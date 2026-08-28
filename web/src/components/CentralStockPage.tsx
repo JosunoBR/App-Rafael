@@ -185,7 +185,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     <div className="space-y-6 animate-in fade-in duration-300">
       
       {/* 1. Header do Módulo do Depósito Central */}
-      <div className="bg-white dark:bg-slate-850 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center shadow-lg shadow-emerald-500/25 shrink-0">
             <Warehouse className="w-6 h-6" />
@@ -238,7 +238,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Total Caixas */}
-        <div className="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
             <span>Saldo em Caixas</span>
             <Boxes className="w-4 h-4 text-emerald-500" />
@@ -252,7 +252,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
         </div>
 
         {/* Total Peças */}
-        <div className="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
             <span>Total de Peças / Unidades</span>
             <Layers className="w-4 h-4 text-teal-500" />
@@ -266,7 +266,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
         </div>
 
         {/* Valor Patrimonial */}
-        <div className="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
             <span>Valor Patrimonial (Custo)</span>
             <TrendingUp className="w-4 h-4 text-amber-500" />
@@ -280,7 +280,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
         </div>
 
         {/* Alerta de Estoque Baixo */}
-        <div className="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
             <span>Atenção / Saldo Baixo</span>
             <AlertCircle className="w-4 h-4 text-rose-500" />
@@ -296,7 +296,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
       </div>
 
       {/* 3. Barra de Busca & Filtros */}
-      <div className="bg-white dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
@@ -339,7 +339,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
       </div>
 
       {/* 4. Tabela de Estoque Físico do Depósito Central */}
-      <div className="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>

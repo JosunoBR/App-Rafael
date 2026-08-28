@@ -246,16 +246,16 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="py-3 px-4">Pedido / Número</th>
-                <th className="py-3 px-3">Fornecedor</th>
-                <th className="py-3 px-3">Data</th>
-                <th className="py-3 px-3 text-center">Itens</th>
-                <th className="py-3 px-3 text-right">Volume Peças</th>
-                <th className="py-3 px-3 text-right">Valor Total (R$)</th>
-                <th className="py-3 px-3 text-center">Status</th>
-                <th className="py-3 px-3 text-center">Avançar Fluxo</th>
-                <th className="py-3 px-3 text-center">Ações</th>
+              <tr className="bg-slate-50 dark:bg-slate-800 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                <th className="py-3 px-4 whitespace-nowrap min-w-[110px]">Pedido / Número</th>
+                <th className="py-3 px-3 min-w-[200px]">Fornecedor</th>
+                <th className="py-3 px-3 whitespace-nowrap min-w-[105px]">Data</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[70px]">Itens</th>
+                <th className="py-3 px-3 text-right whitespace-nowrap min-w-[110px]">Volume Peças</th>
+                <th className="py-3 px-3 text-right whitespace-nowrap min-w-[130px]">Valor Total (R$)</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[130px]">Status</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[120px]">Avançar Fluxo</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[120px]">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
@@ -274,7 +274,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                   return (
                     <tr key={ord.header.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition group">
                       
-                      <td className="py-3.5 px-4 font-mono font-extrabold text-slate-900 dark:text-white">
+                      <td className="py-3.5 px-4 font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
                         {ord.header.numeroPedido}
                       </td>
 
@@ -289,34 +289,34 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         )}
                       </td>
 
-                      <td className="py-3.5 px-3 font-mono text-slate-500">
+                      <td className="py-3.5 px-3 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
                         {ord.header.dataPedido || ord.header.createdAt?.split('T')[0]}
                       </td>
 
-                      <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                      <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {ord.items.length}
                       </td>
 
-                      <td className="py-3.5 px-3 text-right font-mono font-extrabold text-slate-900 dark:text-white">
+                      <td className="py-3.5 px-3 text-right font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
                         {totalPecas.toLocaleString('pt-BR')} un
                       </td>
 
-                      <td className="py-3.5 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                      <td className="py-3.5 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                         R$ {totalPedido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
 
-                      <td className="py-3.5 px-3 text-center">
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${getStatusBadgeClass(statusAtual)}`}>
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                        <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold border whitespace-nowrap ${getStatusBadgeClass(statusAtual)}`}>
                           {statusAtual}
                         </span>
                       </td>
 
                       {/* Botão de Avanço Rápido de Status */}
-                      <td className="py-3.5 px-3 text-center">
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         {statusAtual === 'Em Cotação' && onUpdateOrderStatus && (
                           <button
                             onClick={() => onUpdateOrderStatus(ord, 'Aprovado')}
-                            className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer"
+                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer"
                             title="Aprovar este pedido de compra"
                           >
                             Aprovar
@@ -325,7 +325,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         {statusAtual === 'Aprovado' && onUpdateOrderStatus && (
                           <button
                             onClick={() => onUpdateOrderStatus(ord, 'Em Separação')}
-                            className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer"
+                            className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer"
                             title="Enviar para fila de separação na Doca"
                           >
                             Liberar Doca
@@ -334,7 +334,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         {statusAtual === 'Em Separação' && (
                           <button
                             onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
-                            className="px-2 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 dark:bg-purple-950 dark:text-purple-300 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1 mx-auto"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
                             title="Conferir separação na Doca"
                           >
                             <PackageCheck className="w-3.5 h-3.5" />
@@ -342,13 +342,13 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                           </button>
                         )}
                         {statusAtual === 'Finalizado' && (
-                          <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center justify-center gap-1">
+                          <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold inline-flex items-center gap-1">
                             <Check className="w-3.5 h-3.5" /> Concluído
                           </span>
                         )}
                       </td>
 
-                      <td className="py-3.5 px-3 text-center">
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           
                           <button

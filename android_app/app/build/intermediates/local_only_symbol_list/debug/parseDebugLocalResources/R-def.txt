@@ -1,0 +1,14 @@
+R_DEF: Internal format may change without notice
+local
+color emerald_500
+color emerald_600
+color emerald_700
+color slate_700
+color slate_800
+color slate_900
+color surface_light
+color white
+string app_name
+style Theme.Mega12App
+xml file_paths
+xml network_security_config

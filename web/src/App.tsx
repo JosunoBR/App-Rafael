@@ -103,21 +103,17 @@ import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { CheckCircle2, AlertCircle, Monitor, Smartphone, PackageCheck, AlertTriangle, Save, Trash2, Plus } from 'lucide-react';
 
 export function App() {
-  // 1. Estado de Autenticação (RBAC)
+  // 1. Estado de Autenticação (RBAC) - Inicia nulo para exigir login obrigatório
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('mega12_user');
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try { 
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email) return parsed;
+      } catch {}
     }
-    // Usuário padrão de demonstração para inicialização imediata
-    return {
-      id: 'usr_rafael',
-      nome: 'Rafael',
-      email: 'rafael@mega12.com.br',
-      role: 'diretoria',
-      cargo: 'Diretor Geral / Administrador',
-      ativo: 1
-    };
+    // Sem sessão salva: exige login
+    return null;
   });
 
   // Navigation State: Agora inicia por padrão no Hub / Home

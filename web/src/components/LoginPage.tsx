@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { API_HOST } from '../utils/config';
+import { API_BASE_URL } from '../utils/config';
 import {
   Building2, 
   Lock, 
@@ -36,7 +36,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     setErrorMsg('');
 
     try {
-      const res = await fetch(`${API_HOST}/api/auth/login`, {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, senha })
@@ -64,7 +64,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     setIsLoading(true);
     setErrorMsg('');
 
-    fetch(`${API_HOST}/api/auth/login`, {
+    fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: demoEmail, senha: demoPass })
@@ -199,7 +199,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               {/* Perfil 1: Rafael (Diretoria) */}
               <button
                 type="button"
-                onClick={() => handleQuickLogin('rafael@mega12.com.br')}
+                onClick={() => handleQuickLogin('diretoria@mega12.com.br')}
                 className="p-3 rounded-2xl bg-slate-800/70 hover:bg-amber-950/40 border border-slate-700 hover:border-amber-500/60 text-left transition flex items-center gap-2.5 group cursor-pointer"
               >
                 <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center font-bold transition shrink-0">
@@ -214,7 +214,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               {/* Perfil 2: Jorge (Separação) */}
               <button
                 type="button"
-                onClick={() => handleQuickLogin('jorge@mega12.com.br')}
+                onClick={() => handleQuickLogin('separacao@mega12.com.br')}
                 className="p-3 rounded-2xl bg-slate-800/70 hover:bg-teal-950/40 border border-slate-700 hover:border-teal-500/60 text-left transition flex items-center gap-2.5 group cursor-pointer"
               >
                 <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-400 group-hover:bg-teal-500 group-hover:text-white flex items-center justify-center font-bold transition shrink-0">

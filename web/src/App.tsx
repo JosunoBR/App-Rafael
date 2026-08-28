@@ -5,6 +5,9 @@ import {
   ActiveNavTab
 } from './components/Sidebar';
 import { 
+  Header 
+} from './components/Header';
+import { 
   HomePage 
 } from './components/HomePage';
 import { 
@@ -666,10 +669,6 @@ export function App() {
         }}
         isDark={isDark}
         onToggleTheme={toggleTheme}
-        onNewOrder={handleNewOrder}
-        onSaveOrder={handleSaveOrder}
-        onExportExcel={handleExportExcel}
-        onExportPDF={handleExportPDF}
         currentUser={currentUser}
         onLogout={handleLogout}
         hasActiveDraft={hasActiveDraft}
@@ -678,53 +677,22 @@ export function App() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
         
-        {/* Barra Superior de Alternância de Modo (Desktop vs Mobile PWA) */}
-        <header className="bg-white dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 px-6 py-2.5 flex items-center justify-between sticky top-0 z-20 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Modo de Exibição:</span>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
-              <button
-                onClick={() => setViewMode('desktop')}
-                className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'desktop'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                <span>Visão Desktop</span>
-              </button>
-
-              <button
-                onClick={() => setViewMode('mobile_purchases')}
-                className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'mobile_purchases'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-                <span>📱 App Viagens (Feiras)</span>
-              </button>
-
-              <button
-                onClick={() => setViewMode('mobile_separation')}
-                className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'mobile_separation'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <PackageCheck className="w-3.5 h-3.5 text-teal-400" />
-                <span>📦 Romaneio de Bolso (Doca)</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="text-xs font-mono font-bold text-slate-400">
-            {currentUser.nome} ({currentUser.role.toUpperCase()})
-          </div>
-        </header>
+        {/* TopBar Executivo Unificado com Breadcrumbs, Modos e Ações Contextuais */}
+        <Header
+          activeNav={activeNav}
+          order={order}
+          currentUser={currentUser}
+          viewMode={viewMode}
+          onChangeViewMode={setViewMode}
+          hasActiveDraft={hasActiveDraft}
+          isSavedOrder={isCurrentOrderSaved}
+          onNewOrder={handleNewOrder}
+          onSaveOrder={handleSaveOrder}
+          onDiscardDraft={handleDiscardDraft}
+          onExportExcel={handleExportExcel}
+          onExportPDF={handleExportPDF}
+          onSelectNav={setActiveNav}
+        />
 
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
           

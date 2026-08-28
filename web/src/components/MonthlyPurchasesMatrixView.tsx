@@ -97,7 +97,7 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
     <div className="space-y-5 animate-in fade-in duration-200">
       
       {/* 1. Header do Módulo com Título Oficial e Ação de Exportar PDF */}
-      <div className="bg-white dark:bg-slate-850 p-4 sm:p-5 rounded-2xl border border-slate-200/90 dark:border-slate-750 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-200/90 dark:border-slate-700 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 flex items-center justify-center font-black text-sm shadow-2xs">
@@ -204,7 +204,7 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
       </div>
 
       {/* 3. Tabela Matriz em Estilo Planilha com as Cores Autênticas */}
-      <div className="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200/90 dark:border-slate-750 shadow-xs overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/90 dark:border-slate-700 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
@@ -233,7 +233,7 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-200/70 dark:divide-slate-750 text-xs">
+            <tbody className="divide-y divide-slate-200/70 dark:divide-slate-700 text-xs">
               {filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={7 + matrixData.sortedMonths.length} className="py-12 text-center text-slate-400">
@@ -252,7 +252,7 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
                       title="Clique para abrir detalhes do pedido deste fornecedor"
                     >
                       {/* Empresa */}
-                      <td className="py-2.5 px-3.5 border-r border-slate-200 dark:border-slate-750 font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                      <td className="py-2.5 px-3.5 border-r border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white flex items-center justify-between">
                         <div className="flex items-center gap-1.5 truncate">
                           <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 transition shrink-0" />
                           <span className="truncate">{row.empresa}</span>
@@ -269,34 +269,34 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
                       </td>
 
                       {/* NOTA (%) */}
-                      <td className="py-2.5 px-2.5 border-r border-slate-200 dark:border-slate-750 text-center font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/20">
+                      <td className="py-2.5 px-2.5 border-r border-slate-200 dark:border-slate-700 text-center font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/20">
                         {row.notaPercent}%
                       </td>
 
                       {/* VALOR MENOR (Fundo Verde Suave) */}
-                      <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-750 text-right font-mono font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100/60 dark:bg-emerald-950/40">
+                      <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 text-right font-mono font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100/60 dark:bg-emerald-950/40">
                         {row.valorMenor > 0 
                           ? `R$ ${row.valorMenor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
                           : '-'}
                       </td>
 
                       {/* VALOR 12 (Fundo Amarelo Suave) */}
-                      <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-750 text-right font-mono font-bold text-amber-900 dark:text-amber-200 bg-amber-100/70 dark:bg-amber-950/40">
+                      <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 text-right font-mono font-bold text-amber-900 dark:text-amber-200 bg-amber-100/70 dark:bg-amber-950/40">
                         R$ {row.valor12.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
 
                       {/* PC 12 (Fundo Amarelo Claro) */}
-                      <td className="py-2.5 px-2.5 border-r border-slate-200 dark:border-slate-750 text-center font-mono font-semibold text-slate-800 dark:text-amber-100 bg-amber-50/60 dark:bg-amber-950/20">
+                      <td className="py-2.5 px-2.5 border-r border-slate-200 dark:border-slate-700 text-center font-mono font-semibold text-slate-800 dark:text-amber-100 bg-amber-50/60 dark:bg-amber-950/20">
                         {row.pc12.toLocaleString('pt-BR')}
                       </td>
 
                       {/* ENTREGA */}
-                      <td className="py-2.5 px-2 border-r border-slate-200 dark:border-slate-750 text-center font-mono font-bold text-slate-600 dark:text-slate-300">
+                      <td className="py-2.5 px-2 border-r border-slate-200 dark:border-slate-700 text-center font-mono font-bold text-slate-600 dark:text-slate-300">
                         {row.entrega}
                       </td>
 
                       {/* PRAZO (Fundo Salmão / Laranja Suave) */}
-                      <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-750 text-left font-medium text-orange-950 dark:text-orange-200 bg-orange-100/60 dark:bg-orange-950/30 truncate">
+                      <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 text-left font-medium text-orange-950 dark:text-orange-200 bg-orange-100/60 dark:bg-orange-950/30 truncate">
                         {row.prazo}
                       </td>
 
@@ -306,7 +306,7 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
                         return (
                           <td 
                             key={m} 
-                            className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-750 text-right font-mono text-slate-800 dark:text-slate-200"
+                            className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 text-right font-mono text-slate-800 dark:text-slate-200"
                           >
                             {val && val > 0 ? (
                               <span className="font-bold text-slate-900 dark:text-white">
@@ -327,31 +327,31 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
             {/* Linha de Totais no Rodapé */}
             <tfoot>
               <tr className="bg-slate-100 dark:bg-slate-800 font-bold text-xs text-slate-900 dark:text-white border-t-2 border-slate-300 dark:border-slate-700">
-                <td className="py-3 px-3.5 border-r border-slate-200 dark:border-slate-750 font-black">
+                <td className="py-3 px-3.5 border-r border-slate-200 dark:border-slate-700 font-black">
                   TOTAIS GERAIS ({filteredRows.length} FORNECEDORES)
                 </td>
-                <td className="py-3 px-2.5 border-r border-slate-200 dark:border-slate-750 text-center">
+                <td className="py-3 px-2.5 border-r border-slate-200 dark:border-slate-700 text-center">
                   -
                 </td>
-                <td className="py-3 px-3 border-r border-slate-200 dark:border-slate-750 text-right font-mono font-black text-emerald-700 dark:text-emerald-300 bg-emerald-200/50 dark:bg-emerald-950/60">
+                <td className="py-3 px-3 border-r border-slate-200 dark:border-slate-700 text-right font-mono font-black text-emerald-700 dark:text-emerald-300 bg-emerald-200/50 dark:bg-emerald-950/60">
                   R$ {filteredTotals.sumValorMenor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
-                <td className="py-3 px-3 border-r border-slate-200 dark:border-slate-750 text-right font-mono font-black text-amber-800 dark:text-amber-300 bg-amber-200/60 dark:bg-amber-950/60">
+                <td className="py-3 px-3 border-r border-slate-200 dark:border-slate-700 text-right font-mono font-black text-amber-800 dark:text-amber-300 bg-amber-200/60 dark:bg-amber-950/60">
                   R$ {filteredTotals.sumValor12.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
-                <td className="py-3 px-2.5 border-r border-slate-200 dark:border-slate-750 text-center font-mono font-black text-amber-900 dark:text-amber-200 bg-amber-100/60 dark:bg-amber-950/40">
+                <td className="py-3 px-2.5 border-r border-slate-200 dark:border-slate-700 text-center font-mono font-black text-amber-900 dark:text-amber-200 bg-amber-100/60 dark:bg-amber-950/40">
                   {filteredTotals.sumPc12.toLocaleString('pt-BR')}
                 </td>
-                <td className="py-3 px-2 border-r border-slate-200 dark:border-slate-750 text-center">
+                <td className="py-3 px-2 border-r border-slate-200 dark:border-slate-700 text-center">
                   -
                 </td>
-                <td className="py-3 px-3 border-r border-slate-200 dark:border-slate-750 text-left bg-orange-200/40 dark:bg-orange-950/40 font-mono text-[11px]">
+                <td className="py-3 px-3 border-r border-slate-200 dark:border-slate-700 text-left bg-orange-200/40 dark:bg-orange-950/40 font-mono text-[11px]">
                   Média: R$ {filteredTotals.media12.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / un
                 </td>
                 {matrixData.sortedMonths.map(m => (
                   <td 
                     key={m} 
-                    className="py-3 px-3 border-r border-slate-200 dark:border-slate-750 text-right font-mono font-black text-slate-900 dark:text-white"
+                    className="py-3 px-3 border-r border-slate-200 dark:border-slate-700 text-right font-mono font-black text-slate-900 dark:text-white"
                   >
                     R$ {(filteredTotals.monthSums[m] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>

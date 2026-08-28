@@ -577,7 +577,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                   return (
                     <tr 
                       key={`${order.header.id}_inst_${installment.numeroParcela}`}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-850/50 transition-colors"
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
                     >
                       {/* Pedido / Emissão */}
                       <td className="py-3.5 px-4 font-medium">
@@ -699,7 +699,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
             
             {/* Modal Header */}
-            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-850/50">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/50">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                   <Edit3 className="w-5 h-5" />
@@ -845,7 +845,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850/50 flex items-center justify-end gap-2">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setEditingInstallment(null)}

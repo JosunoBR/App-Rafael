@@ -382,7 +382,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               <div className={`p-4 rounded-2xl border transition-all ${
                 isParcelaExcedente 
                   ? 'bg-rose-50/60 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800/80 shadow-xs' 
-                  : 'bg-slate-50 dark:bg-slate-850/70 border-slate-200/90 dark:border-slate-750'
+                  : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/90 dark:border-slate-700'
               }`}>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5">
                   <div className="flex items-center gap-2">
@@ -521,7 +521,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
                 {/* Prévia dos Boletos e Parcelas */}
                 {previewInstallments.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-750">
+                  <div className="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-700">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 flex items-center gap-1.5">
                       <Clock className="w-3 h-3 text-slate-400" />
                       <span>Previsão de Vencimento dos Boletos ({currentParcelas}x):</span>
@@ -536,7 +536,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                             className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 shadow-xs ${
                               isParcelaExcedente
                                 ? 'bg-rose-50/90 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800'
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-750'
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
                             }`}
                           >
                             <span className="font-bold text-slate-500 dark:text-slate-400">

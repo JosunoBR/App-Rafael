@@ -140,12 +140,30 @@ async function getDatabase() {
     const tableInfo = dbInstance.exec("PRAGMA table_info(purchase_orders)");
     if (tableInfo[0]) {
       const colNames = tableInfo[0].values.map(v => v[1]);
-      if (!colNames.includes('installmentsJson')) {
-        dbInstance.run("ALTER TABLE purchase_orders ADD COLUMN installmentsJson TEXT");
-      }
-      if (!colNames.includes('percentualNota')) {
-        dbInstance.run("ALTER TABLE purchase_orders ADD COLUMN percentualNota REAL DEFAULT 100");
-      }
+      const requiredCols = {
+        dataEmissao: "TEXT",
+        dataEntregaPrevista: "TEXT",
+        totalLiquido: "REAL DEFAULT 0",
+        totalPecas: "INTEGER DEFAULT 0",
+        separationStatus: "TEXT DEFAULT 'Pendente'",
+        observacoes: "TEXT",
+        itemsJson: "TEXT NOT NULL DEFAULT '[]'",
+        separationDistributionJson: "TEXT",
+        installmentsJson: "TEXT",
+        percentualNota: "REAL DEFAULT 100",
+        percentualDescontoOff: "REAL DEFAULT 0",
+        aliquotaSt: "REAL DEFAULT 0",
+        supplierId: "TEXT",
+        vendedor: "TEXT",
+        contatoVendedor: "TEXT",
+        condicaoPagamento: "TEXT"
+      };
+
+      Object.entries(requiredCols).forEach(([col, def]) => {
+        if (!colNames.includes(col)) {
+          try { dbInstance.run(`ALTER TABLE purchase_orders ADD COLUMN ${col} ${def}`); } catch (e) {}
+        }
+      });
     }
   } catch (err) {
     console.error('Aviso na verificação de migrações:', err.message);
@@ -163,8 +181,17 @@ async function getDatabase() {
         ('usr_comprador', 'Mariana Compras', 'compras@mega12.com.br', '123456', 'comprador', 'Compradora Pleno', '(42) 99999-0002', 1, '${now}', '${now}'),
         ('usr_conferente', 'Jorge Doca (Separação)', 'separacao@mega12.com.br', '123456', 'conferente', 'Conferente Líder Doca', '(42) 99999-0003', 1, '${now}', '${now}')
     `);
-    saveDatabaseToDisk();
   }
+
+  // Seeder rico de dados e histórico de compras desde Janeiro de 2026
+  try {
+    const { runFullDatabaseSeed } = require('./seedData');
+    runFullDatabaseSeed(dbInstance);
+  } catch (seedErr) {
+    console.error('Aviso no seeding de histórico:', seedErr.message);
+  }
+
+  saveDatabaseToDisk();
 
   return dbInstance;
 }

@@ -1,7 +1,9 @@
 package br.com.mega12.app.ui.screens.buyer
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -36,7 +38,8 @@ fun OrderCreationScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val successMessage by viewModel.successMessage.collectAsState()
 
-    var selectedSupplier by remember { mutableStateOf(suppliers.firstOrNull()?.razaoSocial ?: "Fornecedor Geral") }
+    var selectedSupplier by remember { mutableStateOf("") }
+    var isSupplierDropdownExpanded by remember { mutableStateOf(false) }
     var condicaoPagamento by remember { mutableStateOf("30/60/90 Dias") }
 
     // Diálogo de Adição de Item
@@ -57,7 +60,7 @@ fun OrderCreationScreen(
     Scaffold(
         topBar = {
             Mega12TopBar(
-                title = "Novo Pedido de Compra",
+                title = "Novo Pedido de Compras",
                 subtitle = "Lançamento Mobile em Viagem",
                 onBackClick = onNavigateBack
             )
@@ -77,29 +80,39 @@ fun OrderCreationScreen(
                 ) {
                     Column {
                         Text(
-                            text = "TOTAL LÍQUIDO",
+                            text = "TOTAL DO PEDIDO",
                             style = MaterialTheme.typography.labelMedium.copy(color = Slate400, fontWeight = FontWeight.Bold)
                         )
                         Text(
                             text = "R$ %.2f".format(draftOrder.totalLiquido),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Emerald400)
                         )
+                        Text(
+                            text = "${draftOrder.totalPecas} peças • ${draftOrder.items.size} itens",
+                            style = MaterialTheme.typography.labelSmall.copy(color = Slate400)
+                        )
                     }
 
                     Button(
                         onClick = {
-                            viewModel.saveDraftOrder(selectedSupplier, condicaoPagamento) {
+                            val supName = selectedSupplier.ifBlank { "Fornecedor Geral" }
+                            viewModel.saveDraftOrder(supName, condicaoPagamento) {
                                 onNavigateBack()
                             }
                         },
                         enabled = !isLoading && draftOrder.items.isNotEmpty(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Emerald500),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Emerald500,
+                            disabledContainerColor = Slate700
+                        ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(color = Slate900, modifier = Modifier.size(20.dp))
                         } else {
-                            Text("CONFIRMAR PEDIDO", fontWeight = FontWeight.Bold, color = Slate900)
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Slate900)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("SALVAR NOVO PEDIDO", fontWeight = FontWeight.Bold, color = Slate900)
                         }
                     }
                 }
@@ -122,30 +135,71 @@ fun OrderCreationScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Dados do Fornecedor",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.Business, contentDescription = null, tint = Emerald400, modifier = Modifier.size(20.dp))
+                            Text(
+                                text = "Dados do Fornecedor & Condições",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
                             )
-                        )
+                        }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                        OutlinedTextField(
-                            value = selectedSupplier,
-                            onValueChange = { selectedSupplier = it },
-                            label = { Text("Nome do Fornecedor / Razão Social", color = Slate400) },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Emerald500,
-                                unfocusedBorderColor = Slate700,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // Seletor Inteligente de Fornecedor
+                        ExposedDropdownMenuBox(
+                            expanded = isSupplierDropdownExpanded,
+                            onExpandedChange = { isSupplierDropdownExpanded = !isSupplierDropdownExpanded }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedSupplier,
+                                onValueChange = { selectedSupplier = it },
+                                label = { Text("Fornecedor / Razão Social", color = Slate400) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isSupplierDropdownExpanded) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Emerald500,
+                                    unfocusedBorderColor = Slate700,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                            )
+
+                            if (suppliers.isNotEmpty()) {
+                                ExposedDropdownMenu(
+                                    expanded = isSupplierDropdownExpanded,
+                                    onDismissRequest = { isSupplierDropdownExpanded = false }
+                                ) {
+                                    suppliers.forEach { sup ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Column {
+                                                    Text(sup.razaoSocial, fontWeight = FontWeight.Bold)
+                                                    if (!sup.vendedor.isNullOrBlank()) {
+                                                        Text("Vendedor: ${sup.vendedor}", style = MaterialTheme.typography.bodySmall, color = Slate400)
+                                                    }
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedSupplier = sup.razaoSocial
+                                                if (!sup.condicaoPagamento.isNullOrBlank()) {
+                                                    condicaoPagamento = sup.condicaoPagamento
+                                                }
+                                                isSupplierDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(12.dp))
 
@@ -182,17 +236,14 @@ fun OrderCreationScreen(
                         )
                     )
 
-                    FilledTonalButton(
+                    Button(
                         onClick = { showAddItemDialog = true },
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = Emerald500.copy(alpha = 0.2f),
-                            contentColor = Emerald400
-                        ),
-                        shape = RoundedCornerShape(8.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = Emerald500),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = Slate900)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Adicionar Item", fontWeight = FontWeight.Bold)
+                        Text("Adicionar Item", fontWeight = FontWeight.Bold, color = Slate900)
                     }
                 }
             }
@@ -208,12 +259,13 @@ fun OrderCreationScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(24.dp),
+                                .padding(32.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(Icons.Default.ShoppingBasket, contentDescription = null, tint = Slate600, modifier = Modifier.size(40.dp))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Nenhum item adicionado ainda", color = Slate400)
+                            Icon(Icons.Default.ShoppingCart, contentDescription = null, tint = Slate600, modifier = Modifier.size(48.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("Nenhum item adicionado ao pedido", color = Slate300, fontWeight = FontWeight.Bold)
+                            Text("Toque em '+ Adicionar Item' acima para incluir produtos", color = Slate500, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -224,40 +276,58 @@ fun OrderCreationScreen(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
+                        Column(modifier = Modifier.padding(14.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = item.descricao,
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = item.descricao,
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
                                     )
-                                )
-                                Text(
-                                    text = "R$ %.2f".format(item.subtotal),
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = Emerald400
+                                    if (item.codigo.isNotBlank()) {
+                                        Text(
+                                            text = "Cód: ${item.codigo}",
+                                            style = MaterialTheme.typography.labelSmall.copy(color = Slate400)
+                                        )
+                                    }
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "R$ %.2f".format(item.subtotal),
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Emerald400
+                                        )
                                     )
-                                )
+                                    IconButton(
+                                        onClick = { viewModel.removeItemFromDraftOrder(item.id) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Remover", tint = Rose500, modifier = Modifier.size(18.dp))
+                                    }
+                                }
                             }
 
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "${item.caixas} CX (${item.totalPecas} peças) x R$ %.2f".format(item.precoCompraUnitario),
+                                    text = "${item.caixas} CX (${item.totalPecas} un) x R$ %.2f".format(item.precoCompraUnitario),
                                     style = MaterialTheme.typography.bodyMedium.copy(color = Slate400)
                                 )
                                 Text(
-                                    text = "PDV Alvo: R$ %.2f".format(item.pdvAlvo),
-                                    style = MaterialTheme.typography.bodyMedium.copy(color = Slate400)
+                                    text = "PDV: R$ %.2f".format(item.pdvAlvo),
+                                    style = MaterialTheme.typography.bodyMedium.copy(color = Slate300, fontWeight = FontWeight.SemiBold)
                                 )
                             }
                         }
@@ -266,17 +336,46 @@ fun OrderCreationScreen(
             }
         }
 
-        // Modal de Adicionar Item
+        // Modal de Adicionar Item com Sugestões do Catálogo
         if (showAddItemDialog) {
             AlertDialog(
                 onDismissRequest = { showAddItemDialog = false },
-                title = { Text("Adicionar Item ao Pedido", color = Color.White) },
+                title = { Text("Adicionar Produto ao Pedido", color = Color.White, fontWeight = FontWeight.Bold) },
                 containerColor = Slate800,
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        // Chips de Produtos Cadastrados para auto-preenchimento
+                        if (products.isNotEmpty()) {
+                            Text("Selecionar do Catálogo:", color = Slate400, style = MaterialTheme.typography.labelSmall)
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(products.take(6)) { prod ->
+                                    Surface(
+                                        color = Slate700,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.clickable {
+                                            itemDescricao = prod.descricao
+                                            itemCodigo = prod.codigo
+                                            itemQtdPorCaixa = prod.qtdPorCaixa.toString()
+                                            itemPrecoCompra = "%.2f".format(prod.precoCompraPadrao).replace(',', '.')
+                                            itemPdvAlvo = "%.2f".format(prod.pdvSugerido).replace(',', '.')
+                                        }
+                                    ) {
+                                        Text(
+                                            text = prod.descricao.take(18) + "...",
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelSmall.copy(color = Emerald400, fontWeight = FontWeight.Bold)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         OutlinedTextField(
                             value = itemDescricao,
                             onValueChange = { itemDescricao = it },
@@ -314,7 +413,7 @@ fun OrderCreationScreen(
                             OutlinedTextField(
                                 value = itemQtdPorCaixa,
                                 onValueChange = { itemQtdPorCaixa = it },
-                                label = { Text("Qtd/CX", color = Slate400) },
+                                label = { Text("Peças/CX", color = Slate400) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(

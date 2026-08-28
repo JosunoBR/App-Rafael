@@ -206,6 +206,41 @@ class Mega12ViewModel : ViewModel() {
         )
     }
 
+    fun removeItemFromDraftOrder(itemId: String) {
+        val updatedItems = _currentDraftOrder.value.items.filterNot { it.id == itemId }
+        val totalLiq = updatedItems.sumOf { it.subtotal }
+        val totalPcs = updatedItems.sumOf { it.totalPecas }
+
+        _currentDraftOrder.value = _currentDraftOrder.value.copy(
+            items = updatedItems,
+            totalLiquido = totalLiq,
+            totalPecas = totalPcs
+        )
+    }
+
+    fun addCurrentCalcToDraftOrder(descricao: String = "Item Calculado em Viagem", codigo: String = ""): Boolean {
+        val compra = _calcPrecoCompra.value.toDoubleOrNull() ?: 0.0
+        val pdv = _calcPdvAlvo.value.toDoubleOrNull() ?: 0.0
+        val caixas = _calcCaixas.value.toIntOrNull() ?: 10
+        val qtdPorCaixa = _calcQtdPorCaixa.value.toIntOrNull() ?: 12
+
+        if (compra <= 0.0 || pdv <= 0.0 || caixas <= 0) {
+            _errorMessage.value = "Preencha preço de compra, PDV e caixas válidos"
+            return false
+        }
+
+        addItemToDraftOrder(
+            descricao = descricao,
+            codigo = codigo,
+            caixas = caixas,
+            qtdPorCaixa = qtdPorCaixa,
+            precoCompra = compra,
+            pdvAlvo = pdv
+        )
+        _successMessage.value = "Produto adicionado ao pedido em aberto!"
+        return true
+    }
+
     fun saveDraftOrder(fornecedor: String, condicao: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
             if (_currentDraftOrder.value.items.isEmpty()) {

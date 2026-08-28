@@ -6,9 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,7 +26,8 @@ import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
 @Composable
 fun QuickCalculatorScreen(
     viewModel: Mega12ViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToOrder: (() -> Unit)? = null
 ) {
     val precoCompra by viewModel.calcPrecoCompra.collectAsState()
     val pdvAlvo by viewModel.calcPdvAlvo.collectAsState()
@@ -38,6 +37,9 @@ fun QuickCalculatorScreen(
     val fiscalResult by viewModel.fiscalResult.collectAsState()
     val separationResult by viewModel.separationResult.collectAsState()
 
+    var showNameDialog by remember { mutableStateOf(false) }
+    var prodNameInput by remember { mutableStateOf("Item da Negociação") }
+
     Scaffold(
         topBar = {
             Mega12TopBar(
@@ -45,6 +47,47 @@ fun QuickCalculatorScreen(
                 subtitle = "Calculadora Rápida em Viagens",
                 onBackClick = onNavigateBack
             )
+        },
+        bottomBar = {
+            if (fiscalResult != null) {
+                Surface(
+                    color = Slate800,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "MARGEM OBTIDA",
+                                style = MaterialTheme.typography.labelSmall.copy(color = Slate400, fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "%.1f%%".format(fiscalResult!!.margemPercentual),
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (fiscalResult!!.isLucrativo) Emerald400 else Rose500
+                                )
+                            )
+                        }
+
+                        Button(
+                            onClick = { showNameDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Emerald500),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.AddShoppingCart, contentDescription = null, tint = Slate900)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("LANÇAR NO PEDIDO", fontWeight = FontWeight.Bold, color = Slate900)
+                        }
+                    }
+                }
+            }
         },
         containerColor = Slate900
     ) { padding ->
@@ -63,13 +106,17 @@ fun QuickCalculatorScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Valores da Negociação",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Calculate, contentDescription = null, tint = Emerald400, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Valores da Negociação na Mesa",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
                             )
-                        )
+                        }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -135,7 +182,7 @@ fun QuickCalculatorScreen(
                             OutlinedTextField(
                                 value = qtdPorCaixa,
                                 onValueChange = { viewModel.updateCalcInputs(qtdPorCaixaStr = it) },
-                                label = { Text("Qtd/Caixa", color = Slate400, fontSize = 12.sp) },
+                                label = { Text("Peças/Caixa", color = Slate400, fontSize = 12.sp) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -158,7 +205,7 @@ fun QuickCalculatorScreen(
                 item {
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = if (res.isLucrativo) Emerald900.copy(alpha = 0.4f) else Rose500.copy(alpha = 0.2f)
+                            containerColor = if (res.isLucrativo) Emerald900.copy(alpha = 0.35f) else Rose500.copy(alpha = 0.2f)
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -170,7 +217,7 @@ fun QuickCalculatorScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "TERMÔMETRO DE MARGEM",
+                                    text = "SIMULAÇÃO FISCAL & MARGEM",
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = if (res.isLucrativo) Emerald400 else Rose500
@@ -179,7 +226,7 @@ fun QuickCalculatorScreen(
                                 MarginBadge(marginPercent = res.margemPercentual, status = res.statusMargem)
                             }
 
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -206,10 +253,10 @@ fun QuickCalculatorScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
                             Divider(color = Slate700)
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
                             Text(
-                                text = "Composição: ICMS 11% + PIS/COFINS 3% + Custos Fixos 26% (Total 40%) - Crédito ICMS 19.5%",
+                                text = "Engenharia Fiscal: ICMS 11% + PIS/COFINS 3% + Custos Fixos 26% (40% Total) - Crédito ICMS 19.5%",
                                 style = MaterialTheme.typography.labelMedium.copy(color = Slate400, fontSize = 11.sp)
                             )
                         }
@@ -236,7 +283,7 @@ fun QuickCalculatorScreen(
                                     Icon(Icons.Default.Store, contentDescription = null, tint = Emerald400, modifier = Modifier.size(20.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Distribuição 20 Lojas",
+                                        text = "Rateio Automático (20 Lojas)",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
                                     )
                                 }
@@ -250,7 +297,7 @@ fun QuickCalculatorScreen(
 
                             Text(
                                 text = "Estoque Central Reserva: ${sep.reserveStockBoxes} CX (${sep.reserveStock} UN)",
-                                style = MaterialTheme.typography.bodyMedium.copy(color = Amber500)
+                                style = MaterialTheme.typography.bodyMedium.copy(color = Amber500, fontWeight = FontWeight.SemiBold)
                             )
 
                             Spacer(modifier = Modifier.height(12.dp))
@@ -266,7 +313,7 @@ fun QuickCalculatorScreen(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Cluster A", color = Slate400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("Cluster A (8 Lojas)", color = Slate400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         Text("${sep.clusterTotalsBoxes.A} CX", color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
@@ -276,7 +323,7 @@ fun QuickCalculatorScreen(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Cluster B", color = Slate400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("Cluster B (8 Lojas)", color = Slate400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         Text("${sep.clusterTotalsBoxes.B} CX", color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
@@ -286,7 +333,7 @@ fun QuickCalculatorScreen(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Cluster C", color = Slate400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("Cluster C (4 Lojas)", color = Slate400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         Text("${sep.clusterTotalsBoxes.C} CX", color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
@@ -295,6 +342,53 @@ fun QuickCalculatorScreen(
                     }
                 }
             }
+        }
+
+        // Modal para confirmar nome do produto ao lançar
+        if (showNameDialog) {
+            AlertDialog(
+                onDismissRequest = { showNameDialog = false },
+                title = { Text("Nome do Produto para o Pedido", color = Color.White, fontWeight = FontWeight.Bold) },
+                containerColor = Slate800,
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Identifique o produto para incluí-lo na lista de compras:", color = Slate400, fontSize = 12.sp)
+                        OutlinedTextField(
+                            value = prodNameInput,
+                            onValueChange = { prodNameInput = it },
+                            label = { Text("Descrição do Produto", color = Slate400) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Emerald500,
+                                unfocusedBorderColor = Slate700,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val success = viewModel.addCurrentCalcToDraftOrder(descricao = prodNameInput.ifBlank { "Item Calculado" })
+                            showNameDialog = false
+                            if (success) {
+                                onNavigateBack()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Emerald500)
+                    ) {
+                        Text("Confirmar Inclusão", color = Slate900, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNameDialog = false }) {
+                        Text("Cancelar", color = Slate400)
+                    }
+                }
+            )
         }
     }
 }

@@ -62,6 +62,25 @@ export interface Product {
   updatedAt: string;
 }
 
+// 4.1 Item em Estoque no Depósito Central (CD / Matriz)
+export interface CentralStockItem {
+  id: string;
+  productId?: string;
+  codigo: string;
+  descricao: string;
+  categoria?: string;
+  fotoUrl?: string;
+  qtdPorPacote: number;          // Peças por caixa/pacote
+  saldoCaixas: number;           // Saldo disponível em caixas no depósito
+  saldoUnidades: number;         // Saldo em peças = saldoCaixas * qtdPorPacote
+  precoUnitario: number;         // Custo de compra unitário
+  pdvSugerido: number;           // Preço de venda pretendido
+  localizacaoGalpao?: string;    // Endereço no CD (ex: "Rua B - Palete 14")
+  fornecedorOrigem?: string;     // Fornecedor / Fabricante
+  dataUltimaEntrada?: string;
+  updatedAt: string;
+}
+
 export interface OrderItem {
   id: string;
   codigo?: string;

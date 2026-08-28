@@ -21,7 +21,8 @@ import {
   Clock,
   Trash2,
   CheckCircle2,
-  ChevronRight
+  ChevronRight,
+  Warehouse
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { ActiveNavTab } from './Sidebar';
@@ -67,6 +68,8 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Visão Geral & Hub', group: 'Operação', icon: Home, color: 'text-emerald-500' };
       case 'orders':
         return { title: 'Cotação & Pedidos de Compras', group: 'Operação', icon: ShoppingCart, color: 'text-emerald-500' };
+      case 'stock':
+        return { title: 'Estoque do Depósito Central (CD Matriz)', group: 'Operação', icon: Warehouse, color: 'text-emerald-500' };
       case 'separation':
         return { title: 'Separação & Matriz de 20 Lojas', group: 'Operação', icon: PackageCheck, color: 'text-emerald-500' };
       case 'financial':

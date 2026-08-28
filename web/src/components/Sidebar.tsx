@@ -16,11 +16,12 @@ import {
   Users as UsersIcon,
   Boxes, 
   CreditCard,
-  Layers
+  Layers,
+  Warehouse
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 
-export type ActiveNavTab = 'home' | 'orders' | 'financial' | 'separation' | 'separationHistory' | 'products' | 'dashboard' | 'suppliers' | 'history' | 'fiscal' | 'users';
+export type ActiveNavTab = 'home' | 'orders' | 'stock' | 'financial' | 'separation' | 'separationHistory' | 'products' | 'dashboard' | 'suppliers' | 'history' | 'fiscal' | 'users';
 
 interface SidebarProps {
   order: PurchaseOrder;
@@ -150,6 +151,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               </button>
             )}
+
+            {/* Depósito / Estoque Central */}
+            <button
+              onClick={() => onSelectNav('stock')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'stock'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Warehouse className={`w-4 h-4 ${activeNav === 'stock' ? 'text-white' : 'text-emerald-500'}`} />
+                <span>Depósito / Estoque CD</span>
+              </div>
+              {activeNav === 'stock' && <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
 
             {/* Separação (20 Lojas) */}
             {canAccessSeparation && (

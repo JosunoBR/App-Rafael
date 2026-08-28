@@ -61,8 +61,11 @@ import {
 import { 
   FinancialBoletosPage 
 } from './components/FinancialBoletosPage';
+import { 
+  CentralStockPage 
+} from './components/CentralStockPage';
 
-import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment } from './shared/types';
+import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem } from './shared/types';
 import { 
   getInitialFiscalConfig, 
   getInitialStoresConfig, 
@@ -81,7 +84,11 @@ import {
   saveProduct,
   deleteProduct,
   getNextOrderNumber,
-  createRealisticMockOrder
+  createRealisticMockOrder,
+  loadCentralStock,
+  saveCentralStock,
+  updateStockBalance,
+  createStockTransferOrder
 } from './utils/storage';
 import { 
   fetchSuppliersFromDb, 
@@ -137,6 +144,7 @@ export function App() {
   const [storeConfigs, setStoreConfigs] = useState<StoreConfig[]>(getInitialStoresConfig);
   const [suppliers, setSuppliers] = useState<Supplier[]>(getSuppliersList);
   const [products, setProducts] = useState<Product[]>(getProductsList);
+  const [centralStock, setCentralStock] = useState<CentralStockItem[]>(() => loadCentralStock());
   const [savedOrders, setSavedOrders] = useState<PurchaseOrder[]>(loadSavedOrdersList);
 
   // Active Purchase Order: carrega rascunho se existir ou inicia limpo
@@ -424,8 +432,57 @@ export function App() {
     }
   };
 
+  // Handlers do Módulo de Estoque do Depósito Central
+  const handleUpdateStockBalance = (stockId: string, deltaCaixas: number, newLocation?: string) => {
+    const updated = updateStockBalance(stockId, deltaCaixas, newLocation);
+    setCentralStock([...updated]);
+    showToast('Saldo de estoque do depósito atualizado com sucesso!', 'success');
+  };
+
+  const handleSaveNewStockItem = (item: CentralStockItem) => {
+    const current = loadCentralStock();
+    const existingIdx = current.findIndex(s => s.id === item.id || (item.productId && s.productId === item.productId));
+    let updated: CentralStockItem[];
+    if (existingIdx >= 0) {
+      current[existingIdx] = { 
+        ...current[existingIdx], 
+        ...item, 
+        saldoCaixas: current[existingIdx].saldoCaixas + item.saldoCaixas, 
+        saldoUnidades: (current[existingIdx].saldoCaixas + item.saldoCaixas) * item.qtdPorPacote 
+      };
+      updated = current;
+    } else {
+      updated = [item, ...current];
+    }
+    saveCentralStock(updated);
+    setCentralStock([...updated]);
+    showToast(`Produto ${item.descricao} adicionado ao estoque do CD!`, 'success');
+  };
+
+  const handleGenerateStockSeparation = (itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>) => {
+    const transfOrder = createStockTransferOrder(itemsToTransfer, storeConfigs, fiscalConfig);
+    saveOrderToHistory(transfOrder);
+    setSavedOrders(loadSavedOrdersList());
+    setOrder(transfOrder);
+    setActiveNav('separation');
+    confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
+    showToast(`Romaneio ${transfOrder.header.numeroPedido} gerado e enviado para a Separação da Doca!`, 'success');
+  };
+
   const handleFinalizeSeparation = async (finalizedOrder: PurchaseOrder) => {
     try {
+      // Se for transferência do estoque central, realiza a baixa do estoque do CD
+      if (finalizedOrder.header.supplierId === 'cd_matriz') {
+        finalizedOrder.items.forEach(it => {
+          const stock = loadCentralStock();
+          const match = stock.find(s => s.codigo === it.codigo || s.descricao === it.descricao);
+          if (match) {
+            updateStockBalance(match.id, -(it.qtdPacotes || 0));
+          }
+        });
+        setCentralStock(loadCentralStock());
+      }
+
       await saveOrderToDb(finalizedOrder);
       saveOrderToHistory(finalizedOrder);
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
@@ -441,6 +498,17 @@ export function App() {
       showToast(`Separação do pedido ${finalizedOrder.header.numeroPedido} FINALIZADA! Arquivado no Histórico.`, 'success');
       setActiveNav('separationHistory');
     } catch (err: any) {
+      if (finalizedOrder.header.supplierId === 'cd_matriz') {
+        finalizedOrder.items.forEach(it => {
+          const stock = loadCentralStock();
+          const match = stock.find(s => s.codigo === it.codigo || s.descricao === it.descricao);
+          if (match) {
+            updateStockBalance(match.id, -(it.qtdPacotes || 0));
+          }
+        });
+        setCentralStock(loadCentralStock());
+      }
+
       saveOrderToHistory(finalizedOrder);
       setSavedOrders(loadSavedOrdersList());
       setOrder(finalizedOrder);
@@ -838,6 +906,21 @@ export function App() {
                     onLoadMockOrder={handleLoadMockOrder}
                   />
                 </div>
+              )}
+
+              {/* PÁGINA 1.1: GESTÃO DO ESTOQUE DO DEPÓSITO CENTRAL (CD MATRIZ) */}
+              {activeNav === 'stock' && (
+                <CentralStockPage
+                  stockItems={centralStock}
+                  products={products}
+                  suppliers={suppliers}
+                  stores={storeConfigs}
+                  fiscalConfig={fiscalConfig}
+                  onUpdateStockBalance={handleUpdateStockBalance}
+                  onSaveNewStockItem={handleSaveNewStockItem}
+                  onGenerateStockSeparation={handleGenerateStockSeparation}
+                  onNavigateToSeparation={() => setActiveNav('separation')}
+                />
               )}
 
               {/* PÁGINA 2: CONFERÊNCIA DE SEPARAÇÃO E ROMANEIO (20 LOJAS) */}

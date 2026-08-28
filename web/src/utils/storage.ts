@@ -1,4 +1,4 @@
-import { PurchaseOrder, FiscalConfig, StoreConfig, Supplier, Product } from '../shared/types';
+import { PurchaseOrder, FiscalConfig, StoreConfig, Supplier, Product, CentralStockItem, OrderItem } from '../shared/types';
 import { DEFAULT_FISCAL_CONFIG, DEFAULT_STORES } from '../shared/constants';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation, calculateBoxesSeparation } from '../shared/separationEngine';
@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   GLOBAL_STORES: 'mega12_global_stores_v1',
   SUPPLIERS: 'mega12_suppliers_v1',
   PRODUCTS: 'mega12_products_v1',
+  CENTRAL_STOCK: 'mega12_central_stock_v1',
   ORDER_SEQUENCE: 'mega12_order_sequence_v1',
   THEME: 'mega12_theme_v1'
 };
@@ -888,4 +889,250 @@ export function saveOrderToHistory(order: PurchaseOrder): void {
     list.unshift(updatedOrder);
   }
   localStorage.setItem(STORAGE_KEYS.SAVED_ORDERS, JSON.stringify(list));
+}
+
+// ==========================================
+// 📦 MÓDULO DE GESTÃO DO DEPÓSITO CENTRAL (CD)
+// ==========================================
+
+export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
+  {
+    id: 'stock_1',
+    productId: 'prod_1',
+    codigo: 'PRD-001',
+    descricao: 'Garrafa Térmica Inox 1L com Termômetro Digital',
+    categoria: 'Utilidades Térmicas',
+    fotoUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=300&auto=format&fit=crop&q=80',
+    qtdPorPacote: 12,
+    saldoCaixas: 45,
+    saldoUnidades: 45 * 12, // 540 un
+    precoUnitario: 18.50,
+    pdvSugerido: 49.90,
+    localizacaoGalpao: 'Rua A - Palete 04',
+    fornecedorOrigem: 'Brasil Plásticos',
+    dataUltimaEntrada: '2026-08-15',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'stock_2',
+    productId: 'prod_2',
+    codigo: 'PRD-002',
+    descricao: 'Conjunto 6 Taças de Cristal Lapidado 320ml',
+    categoria: 'Vidros & Cristais',
+    fotoUrl: 'https://images.unsplash.com/photo-1574053415387-a25475d4088d?w=300&auto=format&fit=crop&q=80',
+    qtdPorPacote: 6,
+    saldoCaixas: 30,
+    saldoUnidades: 30 * 6, // 180 un
+    precoUnitario: 26.90,
+    pdvSugerido: 69.90,
+    localizacaoGalpao: 'Rua A - Palete 12',
+    fornecedorOrigem: 'Paraná Bazar',
+    dataUltimaEntrada: '2026-08-18',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'stock_3',
+    productId: 'prod_4',
+    codigo: 'PRD-004',
+    descricao: 'Difusor de Aromas Elétrico Ultrassônico Madeira 300ml',
+    categoria: 'Aromaterapia & Casa',
+    fotoUrl: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=300&auto=format&fit=crop&q=80',
+    qtdPorPacote: 6,
+    saldoCaixas: 25,
+    saldoUnidades: 25 * 6, // 150 un
+    precoUnitario: 34.00,
+    pdvSugerido: 89.90,
+    localizacaoGalpao: 'Rua B - Palete 02',
+    fornecedorOrigem: 'Paraná Bazar',
+    dataUltimaEntrada: '2026-08-10',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'stock_4',
+    productId: 'prod_5',
+    codigo: 'PRD-005',
+    descricao: 'Vela Aromática Premium Pote Vidro Fosco Baunilha & Âmbar 200g',
+    categoria: 'Aromaterapia & Casa',
+    fotoUrl: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=300&auto=format&fit=crop&q=80',
+    qtdPorPacote: 12,
+    saldoCaixas: 60,
+    saldoUnidades: 60 * 12, // 720 un
+    precoUnitario: 9.80,
+    pdvSugerido: 26.90,
+    localizacaoGalpao: 'Rua B - Palete 08',
+    fornecedorOrigem: 'Paraná Bazar',
+    dataUltimaEntrada: '2026-08-20',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'stock_5',
+    productId: 'prod_7',
+    codigo: 'PRD-007',
+    descricao: 'Copo Térmico Parede Dupla Inox com Tampa e Abridor 473ml',
+    categoria: 'Utilidades Térmicas',
+    fotoUrl: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=300&auto=format&fit=crop&q=80',
+    qtdPorPacote: 12,
+    saldoCaixas: 50,
+    saldoUnidades: 50 * 12, // 600 un
+    precoUnitario: 19.50,
+    pdvSugerido: 49.90,
+    localizacaoGalpao: 'Rua C - Palete 01',
+    fornecedorOrigem: 'Brasil Plásticos',
+    dataUltimaEntrada: '2026-08-22',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'stock_6',
+    productId: 'prod_8',
+    codigo: 'PRD-008',
+    descricao: 'Luminária de Mesa Articulada LED Touch com Porta-Canetas',
+    categoria: 'Decoração & Iluminação',
+    fotoUrl: 'https://images.unsplash.com/photo-1534353436294-0dbd4bdac845?w=300&auto=format&fit=crop&q=80',
+    qtdPorPacote: 8,
+    saldoCaixas: 35,
+    saldoUnidades: 35 * 8, // 280 un
+    precoUnitario: 24.50,
+    pdvSugerido: 59.90,
+    localizacaoGalpao: 'Rua C - Palete 10',
+    fornecedorOrigem: 'Importadora Oriente',
+    dataUltimaEntrada: '2026-08-12',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'stock_7',
+    productId: 'prod_10',
+    codigo: 'PRD-010',
+    descricao: 'Organizador Giratório Acrílico Multiuso 360 Graus 28cm',
+    categoria: 'Organizadores',
+    fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80',
+    qtdPorPacote: 12,
+    saldoCaixas: 40,
+    saldoUnidades: 40 * 12, // 480 un
+    precoUnitario: 16.80,
+    pdvSugerido: 39.90,
+    localizacaoGalpao: 'Rua D - Palete 05',
+    fornecedorOrigem: 'Brasil Plásticos',
+    dataUltimaEntrada: '2026-08-16',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'stock_8',
+    productId: 'prod_14',
+    codigo: 'PRD-014',
+    descricao: 'Conjunto Assadeiras de Alumínio Polido com Grelha 3 Peças',
+    categoria: 'Panelas & Assadeiras',
+    fotoUrl: 'https://images.unsplash.com/photo-1584990347449-a2927236d654?w=300&auto=format&fit=crop&q=80',
+    qtdPorPacote: 6,
+    saldoCaixas: 20,
+    saldoUnidades: 20 * 6, // 120 un
+    precoUnitario: 38.00,
+    pdvSugerido: 89.90,
+    localizacaoGalpao: 'Rua D - Palete 14',
+    fornecedorOrigem: 'Alumínios União',
+    dataUltimaEntrada: '2026-08-05',
+    updatedAt: new Date().toISOString()
+  }
+];
+
+export function getInitialCentralStock(): CentralStockItem[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.CENTRAL_STOCK);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  localStorage.setItem(STORAGE_KEYS.CENTRAL_STOCK, JSON.stringify(INITIAL_CENTRAL_STOCK));
+  return INITIAL_CENTRAL_STOCK;
+}
+
+export function loadCentralStock(): CentralStockItem[] {
+  return getInitialCentralStock();
+}
+
+export function saveCentralStock(stockList: CentralStockItem[]): void {
+  localStorage.setItem(STORAGE_KEYS.CENTRAL_STOCK, JSON.stringify(stockList));
+}
+
+export function updateStockBalance(stockId: string, deltaCaixas: number, newLocation?: string): CentralStockItem[] {
+  const stock = loadCentralStock();
+  const index = stock.findIndex(s => s.id === stockId);
+  if (index >= 0) {
+    const item = stock[index];
+    const newSaldoCaixas = Math.max(0, item.saldoCaixas + deltaCaixas);
+    const newSaldoUnidades = newSaldoCaixas * item.qtdPorPacote;
+    stock[index] = {
+      ...item,
+      saldoCaixas: newSaldoCaixas,
+      saldoUnidades: newSaldoUnidades,
+      localizacaoGalpao: newLocation !== undefined ? newLocation : item.localizacaoGalpao,
+      updatedAt: new Date().toISOString()
+    };
+    saveCentralStock(stock);
+  }
+  return stock;
+}
+
+export function createStockTransferOrder(
+  selectedItemsWithBoxes: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>,
+  storeConfigs: StoreConfig[],
+  fiscalConfig: FiscalConfig
+): PurchaseOrder {
+  const nextNum = 'CD-' + String(Date.now()).slice(-4);
+  const today = new Date().toISOString().split('T')[0];
+
+  const items: OrderItem[] = selectedItemsWithBoxes.map((sel, idx) => {
+    const { stockItem, caixasParaSeparar } = sel;
+    const qtdTotalUnidades = caixasParaSeparar * stockItem.qtdPorPacote;
+    const valorTotalBruto = qtdTotalUnidades * stockItem.precoUnitario;
+    const fiscal = calculateItemFiscal(stockItem.precoUnitario, stockItem.pdvSugerido, fiscalConfig);
+    const separation = calculateAutomaticSeparation(qtdTotalUnidades, storeConfigs);
+
+    return {
+      id: `item_transf_${Date.now()}_${idx + 1}`,
+      codigo: stockItem.codigo,
+      descricao: stockItem.descricao,
+      fotoUrl: stockItem.fotoUrl,
+      qtdPorPacote: stockItem.qtdPorPacote,
+      qtdPacotes: caixasParaSeparar,
+      qtdTotalUnidades,
+      precoUnitario: stockItem.precoUnitario,
+      valorTotalBruto,
+      pdvAlvo: stockItem.pdvSugerido,
+      despesasPdvUnit: fiscal.despesasPdvUnit,
+      creditoIcmsUnit: fiscal.creditoIcmsUnit,
+      custoRealEfetivo: fiscal.custoRealEfetivo,
+      margemRealUnit: fiscal.margemRealUnit,
+      margemPercentual: fiscal.margemPercentual,
+      separacaoLojas: separation.allocations,
+      qtdReservaEstoque: separation.reserveStock,
+      separacaoManual: false
+    };
+  });
+
+  return {
+    header: {
+      id: 'order_transf_cd_' + Date.now(),
+      numeroPedido: nextNum,
+      fornecedor: 'Depósito Central Mega 12 (Transferência CD)',
+      supplierId: 'cd_matriz',
+      aliquotaSt: 0,
+      vendedor: 'Expedição / CD Matriz',
+      contatoVendedor: '(41) 3300-1200',
+      condicaoPagamento: 'Transferência Interna Entre Filiais',
+      dataPedido: today,
+      dataEntregaPrevista: today,
+      percentualDescontoOff: 0,
+      percentualNota: 100,
+      observacoesDescarga: 'Romaneio gerado a partir do estoque físico do Depósito Central para distribuição às 20 lojas.',
+      valorFreteGlobal: 0,
+      valorOutrasDespesasGlobal: 0,
+      status: 'Em Separação',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    items,
+    fiscalConfig,
+    storeConfigs
+  };
 }

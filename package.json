@@ -1,0 +1,20 @@
+{
+  "name": "mega12-sistema-gestao",
+  "version": "1.0.0",
+  "description": "Sistema de Gestão de Compras e Separação - Rede Mega 12",
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix web install",
+    "build": "npm --prefix backend install && npm --prefix web install && npm --prefix web run build",
+    "start": "node backend/server.js",
+    "dev": "node runner.js"
+  },
+  "keywords": [
+    "mega12",
+    "gestao",
+    "compras",
+    "separacao",
+    "varejo"
+  ],
+  "author": "Rede Mega 12",
+  "license": "ISC"
+}

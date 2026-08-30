@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -16,7 +16,10 @@ import {
   X,
   Search,
   Package,
-  Building2
+  Building2,
+  Check,
+  Zap,
+  ChevronDown
 } from 'lucide-react';
 import { OrderItem, FiscalConfig, StoreConfig, Product } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
@@ -36,6 +39,27 @@ interface OrderItemsTableProps {
   onLoadMockOrder?: () => void;
 }
 
+// Helper para destacar os caracteres digitados no texto
+function highlightMatch(text: string, query: string) {
+  if (!query || !text || query.trim().length === 0) return text;
+  const cleanQ = query.trim();
+  const regex = new RegExp(`(${cleanQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <span>
+      {parts.map((part, i) =>
+        part.toLowerCase() === cleanQ.toLowerCase() ? (
+          <mark key={i} className="bg-emerald-200 dark:bg-emerald-900/70 text-emerald-950 dark:text-emerald-200 font-extrabold px-0.5 rounded">
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </span>
+  );
+}
+
 export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   items,
   globalFiscal,
@@ -52,12 +76,70 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
   const [isCatalogPickerOpen, setIsCatalogPickerOpen] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState('');
-  const fileInputRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  
+  // Estado do Filtro Inteligente / Autocomplete nas Linhas da Tabela
+  const [activeAutocompleteItemId, setActiveAutocompleteItemId] = useState<string | null>(null);
+  const [activeAutocompleteField, setActiveAutocompleteField] = useState<'descricao' | 'codigoInterno' | 'codigoFornecedor' | null>(null);
+  const [autocompleteQuery, setAutocompleteQuery] = useState('');
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
 
+  // Estado da Barra de Inclusão Rápida Superior
+  const [quickSearchText, setQuickSearchText] = useState('');
+  const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
+  const quickSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const fileInputRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  const autocompleteContainerRef = useRef<HTMLTableCellElement | null>(null);
+
+  // Fechar dropdowns ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (autocompleteContainerRef.current && !autocompleteContainerRef.current.contains(e.target as Node)) {
+        setActiveAutocompleteItemId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Produtos filtrados para o autocomplete ativo na linha
+  const matchingProductsForRow = useMemo(() => {
+    if (!autocompleteQuery || autocompleteQuery.trim().length === 0) return [];
+    const q = autocompleteQuery.trim().toLowerCase();
+    return products.filter(p => {
+      const desc = (p.descricao || '').toLowerCase();
+      const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+      const codForn = (p.codigoFornecedor || '').toLowerCase();
+      const ean = (p.codigoBarras || p.eanBarcode || '').toLowerCase();
+      const cat = (p.categoria || '').toLowerCase();
+      return desc.includes(q) || codInt.includes(q) || codForn.includes(q) || ean.includes(q) || cat.includes(q);
+    }).slice(0, 8);
+  }, [products, autocompleteQuery]);
+
+  // Produtos filtrados para a Barra de Inclusão Rápida Superior
+  const matchingProductsForQuickBar = useMemo(() => {
+    if (!quickSearchText || quickSearchText.trim().length === 0) return [];
+    const q = quickSearchText.trim().toLowerCase();
+    return products.filter(p => {
+      const desc = (p.descricao || '').toLowerCase();
+      const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+      const codForn = (p.codigoFornecedor || '').toLowerCase();
+      const ean = (p.codigoBarras || p.eanBarcode || '').toLowerCase();
+      const cat = (p.categoria || '').toLowerCase();
+      return desc.includes(q) || codInt.includes(q) || codForn.includes(q) || ean.includes(q) || cat.includes(q);
+    }).slice(0, 6);
+  }, [products, quickSearchText]);
+
+  // Inserir novo produto selecionado do catálogo
   const handleSelectProductForNewItem = (prod: Product) => {
+    const codInterno = prod.codigoInterno || prod.codigo || '';
+    const codFornecedor = prod.codigoFornecedor || '';
+
     const defaultItem: OrderItem = {
       id: 'item_' + Date.now(),
-      codigo: prod.codigo,
+      codigoInterno: codInterno,
+      codigoFornecedor: codFornecedor,
+      codigo: codInterno,
       descricao: prod.descricao,
       fotoUrl: prod.fotoUrl || '',
       qtdPorPacote: prod.qtdPorPacote || 1,
@@ -65,10 +147,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       qtdTotalUnidades: (prod.qtdPorPacote || 1) * 10,
       precoUnitario: prod.precoUnitarioPadrao || 0,
       valorTotalBruto: ((prod.qtdPorPacote || 1) * 10) * (prod.precoUnitarioPadrao || 0),
-      pdvAlvo: prod.pdvSugerido || 0
+      pdvAlvo: 12.00
     };
 
-    const fiscal = calculateItemFiscal(defaultItem.precoUnitario, defaultItem.pdvAlvo, globalFiscal);
+    const fiscal = calculateItemFiscal(defaultItem.precoUnitario, 12.00, globalFiscal);
     const separation = calculateAutomaticSeparation(defaultItem.qtdTotalUnidades, stores);
 
     const fullItem: OrderItem = {
@@ -84,6 +166,51 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
     onAddItem(fullItem);
     setIsCatalogPickerOpen(false);
+    setQuickSearchText('');
+    setIsQuickSearchOpen(false);
+  };
+
+  // Preencher linha existente com o produto selecionado no autocomplete inteligente
+  const handleSelectProductForExistingItem = (item: OrderItem, prod: Product) => {
+    const codInterno = prod.codigoInterno || prod.codigo || item.codigoInterno || item.codigo || '';
+    const codFornecedor = prod.codigoFornecedor || item.codigoFornecedor || '';
+    const pack = prod.qtdPorPacote || item.qtdPorPacote || 1;
+    const preco = prod.precoUnitarioPadrao || item.precoUnitario || 0;
+    const pdv = 12.00;
+    const qtdPacotes = item.qtdPacotes || 10;
+    const qtdTotal = pack * qtdPacotes;
+    const totalBruto = qtdTotal * preco;
+
+    const fiscal = calculateItemFiscal(preco, pdv, globalFiscal, item.fiscalOverride);
+    const separation = !item.separacaoManual 
+      ? calculateAutomaticSeparation(qtdTotal, stores, item.qtdReservaEstoque || 0)
+      : null;
+
+    const updatedItem: OrderItem = {
+      ...item,
+      codigoInterno: codInterno,
+      codigoFornecedor: codFornecedor,
+      codigo: codInterno,
+      descricao: prod.descricao,
+      fotoUrl: prod.fotoUrl || item.fotoUrl || '',
+      qtdPorPacote: pack,
+      qtdPacotes: qtdPacotes,
+      qtdTotalUnidades: qtdTotal,
+      precoUnitario: preco,
+      valorTotalBruto: totalBruto,
+      pdvAlvo: pdv,
+      despesasPdvUnit: fiscal.despesasPdvUnit,
+      creditoIcmsUnit: fiscal.creditoIcmsUnit,
+      custoRealEfetivo: fiscal.custoRealEfetivo,
+      margemRealUnit: fiscal.margemRealUnit,
+      margemPercentual: fiscal.margemPercentual,
+      ...(separation ? { separacaoLojas: separation.allocations, qtdReservaEstoque: separation.reserveStock } : {})
+    };
+
+    onUpdateItem(item.id, updatedItem);
+    setActiveAutocompleteItemId(null);
+    setActiveAutocompleteField(null);
+    setAutocompleteQuery('');
   };
 
   const handleUploadItemPhoto = (item: OrderItem, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,11 +252,12 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       updatedItem.valorTotalBruto = updatedItem.qtdTotalUnidades * Number(value);
     }
 
-    // Auto-cálculo do limite de preço e custo real efetivo
+    // Auto-cálculo do limite de preço e custo real efetivo com PDV travado em R$ 12,00
     const preco = field === 'precoUnitario' ? Number(value) : updatedItem.precoUnitario;
-    const pdv = field === 'pdvAlvo' ? Number(value) : updatedItem.pdvAlvo;
+    const pdv = 12.00;
     const fiscal = calculateItemFiscal(preco, pdv, globalFiscal, updatedItem.fiscalOverride);
 
+    updatedItem.pdvAlvo = 12.00;
     updatedItem.despesasPdvUnit = fiscal.despesasPdvUnit;
     updatedItem.creditoIcmsUnit = fiscal.creditoIcmsUnit;
     updatedItem.custoRealEfetivo = fiscal.custoRealEfetivo;
@@ -140,10 +268,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-hidden">
+    <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-visible">
       
-      {/* Header bar */}
-      <div className="px-5 py-4 bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-200/70 dark:border-slate-700/70 flex flex-wrap items-center justify-between gap-3">
+      {/* Header bar com ações e busca inteligente rápida */}
+      <div className="px-5 py-4 bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-200/70 dark:border-slate-700/70 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -154,30 +282,120 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Multiplicador de pacotes, formação de custo real efetivo e rateio para 20 lojas
+            Filtro inteligente com preenchimento automático de foto, códigos, custos e rateio de 20 lojas
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Barra de Filtro Inteligente Rápido + Botões */}
+        <div className="flex flex-wrap items-center gap-2">
+          
+          {/* Campo de Busca Rápida no Topo com Autocomplete */}
+          <div className="relative min-w-[260px] sm:min-w-[320px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              ref={quickSearchInputRef}
+              type="text"
+              value={quickSearchText}
+              onChange={(e) => {
+                setQuickSearchText(e.target.value);
+                setIsQuickSearchOpen(true);
+              }}
+              onFocus={() => {
+                if (quickSearchText.trim().length > 0) setIsQuickSearchOpen(true);
+              }}
+              placeholder="🔍 Buscar produto no catálogo..."
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-hidden shadow-2xs font-medium"
+            />
+            {quickSearchText && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickSearchText('');
+                  setIsQuickSearchOpen(false);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Dropdown de Sugestões da Busca Rápida */}
+            {isQuickSearchOpen && matchingProductsForQuickBar.length > 0 && (
+              <div className="absolute right-0 sm:left-0 top-full mt-1.5 z-50 w-[320px] sm:w-[420px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Produtos do Catálogo ({matchingProductsForQuickBar.length})
+                  </span>
+                  <span className="text-[10px] text-slate-400">Clique para adicionar</span>
+                </div>
+                <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {matchingProductsForQuickBar.map(prod => (
+                    <button
+                      key={prod.id}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelectProductForNewItem(prod);
+                      }}
+                      className="w-full text-left p-2.5 hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 transition flex items-center gap-3 group cursor-pointer"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden flex items-center justify-center">
+                        {prod.fotoUrl ? (
+                          <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
+                        ) : (
+                          <Package className="w-5 h-5 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                            {prod.codigoInterno || prod.codigo}
+                          </span>
+                          {prod.codigoFornecedor && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
+                              Ref: {prod.codigoFornecedor}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate mt-0.5 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
+                          {highlightMatch(prod.descricao, quickSearchText)}
+                        </p>
+                        <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
+                          <span>Emb: <strong>{prod.qtdPorPacote} pçs</strong></span>
+                          <span>Compra: <strong className="text-emerald-600 dark:text-emerald-400">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</strong></span>
+                          <span>PDV: <strong>R$ {Number(prod.pdvSugerido || 0).toFixed(2)}</strong></span>
+                        </div>
+                      </div>
+                      <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition shrink-0">
+                        <Plus className="w-3.5 h-3.5" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {products && products.length > 0 && (
             <button
               onClick={() => setIsCatalogPickerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition cursor-pointer shadow-2xs"
               title="Buscar e adicionar produto cadastrado com foto no catálogo"
             >
               <Package className="w-3.5 h-3.5 text-indigo-600" />
-              + Do Catálogo ({products.length})
+              <span>Catálogo ({products.length})</span>
             </button>
           )}
 
           {onLoadMockOrder && (
             <button
               onClick={onLoadMockOrder}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition cursor-pointer shadow-2xs"
               title="Carregar 20 itens fictícios de loja de presentes para testes completos"
             >
               <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              Exemplo Presentes (20 Itens)
+              <span>Exemplo Presentes</span>
             </button>
           )}
 
@@ -186,26 +404,27 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            Adicionar Item
+            <span>Adicionar Linha</span>
           </button>
         </div>
       </div>
 
       {/* Table responsive container */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[950px]">
+      <div className="overflow-x-auto overflow-y-visible">
+        <table className="w-full text-left border-collapse min-w-[1060px]">
           <thead>
             <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100/50 dark:bg-slate-900/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               <th className="py-3 px-2 w-8 text-center">#</th>
               <th className="py-3 px-2 w-14 text-center">Foto</th>
-              <th className="py-3 px-3 w-28">Código</th>
-              <th className="py-3 px-3 min-w-[200px]">Descrição do Item</th>
+              <th className="py-3 px-2 w-28">Cód. Interno</th>
+              <th className="py-3 px-2 w-28">Cód. Fornecedor</th>
+              <th className="py-3 px-3 min-w-[240px]">Descrição do Item (Filtro Inteligente)</th>
               <th className="py-3 px-2 w-20 text-center" title="Qtd no Pacote (F)">Qtd/Pct</th>
               <th className="py-3 px-2 w-20 text-center" title="Qtd de Pacotes (G)">Pacotes</th>
               <th className="py-3 px-3 w-24 text-center" title="Qtd Total Peças (H = F * G)">Total Un</th>
               <th className="py-3 px-3 w-28 text-right" title="Preço Unitário Compra (I)">Compra (R$)</th>
               <th className="py-3 px-3 w-28 text-right" title="Total Compra (J = H * I)">Total (R$)</th>
-              <th className="py-3 px-3 w-28 text-right" title="Preço Venda PDV Alvo">PDV Alvo</th>
+              <th className="py-3 px-3 w-28 text-center" title="Preço de Venda Único Rede Mega 12 (Travado em R$ 12,00)">PDV (R$ 12 Fixo)</th>
               <th className="py-3 px-3 w-28 text-right" title="Custo Real Efetivo (Compra + 40% PDV - 19.5% ICMS)">Custo Real</th>
               <th className="py-3 px-3 w-32 text-center" title="Margem de Lucro Real">Margem</th>
               <th className="py-3 px-3 w-28 text-center">Ações</th>
@@ -215,6 +434,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             {items.map((item, index) => {
               const fiscal = calculateItemFiscal(item.precoUnitario, item.pdvAlvo, globalFiscal, item.fiscalOverride);
               const isLucrativo = fiscal.isLucrativo;
+              const isItemRowActive = activeAutocompleteItemId === item.id;
 
               return (
                 <tr 
@@ -269,26 +489,146 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Código */}
-                  <td className="py-2 px-2">
+                  {/* Código Interno */}
+                  <td className="py-2 px-1.5 relative">
                     <input
                       type="text"
-                      value={item.codigo || ''}
-                      onChange={(e) => handleFieldChange(item, 'codigo', e.target.value)}
-                      placeholder="CÓD"
-                      className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      value={item.codigoInterno || item.codigo || ''}
+                      onChange={(e) => {
+                        handleFieldChange(item, 'codigoInterno', e.target.value);
+                        handleFieldChange(item, 'codigo', e.target.value);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('codigoInterno');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      onFocus={(e) => {
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('codigoInterno');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      placeholder="CÓD INT"
+                      className="w-full px-2 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 font-mono font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                      title="Código Interno Mega12"
                     />
                   </td>
 
-                  {/* Descrição */}
-                  <td className="py-2 px-2">
+                  {/* Código do Fornecedor */}
+                  <td className="py-2 px-1.5 relative">
                     <input
                       type="text"
-                      value={item.descricao}
-                      onChange={(e) => handleFieldChange(item, 'descricao', e.target.value)}
-                      placeholder="Descrição detalhada do produto"
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      value={item.codigoFornecedor || ''}
+                      onChange={(e) => {
+                        handleFieldChange(item, 'codigoFornecedor', e.target.value);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('codigoFornecedor');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      onFocus={(e) => {
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('codigoFornecedor');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      placeholder="REF FORN"
+                      className="w-full px-2 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800/80 bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 font-mono text-xs focus:ring-2 focus:ring-amber-500 outline-hidden"
+                      title="Código de Referência do Fornecedor"
                     />
+                  </td>
+
+                  {/* Descrição com FILTRO INTELIGENTE / AUTOCOMPLETE */}
+                  <td className="py-2 px-2 relative" ref={isItemRowActive ? autocompleteContainerRef : undefined}>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={item.descricao}
+                        onChange={(e) => {
+                          handleFieldChange(item, 'descricao', e.target.value);
+                          setActiveAutocompleteItemId(item.id);
+                          setActiveAutocompleteField('descricao');
+                          setAutocompleteQuery(e.target.value);
+                        }}
+                        onFocus={(e) => {
+                          setActiveAutocompleteItemId(item.id);
+                          setActiveAutocompleteField('descricao');
+                          setAutocompleteQuery(e.target.value);
+                        }}
+                        placeholder="Digite o nome ou código do produto..."
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      />
+
+                      {/* DROPDOWN FLUTUANTE DE FILTRO INTELIGENTE */}
+                      {isItemRowActive && matchingProductsForRow.length > 0 && (
+                        <div className="absolute left-0 top-full mt-1.5 z-50 w-full min-w-[380px] max-w-[520px] bg-white dark:bg-slate-900 rounded-2xl border border-emerald-500/40 dark:border-emerald-500/30 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                          
+                          {/* Cabeçalho do Dropdown */}
+                          <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-950/70 border-b border-emerald-100 dark:border-emerald-900/60 flex items-center justify-between text-[11px] font-bold">
+                            <span className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              Produtos do Catálogo ({matchingProductsForRow.length})
+                            </span>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">
+                              Clique para preencher a linha
+                            </span>
+                          </div>
+
+                          {/* Lista de Itens Encontrados */}
+                          <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                            {matchingProductsForRow.map(prod => (
+                              <button
+                                key={prod.id}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault(); // Previne blur para registrar o clique imediato
+                                  handleSelectProductForExistingItem(item, prod);
+                                }}
+                                className="w-full text-left p-2.5 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/50 transition flex items-center gap-3 group cursor-pointer"
+                              >
+                                {/* Thumbnail com Foto */}
+                                <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden flex items-center justify-center">
+                                  {prod.fotoUrl ? (
+                                    <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
+                                  ) : (
+                                    <Package className="w-5 h-5 text-slate-400" />
+                                  )}
+                                </div>
+
+                                {/* Informações do Produto */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                                      {prod.codigoInterno || prod.codigo}
+                                    </span>
+                                    {prod.codigoFornecedor && (
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+                                        Ref: {prod.codigoFornecedor}
+                                      </span>
+                                    )}
+                                    {prod.categoria && (
+                                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                                        • {prod.categoria}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate mt-0.5 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
+                                    {highlightMatch(prod.descricao, autocompleteQuery)}
+                                  </p>
+
+                                  <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
+                                    <span>Emb: <strong className="text-slate-700 dark:text-slate-300">{prod.qtdPorPacote} pçs</strong></span>
+                                    <span>Compra: <strong className="text-emerald-600 dark:text-emerald-400">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</strong></span>
+                                    <span>PDV: <strong className="text-slate-700 dark:text-slate-300">R$ {Number(prod.pdvSugerido || 0).toFixed(2)}</strong></span>
+                                  </div>
+                                </div>
+
+                                <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white transition shrink-0">
+                                  <Check className="w-4 h-4" />
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </td>
 
                   {/* Qtd por Pacote (F) */}
@@ -339,16 +679,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     R$ {item.valorTotalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
 
-                  {/* PDV Alvo */}
+                  {/* PDV Alvo - Fixo R$ 12,00 */}
                   <td className="py-2 px-2 text-right">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.pdvAlvo}
-                      onChange={(e) => handleFieldChange(item, 'pdvAlvo', e.target.value)}
-                      className="w-full text-right px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50/40 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                    />
+                    <div 
+                      className="inline-flex items-center justify-center px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs font-mono w-full shadow-2xs"
+                      title="Preço de Venda Único Rede Mega 12 (Travado em R$ 12,00)"
+                    >
+                      <span>R$ 12,00</span>
+                    </div>
                   </td>
 
                   {/* Custo Real Efetivo */}
@@ -381,7 +719,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       {/* Abrir Modal Fiscal */}
                       <button
                         onClick={() => onOpenFiscalModal(item)}
-                        className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition"
+                        className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition cursor-pointer"
                         title="Simulador Fiscal & Limite de Preço"
                       >
                         <Calculator className="w-4 h-4" />
@@ -390,7 +728,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       {/* Abrir Grade de Separação (20 Lojas) */}
                       <button
                         onClick={() => onOpenSeparationModal(item)}
-                        className="p-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition relative"
+                        className="p-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition relative cursor-pointer"
                         title="Ver / Editar Separação (20 Lojas)"
                       >
                         <Store className="w-4 h-4" />
@@ -402,7 +740,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       {/* Duplicar */}
                       <button
                         onClick={() => onDuplicateItem(item)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                         title="Duplicar Item"
                       >
                         <Copy className="w-3.5 h-3.5" />
@@ -425,35 +763,32 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
             {items.length === 0 && (
               <tr>
-                <td colSpan={13} className="py-12 px-4 text-center">
+                <td colSpan={14} className="py-12 px-4 text-center">
                   <div className="max-w-md mx-auto space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mx-auto">
                       <Package className="w-6 h-6" />
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                        Nenhum produto adicionado ao pedido
-                      </h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Adicione um novo produto em branco ou selecione produtos cadastrados com foto diretamente do catálogo.
-                      </p>
-                    </div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Nenhum produto adicionado ao pedido
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Use a busca inteligente acima, adicione uma linha em branco ou escolha produtos diretamente do catálogo.
+                    </p>
                     <div className="flex items-center justify-center gap-2 pt-2">
                       <button
                         onClick={() => onAddItem()}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
                       >
                         <Plus className="w-4 h-4" />
-                        Adicionar Item em Branco
+                        <span>Adicionar Primeiro Item</span>
                       </button>
-
-                      {products && products.length > 0 && (
+                      {products.length > 0 && (
                         <button
                           onClick={() => setIsCatalogPickerOpen(true)}
-                          className="px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 font-bold text-xs transition inline-flex items-center gap-1.5 cursor-pointer"
+                          className="px-4 py-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
                         >
                           <Package className="w-4 h-4" />
-                          Escolher do Catálogo ({products.length})
+                          <span>Abrir Catálogo ({products.length})</span>
                         </button>
                       )}
                     </div>
@@ -465,21 +800,23 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         </table>
       </div>
 
-      {/* Table Footer Actions */}
-      <div className="p-4 bg-slate-50/50 dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      {/* Footer bar com atalhos */}
+      <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200/70 dark:border-slate-700/70 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => onAddItem()}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline transition cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            Adicionar Item em Branco
+            <Plus className="w-3.5 h-3.5" />
+            Adicionar Nova Linha
           </button>
+
+          <span className="text-slate-300 dark:text-slate-700">•</span>
 
           {products && products.length > 0 && (
             <button
               onClick={() => setIsCatalogPickerOpen(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline transition"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline transition cursor-pointer"
             >
               <Package className="w-3.5 h-3.5" />
               Escolher do Catálogo ({products.length} cadastrados)
@@ -514,7 +851,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
               <button
                 onClick={() => setIsCatalogPickerOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -538,11 +875,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             {/* Lista de Produtos com Fotos */}
             <div className="p-4 overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
               {products
-                .filter(p => 
-                  p.descricao.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-                  (p.codigo && p.codigo.toLowerCase().includes(catalogSearch.toLowerCase())) ||
-                  (p.categoria && p.categoria.toLowerCase().includes(catalogSearch.toLowerCase()))
-                )
+                .filter(p => {
+                  const s = catalogSearch.toLowerCase();
+                  const desc = p.descricao.toLowerCase();
+                  const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+                  const codForn = (p.codigoFornecedor || '').toLowerCase();
+                  const cat = (p.categoria || '').toLowerCase();
+                  return desc.includes(s) || codInt.includes(s) || codForn.includes(s) || cat.includes(s);
+                })
                 .map(prod => (
                   <div
                     key={prod.id}
@@ -561,9 +901,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     {/* Dados */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <span className="text-[10px] font-bold font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900/50">
-                          {prod.codigo}
+                        <span className="text-[10px] font-bold font-mono text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800/60" title="Código Interno">
+                          {prod.codigoInterno || prod.codigo}
                         </span>
+                        {prod.codigoFornecedor && (
+                          <span className="text-[9px] font-bold font-mono text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800" title="Código do Fornecedor">
+                            Ref: {prod.codigoFornecedor}
+                          </span>
+                        )}
                         {prod.categoria && (
                           <span className="text-[10px] text-slate-400 truncate">
                             {prod.categoria}
@@ -626,7 +971,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               </span>
               <button
                 onClick={() => setZoomedImage(null)}
-                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

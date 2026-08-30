@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { exportOrderToExcel } from '../utils/excelExporter';
-import { exportRomaneioPDF } from '../utils/pdfExporter';
+import { exportCommercialOrderPDF, exportRomaneioPDF } from '../utils/pdfExporter';
 
 interface OrderHistoryPageProps {
   orders: PurchaseOrder[];
@@ -363,17 +363,25 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                           <button
                             onClick={() => exportOrderToExcel(ord)}
                             className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition cursor-pointer"
-                            title="Exportar Planilha Excel"
+                            title="Exportar Planilha Excel (.xlsx)"
                           >
                             <FileSpreadsheet className="w-4 h-4" />
                           </button>
 
                           <button
-                            onClick={() => exportRomaneioPDF(ord, ord.storeConfigs || [])}
+                            onClick={() => exportCommercialOrderPDF(ord)}
                             className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
-                            title="Gerar Romaneio PDF"
+                            title="Gerar Pedido Comercial PDF (Proposta para Fornecedor)"
                           >
                             <FileText className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => exportRomaneioPDF(ord, ord.storeConfigs || [])}
+                            className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/60 transition cursor-pointer"
+                            title="Gerar Romaneio de Separação PDF (20 Lojas)"
+                          >
+                            <PackageCheck className="w-4 h-4" />
                           </button>
 
                           {onDeleteOrder && (

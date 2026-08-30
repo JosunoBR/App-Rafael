@@ -106,7 +106,7 @@ import {
   fetchNextOrderNumberFromDb
 } from './utils/api';
 import { exportOrderToExcel } from './utils/excelExporter';
-import { exportRomaneioPDF } from './utils/pdfExporter';
+import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
 import { calculateOrderNetTotal, generateOrderInstallments } from './utils/installments';
 import { calculateItemFiscal } from './shared/fiscalEngine';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
@@ -555,9 +555,14 @@ export function App() {
     showToast('Planilha Excel (.xlsx) gerada!', 'success');
   };
 
-  const handleExportPDF = () => {
+  const handleExportCommercialPDF = () => {
+    exportCommercialOrderPDF(order);
+    showToast('Pedido Comercial PDF (Proposta para Fornecedor) gerado com sucesso!', 'success');
+  };
+
+  const handleExportSeparationPDF = () => {
     exportRomaneioPDF(order, storeConfigs);
-    showToast('Romaneio PDF gerado com sucesso!', 'success');
+    showToast('Romaneio PDF de Separação (20 Lojas) gerado com sucesso!', 'success');
   };
 
   // Supplier Page Handlers
@@ -758,7 +763,7 @@ export function App() {
           onSaveOrder={handleSaveOrder}
           onDiscardDraft={handleDiscardDraft}
           onExportExcel={handleExportExcel}
-          onExportPDF={handleExportPDF}
+          onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
           onSelectNav={setActiveNav}
         />
 
@@ -773,7 +778,7 @@ export function App() {
               stores={storeConfigs}
               fiscalConfig={fiscalConfig}
               onUpdateOrder={setOrder}
-              onExportPDF={handleExportPDF}
+              onExportPDF={handleExportCommercialPDF}
               onExportExcel={handleExportExcel}
               onSaveOrder={handleSaveOrder}
               onNewOrder={handleNewOrder}
@@ -929,7 +934,7 @@ export function App() {
                   order={order}
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
                   stores={storeConfigs}
-                  onExportPDF={handleExportPDF}
+                  onExportPDF={handleExportSeparationPDF}
                   onExportExcel={handleExportExcel}
                   onLoadMockOrder={handleLoadMockOrder}
                   onNavigateToOrders={() => setActiveNav('orders')}

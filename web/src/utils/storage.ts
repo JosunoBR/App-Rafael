@@ -18,15 +18,18 @@ const STORAGE_KEYS = {
 export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod_1',
+    codigoInterno: 'PRD-001',
+    codigoFornecedor: 'BP-1001',
+    codigoBarras: '7891000100011',
     codigo: 'PRD-001',
+    eanBarcode: '7891000100011',
     descricao: 'Garrafa Térmica Inox 1L com Termômetro Digital',
     categoria: 'Utilidades Térmicas',
     fotoUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 12,
-    precoUnitarioPadrao: 18.50,
-    pdvSugerido: 49.90,
+    precoUnitarioPadrao: 5.50,
+    pdvSugerido: 12.00,
     ncm: '9617.00.10',
-    eanBarcode: '7891000100011',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -35,15 +38,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_2',
+    codigoInterno: 'PRD-002',
+    codigoFornecedor: 'PB-2002',
+    codigoBarras: '7891000100028',
     codigo: 'PRD-002',
+    eanBarcode: '7891000100028',
     descricao: 'Conjunto 6 Taças de Cristal Lapidado 320ml',
     categoria: 'Vidros & Cristais',
     fotoUrl: 'https://images.unsplash.com/photo-1574053415387-a25475d4088d?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 6,
-    precoUnitarioPadrao: 28.00,
-    pdvSugerido: 79.90,
+    precoUnitarioPadrao: 5.80,
+    pdvSugerido: 12.00,
     ncm: '7013.22.00',
-    eanBarcode: '7891000100028',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -52,15 +58,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_3',
+    codigoInterno: 'PRD-003',
+    codigoFornecedor: 'BP-1003',
+    codigoBarras: '7891000100035',
     codigo: 'PRD-003',
+    eanBarcode: '7891000100035',
     descricao: 'Kit 4 Potes Herméticos de Vidro com Tampa Bambu',
     categoria: 'Organizadores',
     fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 8,
-    precoUnitarioPadrao: 22.90,
-    pdvSugerido: 59.90,
+    precoUnitarioPadrao: 4.90,
+    pdvSugerido: 12.00,
     ncm: '7013.49.00',
-    eanBarcode: '7891000100035',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -69,15 +78,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_4',
+    codigoInterno: 'PRD-004',
+    codigoFornecedor: 'PB-2004',
+    codigoBarras: '7891000100042',
     codigo: 'PRD-004',
+    eanBarcode: '7891000100042',
     descricao: 'Luminária Decorativa LED Articulada de Mesa',
     categoria: 'Decoração & Presentes',
     fotoUrl: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 24,
-    precoUnitarioPadrao: 14.20,
-    pdvSugerido: 39.90,
+    precoUnitarioPadrao: 4.20,
+    pdvSugerido: 12.00,
     ncm: '9405.20.00',
-    eanBarcode: '7891000100042',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -86,15 +98,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_5',
+    codigoInterno: 'PRD-005',
+    codigoFornecedor: 'AU-3005',
+    codigoBarras: '7891000100059',
     codigo: 'PRD-005',
+    eanBarcode: '7891000100059',
     descricao: 'Frigideira Antiaderente Cerâmica 24cm Granito',
     categoria: 'Panelas & Cozinha',
     fotoUrl: 'https://images.unsplash.com/photo-1583778176476-4a8b02a64c01?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 10,
-    precoUnitarioPadrao: 32.00,
-    pdvSugerido: 89.90,
+    precoUnitarioPadrao: 5.20,
+    pdvSugerido: 12.00,
     ncm: '7615.10.00',
-    eanBarcode: '7891000100059',
     supplierId: 'sup_3',
     nomeFornecedor: 'Alumínios União',
     ativo: true,
@@ -103,15 +118,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_6',
+    codigoInterno: 'PRD-006',
+    codigoFornecedor: 'PB-2006',
+    codigoBarras: '7891000100066',
     codigo: 'PRD-006',
+    eanBarcode: '7891000100066',
     descricao: 'Aparelho de Jantar 16 Peças Cerâmica Nórdica',
     categoria: 'Mesa Posta',
     fotoUrl: 'https://images.unsplash.com/photo-1614707267537-b85aaf00c4b7?w=300&auto=format&fit=crop&q=80',
-    qtdPorPacote: 2,
-    precoUnitarioPadrao: 85.00,
-    pdvSugerido: 229.00,
+    qtdPorPacote: 4,
+    precoUnitarioPadrao: 5.90,
+    pdvSugerido: 12.00,
     ncm: '6912.00.00',
-    eanBarcode: '7891000100066',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -120,15 +138,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_7',
+    codigoInterno: 'PRD-007',
+    codigoFornecedor: 'AU-3007',
+    codigoBarras: '7891000100073',
     codigo: 'PRD-007',
+    eanBarcode: '7891000100073',
     descricao: 'Jogo 6 Facas Cozinha Inox com Cepo de Madeira',
     categoria: 'Cutelaria',
     fotoUrl: 'https://images.unsplash.com/photo-1593618998160-e34014e67546?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 12,
-    precoUnitarioPadrao: 38.00,
-    pdvSugerido: 99.90,
+    precoUnitarioPadrao: 4.80,
+    pdvSugerido: 12.00,
     ncm: '8211.91.00',
-    eanBarcode: '7891000100073',
     supplierId: 'sup_3',
     nomeFornecedor: 'Alumínios União',
     ativo: true,
@@ -137,15 +158,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_8',
+    codigoInterno: 'PRD-008',
+    codigoFornecedor: 'BP-1008',
+    codigoBarras: '7891000100080',
     codigo: 'PRD-008',
+    eanBarcode: '7891000100080',
     descricao: 'Difusor de Aromas Elétrico Ultrassônico 300ml',
     categoria: 'Bem-Estar & Casa',
     fotoUrl: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 20,
-    precoUnitarioPadrao: 24.50,
-    pdvSugerido: 69.90,
+    precoUnitarioPadrao: 4.50,
+    pdvSugerido: 12.00,
     ncm: '8509.80.90',
-    eanBarcode: '7891000100080',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -154,15 +178,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_9',
+    codigoInterno: 'PRD-009',
+    codigoFornecedor: 'BP-1009',
+    codigoBarras: '7891000100097',
     codigo: 'PRD-009',
+    eanBarcode: '7891000100097',
     descricao: 'Organizador Giratório Multiuso Acrílico 360°',
     categoria: 'Organizadores',
     fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 15,
-    precoUnitarioPadrao: 16.80,
-    pdvSugerido: 44.90,
+    precoUnitarioPadrao: 4.80,
+    pdvSugerido: 12.00,
     ncm: '3924.90.00',
-    eanBarcode: '7891000100097',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -171,34 +198,38 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_10',
+    codigoInterno: 'PRD-010',
+    codigoFornecedor: 'PB-2010',
+    codigoBarras: '7891000100103',
     codigo: 'PRD-010',
+    eanBarcode: '7891000100103',
     descricao: 'Porta Retrato Luxo Dourado 15x20 com Vidro',
     categoria: 'Decoração & Presentes',
     fotoUrl: 'https://images.unsplash.com/photo-1582582494705-f8ce0b0c24f0?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 30,
-    precoUnitarioPadrao: 8.90,
-    pdvSugerido: 24.90,
+    precoUnitarioPadrao: 3.90,
+    pdvSugerido: 12.00,
     ncm: '8306.30.00',
-    eanBarcode: '7891000100103',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   },
-  // --- 20 NOVOS PRODUTOS CADASTRADOS (PRD-011 a PRD-030) ---
-  // --- 1 PRODUTO DISPONÍVEL EM 3 FORNECEDORES DIFERENTES COM VALORES DISTINTOS: Mop Giratório ---
   {
     id: 'prod_11',
+    codigoInterno: 'PRD-011',
+    codigoFornecedor: 'BP-MOP01',
+    codigoBarras: '7891000100110',
     codigo: 'PRD-011',
+    eanBarcode: '7891000100110',
     descricao: 'Mop Giratório 360° Pro com Balde Inox e 2 Refis Microfibra',
     categoria: 'Limpeza & Utilidades',
     fotoUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 6,
-    precoUnitarioPadrao: 34.50,
-    pdvSugerido: 79.90,
+    precoUnitarioPadrao: 5.50,
+    pdvSugerido: 12.00,
     ncm: '9603.90.00',
-    eanBarcode: '7891000100110',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -207,15 +238,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_12',
+    codigoInterno: 'PRD-012',
+    codigoFornecedor: 'PB-MOP02',
+    codigoBarras: '7891000100127',
     codigo: 'PRD-012',
+    eanBarcode: '7891000100127',
     descricao: 'Mop Giratório 360° Pro com Balde Inox e 2 Refis Microfibra',
     categoria: 'Limpeza & Utilidades',
     fotoUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 6,
-    precoUnitarioPadrao: 38.90,
-    pdvSugerido: 84.90,
+    precoUnitarioPadrao: 5.80,
+    pdvSugerido: 12.00,
     ncm: '9603.90.00',
-    eanBarcode: '7891000100127',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -224,15 +258,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_13',
+    codigoInterno: 'PRD-013',
+    codigoFornecedor: 'AU-MOP03',
+    codigoBarras: '7891000100134',
     codigo: 'PRD-013',
+    eanBarcode: '7891000100134',
     descricao: 'Mop Giratório 360° Pro com Balde Inox e 2 Refis Microfibra',
     categoria: 'Limpeza & Utilidades',
     fotoUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 8,
-    precoUnitarioPadrao: 31.80,
-    pdvSugerido: 74.90,
+    precoUnitarioPadrao: 5.20,
+    pdvSugerido: 12.00,
     ncm: '9603.90.00',
-    eanBarcode: '7891000100134',
     supplierId: 'sup_3',
     nomeFornecedor: 'Alumínios União',
     ativo: true,
@@ -241,15 +278,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_14',
+    codigoInterno: 'PRD-014',
+    codigoFornecedor: 'PB-2014',
+    codigoBarras: '7891000100141',
     codigo: 'PRD-014',
+    eanBarcode: '7891000100141',
     descricao: 'Conjunto 3 Travessas Refratárias Retangulares em Vidro Opalino',
     categoria: 'Mesa Posta & Cozinha',
     fotoUrl: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 4,
-    precoUnitarioPadrao: 42.00,
-    pdvSugerido: 98.00,
+    precoUnitarioPadrao: 5.00,
+    pdvSugerido: 12.00,
     ncm: '7013.49.00',
-    eanBarcode: '7891000100141',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -258,15 +298,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_15',
+    codigoInterno: 'PRD-015',
+    codigoFornecedor: 'PB-2015',
+    codigoBarras: '7891000100158',
     codigo: 'PRD-015',
+    eanBarcode: '7891000100158',
     descricao: 'Kit 6 Copos de Vidro Alto Diamond 350ml Transparente',
     categoria: 'Vidros & Cristais',
     fotoUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 12,
-    precoUnitarioPadrao: 16.50,
-    pdvSugerido: 39.90,
+    precoUnitarioPadrao: 4.50,
+    pdvSugerido: 12.00,
     ncm: '7013.37.00',
-    eanBarcode: '7891000100158',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -275,15 +318,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_16',
+    codigoInterno: 'PRD-016',
+    codigoFornecedor: 'AU-3016',
+    codigoBarras: '7891000100165',
     codigo: 'PRD-016',
+    eanBarcode: '7891000100165',
     descricao: 'Panela de Pressão Alumínio Polido 4,5L Fechamento Externo',
     categoria: 'Panelas & Cozinha',
     fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 6,
-    precoUnitarioPadrao: 58.00,
-    pdvSugerido: 139.90,
+    precoUnitarioPadrao: 5.80,
+    pdvSugerido: 12.00,
     ncm: '7615.10.00',
-    eanBarcode: '7891000100165',
     supplierId: 'sup_3',
     nomeFornecedor: 'Alumínios União',
     ativo: true,
@@ -292,15 +338,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_17',
+    codigoInterno: 'PRD-017',
+    codigoFornecedor: 'BP-1017',
+    codigoBarras: '7891000100172',
     codigo: 'PRD-017',
+    eanBarcode: '7891000100172',
     descricao: 'Dispenser Automático de Sabonete Líquido com Sensor Infravermelho',
     categoria: 'Banheiro & Higiene',
     fotoUrl: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 20,
-    precoUnitarioPadrao: 21.90,
-    pdvSugerido: 54.90,
+    precoUnitarioPadrao: 4.80,
+    pdvSugerido: 12.00,
     ncm: '8509.80.90',
-    eanBarcode: '7891000100172',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -309,15 +358,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_18',
+    codigoInterno: 'PRD-018',
+    codigoFornecedor: 'AU-3018',
+    codigoBarras: '7891000100189',
     codigo: 'PRD-018',
+    eanBarcode: '7891000100189',
     descricao: 'Escorredor de Louças 2 Andares Inox Black com Porta Copos e Talheres',
     categoria: 'Organizadores',
     fotoUrl: 'https://images.unsplash.com/photo-1583778176476-4a8b02a64c01?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 6,
-    precoUnitarioPadrao: 46.50,
-    pdvSugerido: 119.90,
+    precoUnitarioPadrao: 4.60,
+    pdvSugerido: 12.00,
     ncm: '7323.93.00',
-    eanBarcode: '7891000100189',
     supplierId: 'sup_3',
     nomeFornecedor: 'Alumínios União',
     ativo: true,
@@ -326,15 +378,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_19',
+    codigoInterno: 'PRD-019',
+    codigoFornecedor: 'BP-1019',
+    codigoBarras: '7891000100196',
     codigo: 'PRD-019',
+    eanBarcode: '7891000100196',
     descricao: 'Kit 5 Cabides Veludo Slim Antideslizante Bege',
     categoria: 'Organizadores',
     fotoUrl: 'https://images.unsplash.com/photo-1582735689369-4fe89db7114c?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 30,
-    precoUnitarioPadrao: 9.80,
-    pdvSugerido: 24.90,
+    precoUnitarioPadrao: 3.50,
+    pdvSugerido: 12.00,
     ncm: '3924.90.00',
-    eanBarcode: '7891000100196',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -343,15 +398,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_20',
+    codigoInterno: 'PRD-020',
+    codigoFornecedor: 'PB-2020',
+    codigoBarras: '7891000100202',
     codigo: 'PRD-020',
+    eanBarcode: '7891000100202',
     descricao: 'Bandeja Espelhada Retangular Borda Dourada 30x20cm para Lavabo',
     categoria: 'Decoração & Presentes',
     fotoUrl: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 10,
-    precoUnitarioPadrao: 26.00,
-    pdvSugerido: 69.90,
+    precoUnitarioPadrao: 4.80,
+    pdvSugerido: 12.00,
     ncm: '7009.92.00',
-    eanBarcode: '7891000100202',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -360,15 +418,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_21',
+    codigoInterno: 'PRD-021',
+    codigoFornecedor: 'AU-3021',
+    codigoBarras: '7891000100219',
     codigo: 'PRD-021',
+    eanBarcode: '7891000100219',
     descricao: 'Jogo de Assadeiras Antiaderente 3 Peças Redonda, Retangular e Torta',
     categoria: 'Panelas & Cozinha',
     fotoUrl: 'https://images.unsplash.com/photo-1590794056226-79ef3a8147e1?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 8,
-    precoUnitarioPadrao: 39.50,
-    pdvSugerido: 89.90,
+    precoUnitarioPadrao: 4.90,
+    pdvSugerido: 12.00,
     ncm: '7615.10.00',
-    eanBarcode: '7891000100219',
     supplierId: 'sup_3',
     nomeFornecedor: 'Alumínios União',
     ativo: true,
@@ -377,15 +438,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_22',
+    codigoInterno: 'PRD-022',
+    codigoFornecedor: 'BP-1022',
+    codigoBarras: '7891000100226',
     codigo: 'PRD-022',
+    eanBarcode: '7891000100226',
     descricao: 'Garrafa Térmica Infantil com Canudo Silicone e Alça 500ml',
     categoria: 'Utilidades Térmicas',
     fotoUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 16,
-    precoUnitarioPadrao: 17.20,
-    pdvSugerido: 44.90,
+    precoUnitarioPadrao: 4.20,
+    pdvSugerido: 12.00,
     ncm: '9617.00.10',
-    eanBarcode: '7891000100226',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -394,15 +458,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_23',
+    codigoInterno: 'PRD-023',
+    codigoFornecedor: 'PB-2023',
+    codigoBarras: '7891000100233',
     codigo: 'PRD-023',
+    eanBarcode: '7891000100233',
     descricao: 'Vaso Cerâmica Canelado Nórdico Matte 22cm Off-White',
     categoria: 'Decoração & Presentes',
     fotoUrl: 'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 12,
-    precoUnitarioPadrao: 19.80,
-    pdvSugerido: 49.90,
+    precoUnitarioPadrao: 4.50,
+    pdvSugerido: 12.00,
     ncm: '6913.90.00',
-    eanBarcode: '7891000100233',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -411,15 +478,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_24',
+    codigoInterno: 'PRD-024',
+    codigoFornecedor: 'BP-1024',
+    codigoBarras: '7891000100240',
     codigo: 'PRD-024',
+    eanBarcode: '7891000100240',
     descricao: 'Caixa Organizadora Plástica Transparente com Trava e Rodízios 45L',
     categoria: 'Organizadores',
     fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 8,
-    precoUnitarioPadrao: 29.90,
-    pdvSugerido: 69.90,
+    precoUnitarioPadrao: 4.90,
+    pdvSugerido: 12.00,
     ncm: '3923.10.90',
-    eanBarcode: '7891000100240',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -428,15 +498,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_25',
+    codigoInterno: 'PRD-025',
+    codigoFornecedor: 'AU-3025',
+    codigoBarras: '7891000100257',
     codigo: 'PRD-025',
+    eanBarcode: '7891000100257',
     descricao: 'Faqueiro Aço Inox 24 Peças com Estojo Gaveta Laguna',
     categoria: 'Cutelaria',
     fotoUrl: 'https://images.unsplash.com/photo-1593618998160-e34014e67546?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 6,
-    precoUnitarioPadrao: 54.00,
-    pdvSugerido: 129.90,
+    precoUnitarioPadrao: 5.40,
+    pdvSugerido: 12.00,
     ncm: '8211.91.00',
-    eanBarcode: '7891000100257',
     supplierId: 'sup_3',
     nomeFornecedor: 'Alumínios União',
     ativo: true,
@@ -445,15 +518,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_26',
+    codigoInterno: 'PRD-026',
+    codigoFornecedor: 'PB-2026',
+    codigoBarras: '7891000100264',
     codigo: 'PRD-026',
+    eanBarcode: '7891000100264',
     descricao: 'Kit 3 Mini Bowls de Cerâmica com Base de Bambu para Petiscos',
     categoria: 'Mesa Posta',
     fotoUrl: 'https://images.unsplash.com/photo-1614707267537-b85aaf00c4b7?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 12,
-    precoUnitarioPadrao: 23.50,
-    pdvSugerido: 59.90,
+    precoUnitarioPadrao: 4.60,
+    pdvSugerido: 12.00,
     ncm: '6912.00.00',
-    eanBarcode: '7891000100264',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -462,15 +538,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_27',
+    codigoInterno: 'PRD-027',
+    codigoFornecedor: 'BP-1027',
+    codigoBarras: '7891000100271',
     codigo: 'PRD-027',
+    eanBarcode: '7891000100271',
     descricao: 'Bule Térmico Wave 1L com Ampola de Vidro e Cabo Madeira',
     categoria: 'Utilidades Térmicas',
     fotoUrl: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 10,
-    precoUnitarioPadrao: 27.80,
-    pdvSugerido: 64.90,
+    precoUnitarioPadrao: 4.80,
+    pdvSugerido: 12.00,
     ncm: '9617.00.10',
-    eanBarcode: '7891000100271',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -479,15 +558,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_28',
+    codigoInterno: 'PRD-028',
+    codigoFornecedor: 'AU-3028',
+    codigoBarras: '7891000100288',
     codigo: 'PRD-028',
+    eanBarcode: '7891000100288',
     descricao: 'Cuscuzeira Individual Alumínio Polido com Tampa de Vidro',
     categoria: 'Panelas & Cozinha',
     fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 12,
-    precoUnitarioPadrao: 18.90,
-    pdvSugerido: 42.90,
+    precoUnitarioPadrao: 4.30,
+    pdvSugerido: 12.00,
     ncm: '7615.10.00',
-    eanBarcode: '7891000100288',
     supplierId: 'sup_3',
     nomeFornecedor: 'Alumínios União',
     ativo: true,
@@ -496,15 +578,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_29',
+    codigoInterno: 'PRD-029',
+    codigoFornecedor: 'PB-2029',
+    codigoBarras: '7891000100295',
     codigo: 'PRD-029',
+    eanBarcode: '7891000100295',
     descricao: 'Relógio de Parede Silencioso Minimalista Scandinavian 30cm',
     categoria: 'Decoração & Presentes',
     fotoUrl: 'https://images.unsplash.com/photo-1563861826100-9cb868fdbe1c?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 15,
-    precoUnitarioPadrao: 22.00,
-    pdvSugerido: 54.90,
+    precoUnitarioPadrao: 4.20,
+    pdvSugerido: 12.00,
     ncm: '9105.21.00',
-    eanBarcode: '7891000100295',
     supplierId: 'sup_2',
     nomeFornecedor: 'Paraná Bazar',
     ativo: true,
@@ -513,15 +598,18 @@ export const INITIAL_PRODUCTS: Product[] = [
   },
   {
     id: 'prod_30',
+    codigoInterno: 'PRD-030',
+    codigoFornecedor: 'BP-1030',
+    codigoBarras: '7891000100301',
     codigo: 'PRD-030',
+    eanBarcode: '7891000100301',
     descricao: 'Conjunto 4 Potes Herméticos Quadrados Empilháveis Slim',
     categoria: 'Organizadores',
     fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80',
     qtdPorPacote: 10,
-    precoUnitarioPadrao: 25.40,
-    pdvSugerido: 62.90,
+    precoUnitarioPadrao: 4.90,
+    pdvSugerido: 12.00,
     ncm: '3924.90.00',
-    eanBarcode: '7891000100301',
     supplierId: 'sup_1',
     nomeFornecedor: 'Brasil Plásticos',
     ativo: true,
@@ -650,16 +738,26 @@ export function deleteSupplier(supplierId: string): Supplier[] {
 export function getProductsList(): Product[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (!saved) return INITIAL_PRODUCTS;
-    const parsed: Product[] = JSON.parse(saved);
-    const existingIds = new Set(parsed.map(p => p.id));
+    let list: Product[] = saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    const existingIds = new Set(list.map(p => p.id));
     const missing = INITIAL_PRODUCTS.filter(p => !existingIds.has(p.id));
     if (missing.length > 0) {
-      const merged = [...parsed, ...missing];
-      saveProductsList(merged);
-      return merged;
+      list = [...list, ...missing];
     }
-    return parsed;
+    // Normalizar campos de código e travar PDV Sugerido na regra de negócio da Rede Mega 12 (R$ 12,00 Fixo)
+    return list.map(p => {
+      const codigoInterno = p.codigoInterno || p.codigo || 'PRD-000';
+      const codigoBarras = p.codigoBarras || p.eanBarcode || '';
+      return {
+        ...p,
+        codigoInterno,
+        codigo: codigoInterno,
+        codigoFornecedor: p.codigoFornecedor || '',
+        codigoBarras,
+        eanBarcode: codigoBarras,
+        pdvSugerido: 12.00
+      };
+    });
   } catch {
     return INITIAL_PRODUCTS;
   }
@@ -672,18 +770,27 @@ export function saveProductsList(products: Product[]): void {
 export function saveProduct(product: Product): Product[] {
   const list = getProductsList();
   const index = list.findIndex(p => p.id === product.id);
+  const normalized: Product = {
+    ...product,
+    codigoInterno: product.codigoInterno || product.codigo || `PRD-${Date.now()}`,
+    codigo: product.codigoInterno || product.codigo || `PRD-${Date.now()}`,
+    codigoFornecedor: product.codigoFornecedor || '',
+    codigoBarras: product.codigoBarras || product.eanBarcode || '',
+    eanBarcode: product.codigoBarras || product.eanBarcode || '',
+    pdvSugerido: 12.00,
+    updatedAt: new Date().toISOString()
+  };
   let updatedList: Product[];
 
   if (index >= 0) {
     updatedList = [...list];
-    updatedList[index] = { ...product, updatedAt: new Date().toISOString() };
+    updatedList[index] = normalized;
   } else {
     updatedList = [
       {
-        ...product,
+        ...normalized,
         id: product.id || 'prod_' + Date.now(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: new Date().toISOString()
       },
       ...list
     ];
@@ -767,8 +874,11 @@ export function loadCurrentOrder(): PurchaseOrder | null {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_ORDER);
     if (!saved) return null;
-    const ord = JSON.parse(saved);
+    const ord: PurchaseOrder = JSON.parse(saved);
     if (ord.header?.status === 'Finalizado') return null;
+    if (ord.items) {
+      ord.items = ord.items.map(it => ({ ...it, pdvAlvo: 12.00 }));
+    }
     return ord;
   } catch {
     return null;
@@ -781,7 +891,11 @@ export function saveCurrentOrder(order: PurchaseOrder): void {
     localStorage.removeItem(STORAGE_KEYS.CURRENT_ORDER);
     return;
   }
-  localStorage.setItem(STORAGE_KEYS.CURRENT_ORDER, JSON.stringify(order));
+  const orderWithFixedPdv = {
+    ...order,
+    items: (order.items || []).map(it => ({ ...it, pdvAlvo: 12.00 }))
+  };
+  localStorage.setItem(STORAGE_KEYS.CURRENT_ORDER, JSON.stringify(orderWithFixedPdv));
 }
 
 export function clearCurrentDraft(): void {
@@ -790,32 +904,32 @@ export function clearCurrentDraft(): void {
 
 export function createRealisticMockOrder(fiscalConfig: FiscalConfig, storeConfigs: StoreConfig[]): PurchaseOrder {
   const mockProducts = [
-    { codigo: 'PRE-001', descricao: 'Caneca Cerâmica Decorada com Frases 350ml', pct: 12, cx: 80, preco: 6.20, pdv: 16.90 },
-    { codigo: 'PRE-002', descricao: 'Difusor e Aromatizador de Ambientes Lavanda 250ml', pct: 6, cx: 120, preco: 14.50, pdv: 34.90 },
-    { codigo: 'PRE-003', descricao: 'Porta-Retrato Vidro e Dourado 15x20cm', pct: 24, cx: 50, preco: 7.80, pdv: 19.90 },
-    { codigo: 'PRE-004', descricao: 'Vela Aromática Copo de Vidro Baunilha 180g', pct: 12, cx: 90, preco: 9.50, pdv: 24.90 },
-    { codigo: 'PRE-005', descricao: 'Luminária de Mesa LED Articulada USB', pct: 8, cx: 65, preco: 24.00, pdv: 59.90 },
-    { codigo: 'PRE-006', descricao: 'Caixa Organizadora Cartonada Decorativa P/M/G', pct: 4, cx: 150, preco: 18.20, pdv: 44.90 },
-    { codigo: 'PRE-007', descricao: 'Garrafa Squeeze Inox Degradê 750ml', pct: 12, cx: 70, preco: 16.80, pdv: 39.90 },
-    { codigo: 'PRE-008', descricao: 'Jogo de Xícaras de Café Cristal Coração 6un', pct: 6, cx: 85, preco: 28.50, pdv: 69.90 },
-    { codigo: 'PRE-009', descricao: 'Espelho de Mesa com LED Touch e Base Porta-Jóias', pct: 6, cx: 60, preco: 32.00, pdv: 79.90 },
-    { codigo: 'PRE-010', descricao: 'Mini Vaso Cachepot Cerâmica com Suculenta', pct: 24, cx: 100, preco: 3.90, pdv: 9.90 },
-    { codigo: 'PRE-011', descricao: 'Almofada Decorativa Veludo com Enchimento 45x45cm', pct: 10, cx: 75, preco: 15.50, pdv: 38.90 },
-    { codigo: 'PRE-012', descricao: 'Relógio de Parede Moderno Minimalista 30cm', pct: 12, cx: 45, preco: 21.00, pdv: 49.90 },
-    { codigo: 'PRE-013', descricao: 'Copo Térmico com Tampa e Abridor 473ml', pct: 12, cx: 110, preco: 19.50, pdv: 49.90 },
-    { codigo: 'PRE-014', descricao: 'Kit Canetas Fineliner Tons Pastel 12 Cores', pct: 24, cx: 55, preco: 8.90, pdv: 22.90 },
-    { codigo: 'PRE-015', descricao: 'Garrafa Térmica Nórdica Cabo Madeira 1L', pct: 6, cx: 80, preco: 34.00, pdv: 79.90 },
-    { codigo: 'PRE-016', descricao: 'Bandeja Espelhada Retangular Decorativa Lavabo', pct: 6, cx: 50, preco: 26.50, pdv: 64.90 },
-    { codigo: 'PRE-017', descricao: 'Bloco de Anotações Planner Semanal Wire-o', pct: 20, cx: 40, preco: 7.20, pdv: 18.90 },
-    { codigo: 'PRE-018', descricao: 'Peseira Manta de Sofá Algodão Trabalhado', pct: 4, cx: 60, preco: 38.00, pdv: 89.90 },
-    { codigo: 'PRE-019', descricao: 'Conjunto Taças de Vinho Cristal Borda Dourada 6un', pct: 4, cx: 95, preco: 45.00, pdv: 109.90 },
-    { codigo: 'PRE-020', descricao: 'Aromatizador Umidificador Ultrassônico de Mesa', pct: 6, cx: 70, preco: 42.00, pdv: 99.90 }
+    { codigo: 'PRE-001', descricao: 'Caneca Cerâmica Decorada com Frases 350ml', pct: 12, cx: 80, preco: 4.20, pdv: 12.00 },
+    { codigo: 'PRE-002', descricao: 'Difusor e Aromatizador de Ambientes Lavanda 250ml', pct: 6, cx: 120, preco: 4.80, pdv: 12.00 },
+    { codigo: 'PRE-003', descricao: 'Porta-Retrato Vidro e Dourado 15x20cm', pct: 24, cx: 50, preco: 3.80, pdv: 12.00 },
+    { codigo: 'PRE-004', descricao: 'Vela Aromática Copo de Vidro Baunilha 180g', pct: 12, cx: 90, preco: 4.50, pdv: 12.00 },
+    { codigo: 'PRE-005', descricao: 'Luminária de Mesa LED Articulada USB', pct: 8, cx: 65, preco: 5.20, pdv: 12.00 },
+    { codigo: 'PRE-006', descricao: 'Caixa Organizadora Cartonada Decorativa P/M/G', pct: 4, cx: 150, preco: 4.80, pdv: 12.00 },
+    { codigo: 'PRE-007', descricao: 'Garrafa Squeeze Inox Degradê 750ml', pct: 12, cx: 70, preco: 5.10, pdv: 12.00 },
+    { codigo: 'PRE-008', descricao: 'Jogo de Xícaras de Café Cristal Coração 6un', pct: 6, cx: 85, preco: 5.50, pdv: 12.00 },
+    { codigo: 'PRE-009', descricao: 'Espelho de Mesa com LED Touch e Base Porta-Jóias', pct: 6, cx: 60, preco: 5.40, pdv: 12.00 },
+    { codigo: 'PRE-010', descricao: 'Mini Vaso Cachepot Cerâmica com Suculenta', pct: 24, cx: 100, preco: 3.50, pdv: 12.00 },
+    { codigo: 'PRE-011', descricao: 'Almofada Decorativa Veludo com Enchimento 45x45cm', pct: 10, cx: 75, preco: 4.90, pdv: 12.00 },
+    { codigo: 'PRE-012', descricao: 'Relógio de Parede Moderno Minimalista 30cm', pct: 12, cx: 45, preco: 4.50, pdv: 12.00 },
+    { codigo: 'PRE-013', descricao: 'Copo Térmico com Tampa e Abridor 473ml', pct: 12, cx: 110, preco: 5.20, pdv: 12.00 },
+    { codigo: 'PRE-014', descricao: 'Kit Canetas Fineliner Tons Pastel 12 Cores', pct: 24, cx: 55, preco: 3.90, pdv: 12.00 },
+    { codigo: 'PRE-015', descricao: 'Garrafa Térmica Nórdica Cabo Madeira 1L', pct: 6, cx: 80, preco: 5.80, pdv: 12.00 },
+    { codigo: 'PRE-016', descricao: 'Bandeja Espelhada Retangular Decorativa Lavabo', pct: 6, cx: 50, preco: 4.90, pdv: 12.00 },
+    { codigo: 'PRE-017', descricao: 'Bloco de Anotações Planner Semanal Wire-o', pct: 20, cx: 40, preco: 3.20, pdv: 12.00 },
+    { codigo: 'PRE-018', descricao: 'Peseira Manta de Sofá Algodão Trabalhado', pct: 4, cx: 60, preco: 5.60, pdv: 12.00 },
+    { codigo: 'PRE-019', descricao: 'Conjunto Taças de Vinho Cristal Borda Dourada 6un', pct: 4, cx: 95, preco: 5.80, pdv: 12.00 },
+    { codigo: 'PRE-020', descricao: 'Aromatizador Umidificador Ultrassônico de Mesa', pct: 6, cx: 70, preco: 5.50, pdv: 12.00 }
   ];
 
   const items = mockProducts.map((p, idx) => {
     const qtdTotalUnidades = p.pct * p.cx;
     const valorTotalBruto = qtdTotalUnidades * p.preco;
-    const fiscal = calculateItemFiscal(p.preco, p.pdv, fiscalConfig);
+    const fiscal = calculateItemFiscal(p.preco, 12.00, fiscalConfig);
     const separation = calculateAutomaticSeparation(qtdTotalUnidades, storeConfigs);
 
     return {
@@ -827,7 +941,7 @@ export function createRealisticMockOrder(fiscalConfig: FiscalConfig, storeConfig
       qtdTotalUnidades,
       precoUnitario: p.preco,
       valorTotalBruto,
-      pdvAlvo: p.pdv,
+      pdvAlvo: 12.00,
       despesasPdvUnit: fiscal.despesasPdvUnit,
       creditoIcmsUnit: fiscal.creditoIcmsUnit,
       custoRealEfetivo: fiscal.custoRealEfetivo,
@@ -872,7 +986,11 @@ export function createRealisticMockOrder(fiscalConfig: FiscalConfig, storeConfig
 export function loadSavedOrdersList(): PurchaseOrder[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.SAVED_ORDERS);
-    return saved ? JSON.parse(saved) : [];
+    const list: PurchaseOrder[] = saved ? JSON.parse(saved) : [];
+    return list.map(ord => ({
+      ...ord,
+      items: (ord.items || []).map(it => ({ ...it, pdvAlvo: 12.00 }))
+    }));
   } catch {
     return [];
   }
@@ -881,7 +999,11 @@ export function loadSavedOrdersList(): PurchaseOrder[] {
 export function saveOrderToHistory(order: PurchaseOrder): void {
   const list = loadSavedOrdersList();
   const index = list.findIndex(o => o.header.id === order.header.id);
-  const updatedOrder = { ...order, header: { ...order.header, updatedAt: new Date().toISOString() } };
+  const updatedOrder = { 
+    ...order, 
+    items: (order.items || []).map(it => ({ ...it, pdvAlvo: 12.00 })),
+    header: { ...order.header, updatedAt: new Date().toISOString() } 
+  };
   
   if (index >= 0) {
     list[index] = updatedOrder;
@@ -906,8 +1028,8 @@ export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
     qtdPorPacote: 12,
     saldoCaixas: 45,
     saldoUnidades: 45 * 12, // 540 un
-    precoUnitario: 18.50,
-    pdvSugerido: 49.90,
+    precoUnitario: 5.50,
+    pdvSugerido: 12.00,
     localizacaoGalpao: 'Rua A - Palete 04',
     fornecedorOrigem: 'Brasil Plásticos',
     dataUltimaEntrada: '2026-08-15',
@@ -923,8 +1045,8 @@ export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
     qtdPorPacote: 6,
     saldoCaixas: 30,
     saldoUnidades: 30 * 6, // 180 un
-    precoUnitario: 26.90,
-    pdvSugerido: 69.90,
+    precoUnitario: 5.80,
+    pdvSugerido: 12.00,
     localizacaoGalpao: 'Rua A - Palete 12',
     fornecedorOrigem: 'Paraná Bazar',
     dataUltimaEntrada: '2026-08-18',
@@ -940,8 +1062,8 @@ export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
     qtdPorPacote: 6,
     saldoCaixas: 25,
     saldoUnidades: 25 * 6, // 150 un
-    precoUnitario: 34.00,
-    pdvSugerido: 89.90,
+    precoUnitario: 4.50,
+    pdvSugerido: 12.00,
     localizacaoGalpao: 'Rua B - Palete 02',
     fornecedorOrigem: 'Paraná Bazar',
     dataUltimaEntrada: '2026-08-10',
@@ -957,8 +1079,8 @@ export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
     qtdPorPacote: 12,
     saldoCaixas: 60,
     saldoUnidades: 60 * 12, // 720 un
-    precoUnitario: 9.80,
-    pdvSugerido: 26.90,
+    precoUnitario: 4.20,
+    pdvSugerido: 12.00,
     localizacaoGalpao: 'Rua B - Palete 08',
     fornecedorOrigem: 'Paraná Bazar',
     dataUltimaEntrada: '2026-08-20',
@@ -974,8 +1096,8 @@ export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
     qtdPorPacote: 12,
     saldoCaixas: 50,
     saldoUnidades: 50 * 12, // 600 un
-    precoUnitario: 19.50,
-    pdvSugerido: 49.90,
+    precoUnitario: 5.10,
+    pdvSugerido: 12.00,
     localizacaoGalpao: 'Rua C - Palete 01',
     fornecedorOrigem: 'Brasil Plásticos',
     dataUltimaEntrada: '2026-08-22',
@@ -991,8 +1113,8 @@ export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
     qtdPorPacote: 8,
     saldoCaixas: 35,
     saldoUnidades: 35 * 8, // 280 un
-    precoUnitario: 24.50,
-    pdvSugerido: 59.90,
+    precoUnitario: 4.20,
+    pdvSugerido: 12.00,
     localizacaoGalpao: 'Rua C - Palete 10',
     fornecedorOrigem: 'Importadora Oriente',
     dataUltimaEntrada: '2026-08-12',
@@ -1008,8 +1130,8 @@ export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
     qtdPorPacote: 12,
     saldoCaixas: 40,
     saldoUnidades: 40 * 12, // 480 un
-    precoUnitario: 16.80,
-    pdvSugerido: 39.90,
+    precoUnitario: 4.80,
+    pdvSugerido: 12.00,
     localizacaoGalpao: 'Rua D - Palete 05',
     fornecedorOrigem: 'Brasil Plásticos',
     dataUltimaEntrada: '2026-08-16',
@@ -1025,8 +1147,8 @@ export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
     qtdPorPacote: 6,
     saldoCaixas: 20,
     saldoUnidades: 20 * 6, // 120 un
-    precoUnitario: 38.00,
-    pdvSugerido: 89.90,
+    precoUnitario: 5.00,
+    pdvSugerido: 12.00,
     localizacaoGalpao: 'Rua D - Palete 14',
     fornecedorOrigem: 'Alumínios União',
     dataUltimaEntrada: '2026-08-05',
@@ -1038,8 +1160,10 @@ export function getInitialCentralStock(): CentralStockItem[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.CENTRAL_STOCK);
     if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      const parsed: CentralStockItem[] = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(s => ({ ...s, pdvSugerido: 12.00 }));
+      }
     }
   } catch {}
   localStorage.setItem(STORAGE_KEYS.CENTRAL_STOCK, JSON.stringify(INITIAL_CENTRAL_STOCK));

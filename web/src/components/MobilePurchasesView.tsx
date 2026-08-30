@@ -70,6 +70,8 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
 
   // Estado do item que está sendo adicionado ou editado
   const [novoItem, setNovoItem] = useState<Partial<OrderItem>>({
+    codigoInterno: '',
+    codigoFornecedor: '',
     codigo: '',
     descricao: '',
     qtdPorPacote: 12,
@@ -123,13 +125,18 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
 
   // Autocomplete de produto do catálogo
   const handleSelectProduct = (prod: Product) => {
+    const codInt = prod.codigoInterno || prod.codigo || '';
+    const codForn = prod.codigoFornecedor || '';
+
     setNovoItem(prev => ({
       ...prev,
-      codigo: prod.codigo,
+      codigoInterno: codInt,
+      codigoFornecedor: codForn,
+      codigo: codInt,
       descricao: prod.descricao,
       qtdPorPacote: prod.qtdPorPacote || 12,
       precoUnitario: prod.precoUnitarioPadrao || prev.precoUnitario,
-      pdvAlvo: prod.pdvSugerido || prev.pdvAlvo,
+      pdvAlvo: 12.00,
       fotoUrl: prod.fotoUrl || ''
     }));
     setShowProductSuggestions(false);
@@ -138,10 +145,13 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
 
   // Produtos filtrados pela busca
   const filteredProducts = productSearchTerm.trim().length > 0 
-    ? products.filter(p => 
-        p.descricao.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-        p.codigo.toLowerCase().includes(productSearchTerm.toLowerCase())
-      ).slice(0, 6)
+    ? products.filter(p => {
+        const s = productSearchTerm.toLowerCase();
+        const desc = p.descricao.toLowerCase();
+        const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+        const codForn = (p.codigoFornecedor || '').toLowerCase();
+        return desc.includes(s) || codInt.includes(s) || codForn.includes(s);
+      }).slice(0, 6)
     : [];
 
   // Salvar ou Adicionar Item
@@ -153,7 +163,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
       // Atualizar item existente
       const updatedItems = order.items.map(item => {
         if (item.id !== editingItemId) return item;
-        const fiscal = calculateItemFiscal(Number(novoItem.precoUnitario) || 0, Number(novoItem.pdvAlvo) || 0, order.fiscalConfig);
+        const fiscal = calculateItemFiscal(Number(novoItem.precoUnitario) || 0, 12.00, order.fiscalConfig);
         const qtdTotal = (Number(novoItem.qtdPorPacote) || 1) * (Number(novoItem.qtdPacotes) || 1);
         
         // Recalcular separação se não for manual
@@ -165,7 +175,9 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
 
         return {
           ...item,
-          codigo: novoItem.codigo || item.codigo,
+          codigoInterno: novoItem.codigoInterno || item.codigoInterno || novoItem.codigo || item.codigo,
+          codigoFornecedor: novoItem.codigoFornecedor !== undefined ? novoItem.codigoFornecedor : item.codigoFornecedor,
+          codigo: novoItem.codigoInterno || item.codigoInterno || novoItem.codigo || item.codigo,
           descricao: novoItem.descricao || item.descricao,
           fotoUrl: novoItem.fotoUrl || item.fotoUrl,
           qtdPorPacote: Number(novoItem.qtdPorPacote) || 1,
@@ -173,7 +185,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
           qtdTotalUnidades: qtdTotal,
           precoUnitario: Number(novoItem.precoUnitario) || 0,
           valorTotalBruto: qtdTotal * (Number(novoItem.precoUnitario) || 0),
-          pdvAlvo: Number(novoItem.pdvAlvo) || 0,
+          pdvAlvo: 12.00,
           despesasPdvUnit: fiscal.despesasPdvUnit,
           creditoIcmsUnit: fiscal.creditoIcmsUnit,
           custoRealEfetivo: fiscal.custoRealEfetivo,
@@ -201,7 +213,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
         qtdTotalUnidades: qtdTotal,
         precoUnitario: Number(novoItem.precoUnitario) || 0,
         valorTotalBruto: totalBrutoNovo,
-        pdvAlvo: Number(novoItem.pdvAlvo) || 0,
+        pdvAlvo: 12.00,
         despesasPdvUnit: fiscalNovo.despesasPdvUnit,
         creditoIcmsUnit: fiscalNovo.creditoIcmsUnit,
         custoRealEfetivo: fiscalNovo.custoRealEfetivo,
@@ -743,14 +755,13 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
               />
             </div>
             <div>
-              <label className="font-bold text-slate-700 dark:text-slate-300">PDV Alvo / Loja (R$)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={novoItem.pdvAlvo || ''}
-                onChange={(e) => setNovoItem(prev => ({ ...prev, pdvAlvo: Number(e.target.value) }))}
-                className="w-full mt-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
-              />
+              <label className="font-bold text-slate-700 dark:text-slate-300">PDV Alvo (Fixo Mega 12)</label>
+              <div className="w-full mt-1 p-2.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 rounded-xl text-emerald-800 dark:text-emerald-300 font-mono font-black flex items-center justify-between shadow-2xs">
+                <span>R$ 12,00</span>
+                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200">
+                  Fixo
+                </span>
+              </div>
             </div>
           </div>
 
@@ -837,11 +848,16 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
                   <div className="font-extrabold text-xs text-slate-900 dark:text-white line-clamp-2">
                     {idx + 1}. {item.descricao}
                   </div>
-                  {item.codigo && (
-                    <div className="text-[10px] font-mono text-slate-400">
-                      Cód: {item.codigo}
-                    </div>
-                  )}
+                  <div className="text-[10px] font-mono flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <span className="text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.2 rounded border border-indigo-200 dark:border-indigo-800" title="Código Interno">
+                      {item.codigoInterno || item.codigo || 'S/ CÓD'}
+                    </span>
+                    {item.codigoFornecedor && (
+                      <span className="text-amber-700 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.2 rounded border border-amber-200 dark:border-amber-800" title="Código do Fornecedor">
+                        Ref: {item.codigoFornecedor}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black font-mono shrink-0 ${

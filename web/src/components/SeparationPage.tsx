@@ -799,9 +799,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                             {item.descricao}
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
-                            <span>{item.codigo || 'S/ CÓD'}</span>
+                            <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.codigoInterno || item.codigo || 'S/ CÓD'}</span>
                             <span>•</span>
-                            <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.qtdPacotes} cx</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-300">{item.qtdPacotes} cx</span>
                             <span>×</span>
                             <span>{item.qtdPorPacote} un</span>
                             {item.separacaoManual && (

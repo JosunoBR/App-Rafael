@@ -141,16 +141,16 @@ fun QuickCalculatorScreen(
                             )
 
                             OutlinedTextField(
-                                value = pdvAlvo,
-                                onValueChange = { viewModel.updateCalcInputs(pdvAlvoStr = it) },
-                                label = { Text("PDV Alvo (R$)", color = Slate400, fontSize = 12.sp) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                value = "12.00",
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("PDV (Fixo Mega 12)", color = Slate400, fontSize = 12.sp) },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = Emerald500,
                                     unfocusedBorderColor = Slate700,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White
+                                    focusedTextColor = Emerald400,
+                                    unfocusedTextColor = Emerald400
                                 ),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.weight(1f)

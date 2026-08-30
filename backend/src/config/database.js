@@ -191,6 +191,13 @@ async function getDatabase() {
     console.error('Aviso no seeding de histórico:', seedErr.message);
   }
 
+  // Regra de Negócio Central Rede Mega 12: Todos os produtos com PDV Sugerido travado em R$ 12,00
+  try {
+    dbInstance.run("UPDATE products SET pdvSugerido = 12.0;");
+  } catch (e) {
+    console.error('Aviso na sincronização de PDV para R$ 12,00:', e.message);
+  }
+
   saveDatabaseToDisk();
 
   return dbInstance;

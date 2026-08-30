@@ -192,10 +192,10 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={onExportPDF}
                 className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900 transition flex items-center gap-1 cursor-pointer"
-                title="Gerar PDF do Romaneio"
+                title="Gerar PDF do Pedido de Compra Oficial (Proposta Comercial para Fornecedor)"
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">PDF</span>
+                <span className="hidden lg:inline">Pedido PDF</span>
               </button>
 
               <button

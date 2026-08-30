@@ -45,7 +45,8 @@ fun OrderCreationScreen(
     // Diálogo de Adição de Item
     var showAddItemDialog by remember { mutableStateOf(false) }
     var itemDescricao by remember { mutableStateOf("") }
-    var itemCodigo by remember { mutableStateOf("") }
+    var itemCodigoInterno by remember { mutableStateOf("") }
+    var itemCodigoFornecedor by remember { mutableStateOf("") }
     var itemCaixas by remember { mutableStateOf("5") }
     var itemQtdPorCaixa by remember { mutableStateOf("12") }
     var itemPrecoCompra by remember { mutableStateOf("10.00") }
@@ -183,15 +184,15 @@ fun OrderCreationScreen(
                                             text = {
                                                 Column {
                                                     Text(sup.razaoSocial, fontWeight = FontWeight.Bold)
-                                                    if (!sup.vendedor.isNullOrBlank()) {
-                                                        Text("Vendedor: ${sup.vendedor}", style = MaterialTheme.typography.bodySmall, color = Slate400)
+                                                    if (!sup.vendedorPadrao.isNullOrBlank()) {
+                                                        Text("Vendedor: ${sup.vendedorPadrao}", style = MaterialTheme.typography.bodySmall, color = Slate400)
                                                     }
                                                 }
                                             },
                                             onClick = {
                                                 selectedSupplier = sup.razaoSocial
-                                                if (!sup.condicaoPagamento.isNullOrBlank()) {
-                                                    condicaoPagamento = sup.condicaoPagamento
+                                                if (!sup.condicaoPagamentoPadrao.isNullOrBlank()) {
+                                                    condicaoPagamento = sup.condicaoPagamentoPadrao!!
                                                 }
                                                 isSupplierDropdownExpanded = false
                                             }
@@ -290,11 +291,23 @@ fun OrderCreationScreen(
                                             color = Color.White
                                         )
                                     )
-                                    if (item.codigo.isNotBlank()) {
-                                        Text(
-                                            text = "Cód: ${item.codigo}",
-                                            style = MaterialTheme.typography.labelSmall.copy(color = Slate400)
-                                        )
+                                    val codInt = item.codigoInterno.ifBlank { item.codigo }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (codInt.isNotBlank()) {
+                                            Text(
+                                                text = "Cód: $codInt",
+                                                style = MaterialTheme.typography.labelSmall.copy(color = Emerald400, fontWeight = FontWeight.Bold)
+                                            )
+                                        }
+                                        if (!item.codigoFornecedor.isNullOrBlank()) {
+                                            Text(
+                                                text = "• Ref: ${item.codigoFornecedor}",
+                                                style = MaterialTheme.typography.labelSmall.copy(color = Amber400)
+                                            )
+                                        }
                                     }
                                 }
 
@@ -360,9 +373,10 @@ fun OrderCreationScreen(
                                         shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier.clickable {
                                             itemDescricao = prod.descricao
-                                            itemCodigo = prod.codigo
-                                            itemQtdPorCaixa = prod.qtdPorCaixa.toString()
-                                            itemPrecoCompra = "%.2f".format(prod.precoCompraPadrao).replace(',', '.')
+                                            itemCodigoInterno = prod.codigoInterno.ifBlank { prod.codigo }
+                                            itemCodigoFornecedor = prod.codigoFornecedor ?: ""
+                                            itemQtdPorCaixa = prod.qtdPorPacote.toString()
+                                            itemPrecoCompra = "%.2f".format(prod.precoUnitarioPadrao).replace(',', '.')
                                             itemPdvAlvo = "%.2f".format(prod.pdvSugerido).replace(',', '.')
                                         }
                                     ) {
@@ -374,6 +388,41 @@ fun OrderCreationScreen(
                                     }
                                 }
                             }
+                        }
+
+                        // Códigos Interno e Fornecedor
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = itemCodigoInterno,
+                                onValueChange = { itemCodigoInterno = it },
+                                label = { Text("Cód. Interno", color = Slate400) },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Emerald500,
+                                    unfocusedBorderColor = Slate700,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = itemCodigoFornecedor,
+                                onValueChange = { itemCodigoFornecedor = it },
+                                label = { Text("Ref. Fornecedor", color = Slate400) },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Emerald500,
+                                    unfocusedBorderColor = Slate700,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            )
                         }
 
                         OutlinedTextField(
@@ -447,16 +496,16 @@ fun OrderCreationScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             OutlinedTextField(
-                                value = itemPdvAlvo,
-                                onValueChange = { itemPdvAlvo = it },
-                                label = { Text("PDV Alvo (R$)", color = Slate400) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                value = "12.00",
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("PDV (Fixo Mega 12)", color = Slate400) },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = Emerald500,
                                     unfocusedBorderColor = Slate700,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White
+                                    focusedTextColor = Emerald400,
+                                    unfocusedTextColor = Emerald400
                                 ),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f)
@@ -470,13 +519,17 @@ fun OrderCreationScreen(
                             if (itemDescricao.isNotBlank()) {
                                 viewModel.addItemToDraftOrder(
                                     descricao = itemDescricao,
-                                    codigo = itemCodigo,
+                                    codigo = itemCodigoInterno,
+                                    codigoInterno = itemCodigoInterno,
+                                    codigoFornecedor = itemCodigoFornecedor.ifBlank { null },
                                     caixas = itemCaixas.toIntOrNull() ?: 1,
                                     qtdPorCaixa = itemQtdPorCaixa.toIntOrNull() ?: 12,
                                     precoCompra = itemPrecoCompra.toDoubleOrNull() ?: 0.0,
-                                    pdvAlvo = itemPdvAlvo.toDoubleOrNull() ?: 0.0
+                                    pdvAlvo = 12.00
                                 )
                                 itemDescricao = ""
+                                itemCodigoInterno = ""
+                                itemCodigoFornecedor = ""
                                 showAddItemDialog = false
                             }
                         },

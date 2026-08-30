@@ -81,6 +81,9 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
   // Modal de Cadastro Rápido de Produto para o Fornecedor
   const [productModalSupplier, setProductModalSupplier] = useState<Supplier | null>(null);
   const [newProductData, setNewProductData] = useState<Partial<Product>>({
+    codigoInterno: '',
+    codigoFornecedor: '',
+    codigoBarras: '',
     codigo: '',
     descricao: '',
     categoria: 'Utilidades',
@@ -169,8 +172,12 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
 
   const handleOpenCreateProductForSupplier = (sup: Supplier) => {
     setProductModalSupplier(sup);
+    const cod = `PRD-${Date.now().toString().slice(-4)}`;
     setNewProductData({
-      codigo: `PRD-${Date.now().toString().slice(-4)}`,
+      codigoInterno: cod,
+      codigo: cod,
+      codigoFornecedor: '',
+      codigoBarras: '',
       descricao: '',
       categoria: 'Utilidades',
       fotoUrl: '',
@@ -196,9 +203,17 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
     e.preventDefault();
     if (!productModalSupplier || !newProductData.descricao?.trim()) return;
 
+    const codInterno = newProductData.codigoInterno?.trim() || newProductData.codigo?.trim() || `PRD-${Date.now()}`;
+    const codForn = newProductData.codigoFornecedor?.trim() || '';
+    const codBarras = newProductData.codigoBarras?.trim() || newProductData.eanBarcode?.trim() || '';
+
     const prodToSave: Product = {
       id: 'prod_' + Date.now(),
-      codigo: newProductData.codigo?.trim() || `PRD-${Date.now()}`,
+      codigoInterno: codInterno,
+      codigo: codInterno,
+      codigoFornecedor: codForn,
+      codigoBarras: codBarras,
+      eanBarcode: codBarras,
       descricao: newProductData.descricao.trim(),
       categoria: newProductData.categoria?.trim() || 'Geral',
       fotoUrl: newProductData.fotoUrl || '',
@@ -206,7 +221,6 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
       precoUnitarioPadrao: Math.max(0, Number(newProductData.precoUnitarioPadrao) || 0),
       pdvSugerido: Math.max(0, Number(newProductData.pdvSugerido) || 0),
       ncm: newProductData.ncm?.trim() || '',
-      eanBarcode: newProductData.eanBarcode?.trim() || '',
       supplierId: productModalSupplier.id,
       nomeFornecedor: productModalSupplier.razaoSocial,
       ativo: true,
@@ -685,35 +699,62 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                 </div>
               </div>
 
-              {/* Código & Descrição */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div className="sm:col-span-4">
+              {/* Códigos de Identificação */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Código / SKU *
+                    Cód. Interno (SKU Rede) *
                   </label>
                   <input
                     type="text"
                     required
-                    value={newProductData.codigo || ''}
-                    onChange={(e) => setNewProductData(prev => ({ ...prev, codigo: e.target.value }))}
+                    value={newProductData.codigoInterno || newProductData.codigo || ''}
+                    onChange={(e) => setNewProductData(prev => ({ ...prev, codigoInterno: e.target.value, codigo: e.target.value }))}
                     placeholder="Ex: PRD-001"
-                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 outline-hidden"
                   />
                 </div>
 
-                <div className="sm:col-span-8">
+                <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Descrição Completa do Produto *
+                    Cód. Fornecedor (Ref)
                   </label>
                   <input
                     type="text"
-                    required
-                    value={newProductData.descricao || ''}
-                    onChange={(e) => setNewProductData(prev => ({ ...prev, descricao: e.target.value }))}
-                    placeholder="Ex: Garrafa Térmica Inox 1L..."
-                    className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
+                    value={newProductData.codigoFornecedor || ''}
+                    onChange={(e) => setNewProductData(prev => ({ ...prev, codigoFornecedor: e.target.value }))}
+                    placeholder="Ex: REF-1001"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 outline-hidden"
                   />
                 </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Código de Barras (EAN)
+                  </label>
+                  <input
+                    type="text"
+                    value={newProductData.codigoBarras || newProductData.eanBarcode || ''}
+                    onChange={(e) => setNewProductData(prev => ({ ...prev, codigoBarras: e.target.value, eanBarcode: e.target.value }))}
+                    placeholder="Ex: 7891000100011"
+                    className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Descrição Completa */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Descrição Completa do Produto *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newProductData.descricao || ''}
+                  onChange={(e) => setNewProductData(prev => ({ ...prev, descricao: e.target.value }))}
+                  placeholder="Ex: Garrafa Térmica Inox 1L..."
+                  className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
+                />
               </div>
 
               {/* Categoria, Embalagem & Preços */}

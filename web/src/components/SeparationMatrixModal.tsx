@@ -152,7 +152,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-lg">
-                {item.descricao} • Total Comprado: <strong className="text-slate-900 dark:text-white">{item.qtdPacotes} cx ({item.qtdTotalUnidades.toLocaleString('pt-BR')} peças)</strong> • Emb: {item.qtdPorPacote} un/cx
+                <strong className="text-indigo-600 dark:text-indigo-400 font-mono">[{item.codigoInterno || item.codigo || 'S/ CÓD'}]</strong> {item.descricao} • Total: <strong className="text-slate-900 dark:text-white">{item.qtdPacotes} cx ({item.qtdTotalUnidades.toLocaleString('pt-BR')} un)</strong> • Emb: {item.qtdPorPacote} un/cx
               </p>
             </div>
           </div>

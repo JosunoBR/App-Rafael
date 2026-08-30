@@ -80,11 +80,21 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   // Itens Filtrados
   const filteredStock = useMemo(() => {
     return stockItems.filter(item => {
+      const s = searchTerm.toLowerCase();
+      const codInt = (item.codigoInterno || item.codigo || '').toLowerCase();
+      const codForn = (item.codigoFornecedor || '').toLowerCase();
+      const codBarras = (item.codigoBarras || '').toLowerCase();
+      const desc = item.descricao.toLowerCase();
+      const forn = (item.fornecedorOrigem || '').toLowerCase();
+      const loc = (item.localizacaoGalpao || '').toLowerCase();
+
       const matchesSearch = 
-        item.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.fornecedorOrigem && item.fornecedorOrigem.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.localizacaoGalpao && item.localizacaoGalpao.toLowerCase().includes(searchTerm.toLowerCase()));
+        desc.includes(s) ||
+        codInt.includes(s) ||
+        codForn.includes(s) ||
+        codBarras.includes(s) ||
+        forn.includes(s) ||
+        loc.includes(s);
 
       const matchesCat = selectedCategory === 'all' || item.categoria === selectedCategory;
       return matchesSearch && matchesCat;
@@ -158,10 +168,14 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     if (!prod) return;
 
     const caixas = parseInt(newSaldoCaixas, 10) || 10;
+    const codInterno = prod.codigoInterno || prod.codigo || '';
     const newItem: CentralStockItem = {
       id: 'stock_' + Date.now(),
       productId: prod.id,
-      codigo: prod.codigo,
+      codigo: codInterno,
+      codigoInterno: codInterno,
+      codigoFornecedor: prod.codigoFornecedor,
+      codigoBarras: prod.codigoBarras || prod.eanBarcode,
       descricao: prod.descricao,
       categoria: prod.categoria || 'Geral',
       fotoUrl: prod.fotoUrl,
@@ -348,7 +362,8 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                   <span className="sr-only">Seleção</span>
                 </th>
                 <th className="py-3 px-2 w-14 text-center">Foto</th>
-                <th className="py-3 px-3 min-w-[100px] whitespace-nowrap">Código</th>
+                <th className="py-3 px-3 min-w-[120px] whitespace-nowrap">Cód. Interno</th>
+                <th className="py-3 px-3 min-w-[130px] whitespace-nowrap">Cód. Barras (EAN)</th>
                 <th className="py-3 px-3 min-w-[220px]">Descrição do Produto</th>
                 <th className="py-3 px-3 min-w-[140px]">Endereço / Galpão</th>
                 <th className="py-3 px-3 text-center min-w-[80px] whitespace-nowrap">Peças/CX</th>
@@ -365,7 +380,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredStock.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-400">
+                  <td colSpan={12} className="py-12 text-center text-slate-400">
                     Nenhum produto em estoque encontrado com o filtro aplicado.
                   </td>
                 </tr>
@@ -373,6 +388,8 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 filteredStock.map((item) => {
                   const isSelected = selectedTransferItems[item.id] !== undefined;
                   const valorTotalItem = item.saldoUnidades * item.precoUnitario;
+                  const matchedProd = products.find(p => p.id === item.productId || (p.codigoInterno && p.codigoInterno === item.codigo) || p.codigo === item.codigo);
+                  const barcode = item.codigoBarras || matchedProd?.codigoBarras || matchedProd?.eanBarcode || '';
 
                   return (
                     <tr 
@@ -408,9 +425,20 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                         )}
                       </td>
 
-                      {/* Código */}
-                      <td className="py-3 px-3 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                        {item.codigo}
+                      {/* Código Interno */}
+                      <td className="py-3 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                        {item.codigoInterno || item.codigo}
+                      </td>
+
+                      {/* Código de Barras (EAN) */}
+                      <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap text-[11px]">
+                        {barcode ? (
+                          <span className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                            {barcode}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </td>
 
                       {/* Descrição & Fornecedor */}

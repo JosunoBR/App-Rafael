@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import br.com.mega12.app.data.api.ApiClient
 import br.com.mega12.app.ui.components.Mega12TopBar
 import br.com.mega12.app.ui.theme.*

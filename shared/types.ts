@@ -45,7 +45,11 @@ export interface OrderItemFiscalOverride {
 
 export interface Product {
   id: string;
-  codigo: string;
+  codigoInterno: string;        // Código de produto interno (visível em todas as telas)
+  codigoFornecedor?: string;    // Código de produto do fornecedor (visível em compras/pedidos e catálogo)
+  codigoBarras?: string;        // Código de barras EAN-13 (visível em catálogo, estoque, separação; oculto em compras)
+  codigo?: string;              // Mantido para retrocompatibilidade (aponta para codigoInterno)
+  eanBarcode?: string;          // Mantido para retrocompatibilidade (aponta para codigoBarras)
   descricao: string;
   categoria?: string;
   fotoUrl?: string;
@@ -53,7 +57,6 @@ export interface Product {
   precoUnitarioPadrao: number;
   pdvSugerido?: number;
   ncm?: string;
-  eanBarcode?: string;
   supplierId?: string;
   nomeFornecedor?: string;
   ativo: boolean;
@@ -63,7 +66,9 @@ export interface Product {
 
 export interface OrderItem {
   id: string;
-  codigo?: string;
+  codigoInterno?: string;       // Código de produto interno (visível em todas as telas)
+  codigoFornecedor?: string;    // Código de produto do fornecedor (visível na página de compras)
+  codigo?: string;              // Mantido para retrocompatibilidade
   descricao: string;
   fotoUrl?: string;          // Foto/Imagem do produto (URL ou Base64)
   qtdPorPacote: number;      // F: Peças por embalagem/pacote

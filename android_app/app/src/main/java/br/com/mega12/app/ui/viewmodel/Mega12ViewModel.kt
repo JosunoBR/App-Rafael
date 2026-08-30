@@ -54,7 +54,7 @@ class Mega12ViewModel : ViewModel() {
     private val _calcPrecoCompra = MutableStateFlow("")
     val calcPrecoCompra: StateFlow<String> = _calcPrecoCompra.asStateFlow()
 
-    private val _calcPdvAlvo = MutableStateFlow("")
+    private val _calcPdvAlvo = MutableStateFlow("12.00")
     val calcPdvAlvo: StateFlow<String> = _calcPdvAlvo.asStateFlow()
 
     private val _calcCaixas = MutableStateFlow("10")
@@ -167,13 +167,16 @@ class Mega12ViewModel : ViewModel() {
 
     fun addItemToDraftOrder(
         descricao: String,
-        codigo: String,
+        codigo: String = "",
+        codigoInterno: String = "",
+        codigoFornecedor: String? = null,
         caixas: Int,
         qtdPorCaixa: Int,
         precoCompra: Double,
         pdvAlvo: Double,
         photoUrl: String? = null
     ) {
+        val finalCodInterno = codigoInterno.ifEmpty { codigo.ifEmpty { "PRD-${System.currentTimeMillis() % 10000}" } }
         val totalPecas = caixas * qtdPorCaixa
         val subtotal = totalPecas * precoCompra
         val fiscal = FiscalEngine.calculateItemFiscal(precoCompra, pdvAlvo, _fiscalConfig.value)
@@ -181,7 +184,9 @@ class Mega12ViewModel : ViewModel() {
 
         val newItem = OrderItem(
             id = UUID.randomUUID().toString(),
-            codigo = codigo.ifEmpty { "PRD-${System.currentTimeMillis() % 10000}" },
+            codigoInterno = finalCodInterno,
+            codigoFornecedor = codigoFornecedor,
+            codigo = finalCodInterno,
             descricao = descricao,
             caixas = caixas,
             qtdPorCaixa = qtdPorCaixa,

@@ -46,7 +46,10 @@ data class FiscalConfig(
 // Produto
 data class Product(
     val id: String = "",
-    val codigo: String = "",
+    val codigoInterno: String = "",
+    val codigoFornecedor: String? = null,
+    val codigoBarras: String? = null,
+    val codigo: String = "", // retrocompatibilidade
     val descricao: String = "",
     val categoria: String = "",
     val subcategoria: String? = null,
@@ -79,7 +82,9 @@ data class Supplier(
 // Item do Pedido
 data class OrderItem(
     val id: String = "",
-    val codigo: String = "",
+    val codigoInterno: String = "",
+    val codigoFornecedor: String? = null,
+    val codigo: String = "", // retrocompatibilidade
     val descricao: String = "",
     val caixas: Int = 0,
     val qtdPorCaixa: Int = 12,

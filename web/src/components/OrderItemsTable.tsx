@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Plus, 
   Trash2, 
@@ -81,7 +82,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const [activeAutocompleteItemId, setActiveAutocompleteItemId] = useState<string | null>(null);
   const [activeAutocompleteField, setActiveAutocompleteField] = useState<'descricao' | 'codigoInterno' | 'codigoFornecedor' | null>(null);
   const [autocompleteQuery, setAutocompleteQuery] = useState('');
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const [dropdownCoords, setDropdownCoords] = useState<{ top: number; left: number; width: number; isFlipped: boolean } | null>(null);
 
   // Estado da Barra de Inclusão Rápida Superior
   const [quickSearchText, setQuickSearchText] = useState('');
@@ -89,18 +90,50 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const quickSearchInputRef = useRef<HTMLInputElement>(null);
 
   const fileInputRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
-  const autocompleteContainerRef = useRef<HTMLTableCellElement | null>(null);
+  const activeInputRef = useRef<HTMLInputElement | null>(null);
+  const autocompletePortalRef = useRef<HTMLDivElement | null>(null);
 
-  // Fechar dropdowns ao clicar fora
+  const updateDropdownPosition = (el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const isFlipped = spaceBelow < 280 && rect.top > 280;
+    setDropdownCoords({
+      top: isFlipped ? rect.top - 6 : rect.bottom + 6,
+      left: Math.max(12, Math.min(rect.left, window.innerWidth - 460)),
+      width: Math.max(400, rect.width),
+      isFlipped
+    });
+  };
+
+  // Fechar dropdowns ao clicar fora e reposicionar no scroll/resize
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (autocompleteContainerRef.current && !autocompleteContainerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        autocompletePortalRef.current &&
+        !autocompletePortalRef.current.contains(target) &&
+        activeInputRef.current &&
+        !activeInputRef.current.contains(target)
+      ) {
         setActiveAutocompleteItemId(null);
       }
     };
+
+    const handleScrollOrResize = () => {
+      if (activeInputRef.current && activeAutocompleteItemId) {
+        updateDropdownPosition(activeInputRef.current);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [activeAutocompleteItemId]);
 
   // Produtos filtrados para o autocomplete ativo na linha
   const matchingProductsForRow = useMemo(() => {
@@ -490,18 +523,22 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   </td>
 
                   {/* Código Interno */}
-                  <td className="py-2 px-1.5 relative">
+                  <td className="py-2 px-1.5">
                     <input
                       type="text"
                       value={item.codigoInterno || item.codigo || ''}
                       onChange={(e) => {
                         handleFieldChange(item, 'codigoInterno', e.target.value);
                         handleFieldChange(item, 'codigo', e.target.value);
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
                         setActiveAutocompleteItemId(item.id);
                         setActiveAutocompleteField('codigoInterno');
                         setAutocompleteQuery(e.target.value);
                       }}
                       onFocus={(e) => {
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
                         setActiveAutocompleteItemId(item.id);
                         setActiveAutocompleteField('codigoInterno');
                         setAutocompleteQuery(e.target.value);
@@ -513,17 +550,21 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   </td>
 
                   {/* Código do Fornecedor */}
-                  <td className="py-2 px-1.5 relative">
+                  <td className="py-2 px-1.5">
                     <input
                       type="text"
                       value={item.codigoFornecedor || ''}
                       onChange={(e) => {
                         handleFieldChange(item, 'codigoFornecedor', e.target.value);
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
                         setActiveAutocompleteItemId(item.id);
                         setActiveAutocompleteField('codigoFornecedor');
                         setAutocompleteQuery(e.target.value);
                       }}
                       onFocus={(e) => {
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
                         setActiveAutocompleteItemId(item.id);
                         setActiveAutocompleteField('codigoFornecedor');
                         setAutocompleteQuery(e.target.value);
@@ -535,100 +576,28 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   </td>
 
                   {/* Descrição com FILTRO INTELIGENTE / AUTOCOMPLETE */}
-                  <td className="py-2 px-2 relative" ref={isItemRowActive ? autocompleteContainerRef : undefined}>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={item.descricao}
-                        onChange={(e) => {
-                          handleFieldChange(item, 'descricao', e.target.value);
-                          setActiveAutocompleteItemId(item.id);
-                          setActiveAutocompleteField('descricao');
-                          setAutocompleteQuery(e.target.value);
-                        }}
-                        onFocus={(e) => {
-                          setActiveAutocompleteItemId(item.id);
-                          setActiveAutocompleteField('descricao');
-                          setAutocompleteQuery(e.target.value);
-                        }}
-                        placeholder="Digite o nome ou código do produto..."
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                      />
-
-                      {/* DROPDOWN FLUTUANTE DE FILTRO INTELIGENTE */}
-                      {isItemRowActive && matchingProductsForRow.length > 0 && (
-                        <div className="absolute left-0 top-full mt-1.5 z-50 w-full min-w-[380px] max-w-[520px] bg-white dark:bg-slate-900 rounded-2xl border border-emerald-500/40 dark:border-emerald-500/30 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                          
-                          {/* Cabeçalho do Dropdown */}
-                          <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-950/70 border-b border-emerald-100 dark:border-emerald-900/60 flex items-center justify-between text-[11px] font-bold">
-                            <span className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300">
-                              <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                              Produtos do Catálogo ({matchingProductsForRow.length})
-                            </span>
-                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">
-                              Clique para preencher a linha
-                            </span>
-                          </div>
-
-                          {/* Lista de Itens Encontrados */}
-                          <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                            {matchingProductsForRow.map(prod => (
-                              <button
-                                key={prod.id}
-                                type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault(); // Previne blur para registrar o clique imediato
-                                  handleSelectProductForExistingItem(item, prod);
-                                }}
-                                className="w-full text-left p-2.5 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/50 transition flex items-center gap-3 group cursor-pointer"
-                              >
-                                {/* Thumbnail com Foto */}
-                                <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden flex items-center justify-center">
-                                  {prod.fotoUrl ? (
-                                    <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
-                                  ) : (
-                                    <Package className="w-5 h-5 text-slate-400" />
-                                  )}
-                                </div>
-
-                                {/* Informações do Produto */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
-                                      {prod.codigoInterno || prod.codigo}
-                                    </span>
-                                    {prod.codigoFornecedor && (
-                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
-                                        Ref: {prod.codigoFornecedor}
-                                      </span>
-                                    )}
-                                    {prod.categoria && (
-                                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                                        • {prod.categoria}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate mt-0.5 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
-                                    {highlightMatch(prod.descricao, autocompleteQuery)}
-                                  </p>
-
-                                  <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
-                                    <span>Emb: <strong className="text-slate-700 dark:text-slate-300">{prod.qtdPorPacote} pçs</strong></span>
-                                    <span>Compra: <strong className="text-emerald-600 dark:text-emerald-400">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</strong></span>
-                                    <span>PDV: <strong className="text-slate-700 dark:text-slate-300">R$ {Number(prod.pdvSugerido || 0).toFixed(2)}</strong></span>
-                                  </div>
-                                </div>
-
-                                <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white transition shrink-0">
-                                  <Check className="w-4 h-4" />
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                  <td className="py-2 px-2">
+                    <input
+                      type="text"
+                      value={item.descricao}
+                      onChange={(e) => {
+                        handleFieldChange(item, 'descricao', e.target.value);
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('descricao');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      onFocus={(e) => {
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('descricao');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      placeholder="Digite o nome ou código do produto..."
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                    />
                   </td>
 
                   {/* Qtd por Pacote (F) */}
@@ -978,6 +947,94 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* PORTAL FLUTUANTE DE FILTRO INTELIGENTE (RENDERIZADO NO ROOT BODY ACIMA DE QUALQUER TABELA/CONTAINER) */}
+      {activeAutocompleteItemId && matchingProductsForRow.length > 0 && dropdownCoords && createPortal(
+        <div
+          ref={autocompletePortalRef}
+          style={{
+            position: 'fixed',
+            top: dropdownCoords.isFlipped ? undefined : `${dropdownCoords.top}px`,
+            bottom: dropdownCoords.isFlipped ? `${window.innerHeight - dropdownCoords.top}px` : undefined,
+            left: `${dropdownCoords.left}px`,
+            width: `${dropdownCoords.width}px`,
+            zIndex: 999999
+          }}
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-emerald-500/50 dark:border-emerald-500/40 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md"
+        >
+          {/* Cabeçalho do Dropdown */}
+          <div className="px-3.5 py-2.5 bg-emerald-50/90 dark:bg-emerald-950/90 border-b border-emerald-100 dark:border-emerald-900/60 flex items-center justify-between text-[11px] font-bold">
+            <span className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              Produtos do Catálogo ({matchingProductsForRow.length})
+            </span>
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">
+              Clique para preencher a linha
+            </span>
+          </div>
+
+          {/* Lista de Itens Encontrados */}
+          <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+            {matchingProductsForRow.map(prod => (
+              <button
+                key={prod.id}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const targetItem = items.find(it => it.id === activeAutocompleteItemId);
+                  if (targetItem) {
+                    handleSelectProductForExistingItem(targetItem, prod);
+                  }
+                }}
+                className="w-full text-left p-2.5 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/50 transition flex items-center gap-3 group cursor-pointer"
+              >
+                {/* Thumbnail com Foto */}
+                <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden flex items-center justify-center">
+                  {prod.fotoUrl ? (
+                    <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
+                  ) : (
+                    <Package className="w-5 h-5 text-slate-400" />
+                  )}
+                </div>
+
+                {/* Informações do Produto */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                      {prod.codigoInterno || prod.codigo}
+                    </span>
+                    {prod.codigoFornecedor && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+                        Ref: {prod.codigoFornecedor}
+                      </span>
+                    )}
+                    {prod.categoria && (
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                        • {prod.categoria}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate mt-0.5 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
+                    {highlightMatch(prod.descricao, autocompleteQuery)}
+                  </p>
+
+                  <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
+                    <span>Emb: <strong className="text-slate-700 dark:text-slate-300">{prod.qtdPorPacote} pçs</strong></span>
+                    <span>Compra: <strong className="text-emerald-600 dark:text-emerald-400">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</strong></span>
+                    <span>PDV: <strong className="text-slate-700 dark:text-slate-300">R$ 12,00</strong></span>
+                  </div>
+                </div>
+
+                <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white transition shrink-0">
+                  <Check className="w-4 h-4" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body
       )}
 
     </div>

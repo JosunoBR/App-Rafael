@@ -154,7 +154,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
 
       </div>
 
-      {/* 3. Abas de Status do Fluxo Oficial */}
+      {/* 3. Abas de Status da Esteira Operacional Oficial */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <button
           onClick={() => setSelectedStatusTab('todos')}
@@ -178,7 +178,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50'
           }`}
         >
-          <span>🟡 1. Em Cotação</span>
+          <span>🟡 1. Em Cotação (Compras)</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Em Cotação']}
           </span>
@@ -192,7 +192,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-50'
           }`}
         >
-          <span>🔵 2. Aprovado</span>
+          <span>🔵 2. Aprovados (Depósito CD)</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Aprovado']}
           </span>
@@ -206,7 +206,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50'
           }`}
         >
-          <span>🟣 3. Em Separação</span>
+          <span>🟣 3. Em Separação (Doca)</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Em Separação']}
           </span>
@@ -220,7 +220,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-50'
           }`}
         >
-          <span>🟢 4. Finalizado</span>
+          <span>🟢 4. Finalizados</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Finalizado']}
           </span>
@@ -254,7 +254,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                 <th className="py-3 px-3 text-right whitespace-nowrap min-w-[110px]">Volume Peças</th>
                 <th className="py-3 px-3 text-right whitespace-nowrap min-w-[130px]">Valor Total (R$)</th>
                 <th className="py-3 px-3 text-center whitespace-nowrap min-w-[130px]">Status</th>
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[120px]">Avançar Fluxo</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[140px]">Avançar Esteira</th>
                 <th className="py-3 px-3 text-center whitespace-nowrap min-w-[120px]">Ações</th>
               </tr>
             </thead>
@@ -311,38 +311,40 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         </span>
                       </td>
 
-                      {/* Botão de Avanço Rápido de Status */}
+                      {/* Botão de Avanço Rápido de Status da Esteira */}
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         {statusAtual === 'Em Cotação' && onUpdateOrderStatus && (
                           <button
                             onClick={() => onUpdateOrderStatus(ord, 'Aprovado')}
-                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer"
-                            title="Aprovar este pedido de compra"
+                            className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 mx-auto"
+                            title="Aprovar este pedido e encaminhar para a distribuição do Depósito"
                           >
-                            Aprovar
+                            <span>✓ Aprovar</span>
+                            <ArrowRight className="w-3 h-3" />
                           </button>
                         )}
-                        {statusAtual === 'Aprovado' && onUpdateOrderStatus && (
+                        {statusAtual === 'Aprovado' && (
                           <button
-                            onClick={() => onUpdateOrderStatus(ord, 'Em Separação')}
-                            className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer"
-                            title="Enviar para fila de separação na Doca"
+                            onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
+                            className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 mx-auto"
+                            title="Abrir a matriz de distribuição do Depósito para ratear nas 20 lojas e liberar para a doca"
                           >
-                            Liberar Doca
+                            <Boxes className="w-3.5 h-3.5" />
+                            <span>Distribuir CD</span>
                           </button>
                         )}
                         {statusAtual === 'Em Separação' && (
                           <button
                             onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                            title="Conferir separação na Doca"
+                            className="inline-flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition shadow-xs cursor-pointer mx-auto"
+                            title="Conferir separação física na Doca"
                           >
                             <PackageCheck className="w-3.5 h-3.5" />
-                            <span>Conferir</span>
+                            <span>Separar Doca</span>
                           </button>
                         )}
                         {statusAtual === 'Finalizado' && (
-                          <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold inline-flex items-center gap-1">
+                          <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold inline-flex items-center gap-1 mx-auto">
                             <Check className="w-3.5 h-3.5" /> Concluído
                           </span>
                         )}

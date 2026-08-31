@@ -1,4 +1,4 @@
-import { PurchaseOrder, Supplier, FiscalConfig, StoreConfig, Product } from '../shared/types';
+import { PurchaseOrder, Supplier, FiscalConfig, StoreConfig, Product, User, CentralStockItem } from '../shared/types';
 import { API_BASE_URL } from './config';
 
 function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
@@ -114,12 +114,60 @@ export async function updateInstallmentInDb(
   if (!res.ok) throw new Error('Erro ao atualizar parcela no SQLite');
 }
 
+export async function fetchStoresFromDb(): Promise<StoreConfig[]> {
+  const res = await fetch(`${API_BASE_URL}/config/stores`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Erro ao buscar lojas do SQLite');
+  return res.json();
+}
+
+// ESTOQUE DO DEPÓSITO CENTRAL (CD MATRIZ)
+export async function fetchStockFromDb(): Promise<CentralStockItem[]> {
+  const res = await fetch(`${API_BASE_URL}/stock`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Erro ao buscar estoque central do SQLite');
+  return res.json();
+}
+
+export async function saveStockItemToDb(item: CentralStockItem): Promise<CentralStockItem> {
+  const res = await fetch(`${API_BASE_URL}/stock`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(item)
+  });
+  if (!res.ok) throw new Error('Erro ao salvar item no estoque central do SQLite');
+  return res.json();
+}
+
+export async function updateStockBalanceInDb(
+  id: string, 
+  deltaUnidades: number, 
+  localizacaoGalpao?: string
+): Promise<CentralStockItem> {
+  const res = await fetch(`${API_BASE_URL}/stock/${id}/balance`, {
+    method: 'PUT',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ deltaUnidades, localizacaoGalpao })
+  });
+  if (!res.ok) throw new Error('Erro ao atualizar saldo de estoque central no SQLite');
+  return res.json();
+}
+
+export async function deleteStockItemFromDb(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/stock/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Erro ao excluir item do estoque central no SQLite');
+}
+
 export async function fetchFiscalConfigFromDb(): Promise<FiscalConfig> {
   const res = await fetch(`${API_BASE_URL}/config/fiscal`, {
     headers: getAuthHeaders()
   });
   if (!res.ok) {
-    // Retorna fallback se não encontrado
     return {
       icmsAliquota: 0.11,
       ipiAliquota: 0.00,
@@ -161,4 +209,38 @@ export async function fetchNextOrderNumberFromDb(): Promise<string> {
     return 'PED-0001';
   }
 }
+
+export async function fetchUsersFromDb(): Promise<User[]> {
+  const res = await fetch(`${API_BASE_URL}/users`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Erro ao buscar usuários do SQLite');
+  return res.json();
+}
+
+export async function saveUserToDb(user: Partial<User> & { senha?: string }): Promise<User> {
+  const isUpdate = Boolean(user.id);
+  const url = isUpdate ? `${API_BASE_URL}/users/${user.id}` : `${API_BASE_URL}/users`;
+  const method = isUpdate ? 'PUT' : 'POST';
+
+  const res = await fetch(url, {
+    method,
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(user)
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Erro ao salvar usuário no SQLite');
+  }
+  return res.json();
+}
+
+export async function deleteUserFromDb(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Erro ao excluir usuário do SQLite');
+}
+
 

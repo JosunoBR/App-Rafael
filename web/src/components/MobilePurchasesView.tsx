@@ -74,19 +74,18 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     codigoFornecedor: '',
     codigo: '',
     descricao: '',
-    qtdPorPacote: 12,
-    qtdPacotes: 10,
+    qtdTotalUnidades: 120,
     precoUnitario: 5.0,
     pdvAlvo: 12.0,
     fotoUrl: ''
   });
 
   // Cálculos fiscais instantâneos do formulário
-  const totalUnidadesNovo = (Number(novoItem.qtdPorPacote) || 0) * (Number(novoItem.qtdPacotes) || 0);
+  const totalUnidadesNovo = Number(novoItem.qtdTotalUnidades) || 0;
   const totalBrutoNovo = totalUnidadesNovo * (Number(novoItem.precoUnitario) || 0);
   const fiscalNovo = calculateItemFiscal(
     Number(novoItem.precoUnitario) || 0, 
-    Number(novoItem.pdvAlvo) || 0, 
+    Number(novoItem.pdvAlvo) || 12.0, 
     order.fiscalConfig
   );
 
@@ -125,19 +124,16 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
 
   // Autocomplete de produto do catálogo
   const handleSelectProduct = (prod: Product) => {
-    const codInt = prod.codigoInterno || prod.codigo || '';
-    const codForn = prod.codigoFornecedor || '';
-
+    const codInterno = prod.codigoInterno || prod.codigo || '';
     setNovoItem(prev => ({
       ...prev,
-      codigoInterno: codInt,
-      codigoFornecedor: codForn,
-      codigo: codInt,
+      codigoInterno: codInterno,
+      codigoFornecedor: prod.codigoFornecedor || prev.codigoFornecedor,
+      codigo: codInterno,
       descricao: prod.descricao,
-      qtdPorPacote: prod.qtdPorPacote || 12,
       precoUnitario: prod.precoUnitarioPadrao || prev.precoUnitario,
       pdvAlvo: 12.00,
-      fotoUrl: prod.fotoUrl || ''
+      fotoUrl: prod.fotoUrl || prev.fotoUrl
     }));
     setShowProductSuggestions(false);
     setProductSearchTerm('');
@@ -155,16 +151,18 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     : [];
 
   // Salvar ou Adicionar Item
-  const handleSaveItemForm = (e: React.FormEvent) => {
+  const handleSubmitItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!novoItem.descricao?.trim()) return;
+
+    const qtdTotal = Number(novoItem.qtdTotalUnidades) || 100;
+    const preco = Number(novoItem.precoUnitario) || 0;
 
     if (editingItemId) {
       // Atualizar item existente
       const updatedItems = order.items.map(item => {
         if (item.id !== editingItemId) return item;
-        const fiscal = calculateItemFiscal(Number(novoItem.precoUnitario) || 0, 12.00, order.fiscalConfig);
-        const qtdTotal = (Number(novoItem.qtdPorPacote) || 1) * (Number(novoItem.qtdPacotes) || 1);
+        const fiscal = calculateItemFiscal(preco, 12.00, order.fiscalConfig);
         
         // Recalcular separação se não for manual
         let separacao = item.separacaoLojas;
@@ -180,11 +178,9 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
           codigo: novoItem.codigoInterno || item.codigoInterno || novoItem.codigo || item.codigo,
           descricao: novoItem.descricao || item.descricao,
           fotoUrl: novoItem.fotoUrl || item.fotoUrl,
-          qtdPorPacote: Number(novoItem.qtdPorPacote) || 1,
-          qtdPacotes: Number(novoItem.qtdPacotes) || 1,
           qtdTotalUnidades: qtdTotal,
-          precoUnitario: Number(novoItem.precoUnitario) || 0,
-          valorTotalBruto: qtdTotal * (Number(novoItem.precoUnitario) || 0),
+          precoUnitario: preco,
+          valorTotalBruto: qtdTotal * preco,
           pdvAlvo: 12.00,
           despesasPdvUnit: fiscal.despesasPdvUnit,
           creditoIcmsUnit: fiscal.creditoIcmsUnit,
@@ -199,20 +195,19 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
       setEditingItemId(null);
     } else {
       // Criar novo item
-      const qtdTotal = totalUnidadesNovo;
       const sepRes = stores.length > 0 ? calculateAutomaticSeparation(qtdTotal, stores, 0) : null;
       const separacao = sepRes ? sepRes.allocations : {};
 
       const itemFinal: OrderItem = {
         id: 'item_' + Date.now(),
         codigo: novoItem.codigo || `PROD-${order.items.length + 1}`,
+        codigoInterno: novoItem.codigoInterno || novoItem.codigo || `PROD-${order.items.length + 1}`,
+        codigoFornecedor: novoItem.codigoFornecedor,
         descricao: novoItem.descricao,
         fotoUrl: novoItem.fotoUrl,
-        qtdPorPacote: Number(novoItem.qtdPorPacote) || 1,
-        qtdPacotes: Number(novoItem.qtdPacotes) || 1,
         qtdTotalUnidades: qtdTotal,
-        precoUnitario: Number(novoItem.precoUnitario) || 0,
-        valorTotalBruto: totalBrutoNovo,
+        precoUnitario: preco,
+        valorTotalBruto: qtdTotal * preco,
         pdvAlvo: 12.00,
         despesasPdvUnit: fiscalNovo.despesasPdvUnit,
         creditoIcmsUnit: fiscalNovo.creditoIcmsUnit,
@@ -232,8 +227,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     setNovoItem({
       codigo: '',
       descricao: '',
-      qtdPorPacote: 12,
-      qtdPacotes: 10,
+      qtdTotalUnidades: 120,
       precoUnitario: 5.0,
       pdvAlvo: 12.0,
       fotoUrl: ''
@@ -270,10 +264,12 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
 
   // Ajuste rápido de Caixas (+ / -) direto no card do item
   const handleQuickAdjustBoxes = (item: OrderItem, delta: number) => {
-    const novasCaixas = Math.max(1, item.qtdPacotes + delta);
-    if (novasCaixas === item.qtdPacotes) return;
+    const pacotes = item.qtdPacotes ?? 1;
+    const porPacote = item.qtdPorPacote ?? 1;
+    const novasCaixas = Math.max(1, pacotes + delta);
+    if (novasCaixas === pacotes) return;
 
-    const novasUnidades = novasCaixas * item.qtdPorPacote;
+    const novasUnidades = novasCaixas * porPacote;
     const novoBruto = novasUnidades * item.precoUnitario;
     
     let separacao = item.separacaoLojas;
@@ -328,15 +324,14 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
       `*Prazo:* ${order.header.condicaoPagamento || 'A Combinar'}\n` +
       `*Condição Comercial:* ${order.header.percentualDescontoOff || 0}% OFF | ST: ${order.header.aliquotaSt || 0}%\n\n` +
       `📦 *RESUMO DA CARGA:*\n` +
-      `• Total de Itens: ${order.items.length}\n` +
-      `• Total de Caixas: ${totalCaixas.toLocaleString('pt-BR')} cx\n` +
-      `• Total de Peças: ${totalUnidades.toLocaleString('pt-BR')} un\n` +
+      `• Total de Produtos: ${order.items.length}\n` +
+      `• Total de Unidades: ${totalUnidades.toLocaleString('pt-BR')} un\n` +
       `• Investimento Total: R$ ${totalCompraLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
       `• Margem Média Carga: ${margemMediaPercentual.toFixed(1)}%\n\n` +
       `📋 *PRODUTOS:* \n` +
       order.items.map((i, idx) => 
         `${idx + 1}. *${i.descricao}*\n` +
-        `   └ ${i.qtdPacotes} cx × ${i.qtdPorPacote} un = ${i.qtdTotalUnidades} un | R$ ${i.precoUnitario.toFixed(2)}/un | Total: R$ ${i.valorTotalBruto.toFixed(2)} | PDV Alvo: R$ ${i.pdvAlvo.toFixed(2)}`
+        `   └ ${i.qtdTotalUnidades.toLocaleString('pt-BR')} un | R$ ${i.precoUnitario.toFixed(2)}/un | Total: R$ ${i.valorTotalBruto.toFixed(2)} | PDV Alvo: R$ ${i.pdvAlvo.toFixed(2)}`
       ).join('\n\n') +
       `\n\n_Gerado pelo App Mega 12 Mobile Compras_`;
 
@@ -547,7 +542,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
               <Boxes className="w-3 h-3" /> Volume Total
             </div>
             <div className="text-base font-black font-mono text-white mt-0.5">
-              {totalCaixas} <span className="text-xs font-normal text-emerald-200">cx</span> ({totalUnidades} un)
+              {totalUnidades.toLocaleString('pt-BR')} <span className="text-xs font-normal text-emerald-200">un</span>
             </div>
           </div>
 
@@ -709,7 +704,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSaveItemForm} className="space-y-3 text-xs">
+        <form onSubmit={handleSubmitItem} className="space-y-3 text-xs">
           <div>
             <label className="font-bold text-slate-700 dark:text-slate-300">Descrição do Produto</label>
             <input
@@ -722,25 +717,16 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-bold text-slate-700 dark:text-slate-300">Peças por Caixa (F)</label>
-              <input
-                type="number"
-                value={novoItem.qtdPorPacote || ''}
-                onChange={(e) => setNovoItem(prev => ({ ...prev, qtdPorPacote: Number(e.target.value) }))}
-                className="w-full mt-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
-              />
-            </div>
-            <div>
-              <label className="font-bold text-slate-700 dark:text-slate-300">Qtd de Caixas (G)</label>
-              <input
-                type="number"
-                value={novoItem.qtdPacotes || ''}
-                onChange={(e) => setNovoItem(prev => ({ ...prev, qtdPacotes: Number(e.target.value) }))}
-                className="w-full mt-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
-              />
-            </div>
+          <div>
+            <label className="font-bold text-slate-700 dark:text-slate-300">Quantidade Total (Unidades)</label>
+            <input
+              type="number"
+              value={novoItem.qtdTotalUnidades || ''}
+              onChange={(e) => setNovoItem(prev => ({ ...prev, qtdTotalUnidades: Number(e.target.value) }))}
+              placeholder="ex: 120"
+              className="w-full mt-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
+              required
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -22,7 +22,7 @@ import {
   X,
   PlusCircle
 } from 'lucide-react';
-import { CentralStockItem, StoreConfig, FiscalConfig, Product, Supplier, PurchaseOrder } from '../shared/types';
+import { CentralStockItem, StoreConfig, FiscalConfig, Product, Supplier } from '../shared/types';
 
 interface CentralStockPageProps {
   stockItems: CentralStockItem[];
@@ -30,17 +30,17 @@ interface CentralStockPageProps {
   suppliers: Supplier[];
   stores: StoreConfig[];
   fiscalConfig: FiscalConfig;
-  onUpdateStockBalance: (stockId: string, deltaCaixas: number, newLocation?: string) => void;
+  onUpdateStockBalance: (stockId: string, deltaUnidades: number, newLocation?: string) => void;
   onSaveNewStockItem: (item: CentralStockItem) => void;
   onGenerateStockSeparation: (itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>) => void;
   onNavigateToSeparation: () => void;
 }
 
 export const CentralStockPage: React.FC<CentralStockPageProps> = ({
-  stockItems,
-  products,
-  suppliers,
-  stores,
+  stockItems = [],
+  products = [],
+  suppliers = [],
+  stores = [],
   fiscalConfig,
   onUpdateStockBalance,
   onSaveNewStockItem,
@@ -50,19 +50,19 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   
-  // Itens selecionados para o Romaneio de Transferência: { [stockId]: caixasAEnviar }
+  // Itens selecionados para o Romaneio de Transferência: { [stockId]: unidadesAEnviar }
   const [selectedTransferItems, setSelectedTransferItems] = useState<Record<string, number>>({});
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   
   // Modal de Ajuste / Entrada de Estoque
   const [editingStockItem, setEditingStockItem] = useState<CentralStockItem | null>(null);
-  const [adjustCaixasDelta, setAdjustCaixasDelta] = useState<string>('10');
+  const [adjustUnidadesDelta, setAdjustUnidadesDelta] = useState<string>('100');
   const [adjustLocation, setAdjustLocation] = useState<string>('');
   
   // Modal de Novo Item no CD
   const [isNewItemModalOpen, setIsNewItemModalOpen] = useState(false);
   const [selectedProductToAdd, setSelectedProductToAdd] = useState<string>('');
-  const [newSaldoCaixas, setNewSaldoCaixas] = useState<string>('20');
+  const [newSaldoUnidades, setNewSaldoUnidades] = useState<string>('120');
   const [newLocationGalpao, setNewLocationGalpao] = useState<string>('Rua A - Palete 01');
 
   // Modal de Zoom de Imagem
@@ -71,80 +71,85 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   // Lista de Categorias
   const categories = useMemo(() => {
     const set = new Set<string>();
-    stockItems.forEach(it => {
-      if (it.categoria) set.add(it.categoria);
+    (stockItems || []).forEach(it => {
+      if (it?.categoria) set.add(it.categoria);
     });
     return Array.from(set);
   }, [stockItems]);
 
   // Itens Filtrados
   const filteredStock = useMemo(() => {
-    return stockItems.filter(item => {
-      const s = searchTerm.toLowerCase();
+    return (stockItems || []).filter(item => {
+      if (!item) return false;
+      const s = (searchTerm || '').toLowerCase();
       const codInt = (item.codigoInterno || item.codigo || '').toLowerCase();
       const codForn = (item.codigoFornecedor || '').toLowerCase();
       const codBarras = (item.codigoBarras || '').toLowerCase();
-      const desc = item.descricao.toLowerCase();
+      const desc = (item.descricao || '').toLowerCase();
       const forn = (item.fornecedorOrigem || '').toLowerCase();
       const loc = (item.localizacaoGalpao || '').toLowerCase();
 
-      const matchesSearch = 
-        desc.includes(s) ||
-        codInt.includes(s) ||
-        codForn.includes(s) ||
-        codBarras.includes(s) ||
-        forn.includes(s) ||
-        loc.includes(s);
+      const matchSearch = !s || codInt.includes(s) || codForn.includes(s) || codBarras.includes(s) || desc.includes(s) || forn.includes(s) || loc.includes(s);
+      const matchCat = selectedCategory === 'all' || item.categoria === selectedCategory;
 
-      const matchesCat = selectedCategory === 'all' || item.categoria === selectedCategory;
-      return matchesSearch && matchesCat;
+      return matchSearch && matchCat;
     });
   }, [stockItems, searchTerm, selectedCategory]);
 
-  // KPIs de Estoque
+  // Métricas Consolidadas (KPIs)
   const metrics = useMemo(() => {
-    const totalCaixas = stockItems.reduce((acc, it) => acc + (it.saldoCaixas || 0), 0);
-    const totalPecas = stockItems.reduce((acc, it) => acc + (it.saldoUnidades || 0), 0);
-    const valorPatrimonial = stockItems.reduce((acc, it) => acc + ((it.saldoUnidades || 0) * (it.precoUnitario || 0)), 0);
-    const itensComSaldoBaixo = stockItems.filter(it => it.saldoCaixas <= 5).length;
+    const list = stockItems || [];
+    const totalItens = list.length;
+    const totalUnidades = list.reduce((sum, item) => sum + (Number(item?.saldoUnidades) || 0), 0);
+    const valorPatrimonial = list.reduce((sum, item) => sum + ((Number(item?.saldoUnidades) || 0) * (Number(item?.precoUnitario) || 0)), 0);
+    const valorTotalPdv = list.reduce((sum, item) => sum + ((Number(item?.saldoUnidades) || 0) * (Number(item?.pdvSugerido) || 12.0)), 0);
+    const itensComSaldoBaixo = list.filter(item => (Number(item?.saldoUnidades) || 0) <= 60).length;
 
-    return { totalCaixas, totalPecas, valorPatrimonial, itensComSaldoBaixo };
+    return {
+      totalItens,
+      totalUnidades,
+      totalPecas: totalUnidades,
+      valorPatrimonial,
+      valorTotalPdv,
+      lucroPotencial: valorTotalPdv - valorPatrimonial,
+      itensComSaldoBaixo
+    };
   }, [stockItems]);
 
-  // Contagem de itens no carrinho de transferência
+  // Total selecionado para transferência
   const selectedCount = Object.keys(selectedTransferItems).length;
-  const totalCaixasTransferencia = Object.values(selectedTransferItems).reduce((sum, q) => sum + (q || 0), 0);
+  const totalUnidadesTransferencia = Object.values(selectedTransferItems).reduce((sum, val) => sum + (Number(val) || 0), 0);
 
+  // Handlers de Seleção e Transferência
   const toggleItemSelection = (item: CentralStockItem) => {
     setSelectedTransferItems(prev => {
       const next = { ...prev };
-      if (next[item.id] !== undefined) {
+      if (next[item.id]) {
         delete next[item.id];
       } else {
-        // Quantidade padrão de caixas para enviar: 10 caixas ou o saldo disponível
-        next[item.id] = Math.min(10, Math.max(1, item.saldoCaixas));
+        next[item.id] = Math.min(Math.max(1, item.saldoUnidades), 100);
       }
       return next;
     });
   };
 
-  const handleTransferBoxChange = (stockId: string, boxes: number, maxBoxes: number) => {
-    const validBoxes = Math.max(1, Math.min(boxes, maxBoxes));
+  const handleTransferUnitsChange = (stockId: string, units: number, maxUnits: number) => {
+    const validUnits = Math.max(1, Math.min(units, maxUnits));
     setSelectedTransferItems(prev => ({
       ...prev,
-      [stockId]: validBoxes
+      [stockId]: validUnits
     }));
   };
 
   const handleConfirmTransferOrder = () => {
     const itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }> = [];
 
-    Object.entries(selectedTransferItems).forEach(([stockId, caixas]) => {
+    Object.entries(selectedTransferItems).forEach(([stockId, units]) => {
       const stockItem = stockItems.find(s => s.id === stockId);
-      if (stockItem && caixas > 0) {
+      if (stockItem && units > 0) {
         itemsToTransfer.push({
           stockItem,
-          caixasParaSeparar: caixas
+          caixasParaSeparar: units
         });
       }
     });
@@ -158,7 +163,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
 
   const handleSaveStockAdjustment = () => {
     if (!editingStockItem) return;
-    const delta = parseInt(adjustCaixasDelta, 10) || 0;
+    const delta = parseInt(adjustUnidadesDelta, 10) || 0;
     onUpdateStockBalance(editingStockItem.id, delta, adjustLocation.trim() || undefined);
     setEditingStockItem(null);
   };
@@ -167,7 +172,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     const prod = products.find(p => p.id === selectedProductToAdd);
     if (!prod) return;
 
-    const caixas = parseInt(newSaldoCaixas, 10) || 10;
+    const unidades = parseInt(newSaldoUnidades, 10) || 120;
     const codInterno = prod.codigoInterno || prod.codigo || '';
     const newItem: CentralStockItem = {
       id: 'stock_' + Date.now(),
@@ -179,11 +184,9 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
       descricao: prod.descricao,
       categoria: prod.categoria || 'Geral',
       fotoUrl: prod.fotoUrl,
-      qtdPorPacote: prod.qtdPorPacote || 12,
-      saldoCaixas: caixas,
-      saldoUnidades: caixas * (prod.qtdPorPacote || 12),
+      saldoUnidades: unidades,
       precoUnitario: prod.precoUnitarioPadrao || 0,
-      pdvSugerido: prod.pdvSugerido || 0,
+      pdvSugerido: prod.pdvSugerido || 12.0,
       localizacaoGalpao: newLocationGalpao.trim() || 'Rua A - Palete 01',
       fornecedorOrigem: prod.nomeFornecedor || 'Fornecedor Cadastrado',
       dataUltimaEntrada: new Date().toISOString().split('T')[0],
@@ -193,6 +196,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     onSaveNewStockItem(newItem);
     setIsNewItemModalOpen(false);
     setSelectedProductToAdd('');
+    setNewSaldoUnidades('120');
   };
 
   return (
@@ -210,11 +214,11 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 Estoque do Depósito Central (CD Matriz)
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800">
-                {stockItems.length} Itens Estocados
+                {metrics.totalItens} Itens Estocados
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Gerencie saldos em caixas/peças no galpão, endereçamento e crie romaneios de separação para distribuição às 20 lojas
+              Gerencie saldos em peças/unidades no galpão, endereçamento e crie ordens de separação para distribuição às 20 lojas
             </p>
           </div>
         </div>
@@ -234,7 +238,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               className="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer animate-pulse hover:scale-102"
             >
               <Send className="w-4 h-4" />
-              <span>Gerar Romaneio ({selectedCount} itens • {totalCaixasTransferencia} cx)</span>
+              <span>Gerar Romaneio ({selectedCount} itens • {totalUnidadesTransferencia.toLocaleString('pt-BR')} un)</span>
             </button>
           ) : (
             <button
@@ -251,24 +255,24 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
       {/* 2. Cards de Métricas de Patrimônio e Volume */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* Total Caixas */}
+        {/* Total Unidades */}
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Saldo em Caixas</span>
+            <span>Saldo em Unidades</span>
             <Boxes className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-            {metrics.totalCaixas.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">cx</span>
+            {metrics.totalUnidades.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
           </div>
           <span className="text-[11px] text-slate-400 mt-0.5 block">
-            Prontas para carregamento
+            Prontas para distribuição
           </span>
         </div>
 
         {/* Total Peças */}
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Total de Peças / Unidades</span>
+            <span>Total de Peças / Itens</span>
             <Layers className="w-4 h-4 text-teal-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
@@ -303,7 +307,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             {metrics.itensComSaldoBaixo} <span className="text-xs font-normal text-slate-400">itens</span>
           </div>
           <span className="text-[11px] text-rose-500 font-semibold mt-0.5 block">
-            Saldo ≤ 5 caixas no galpão
+            Saldo ≤ 60 unidades no galpão
           </span>
         </div>
 
@@ -317,23 +321,23 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por código, descrição, localização (rua/palete) ou fornecedor..."
-            className="w-full pl-10 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
+            placeholder="Buscar por descrição, código interno, EAN, fornecedor ou posição no galpão..."
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
           />
         </div>
 
-        {/* Filtro por Categoria */}
+        {/* Filtro de Categoria */}
         {categories.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
             <button
               onClick={() => setSelectedCategory('all')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
                 selectedCategory === 'all'
-                  ? 'bg-emerald-600 text-white shadow-xs'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
               }`}
             >
-              Todas ({stockItems.length})
+              Todas as Categorias
             </button>
             {categories.map(cat => (
               <button
@@ -366,11 +370,9 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 <th className="py-3 px-3 min-w-[130px] whitespace-nowrap">Cód. Barras (EAN)</th>
                 <th className="py-3 px-3 min-w-[220px]">Descrição do Produto</th>
                 <th className="py-3 px-3 min-w-[140px]">Endereço / Galpão</th>
-                <th className="py-3 px-3 text-center min-w-[80px] whitespace-nowrap">Peças/CX</th>
-                <th className="py-3 px-3 text-right min-w-[110px] whitespace-nowrap bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300">
-                  Saldo Caixas
+                <th className="py-3 px-3 text-right min-w-[110px] whitespace-nowrap bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-extrabold">
+                  Saldo Unidades
                 </th>
-                <th className="py-3 px-3 text-right min-w-[110px] whitespace-nowrap">Saldo Peças</th>
                 <th className="py-3 px-3 text-right min-w-[110px] whitespace-nowrap">Custo Unit.</th>
                 <th className="py-3 px-3 text-right min-w-[130px] whitespace-nowrap font-bold">Valor Total</th>
                 <th className="py-3 px-3 text-center min-w-[110px] whitespace-nowrap">Ações</th>
@@ -380,14 +382,14 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredStock.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
                     Nenhum produto em estoque encontrado com o filtro aplicado.
                   </td>
                 </tr>
               ) : (
                 filteredStock.map((item) => {
                   const isSelected = selectedTransferItems[item.id] !== undefined;
-                  const valorTotalItem = item.saldoUnidades * item.precoUnitario;
+                  const valorTotalItem = (item.saldoUnidades || 0) * (item.precoUnitario || 0);
                   const matchedProd = products.find(p => p.id === item.productId || (p.codigoInterno && p.codigoInterno === item.codigo) || p.codigo === item.codigo);
                   const barcode = item.codigoBarras || matchedProd?.codigoBarras || matchedProd?.eanBarcode || '';
 
@@ -404,7 +406,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleItemSelection(item)}
-                          disabled={item.saldoCaixas <= 0}
+                          disabled={(item.saldoUnidades || 0) <= 0}
                           className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                         />
                       </td>
@@ -465,24 +467,14 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                         </div>
                       </td>
 
-                      {/* Peças por Caixa */}
-                      <td className="py-3 px-3 text-center font-mono font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                        {item.qtdPorPacote} un/cx
-                      </td>
-
-                      {/* Saldo em Caixas */}
+                      {/* Saldo em Unidades */}
                       <td className="py-3 px-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 whitespace-nowrap text-sm">
-                        {item.saldoCaixas.toLocaleString('pt-BR')} cx
-                      </td>
-
-                      {/* Saldo em Peças */}
-                      <td className="py-3 px-3 text-right font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                        {item.saldoUnidades.toLocaleString('pt-BR')} un
+                        {(item.saldoUnidades || 0).toLocaleString('pt-BR')} un
                       </td>
 
                       {/* Custo Unitário */}
                       <td className="py-3 px-3 text-right font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                        R$ {item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        R$ {(item.precoUnitario || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
 
                       {/* Valor Total */}
@@ -496,11 +488,11 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                           <button
                             onClick={() => {
                               setEditingStockItem(item);
-                              setAdjustCaixasDelta('10');
+                              setAdjustUnidadesDelta('50');
                               setAdjustLocation(item.localizacaoGalpao || '');
                             }}
                             className="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
-                            title="Ajustar saldo de caixas ou localização"
+                            title="Ajustar saldo de unidades ou localização"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
@@ -543,7 +535,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                     Gerar Romaneio de Transferência do Depósito
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Defina quantas caixas de cada item serão distribuídas proporcionalmente entre as 20 lojas
+                    Defina quantas unidades de cada item serão distribuídas proporcionalmente entre as 20 lojas
                   </p>
                 </div>
               </div>
@@ -562,11 +554,9 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 Produtos Selecionados ({selectedCount})
               </div>
 
-              {Object.entries(selectedTransferItems).map(([stockId, caixas]) => {
+              {Object.entries(selectedTransferItems).map(([stockId, unidades]) => {
                 const item = stockItems.find(s => s.id === stockId);
                 if (!item) return null;
-
-                const totalPecas = caixas * item.qtdPorPacote;
 
                 return (
                   <div 
@@ -589,33 +579,33 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                           {item.descricao}
                         </div>
                         <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                          Saldo CD: <strong className="text-slate-700 dark:text-slate-300">{item.saldoCaixas} cx</strong> • {item.qtdPorPacote} un/cx
+                          Saldo Disponível no CD: <strong className="text-slate-700 dark:text-slate-300">{(item.saldoUnidades || 0).toLocaleString('pt-BR')} un</strong>
                         </div>
                       </div>
                     </div>
 
-                    {/* Controle de Caixas a Transferir */}
+                    {/* Controle de Unidades a Transferir */}
                     <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
                       <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
                         <button
                           type="button"
-                          onClick={() => handleTransferBoxChange(stockId, caixas - 1, item.saldoCaixas)}
-                          className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition"
+                          onClick={() => handleTransferUnitsChange(stockId, unidades - 10, item.saldoUnidades)}
+                          className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
                         <input
                           type="number"
                           min="1"
-                          max={item.saldoCaixas}
-                          value={caixas}
-                          onChange={(e) => handleTransferBoxChange(stockId, parseInt(e.target.value, 10) || 1, item.saldoCaixas)}
-                          className="w-14 text-center font-mono font-bold text-xs bg-transparent text-slate-900 dark:text-white outline-hidden"
+                          max={item.saldoUnidades}
+                          value={unidades}
+                          onChange={(e) => handleTransferUnitsChange(stockId, parseInt(e.target.value, 10) || 1, item.saldoUnidades)}
+                          className="w-16 text-center font-mono font-bold text-xs bg-transparent text-slate-900 dark:text-white outline-hidden"
                         />
                         <button
                           type="button"
-                          onClick={() => handleTransferBoxChange(stockId, caixas + 1, item.saldoCaixas)}
-                          className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition"
+                          onClick={() => handleTransferUnitsChange(stockId, unidades + 10, item.saldoUnidades)}
+                          className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -623,9 +613,9 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
 
                       <div className="text-right min-w-[70px]">
                         <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 block">
-                          {totalPecas} un
+                          {unidades} un
                         </span>
-                        <span className="text-[10px] text-slate-400">Total peças</span>
+                        <span className="text-[10px] text-slate-400">Rateio lojas</span>
                       </div>
                     </div>
                   </div>
@@ -638,7 +628,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               <div>
                 <span className="text-xs text-slate-500 dark:text-slate-400 block">Resumo do Romaneio:</span>
                 <span className="text-sm font-extrabold text-slate-900 dark:text-white font-mono">
-                  {totalCaixasTransferencia} caixas totais para rateio entre 20 lojas
+                  {totalUnidadesTransferencia.toLocaleString('pt-BR')} unidades totais para rateio entre 20 lojas
                 </span>
               </div>
 
@@ -685,7 +675,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               </div>
               <button
                 onClick={() => setEditingStockItem(null)}
-                className="p-1 text-slate-400 hover:text-slate-600"
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -694,23 +684,23 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-slate-500">Saldo Atual no CD:</span>
-                <strong className="text-slate-900 dark:text-white font-mono text-sm">{editingStockItem.saldoCaixas} cx ({editingStockItem.saldoUnidades} un)</strong>
+                <strong className="text-slate-900 dark:text-white font-mono text-sm">{(editingStockItem.saldoUnidades || 0).toLocaleString('pt-BR')} un</strong>
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Adicionar (+) ou Remover (-) Caixas:
+                Adicionar (+) ou Remover (-) Unidades:
               </label>
               <input
                 type="number"
-                value={adjustCaixasDelta}
-                onChange={(e) => setAdjustCaixasDelta(e.target.value)}
-                placeholder="Ex: +10 para entrada ou -5 para baixa"
+                value={adjustUnidadesDelta}
+                onChange={(e) => setAdjustUnidadesDelta(e.target.value)}
+                placeholder="Ex: +50 para entrada ou -20 para baixa"
                 className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
               />
               <span className="text-[11px] text-slate-400 mt-1 block">
-                Novo saldo final resultante: <strong>{Math.max(0, editingStockItem.saldoCaixas + (parseInt(adjustCaixasDelta, 10) || 0))} cx</strong>
+                Novo saldo final resultante: <strong>{Math.max(0, (editingStockItem.saldoUnidades || 0) + (parseInt(adjustUnidadesDelta, 10) || 0))} un</strong>
               </span>
             </div>
 
@@ -765,7 +755,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               </div>
               <button
                 onClick={() => setIsNewItemModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600"
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -783,7 +773,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 <option value="">Selecione um produto...</option>
                 {products.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.codigo} - {p.descricao} ({p.qtdPorPacote} un/cx)
+                    {p.codigoInterno || p.codigo} - {p.descricao}
                   </option>
                 ))}
               </select>
@@ -791,13 +781,13 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Quantidade Inicial de Caixas:
+                Quantidade Inicial de Unidades:
               </label>
               <input
                 type="number"
                 min="1"
-                value={newSaldoCaixas}
-                onChange={(e) => setNewSaldoCaixas(e.target.value)}
+                value={newSaldoUnidades}
+                onChange={(e) => setNewSaldoUnidades(e.target.value)}
                 className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
               />
             </div>
@@ -839,17 +829,25 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
       {/* 8. MODAL DE ZOOM DE IMAGEM */}
       {zoomedImage && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
           onClick={() => setZoomedImage(null)}
         >
-          <div className="relative max-w-xl w-full bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl p-2">
-            <img
-              src={zoomedImage.url}
-              alt={zoomedImage.title}
-              className="w-full h-auto max-h-[75vh] object-contain rounded-2xl mx-auto"
+          <div className="relative max-w-xl max-h-[85vh] bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 p-2" onClick={(e) => e.stopPropagation()}>
+            <img 
+              src={zoomedImage.url} 
+              alt={zoomedImage.title} 
+              className="max-h-[65vh] w-auto mx-auto object-contain rounded-2xl" 
             />
-            <div className="p-3 text-center">
-              <p className="text-sm font-bold text-white">{zoomedImage.title}</p>
+            <div className="p-4 flex items-center justify-between">
+              <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                {zoomedImage.title}
+              </span>
+              <button
+                onClick={() => setZoomedImage(null)}
+                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>

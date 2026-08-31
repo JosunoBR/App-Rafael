@@ -447,7 +447,7 @@ fun OrderCreationScreen(
                             OutlinedTextField(
                                 value = itemCaixas,
                                 onValueChange = { itemCaixas = it },
-                                label = { Text("Caixas", color = Slate400) },
+                                label = { Text("Qtd (Unidades)", color = Slate400) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -457,22 +457,7 @@ fun OrderCreationScreen(
                                     unfocusedTextColor = Color.White
                                 ),
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = itemQtdPorCaixa,
-                                onValueChange = { itemQtdPorCaixa = it },
-                                label = { Text("Peças/CX", color = Slate400) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Emerald500,
-                                    unfocusedBorderColor = Slate700,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
 
@@ -522,8 +507,7 @@ fun OrderCreationScreen(
                                     codigo = itemCodigoInterno,
                                     codigoInterno = itemCodigoInterno,
                                     codigoFornecedor = itemCodigoFornecedor.ifBlank { null },
-                                    caixas = itemCaixas.toIntOrNull() ?: 1,
-                                    qtdPorCaixa = itemQtdPorCaixa.toIntOrNull() ?: 12,
+                                    totalUnidades = itemCaixas.toIntOrNull() ?: 100,
                                     precoCompra = itemPrecoCompra.toDoubleOrNull() ?: 0.0,
                                     pdvAlvo = 12.00
                                 )

@@ -69,6 +69,26 @@ const DEFAULT_SUPPLIERS = [
 ];
 
 const DEFAULT_PRODUCTS = [
+  { id: 'prod_pre_1', codigo: 'PRE-001', descricao: 'Caneca Cerâmica Decorada com Frases 350ml', categoria: 'Presentes & Decoração', fotoUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 12, precoUnitarioPadrao: 4.20, pdvSugerido: 12.00, ncm: '6912.00.00', eanBarcode: '7892000100012', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_2', codigo: 'PRE-002', descricao: 'Difusor e Aromatizador de Ambientes Lavanda 250ml', categoria: 'Bem-Estar & Casa', fotoUrl: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 6, precoUnitarioPadrao: 4.80, pdvSugerido: 12.00, ncm: '3307.49.00', eanBarcode: '7892000100029', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_3', codigo: 'PRE-003', descricao: 'Porta-Retrato Vidro e Dourado 15x20cm', categoria: 'Presentes & Decoração', fotoUrl: 'https://images.unsplash.com/photo-1582582494705-f8ce0b0c24f0?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 24, precoUnitarioPadrao: 3.80, pdvSugerido: 12.00, ncm: '8306.30.00', eanBarcode: '7892000100036', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_4', codigo: 'PRE-004', descricao: 'Vela Aromática Copo de Vidro Baunilha 180g', categoria: 'Bem-Estar & Casa', fotoUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 12, precoUnitarioPadrao: 4.50, pdvSugerido: 12.00, ncm: '3406.00.00', eanBarcode: '7892000100043', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_5', codigo: 'PRE-005', descricao: 'Luminária de Mesa LED Articulada USB', categoria: 'Presentes & Decoração', fotoUrl: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 8, precoUnitarioPadrao: 5.20, pdvSugerido: 12.00, ncm: '9405.20.00', eanBarcode: '7892000100050', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_6', codigo: 'PRE-006', descricao: 'Caixa Organizadora Cartonada Decorativa P/M/G', categoria: 'Organizadores', fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 4, precoUnitarioPadrao: 4.80, pdvSugerido: 12.00, ncm: '4819.10.00', eanBarcode: '7892000100067', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_7', codigo: 'PRE-007', descricao: 'Garrafa Squeeze Inox Degradê 750ml', categoria: 'Presentes & Decoração', fotoUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 12, precoUnitarioPadrao: 5.10, pdvSugerido: 12.00, ncm: '7323.93.00', eanBarcode: '7892000100074', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_8', codigo: 'PRE-008', descricao: 'Jogo de Xícaras de Café Cristal Coração 6un', categoria: 'Mesa Posta', fotoUrl: 'https://images.unsplash.com/photo-1574053415387-a25475d4088d?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 6, precoUnitarioPadrao: 5.50, pdvSugerido: 12.00, ncm: '7013.37.00', eanBarcode: '7892000100081', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_9', codigo: 'PRE-009', descricao: 'Espelho de Mesa com LED Touch e Base Porta-Jóias', categoria: 'Presentes & Decoração', fotoUrl: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 6, precoUnitarioPadrao: 5.40, pdvSugerido: 12.00, ncm: '7009.92.00', eanBarcode: '7892000100098', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_10', codigo: 'PRE-010', descricao: 'Mini Vaso Cachepot Cerâmica com Suculenta', categoria: 'Presentes & Decoração', fotoUrl: 'https://images.unsplash.com/photo-1614707267537-b85aaf00c4b7?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 24, precoUnitarioPadrao: 3.50, pdvSugerido: 12.00, ncm: '6912.00.00', eanBarcode: '7892000100104', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_11', codigo: 'PRE-011', descricao: 'Almofada Decorativa Veludo com Enchimento 45x45cm', categoria: 'Cama, Mesa & Banho', fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 10, precoUnitarioPadrao: 4.90, pdvSugerido: 12.00, ncm: '9404.90.00', eanBarcode: '7892000100111', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_12', codigo: 'PRE-012', descricao: 'Relógio de Parede Moderno Minimalista 30cm', categoria: 'Presentes & Decoração', fotoUrl: 'https://images.unsplash.com/photo-1563861826100-9cb868fdbe1c?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 12, precoUnitarioPadrao: 4.50, pdvSugerido: 12.00, ncm: '9105.21.00', eanBarcode: '7892000100128', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_13', codigo: 'PRE-013', descricao: 'Copo Térmico com Tampa e Abridor 473ml', categoria: 'Utilidades Térmicas', fotoUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 12, precoUnitarioPadrao: 5.20, pdvSugerido: 12.00, ncm: '9617.00.10', eanBarcode: '7892000100135', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_14', codigo: 'PRE-014', descricao: 'Kit Canetas Fineliner Tons Pastel 12 Cores', categoria: 'Papelaria & Bazar', fotoUrl: 'https://images.unsplash.com/photo-1583778176476-4a8b02a64c01?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 24, precoUnitarioPadrao: 3.90, pdvSugerido: 12.00, ncm: '9608.20.00', eanBarcode: '7892000100142', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_15', codigo: 'PRE-015', descricao: 'Garrafa Térmica Nórdica Cabo Madeira 1L', categoria: 'Utilidades Térmicas', fotoUrl: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 6, precoUnitarioPadrao: 5.80, pdvSugerido: 12.00, ncm: '9617.00.10', eanBarcode: '7892000100159', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_16', codigo: 'PRE-016', descricao: 'Bandeja Espelhada Retangular Decorativa Lavabo', categoria: 'Presentes & Decoração', fotoUrl: 'https://images.unsplash.com/photo-1582582494705-f8ce0b0c24f0?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 6, precoUnitarioPadrao: 4.90, pdvSugerido: 12.00, ncm: '7009.92.00', eanBarcode: '7892000100166', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_17', codigo: 'PRE-017', descricao: 'Bloco de Anotações Planner Semanal Wire-o', categoria: 'Papelaria & Bazar', fotoUrl: 'https://images.unsplash.com/photo-1583778176476-4a8b02a64c01?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 20, precoUnitarioPadrao: 3.20, pdvSugerido: 12.00, ncm: '4820.10.00', eanBarcode: '7892000100173', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_18', codigo: 'PRE-018', descricao: 'Peseira Manta de Sofá Algodão Trabalhado', categoria: 'Cama, Mesa & Banho', fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 4, precoUnitarioPadrao: 5.60, pdvSugerido: 12.00, ncm: '6301.30.00', eanBarcode: '7892000100180', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_19', codigo: 'PRE-019', descricao: 'Conjunto Taças de Vinho Cristal Borda Dourada 6un', categoria: 'Vidros & Cristais', fotoUrl: 'https://images.unsplash.com/photo-1574053415387-a25475d4088d?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 4, precoUnitarioPadrao: 5.80, pdvSugerido: 12.00, ncm: '7013.22.00', eanBarcode: '7892000100197', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
+  { id: 'prod_pre_20', codigo: 'PRE-020', descricao: 'Aromatizador Umidificador Ultrassônico de Mesa', categoria: 'Bem-Estar & Casa', fotoUrl: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 6, precoUnitarioPadrao: 5.50, pdvSugerido: 12.00, ncm: '8509.80.90', eanBarcode: '7892000100203', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
   { id: 'prod_1', codigo: 'PRD-001', descricao: 'Garrafa Térmica Inox 1L com Termômetro Digital', categoria: 'Utilidades Térmicas', fotoUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 12, precoUnitarioPadrao: 5.50, pdvSugerido: 12.00, ncm: '9617.00.10', eanBarcode: '7891000100011', supplierId: 'sup_1', nomeFornecedor: 'Brasil Plásticos' },
   { id: 'prod_2', codigo: 'PRD-002', descricao: 'Conjunto 6 Taças de Cristal Lapidado 320ml', categoria: 'Vidros & Cristais', fotoUrl: 'https://images.unsplash.com/photo-1574053415387-a25475d4088d?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 6, precoUnitarioPadrao: 5.80, pdvSugerido: 12.00, ncm: '7013.22.00', eanBarcode: '7891000100028', supplierId: 'sup_2', nomeFornecedor: 'Paraná Bazar' },
   { id: 'prod_3', codigo: 'PRD-003', descricao: 'Kit 4 Potes Herméticos de Vidro com Tampa Bambu', categoria: 'Organizadores', fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80', qtdPorPacote: 8, precoUnitarioPadrao: 4.90, pdvSugerido: 12.00, ncm: '7013.49.00', eanBarcode: '7891000100035', supplierId: 'sup_1', nomeFornecedor: 'Brasil Plásticos' },
@@ -148,13 +168,13 @@ function buildItemCalculations(prod, qtdPacotes, fiscalConfig, stores) {
   };
 }
 
-function buildInstallments(orderTotal, condicao, emissionDate, statusPedido) {
+function buildInstallments(orderTotal, condicao, deliveryDate, statusPedido) {
   const parts = condicao.split('/');
   const count = parts.length > 0 && parts[0].includes('Dias') ? parts.length : 3;
   const daysInterval = [30, 60, 90, 120];
 
   const valuePerInstallment = Number((orderTotal / count).toFixed(2));
-  const baseDate = new Date(emissionDate);
+  const baseDate = new Date(deliveryDate);
   const now = new Date();
 
   return Array.from({ length: count }).map((_, i) => {
@@ -344,7 +364,7 @@ function generateHistoricalOrders(fiscalConfig, stores) {
       totalPecas += it.qtdTotalUnidades;
     });
 
-    const installments = buildInstallments(totalLiquido, tmpl.condicao, tmpl.dataEmissao, tmpl.status);
+    const installments = buildInstallments(totalLiquido, tmpl.condicao, tmpl.dataEntrega, tmpl.status);
 
     return {
       id: 'ord_' + tmpl.num.toLowerCase().replace('-', '_'),
@@ -412,16 +432,36 @@ function runFullDatabaseSeed(db) {
     });
   }
 
-  // 4. Catálogo de Produtos com Fotos
-  const prodCheck = db.exec("SELECT COUNT(*) as count FROM products");
-  if (!prodCheck[0] || prodCheck[0].values[0][0] === 0) {
-    DEFAULT_PRODUCTS.forEach(p => {
+  // 4. Catálogo de Produtos com Fotos (Garante inserção de todos os produtos do seed se faltar algum)
+  DEFAULT_PRODUCTS.forEach(p => {
+    const existing = db.exec("SELECT id FROM products WHERE id = ? OR codigo = ?", [p.id, p.codigo]);
+    if (!existing[0] || existing[0].values.length === 0) {
       db.run(`
-        INSERT INTO products (id, codigo, descricao, categoria, subcategoria, fornecedorPadraoId, fornecedorPadraoNome, precoUnitarioPadrao, pdvSugerido, qtdPorPacote, fotoUrl, ncm, eanBarcode, ativo, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [p.id, p.codigo, p.descricao, p.categoria, '', p.supplierId, p.nomeFornecedor, p.precoUnitarioPadrao, p.pdvSugerido, p.qtdPorPacote, p.fotoUrl, p.ncm, p.eanBarcode, 1, now, now]);
-    });
-  }
+        INSERT INTO products (id, codigo, codigoInterno, codigoFornecedor, codigoBarras, descricao, categoria, subcategoria, supplierId, nomeFornecedor, precoUnitarioPadrao, pdvSugerido, qtdPorPacote, fotoUrl, ncm, eanBarcode, ativo, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        p.id, 
+        p.codigo, 
+        p.codigoInterno || p.codigo, 
+        p.codigoFornecedor || '', 
+        p.codigoBarras || p.eanBarcode || '', 
+        p.descricao, 
+        p.categoria, 
+        p.subcategoria || '', 
+        p.supplierId || '', 
+        p.nomeFornecedor || '', 
+        p.precoUnitarioPadrao, 
+        p.pdvSugerido, 
+        p.qtdPorPacote, 
+        p.fotoUrl || '', 
+        p.ncm || '', 
+        p.eanBarcode || '', 
+        1, 
+        now, 
+        now
+      ]);
+    }
+  });
 
   // 5. Histórico de Pedidos de Compra (Janeiro a Agosto de 2026)
   const orderCheck = db.exec("SELECT COUNT(*) as count FROM purchase_orders");
@@ -468,6 +508,63 @@ function runFullDatabaseSeed(db) {
         ]);
       }
     });
+  }
+
+  // 6. Usuários do Sistema (3 Níveis: Diretoria, Depósito, Separação)
+  try {
+    const bcrypt = require('bcryptjs');
+    const defaultPasswordHash = bcrypt.hashSync('123456', 10);
+
+    // Migração de roles legadas
+    db.run("UPDATE users SET role = 'deposito' WHERE role = 'comprador'");
+    db.run("UPDATE users SET role = 'separacao' WHERE role IN ('conferente', 'motorista')");
+
+    const defaultUsers = [
+      {
+        id: 'usr_diretoria',
+        nome: 'Rafael (Diretoria)',
+        email: 'diretoria@mega12.com.br',
+        senha: defaultPasswordHash,
+        role: 'diretoria',
+        cargo: 'Diretoria Executiva',
+        telefone: '(42) 99999-0001'
+      },
+      {
+        id: 'usr_deposito',
+        nome: 'Marcos (Depósito & CD)',
+        email: 'deposito@mega12.com.br',
+        senha: defaultPasswordHash,
+        role: 'deposito',
+        cargo: 'Gestão de Estoque & Depósito',
+        telefone: '(42) 99999-0002'
+      },
+      {
+        id: 'usr_separacao',
+        nome: 'Jorge (Separação & Doca)',
+        email: 'separacao@mega12.com.br',
+        senha: defaultPasswordHash,
+        role: 'separacao',
+        cargo: 'Conferência & Separação Doca',
+        telefone: '(42) 99999-0003'
+      }
+    ];
+
+    defaultUsers.forEach(u => {
+      const check = db.exec(`SELECT id FROM users WHERE LOWER(email) = '${u.email.toLowerCase()}' OR id = '${u.id}'`);
+      if (!check[0] || check[0].values.length === 0) {
+        db.run(`
+          INSERT INTO users (id, nome, email, senha, role, cargo, telefone, ativo, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        `, [u.id, u.nome, u.email, u.senha, u.role, u.cargo, u.telefone, now, now]);
+      } else {
+        // Atualizar papel e cargo
+        db.run(`
+          UPDATE users SET role = ?, cargo = ?, updatedAt = ? WHERE id = ?
+        `, [u.role, u.cargo, now, u.id]);
+      }
+    });
+  } catch (err) {
+    console.warn('Aviso no seed de usuários:', err.message);
   }
 }
 

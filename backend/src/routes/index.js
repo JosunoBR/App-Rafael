@@ -8,6 +8,8 @@ const supplierRoutes = require('./supplier.routes');
 const productRoutes = require('./product.routes');
 const auditRoutes = require('./audit.routes');
 const exportRoutes = require('./export.routes');
+const configRoutes = require('./config.routes');
+const stockRoutes = require('./stock.routes');
 
 const router = Router();
 
@@ -15,7 +17,7 @@ const router = Router();
 router.get('/health', (req, res) => {
   res.json({
     status: 'online',
-    architecture: 'Clean Architecture (SRP + DIP + RBAC)',
+    architecture: 'Clean Architecture (SRP + DIP + RBAC + SQLite Relational)',
     database: 'SQLite (mega12.db)',
     path: dbPath,
     timestamp: new Date().toISOString()
@@ -28,6 +30,8 @@ router.use('/users', userRoutes);
 router.use('/orders', orderRoutes);
 router.use('/suppliers', supplierRoutes);
 router.use('/products', productRoutes);
+router.use('/stock', stockRoutes);
+router.use('/config', configRoutes);
 router.use('/audit', auditRoutes);
 router.use('/export', exportRoutes);
 

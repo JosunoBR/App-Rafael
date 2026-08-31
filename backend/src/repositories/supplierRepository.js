@@ -18,13 +18,17 @@ class SupplierRepository {
     const existing = await this.findById(supplier.id);
     const now = new Date().toISOString();
 
+    const pedidoPadraoJson = typeof supplier.pedidoPadraoJson === 'string' 
+      ? supplier.pedidoPadraoJson 
+      : (supplier.pedidoPadrao ? JSON.stringify(supplier.pedidoPadrao) : (existing?.pedidoPadraoJson || null));
+
     if (existing) {
       const sql = `
         UPDATE suppliers SET
           razaoSocial = ?, nomeFantasia = ?, cnpj = ?, vendedorPadrao = ?,
           contatoVendedor = ?, condicaoPagamentoPadrao = ?, aliquotaStPadrao = ?,
-          aliquotaIpiPadrao = ?, descontoOffPadrao = ?, observacoesDescarga = ?,
-          updatedAt = ?
+          aliquotaIpiPadrao = ?, descontoOffPadrao = ?, percentualNotaPadrao = ?,
+          observacoesDescarga = ?, pedidoPadraoJson = ?, updatedAt = ?
         WHERE id = ?
       `;
       await execute(sql, [
@@ -37,7 +41,9 @@ class SupplierRepository {
         Number(supplier.aliquotaStPadrao) || 0,
         Number(supplier.aliquotaIpiPadrao) || 0,
         Number(supplier.descontoOffPadrao) || 0,
+        Number(supplier.percentualNotaPadrao) || 100,
         supplier.observacoesDescarga || '',
+        pedidoPadraoJson,
         now,
         supplier.id
       ]);
@@ -46,8 +52,9 @@ class SupplierRepository {
         INSERT INTO suppliers (
           id, razaoSocial, nomeFantasia, cnpj, vendedorPadrao, contatoVendedor,
           condicaoPagamentoPadrao, aliquotaStPadrao, aliquotaIpiPadrao,
-          descontoOffPadrao, observacoesDescarga, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          descontoOffPadrao, percentualNotaPadrao, observacoesDescarga,
+          pedidoPadraoJson, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await execute(sql, [
         supplier.id,
@@ -60,7 +67,9 @@ class SupplierRepository {
         Number(supplier.aliquotaStPadrao) || 0,
         Number(supplier.aliquotaIpiPadrao) || 0,
         Number(supplier.descontoOffPadrao) || 0,
+        Number(supplier.percentualNotaPadrao) || 100,
         supplier.observacoesDescarga || '',
+        pedidoPadraoJson,
         supplier.createdAt || now,
         now
       ]);

@@ -8,6 +8,7 @@ import {
   ShieldCheck, 
   ShoppingBag, 
   PackageCheck, 
+  Warehouse,
   Truck, 
   Sparkles,
   AlertCircle,
@@ -194,36 +195,60 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
               
               {/* Perfil 1: Rafael (Diretoria) */}
               <button
                 type="button"
                 onClick={() => handleQuickLogin('diretoria@mega12.com.br')}
-                className="p-3 rounded-2xl bg-slate-800/70 hover:bg-amber-950/40 border border-slate-700 hover:border-amber-500/60 text-left transition flex items-center gap-2.5 group cursor-pointer"
+                className="p-3 rounded-2xl bg-slate-800/70 hover:bg-amber-950/40 border border-slate-700 hover:border-amber-500/60 text-left transition flex flex-col gap-2 group cursor-pointer"
               >
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center font-bold transition shrink-0">
-                  <ShieldCheck className="w-5 h-5" />
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center font-bold transition shrink-0">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-white text-xs">Diretoria</div>
+                    <div className="text-[9px] text-amber-400 font-bold">Acesso Total</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-extrabold text-white text-xs">Rafael (Diretoria)</div>
-                  <div className="text-[10px] text-slate-400">Acesso Total • Compras & Fiscal</div>
-                </div>
+                <div className="text-[10px] text-slate-400">Compras, BI, Boletos & Gestão Geral</div>
               </button>
 
-              {/* Perfil 2: Jorge (Separação) */}
+              {/* Perfil 2: Marcos (Depósito) */}
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('deposito@mega12.com.br')}
+                className="p-3 rounded-2xl bg-slate-800/70 hover:bg-blue-950/40 border border-slate-700 hover:border-blue-500/60 text-left transition flex flex-col gap-2 group cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 group-hover:bg-blue-500 group-hover:text-white flex items-center justify-center font-bold transition shrink-0">
+                    <Warehouse className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-white text-xs">Depósito</div>
+                    <div className="text-[9px] text-blue-400 font-bold">Estoque & CD</div>
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-400">Estoque Central & Rateio Lojas</div>
+              </button>
+
+              {/* Perfil 3: Jorge (Separação) */}
               <button
                 type="button"
                 onClick={() => handleQuickLogin('separacao@mega12.com.br')}
-                className="p-3 rounded-2xl bg-slate-800/70 hover:bg-teal-950/40 border border-slate-700 hover:border-teal-500/60 text-left transition flex items-center gap-2.5 group cursor-pointer"
+                className="p-3 rounded-2xl bg-slate-800/70 hover:bg-emerald-950/40 border border-slate-700 hover:border-emerald-500/60 text-left transition flex flex-col gap-2 group cursor-pointer"
               >
-                <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-400 group-hover:bg-teal-500 group-hover:text-white flex items-center justify-center font-bold transition shrink-0">
-                  <PackageCheck className="w-5 h-5" />
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 flex items-center justify-center font-bold transition shrink-0">
+                    <PackageCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-white text-xs">Separação</div>
+                    <div className="text-[9px] text-emerald-400 font-bold">Doca & Lojas</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-extrabold text-white text-xs">Jorge (Separação)</div>
-                  <div className="text-[10px] text-slate-400">Doca • Conferência & Avarias</div>
-                </div>
+                <div className="text-[10px] text-slate-400">Conferência & Finalização Pedido</div>
               </button>
 
             </div>

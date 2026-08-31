@@ -38,15 +38,18 @@ class ProductService {
   }
 
   async deleteProduct(id) {
-    const existing = await productRepository.findById(id);
-    if (!existing) {
-      const err = new Error('Produto não encontrado.');
-      err.statusCode = 404;
-      throw err;
-    }
-
+    await this.getProduct(id);
     await productRepository.delete(id);
-    return { success: true, message: `Produto "${existing.descricao}" excluído com sucesso.` };
+    return { success: true, message: 'Produto removido com sucesso.' };
+  }
+
+  async syncCatalog() {
+    const { getDatabase, saveDatabaseToDisk } = require('../config/database');
+    const { runFullDatabaseSeed } = require('../config/seedData');
+    const db = await getDatabase();
+    runFullDatabaseSeed(db);
+    saveDatabaseToDisk();
+    return await productRepository.findAll();
   }
 }
 

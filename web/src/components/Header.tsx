@@ -59,7 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectNav
 }) => {
   const userRole: UserRole = currentUser?.role || 'diretoria';
-  const canAccessOrders = userRole === 'diretoria' || userRole === 'comprador';
+  const canAccessOrders = userRole === 'diretoria';
 
   // Configurações de Título e Ícone da Página Ativa
   const getNavMeta = (tab: ActiveNavTab) => {

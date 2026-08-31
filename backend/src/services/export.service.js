@@ -33,8 +33,8 @@ class ExportService {
     ];
 
     const itemsHeaders = [
-      'Código', 'Cód. Fornecedor', 'EAN-13', 'Descrição', 'Qtd Pacotes', 'Qtd p/ Pacote', 'Total Peças',
-      'Preço Unitário (R$)', 'Preço Pacote (R$)', 'Custo Bruto (R$)', 'Valor ST (R$)',
+      'Código', 'Cód. Fornecedor', 'EAN-13', 'Descrição', 'Qtd (Unidades)',
+      'Preço Unitário (R$)', 'Custo Bruto (R$)', 'Valor ST (R$)',
       'Desconto (R$)', 'Custo Líquido Total (R$)', 'PDV Alvo (R$)', 'Margem (%)'
     ];
 
@@ -43,16 +43,13 @@ class ExportService {
       item.codigoFornecedor || '',
       item.codigoBarras || item.eanBarcode || '',
       item.descricao || '',
-      item.qtdPacotes || 0,
-      item.qtdPorPacote || 1,
       item.qtdTotalUnidades || 0,
       item.precoUnitario || 0,
-      item.precoPacote || 0,
-      item.custoBrutoTotal || 0,
+      item.valorTotalBruto || (item.qtdTotalUnidades * item.precoUnitario) || 0,
       item.valorStTotal || 0,
       item.valorDescontoTotal || 0,
-      item.custoLiquidoTotalComDesconto || item.custoLiquidoTotal || 0,
-      item.pdvAlvo || 0,
+      item.custoLiquidoTotalComDesconto || item.valorTotalBruto || 0,
+      item.pdvAlvo || 12.0,
       `${Number(item.margemPercentual || 0).toFixed(1)}%`
     ]);
 

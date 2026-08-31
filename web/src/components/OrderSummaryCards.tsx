@@ -15,7 +15,6 @@ interface OrderSummaryCardsProps {
 }
 
 export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) => {
-  const totalPacotes = order.items.reduce((acc, i) => acc + (i.qtdPacotes || 0), 0);
   const totalUnidades = order.items.reduce((acc, i) => acc + (i.qtdTotalUnidades || 0), 0);
   const totalBrutoCompra = order.items.reduce((acc, i) => acc + (i.valorTotalBruto || 0), 0);
   
@@ -37,7 +36,7 @@ export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) =
   const margemPercentualMedia = faturamentoPdvProjetado > 0 ? (lucroEstimadoTotal / faturamentoPdvProjetado) * 100 : 0;
 
   // Verificação de separação de todas as lojas (soma das lojas + estoque central/reserva)
-  const activeStores = order.storeConfigs.filter(s => s.active);
+  const activeStores = (order.storeConfigs || []).filter(s => s.active);
   let totalDivergencias = 0;
   if (order.items.length > 0) {
     order.items.forEach(item => {
@@ -120,17 +119,17 @@ export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) =
         </div>
       </div>
 
-      {/* 5. Volume de Peças / Caixas */}
+      {/* 5. Volume de Unidades */}
       <div className="bg-white dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
           <span className="text-xs font-medium">Volume Total</span>
           <Boxes className="w-4 h-4 text-purple-500" />
         </div>
         <div className="text-base font-bold text-slate-900 dark:text-white truncate">
-          {totalUnidades.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
+          {totalUnidades.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">unidades</span>
         </div>
         <div className="text-[10px] text-slate-400">
-          {totalPacotes.toLocaleString('pt-BR')} cx / pacotes
+          {order.items.length} {order.items.length === 1 ? 'produto' : 'produtos'} no pedido
         </div>
       </div>
 

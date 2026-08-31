@@ -98,27 +98,20 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
 
   // Estatísticas e Métricas de Desempenho
   const metrics = useMemo(() => {
-    let totalCaixasGeral = 0;
     let totalPecasGeral = 0;
-    let totalCaixasCD = 0;
+    let totalPecasCD = 0;
     let totalPedidosConferidos = 0;
     let totalAvariasOcorrencias = 0;
     let totalPrejuizoAvarias = 0;
 
-    const separadorStats: Record<string, { pedidos: number; caixas: number; pecas: number; avarias: number }> = {};
+    const separadorStats: Record<string, { pedidos: number; pecas: number; avarias: number }> = {};
 
     orders.forEach(o => {
-      const caixasPedido = o.items.reduce((sum, item) => sum + (item.qtdPacotes || 0), 0);
       const pecasPedido = o.items.reduce((sum, item) => sum + (item.qtdTotalUnidades || 0), 0);
-      const caixasCD = o.items.reduce((sum, item) => {
-        const pack = Math.max(1, item.qtdPorPacote || 1);
-        const reserveUnits = item.qtdReservaEstoque || 0;
-        return sum + (reserveUnits / pack);
-      }, 0);
+      const pecasCD = o.items.reduce((sum, item) => sum + (item.qtdReservaEstoque || 0), 0);
 
-      totalCaixasGeral += caixasPedido;
       totalPecasGeral += pecasPedido;
-      totalCaixasCD += caixasCD;
+      totalPecasCD += pecasCD;
 
       const orderLoss = calculateOrderLoss(o);
 
@@ -126,10 +119,9 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
       if (conferenteNome) {
         totalPedidosConferidos += 1;
         if (!separadorStats[conferenteNome]) {
-          separadorStats[conferenteNome] = { pedidos: 0, caixas: 0, pecas: 0, avarias: 0 };
+          separadorStats[conferenteNome] = { pedidos: 0, pecas: 0, avarias: 0 };
         }
         separadorStats[conferenteNome].pedidos += 1;
-        separadorStats[conferenteNome].caixas += caixasPedido;
         separadorStats[conferenteNome].pecas += pecasPedido;
         
         if (o.inspection?.possuiAvarias && o.inspection.avarias) {
@@ -146,12 +138,11 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
     const rankingSeparadores = Object.entries(separadorStats).map(([nome, stat]) => ({
       nome,
       ...stat
-    })).sort((a, b) => b.caixas - a.caixas);
+    })).sort((a, b) => b.pecas - a.pecas);
 
     return {
-      totalCaixasGeral,
       totalPecasGeral,
-      totalCaixasCD,
+      totalPecasCD,
       totalPedidosConferidos,
       totalAvariasOcorrencias,
       totalPrejuizoAvarias,
@@ -206,17 +197,17 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
       {/* 2. Cards de Métricas Operacionais de Galpão */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* Total Caixas Separadas */}
+        {/* Total Peças Separadas */}
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
           <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Volumes Processados</span>
+            <span>Unidades Processadas</span>
             <Boxes className="w-4 h-4 text-indigo-500" />
           </div>
           <div className="text-xl font-extrabold text-slate-900 dark:text-white font-mono">
-            {metrics.totalCaixasGeral.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">cx</span>
+            {metrics.totalPecasGeral.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
           </div>
           <span className="text-[11px] text-slate-400 mt-0.5 block">
-            {metrics.totalPecasGeral.toLocaleString('pt-BR')} peças totais
+            Volume total de mercadorias separadas
           </span>
         </div>
 
@@ -241,7 +232,7 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
             <Warehouse className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-xl font-extrabold text-amber-600 dark:text-amber-400 font-mono">
-            {Math.round(metrics.totalCaixasCD)} <span className="text-xs font-normal text-slate-400">cx</span>
+            {metrics.totalPecasCD.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
           </div>
           <span className="text-[11px] text-slate-400 mt-0.5 block">
             Reserva estratégica guardada na Matriz
@@ -309,7 +300,7 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
                     </div>
                   </div>
                   <span className="text-xs font-mono font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded-md">
-                    {conf.caixas} cx
+                    {conf.pecas.toLocaleString('pt-BR')} un
                   </span>
                 </div>
 
@@ -400,7 +391,7 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
               <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
                 <th className="py-3 px-4">Nº Pedido / Fornecedor</th>
                 <th className="py-3 px-4">Separador / Conferente</th>
-                <th className="py-3 px-3 text-center">Volumes / Caixas</th>
+                <th className="py-3 px-3 text-center">Total Unidades</th>
                 <th className="py-3 px-3 text-center">Estoque CD</th>
                 <th className="py-3 px-3 text-center">Status Doca</th>
                 <th className="py-3 px-3 text-center">Ocorrências</th>
@@ -417,12 +408,8 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
                 </tr>
               ) : (
                 filteredOrders.map(orderItem => {
-                  const caixas = orderItem.items.reduce((sum, i) => sum + (i.qtdPacotes || 0), 0);
                   const pecas = orderItem.items.reduce((sum, i) => sum + (i.qtdTotalUnidades || 0), 0);
-                  const caixasCD = orderItem.items.reduce((sum, i) => {
-                    const pack = Math.max(1, i.qtdPorPacote || 1);
-                    return sum + ((i.qtdReservaEstoque || 0) / pack);
-                  }, 0);
+                  const pecasCD = orderItem.items.reduce((sum, i) => sum + (i.qtdReservaEstoque || 0), 0);
 
                   const conferente = orderItem.inspection?.conferente?.trim();
                   const possuiAvarias = Boolean(orderItem.inspection?.possuiAvarias && orderItem.inspection.avarias && orderItem.inspection.avarias.length > 0);
@@ -468,12 +455,9 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
                         )}
                       </td>
 
-                      {/* 3. Volumes & Caixas */}
+                      {/* 3. Total Unidades */}
                       <td className="py-3.5 px-3 text-center font-mono">
                         <div className="font-extrabold text-slate-900 dark:text-white">
-                          {caixas} cx
-                        </div>
-                        <div className="text-[10px] text-slate-400">
                           {pecas.toLocaleString('pt-BR')} un
                         </div>
                       </td>
@@ -481,7 +465,7 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
                       {/* 4. Estoque CD */}
                       <td className="py-3.5 px-3 text-center font-mono">
                         <div className="font-bold text-amber-700 dark:text-amber-400">
-                          {Math.round(caixasCD)} cx
+                          {pecasCD.toLocaleString('pt-BR')} un
                         </div>
                         <div className="text-[10px] text-amber-600/70 dark:text-amber-400/70">
                           no Depósito

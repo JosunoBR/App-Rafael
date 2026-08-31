@@ -44,7 +44,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
     ? order 
     : (pendingSeparationOrders[0] || order);
 
-  const activeStores = activeOrder.storeConfigs.filter(s => s.active);
+  const activeStores = (activeOrder.storeConfigs || []).filter(s => s.active);
   const [selectedStoreId, setSelectedStoreId] = useState<string>(activeStores[0]?.id || 'pg_centro');
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
   const [conferenteNome, setConferenteNome] = useState(activeOrder.inspection?.conferente || '');
@@ -67,7 +67,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
   const isAllStoreChecked = totalItemsStore.length > 0 && checkedCount === totalItemsStore.length;
 
   const totalPecasStore = activeOrder.items.reduce((acc, i) => acc + (i.separacaoLojas?.[selectedStoreId] || 0), 0);
-  const totalCaixasGeral = activeOrder.items.reduce((acc, i) => acc + (i.qtdPacotes || 0), 0);
+  const totalUnidadesGeral = activeOrder.items.reduce((acc, i) => acc + (i.qtdTotalUnidades || 0), 0);
 
   // Calcular progresso geral de todas as lojas
   let totalChecksPossible = 0;
@@ -199,7 +199,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
             {activeOrder.header.fornecedor}
           </h2>
           <div className="text-xs text-purple-200 font-mono mt-0.5">
-            Pedido: <b>{activeOrder.header.numeroPedido}</b> • {totalCaixasGeral} caixas no total da carga
+            Pedido: <b>{activeOrder.header.numeroPedido}</b> • {totalUnidadesGeral.toLocaleString('pt-BR')} unidades no total da carga
           </div>
         </div>
 
@@ -240,10 +240,10 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
           <div className="p-2.5 rounded-2xl bg-black/30 backdrop-blur-xs border border-white/10">
             <div className="text-[10px] text-purple-200 uppercase font-bold">Carga Desta Loja</div>
             <div className="text-base font-black font-mono text-white mt-0.5">
-              {activeOrder.items.reduce((acc, i) => acc + Math.round((i.separacaoLojas?.[selectedStoreId] || 0) / (i.qtdPorPacote || 1)), 0)} cx
+              {totalPecasStore.toLocaleString('pt-BR')} un
             </div>
             <div className="text-[10px] text-purple-200 font-mono">
-              ({totalPecasStore.toLocaleString('pt-BR')} peças)
+              ({totalPecasStore.toLocaleString('pt-BR')} unidades)
             </div>
           </div>
 
@@ -279,7 +279,6 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
         {totalItemsStore.map((item) => {
           const qtdLoja = item.separacaoLojas?.[selectedStoreId] || 0;
           const isChecked = Boolean(checkedItems[`${activeOrderId}_${selectedStoreId}_${item.id}`]);
-          const cxEstimadas = item.qtdPorPacote > 0 ? Math.round(qtdLoja / item.qtdPorPacote) : 0;
 
           return (
             <div
@@ -315,16 +314,12 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
                   </div>
                   <div className="text-[11px] text-slate-400 font-mono mt-0.5">
                     {item.codigo && <span>[{item.codigo}] </span>}
-                    {item.qtdPorPacote} un/cx
                   </div>
                 </div>
               </div>
 
               <div className="text-right shrink-0 ml-2">
                 <div className="text-sm font-black font-mono text-purple-600 dark:text-purple-400">
-                  {cxEstimadas} cx
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                   {qtdLoja.toLocaleString('pt-BR')} un
                 </div>
               </div>

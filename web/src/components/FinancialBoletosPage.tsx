@@ -608,9 +608,15 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
 
                       {/* Parcela */}
                       <td className="py-3.5 px-4 text-center">
-                        <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
-                          {installment.numeroParcela} / {installment.totalParcelas}
-                        </span>
+                        {installment.observacao?.toLowerCase().includes('entrada') ? (
+                          <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-mono border border-emerald-300 dark:border-emerald-800">
+                            1 / {installment.totalParcelas} (Entrada)
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
+                            {installment.numeroParcela} / {installment.totalParcelas}
+                          </span>
+                        )}
                       </td>
 
                       {/* Vencimento */}

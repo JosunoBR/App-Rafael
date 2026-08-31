@@ -86,16 +86,21 @@ data class OrderItem(
     val codigoFornecedor: String? = null,
     val codigo: String = "", // retrocompatibilidade
     val descricao: String = "",
-    val caixas: Int = 0,
-    val qtdPorCaixa: Int = 12,
+    @SerializedName("qtdTotalUnidades", alternate = ["totalPecas", "caixas"])
     val totalPecas: Int = 0,
+    @SerializedName("precoUnitario", alternate = ["precoCompraUnitario"])
     val precoCompraUnitario: Double = 0.0,
-    val pdvAlvo: Double = 0.0,
+    val pdvAlvo: Double = 12.0,
+    @SerializedName("valorTotalBruto", alternate = ["subtotal"])
     val subtotal: Double = 0.0,
+    @SerializedName("margemPercentual", alternate = ["margemCalculada"])
     val margemCalculada: Double = 0.0,
     val statusMargem: String = "boa",
+    @SerializedName("fotoUrl", alternate = ["photoUrl"])
     val photoUrl: String? = null,
-    val storeDistribution: Map<String, Int> = emptyMap()
+    @SerializedName("separacaoLojas", alternate = ["storeDistribution"])
+    val storeDistribution: Map<String, Int> = emptyMap(),
+    val qtdPorCaixa: Int = 1
 )
 
 // Cabeçalho do Pedido

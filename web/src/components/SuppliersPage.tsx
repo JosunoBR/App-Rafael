@@ -19,7 +19,8 @@ import {
   Image as ImageIcon,
   Upload,
   X,
-  Check
+  Check,
+  Star
 } from 'lucide-react';
 import { Supplier, Product } from '../shared/types';
 
@@ -493,6 +494,18 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                           {sup.nomeFantasia}
                         </div>
                       )}
+                      {(sup.pedidoPadrao || sup.pedidoPadraoJson) && (
+                        <div className="mt-1">
+                          <button
+                            onClick={() => onSelectSupplierForOrder && onSelectSupplierForOrder(sup)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800 transition cursor-pointer shadow-2xs"
+                            title="Iniciar cotação carregando a Compra Padrão deste fornecedor"
+                          >
+                            <Star className="w-3 h-3 text-amber-500 fill-amber-400" />
+                            <span>Compra Padrão ({sup.pedidoPadrao?.items?.length || (sup.pedidoPadraoJson ? JSON.parse(sup.pedidoPadraoJson).items?.length : 0)} itens)</span>
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3.5 px-3 font-mono text-slate-500">
@@ -771,20 +784,9 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Embalagem (un/cx) *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={newProductData.qtdPorPacote || 1}
-                    onChange={(e) => setNewProductData(prev => ({ ...prev, qtdPorPacote: Math.max(1, parseInt(e.target.value) || 1) }))}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden text-center"
-                  />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">

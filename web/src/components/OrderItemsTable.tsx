@@ -20,17 +20,26 @@ import {
   Building2,
   Check,
   Zap,
-  ChevronDown
+  ChevronDown,
+  PackagePlus,
+  PackageCheck,
+  Link as LinkIcon,
+  UploadCloud,
+  CheckCircle2,
+  Trash
 } from 'lucide-react';
 import { OrderItem, FiscalConfig, StoreConfig, Product } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
+import { isOrderItemBlank, generateNextProductCode } from '../utils/orderItemUtils';
 
 interface OrderItemsTableProps {
   items: OrderItem[];
   globalFiscal: FiscalConfig;
   stores: StoreConfig[];
   products?: Product[];
+  currentSupplierName?: string;
+  currentSupplierId?: string;
   onUpdateItem: (itemId: string, updatedFields: Partial<OrderItem>) => void;
   onAddItem: (customItem?: OrderItem) => void;
   onDuplicateItem: (item: OrderItem) => void;
@@ -38,6 +47,7 @@ interface OrderItemsTableProps {
   onOpenFiscalModal: (item: OrderItem) => void;
   onOpenSeparationModal: (item: OrderItem) => void;
   onLoadMockOrder?: () => void;
+  onSaveProduct?: (product: Product) => void;
 }
 
 // Helper para destacar os caracteres digitados no texto
@@ -66,18 +76,28 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   globalFiscal,
   stores,
   products = [],
+  currentSupplierName,
+  currentSupplierId,
   onUpdateItem,
   onAddItem,
   onDuplicateItem,
   onDeleteItem,
   onOpenFiscalModal,
   onOpenSeparationModal,
-  onLoadMockOrder
+  onLoadMockOrder,
+  onSaveProduct
 }) => {
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
   const [isCatalogPickerOpen, setIsCatalogPickerOpen] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState('');
   
+  // Estado do Modal Especializado de Foto
+  const [photoModalItem, setPhotoModalItem] = useState<OrderItem | null>(null);
+  const [photoTab, setPhotoTab] = useState<'upload' | 'url'>('upload');
+  const [photoUrlInput, setPhotoUrlInput] = useState('');
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
+
   // Estado do Filtro Inteligente / Autocomplete nas Linhas da Tabela
   const [activeAutocompleteItemId, setActiveAutocompleteItemId] = useState<string | null>(null);
   const [activeAutocompleteField, setActiveAutocompleteField] = useState<'descricao' | 'codigoInterno' | 'codigoFornecedor' | null>(null);
@@ -175,11 +195,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       codigo: codInterno,
       descricao: prod.descricao,
       fotoUrl: prod.fotoUrl || '',
-      qtdPorPacote: prod.qtdPorPacote || 1,
-      qtdPacotes: 10,
-      qtdTotalUnidades: (prod.qtdPorPacote || 1) * 10,
+      qtdTotalUnidades: 100,
       precoUnitario: prod.precoUnitarioPadrao || 0,
-      valorTotalBruto: ((prod.qtdPorPacote || 1) * 10) * (prod.precoUnitarioPadrao || 0),
+      valorTotalBruto: 100 * (prod.precoUnitarioPadrao || 0),
       pdvAlvo: 12.00
     };
 
@@ -207,11 +225,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const handleSelectProductForExistingItem = (item: OrderItem, prod: Product) => {
     const codInterno = prod.codigoInterno || prod.codigo || item.codigoInterno || item.codigo || '';
     const codFornecedor = prod.codigoFornecedor || item.codigoFornecedor || '';
-    const pack = prod.qtdPorPacote || item.qtdPorPacote || 1;
     const preco = prod.precoUnitarioPadrao || item.precoUnitario || 0;
     const pdv = 12.00;
-    const qtdPacotes = item.qtdPacotes || 10;
-    const qtdTotal = pack * qtdPacotes;
+    const qtdTotal = item.qtdTotalUnidades || 100;
     const totalBruto = qtdTotal * preco;
 
     const fiscal = calculateItemFiscal(preco, pdv, globalFiscal, item.fiscalOverride);
@@ -226,8 +242,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       codigo: codInterno,
       descricao: prod.descricao,
       fotoUrl: prod.fotoUrl || item.fotoUrl || '',
-      qtdPorPacote: pack,
-      qtdPacotes: qtdPacotes,
       qtdTotalUnidades: qtdTotal,
       precoUnitario: preco,
       valorTotalBruto: totalBruto,
@@ -246,35 +260,150 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     setAutocompleteQuery('');
   };
 
-  const handleUploadItemPhoto = (item: OrderItem, e: React.ChangeEvent<HTMLInputElement>) => {
+  // Encontra produto no catálogo correspondente ao item
+  const findCatalogProduct = (item: OrderItem): Product | undefined => {
+    if (!products || products.length === 0) return undefined;
+    const desc = (item.descricao || '').trim().toLowerCase();
+    const codInt = (item.codigoInterno || item.codigo || '').trim().toLowerCase();
+    const codForn = (item.codigoFornecedor || '').trim().toLowerCase();
+
+    return products.find(p => {
+      const pDesc = (p.descricao || '').trim().toLowerCase();
+      const pCodInt = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
+      const pCodForn = (p.codigoFornecedor || '').trim().toLowerCase();
+
+      if (codInt && pCodInt && codInt === pCodInt) return true;
+      if (codForn && pCodForn && codForn === pCodForn) return true;
+      if (desc && pDesc && desc === pDesc) return true;
+      return false;
+    });
+  };
+
+  // Cadastro rápido do produto no catálogo direto da linha do pedido
+  const handleQuickRegisterProduct = (item: OrderItem) => {
+    if (!item.descricao || item.descricao.trim().length === 0) {
+      return;
+    }
+    if (!onSaveProduct) return;
+
+    const existing = findCatalogProduct(item);
+    const codInterno = item.codigoInterno || item.codigo || existing?.codigoInterno || generateNextProductCode(products, items);
+
+    const prodToSave: Product = {
+      id: existing?.id || ('prod_' + Date.now()),
+      codigoInterno: codInterno,
+      codigo: codInterno,
+      codigoFornecedor: item.codigoFornecedor || existing?.codigoFornecedor || '',
+      codigoBarras: existing?.codigoBarras || '',
+      eanBarcode: existing?.codigoBarras || '',
+      descricao: item.descricao.trim(),
+      categoria: existing?.categoria || 'Geral',
+      fotoUrl: item.fotoUrl || existing?.fotoUrl || '',
+      precoUnitarioPadrao: item.precoUnitario > 0 ? item.precoUnitario : (existing?.precoUnitarioPadrao || 0),
+      pdvSugerido: item.pdvAlvo || existing?.pdvSugerido || 12.00,
+      ncm: existing?.ncm || '',
+      supplierId: currentSupplierId || existing?.supplierId || '',
+      nomeFornecedor: currentSupplierName || existing?.nomeFornecedor || '',
+      ativo: true,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    onSaveProduct(prodToSave);
+
+    // Se o item não tinha código interno, atualiza o item com o código gerado
+    if (!item.codigoInterno || !item.codigo) {
+      onUpdateItem(item.id, {
+        ...item,
+        codigoInterno: codInterno,
+        codigo: codInterno
+      });
+    }
+  };
+
+  // Abrir Modal Especializado de Foto
+  const handleOpenPhotoModal = (item: OrderItem) => {
+    setPhotoModalItem(item);
+    setPhotoPreview(item.fotoUrl || null);
+    setPhotoUrlInput(item.fotoUrl && item.fotoUrl.startsWith('http') ? item.fotoUrl : '');
+    setPhotoTab('upload');
+  };
+
+  // Salvar foto do modal no item do pedido e sincronizar com o Catálogo de Produtos
+  const handleSavePhotoFromModal = () => {
+    if (!photoModalItem) return;
+    const finalPhoto = photoPreview || '';
+
+    // Atualiza na linha do pedido
+    onUpdateItem(photoModalItem.id, {
+      ...photoModalItem,
+      fotoUrl: finalPhoto || undefined
+    });
+
+    // Se houver onSaveProduct e descrição preenchida, sincroniza no Catálogo de Produtos
+    if (onSaveProduct && photoModalItem.descricao && photoModalItem.descricao.trim().length > 0) {
+      const existing = findCatalogProduct(photoModalItem);
+      const codInterno = photoModalItem.codigoInterno || photoModalItem.codigo || existing?.codigoInterno || `PROD-${Date.now().toString().slice(-4)}`;
+
+      const prodToSave: Product = {
+        id: existing?.id || ('prod_' + Date.now()),
+        codigoInterno: codInterno,
+        codigo: codInterno,
+        codigoFornecedor: photoModalItem.codigoFornecedor || existing?.codigoFornecedor || '',
+        codigoBarras: existing?.codigoBarras || '',
+        eanBarcode: existing?.codigoBarras || '',
+        descricao: photoModalItem.descricao.trim(),
+        categoria: existing?.categoria || 'Geral',
+        fotoUrl: finalPhoto,
+        precoUnitarioPadrao: photoModalItem.precoUnitario > 0 ? photoModalItem.precoUnitario : (existing?.precoUnitarioPadrao || 0),
+        pdvSugerido: photoModalItem.pdvAlvo || existing?.pdvSugerido || 12.00,
+        ncm: existing?.ncm || '',
+        supplierId: currentSupplierId || existing?.supplierId || '',
+        nomeFornecedor: currentSupplierName || existing?.nomeFornecedor || '',
+        ativo: true,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      onSaveProduct(prodToSave);
+    }
+
+    setPhotoModalItem(null);
+  };
+
+  // Remover foto no modal
+  const handleRemovePhotoFromModal = () => {
+    setPhotoPreview(null);
+    setPhotoUrlInput('');
+  };
+
+  // Upload de arquivo dentro do modal
+  const handleFileSelectedInModal = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
-      onUpdateItem(item.id, { ...item, fotoUrl: base64 });
+      setPhotoPreview(base64);
     };
     reader.readAsDataURL(file);
   };
 
   const handleFieldChange = (item: OrderItem, field: keyof OrderItem, rawValue: any) => {
     let value = rawValue;
-    if (['qtdPorPacote', 'qtdPacotes', 'precoUnitario', 'pdvAlvo'].includes(field as string)) {
+    if (['qtdTotalUnidades', 'precoUnitario', 'pdvAlvo'].includes(field as string)) {
       value = parseFloat(rawValue) || 0;
     }
 
     const updatedItem = { ...item, [field]: value };
 
-    // Auto-cálculo do multiplicador de caixas: H = F * G
-    if (field === 'qtdPorPacote' || field === 'qtdPacotes') {
-      const qtdPorPacote = field === 'qtdPorPacote' ? value : item.qtdPorPacote;
-      const qtdPacotes = field === 'qtdPacotes' ? value : item.qtdPacotes;
-      updatedItem.qtdTotalUnidades = Number(qtdPorPacote) * Number(qtdPacotes);
-      updatedItem.valorTotalBruto = updatedItem.qtdTotalUnidades * item.precoUnitario;
+    // Auto-cálculo do valor total bruto
+    if (field === 'qtdTotalUnidades') {
+      updatedItem.valorTotalBruto = Number(value) * item.precoUnitario;
 
       // Se a separação não for manual, recalcula o rateio automático das 20 lojas
       if (!updatedItem.separacaoManual) {
-        const autoSep = calculateAutomaticSeparation(updatedItem.qtdTotalUnidades, stores, updatedItem.qtdReservaEstoque || 0);
+        const autoSep = calculateAutomaticSeparation(Number(value), stores, updatedItem.qtdReservaEstoque || 0);
         updatedItem.separacaoLojas = autoSep.allocations;
         updatedItem.qtdReservaEstoque = autoSep.reserveStock;
       }
@@ -297,8 +426,20 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     updatedItem.margemRealUnit = fiscal.margemRealUnit;
     updatedItem.margemPercentual = fiscal.margemPercentual;
 
+    // Se o usuário começou a digitar a descrição do produto e o código interno estiver vazio,
+    // gera automaticamente o próximo código sequencial oficial (ex: PRD-051)
+    if (field === 'descricao' && typeof value === 'string' && value.trim().length > 0) {
+      if (!updatedItem.codigoInterno && !updatedItem.codigo) {
+        const nextCode = generateNextProductCode(products, items);
+        updatedItem.codigoInterno = nextCode;
+        updatedItem.codigo = nextCode;
+      }
+    }
+
     onUpdateItem(item.id, updatedItem);
   };
+
+  const validItemsCount = useMemo(() => items.filter(it => !isOrderItemBlank(it)).length, [items]);
 
   return (
     <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-visible">
@@ -311,11 +452,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               Grade de Produtos & Pedido ao Fornecedor
             </h2>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-              {items.length} {items.length === 1 ? 'item' : 'itens'}
+              {validItemsCount} {validItemsCount === 1 ? 'item' : 'itens'}
             </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Filtro inteligente com preenchimento automático de foto, códigos, custos e rateio de 20 lojas
+            Digitação contínua com auto-inclusão de linhas, códigos, custos e rateio de 20 lojas
           </p>
         </div>
 
@@ -346,66 +487,50 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   setQuickSearchText('');
                   setIsQuickSearchOpen(false);
                 }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
 
-            {/* Dropdown de Sugestões da Busca Rápida */}
-            {isQuickSearchOpen && matchingProductsForQuickBar.length > 0 && (
-              <div className="absolute right-0 sm:left-0 top-full mt-1.5 z-50 w-[320px] sm:w-[420px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                  <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Produtos do Catálogo ({matchingProductsForQuickBar.length})
-                  </span>
-                  <span className="text-[10px] text-slate-400">Clique para adicionar</span>
-                </div>
-                <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                  {matchingProductsForQuickBar.map(prod => (
+            {/* Dropdown de Resultados da Busca Rápida */}
+            {isQuickSearchOpen && quickSearchText.trim().length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto p-1.5 space-y-1">
+                {products
+                  .filter(p => {
+                    const q = quickSearchText.toLowerCase();
+                    const desc = (p.descricao || '').toLowerCase();
+                    const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+                    const codForn = (p.codigoFornecedor || '').toLowerCase();
+                    return desc.includes(q) || codInt.includes(q) || codForn.includes(q);
+                  })
+                  .slice(0, 8)
+                  .map(prod => (
                     <button
                       key={prod.id}
                       type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleSelectProductForNewItem(prod);
-                      }}
-                      className="w-full text-left p-2.5 hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 transition flex items-center gap-3 group cursor-pointer"
+                      onClick={() => handleSelectProductForNewItem(prod)}
+                      className="w-full p-2 rounded-xl text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-2.5 group cursor-pointer"
                     >
-                      <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
                         {prod.fotoUrl ? (
-                          <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
+                          <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <Package className="w-5 h-5 text-slate-400" />
+                          <Package className="w-4 h-4 text-slate-400" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                            {prod.codigoInterno || prod.codigo}
-                          </span>
-                          {prod.codigoFornecedor && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
-                              Ref: {prod.codigoFornecedor}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate mt-0.5 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
+                        <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
                           {highlightMatch(prod.descricao, quickSearchText)}
-                        </p>
-                        <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
-                          <span>Emb: <strong>{prod.qtdPorPacote} pçs</strong></span>
-                          <span>Compra: <strong className="text-emerald-600 dark:text-emerald-400">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</strong></span>
-                          <span>PDV: <strong>R$ {Number(prod.pdvSugerido || 0).toFixed(2)}</strong></span>
                         </div>
-                      </div>
-                      <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition shrink-0">
-                        <Plus className="w-3.5 h-3.5" />
+                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
+                          <span>{prod.codigoInterno || prod.codigo}</span>
+                          <span>•</span>
+                          <span className="text-emerald-600 font-bold">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</span>
+                        </div>
                       </div>
                     </button>
                   ))}
-                </div>
               </div>
             )}
           </div>
@@ -414,9 +539,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             <button
               onClick={() => setIsCatalogPickerOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition cursor-pointer shadow-2xs"
-              title="Buscar e adicionar produto cadastrado com foto no catálogo"
             >
-              <Package className="w-3.5 h-3.5 text-indigo-600" />
+              <Package className="w-3.5 h-3.5" />
               <span>Catálogo ({products.length})</span>
             </button>
           )}
@@ -431,14 +555,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               <span>Exemplo Presentes</span>
             </button>
           )}
-
-          <button
-            onClick={() => onAddItem()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 transition cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Adicionar Linha</span>
-          </button>
         </div>
       </div>
 
@@ -452,10 +568,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               <th className="py-3 px-2 w-28">Cód. Interno</th>
               <th className="py-3 px-2 w-28">Cód. Fornecedor</th>
               <th className="py-3 px-3 min-w-[240px]">Descrição do Item (Filtro Inteligente)</th>
-              <th className="py-3 px-2 w-20 text-center" title="Qtd no Pacote (F)">Qtd/Pct</th>
-              <th className="py-3 px-2 w-20 text-center" title="Qtd de Pacotes (G)">Pacotes</th>
-              <th className="py-3 px-3 w-24 text-center" title="Qtd Total Peças (H = F * G)">Total Un</th>
-              <th className="py-3 px-3 w-28 text-right" title="Preço Unitário Compra (I)">Compra (R$)</th>
+              <th className="py-3 px-3 w-24 text-center" title="Quantidade Total de Unidades">Qtd (un)</th>
+              <th className="py-3 px-3 w-28 text-right" title="Preço Unitário Compra">Compra (R$)</th>
               <th className="py-3 px-3 w-28 text-right" title="Total Compra (J = H * I)">Total (R$)</th>
               <th className="py-3 px-3 w-28 text-center" title="Preço de Venda Único Rede Mega 12 (Travado em R$ 12,00)">PDV (R$ 12 Fixo)</th>
               <th className="py-3 px-3 w-28 text-right" title="Custo Real Efetivo (Compra + 40% PDV - 19.5% ICMS)">Custo Real</th>
@@ -481,40 +595,24 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
                   {/* Foto do Produto */}
                   <td className="py-1.5 px-1.5 text-center">
-                    <div className="relative group/photo flex items-center justify-center">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        ref={el => { fileInputRef.current[item.id] = el; }}
-                        onChange={(e) => handleUploadItemPhoto(item, e)}
-                        className="hidden"
-                      />
-
+                    <div className="flex items-center justify-center">
                       {item.fotoUrl ? (
                         <div 
-                          className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer relative shadow-xs"
-                          onClick={() => setZoomedImage({ url: item.fotoUrl!, title: item.descricao })}
-                          title="Clique para ampliar ou passe o mouse para alterar"
+                          className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer relative group/photo shadow-xs"
+                          onClick={() => handleOpenPhotoModal(item)}
+                          title="Clique para trocar, ver ampliado ou remover foto"
                         >
                           <img src={item.fotoUrl} alt="" className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              fileInputRef.current[item.id]?.click();
-                            }}
-                            className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition"
-                            title="Trocar Foto"
-                          >
+                          <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition">
                             <Upload className="w-3.5 h-3.5" />
-                          </button>
+                          </div>
                         </div>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => fileInputRef.current[item.id]?.click()}
+                          onClick={() => handleOpenPhotoModal(item)}
                           className="w-10 h-10 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition cursor-pointer"
-                          title="Anexar foto do produto"
+                          title="Anexar foto do produto (Upload ou URL)"
                         >
                           <ImageIcon className="w-4 h-4" />
                         </button>
@@ -600,33 +698,16 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     />
                   </td>
 
-                  {/* Qtd por Pacote (F) */}
+                  {/* Quantidade Total de Unidades (editável) */}
                   <td className="py-2 px-1.5 text-center">
                     <input
                       type="number"
-                      min="1"
-                      value={item.qtdPorPacote}
-                      onChange={(e) => handleFieldChange(item, 'qtdPorPacote', e.target.value)}
+                      min="0"
+                      value={item.qtdTotalUnidades === 0 ? '' : item.qtdTotalUnidades}
+                      placeholder="0"
+                      onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
                       className="w-full text-center px-1 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
-                  </td>
-
-                  {/* Qtd Pacotes (G) */}
-                  <td className="py-2 px-1.5 text-center">
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.qtdPacotes}
-                      onChange={(e) => handleFieldChange(item, 'qtdPacotes', e.target.value)}
-                      className="w-full text-center px-1 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                    />
-                  </td>
-
-                  {/* Total Unidades (H = F * G) */}
-                  <td className="py-2.5 px-3 text-center">
-                    <span className="inline-flex items-center px-2 py-1 rounded-md font-bold text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-mono">
-                      {item.qtdTotalUnidades.toLocaleString('pt-BR')} un
-                    </span>
                   </td>
 
                   {/* Preço Unitário Compra (I) */}
@@ -636,7 +717,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         type="number"
                         step="0.01"
                         min="0"
-                        value={item.precoUnitario}
+                        value={item.precoUnitario === 0 ? '' : item.precoUnitario}
+                        placeholder="0.00"
                         onChange={(e) => handleFieldChange(item, 'precoUnitario', e.target.value)}
                         className="w-full text-right px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
                       />
@@ -685,6 +767,26 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   <td className="py-2 px-2 text-center">
                     <div className="flex items-center justify-center gap-1">
                       
+                      {/* Salvar / Sincronizar no Catálogo */}
+                      {onSaveProduct && item.descricao && item.descricao.trim().length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickRegisterProduct(item)}
+                          className={`p-1.5 rounded-lg transition cursor-pointer ${
+                            findCatalogProduct(item)
+                              ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60'
+                              : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 bg-indigo-50/50 dark:bg-indigo-950/30'
+                          }`}
+                          title={findCatalogProduct(item) ? 'Produto já cadastrado no catálogo (Clique para sincronizar)' : 'Salvar este produto no Catálogo agora'}
+                        >
+                          {findCatalogProduct(item) ? (
+                            <PackageCheck className="w-4 h-4" />
+                          ) : (
+                            <PackagePlus className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                          )}
+                        </button>
+                      )}
+
                       {/* Abrir Modal Fiscal */}
                       <button
                         onClick={() => onOpenFiscalModal(item)}
@@ -694,32 +796,16 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         <Calculator className="w-4 h-4" />
                       </button>
 
-                      {/* Abrir Grade de Separação (20 Lojas) */}
-                      <button
-                        onClick={() => onOpenSeparationModal(item)}
-                        className="p-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition relative cursor-pointer"
-                        title="Ver / Editar Separação (20 Lojas)"
-                      >
-                        <Store className="w-4 h-4" />
-                        {item.separacaoManual && (
-                          <span className="w-2 h-2 rounded-full bg-amber-500 absolute top-1 right-1" />
-                        )}
-                      </button>
-
-                      {/* Duplicar */}
-                      <button
-                        onClick={() => onDuplicateItem(item)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                        title="Duplicar Item"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-
                       {/* Excluir */}
                       <button
                         onClick={() => onDeleteItem(item.id)}
-                        className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
-                        title="Remover Item"
+                        disabled={isOrderItemBlank(item) && index === items.length - 1}
+                        className={`p-1.5 rounded-lg transition ${
+                          isOrderItemBlank(item) && index === items.length - 1
+                            ? 'text-slate-300 dark:text-slate-700 opacity-30 cursor-not-allowed'
+                            : 'text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/60 cursor-pointer'
+                        }`}
+                        title={isOrderItemBlank(item) && index === items.length - 1 ? 'Linha automática' : 'Remover Item'}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -729,42 +815,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 </tr>
               );
             })}
-
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={14} className="py-12 px-4 text-center">
-                  <div className="max-w-md mx-auto space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mx-auto">
-                      <Package className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Nenhum produto adicionado ao pedido
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Use a busca inteligente acima, adicione uma linha em branco ou escolha produtos diretamente do catálogo.
-                    </p>
-                    <div className="flex items-center justify-center gap-2 pt-2">
-                      <button
-                        onClick={() => onAddItem()}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Adicionar Primeiro Item</span>
-                      </button>
-                      {products.length > 0 && (
-                        <button
-                          onClick={() => setIsCatalogPickerOpen(true)}
-                          className="px-4 py-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Package className="w-4 h-4" />
-                          <span>Abrir Catálogo ({products.length})</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
@@ -772,29 +822,13 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       {/* Footer bar com atalhos */}
       <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200/70 dark:border-slate-700/70 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => onAddItem()}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline transition cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Adicionar Nova Linha
-          </button>
-
-          <span className="text-slate-300 dark:text-slate-700">•</span>
-
-          {products && products.length > 0 && (
-            <button
-              onClick={() => setIsCatalogPickerOpen(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline transition cursor-pointer"
-            >
-              <Package className="w-3.5 h-3.5" />
-              Escolher do Catálogo ({products.length} cadastrados)
-            </button>
-          )}
+          <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+            💡 Digite na linha em branco para incluir produtos continuamente
+          </span>
         </div>
 
         <div className="text-xs text-slate-500 dark:text-slate-400">
-          Total de Itens: <strong className="text-slate-900 dark:text-white font-mono">{items.length}</strong>
+          Total de Itens: <strong className="text-slate-900 dark:text-white font-mono">{validItemsCount}</strong>
         </div>
       </div>
 
@@ -923,6 +957,185 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       )}
 
       {/* Modal: Zoom da Imagem */}
+      {/* MODAL ESPECIALIZADO DE FOTO DO PRODUTO NO PEDIDO */}
+      {photoModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            
+            {/* Header do Modal */}
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
+                  <ImageIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Foto do Produto
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[280px]">
+                    {photoModalItem.descricao || 'Definir imagem do item'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPhotoModalItem(null)}
+                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-5 space-y-4">
+              
+              {/* Tabs de Seleção: Upload vs Link URL */}
+              <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setPhotoTab('upload')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    photoTab === 'upload'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+                  }`}
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  Upload do Computador/Celular
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhotoTab('url')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    photoTab === 'url'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+                  }`}
+                >
+                  <LinkIcon className="w-3.5 h-3.5" />
+                  Link / URL da Imagem
+                </button>
+              </div>
+
+              {/* Área de Preview da Imagem */}
+              <div className="w-full h-44 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 overflow-hidden flex items-center justify-center relative group">
+                {photoPreview ? (
+                  <>
+                    <img src={photoPreview} alt="Preview" className="w-full h-full object-contain" />
+                    <button
+                      type="button"
+                      onClick={handleRemovePhotoFromModal}
+                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-rose-600 text-white shadow-md hover:bg-rose-700 transition cursor-pointer"
+                      title="Remover Imagem"
+                    >
+                      <Trash className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center p-4 space-y-1.5 text-slate-400">
+                    <ImageIcon className="w-10 h-10 mx-auto stroke-1 text-slate-300 dark:text-slate-600" />
+                    <p className="text-xs font-medium">Nenhuma foto selecionada</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                      Envie um arquivo ou cole um link web abaixo
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Tab 1: Upload */}
+              {photoTab === 'upload' && (
+                <div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={photoFileInputRef}
+                    onChange={handleFileSelectedInModal}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => photoFileInputRef.current?.click()}
+                    className="w-full py-2.5 px-4 rounded-xl border border-dashed border-indigo-300 dark:border-indigo-800 hover:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Escolher arquivo de imagem...</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Tab 2: URL */}
+              {photoTab === 'url' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    URL da Imagem na Internet:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={photoUrlInput}
+                      onChange={(e) => {
+                        setPhotoUrlInput(e.target.value);
+                        setPhotoPreview(e.target.value.trim() || null);
+                      }}
+                      placeholder="https://exemplo.com/foto-produto.jpg"
+                      className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPhotoPreview(photoUrlInput.trim() || null)}
+                      className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer"
+                    >
+                      Carregar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200/60 dark:border-amber-900/40 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  Ao salvar, esta foto será gravada no item do pedido e sincronizada automaticamente no <strong>Catálogo de Produtos</strong>!
+                </span>
+              </div>
+
+            </div>
+
+            {/* Rodapé do Modal */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setPhotoModalItem(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <div className="flex items-center gap-2">
+                {photoPreview && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhotoFromModal}
+                    className="px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition cursor-pointer"
+                  >
+                    Remover Foto
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSavePhotoFromModal}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Salvar Foto</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Visualizador Zoom de Foto */}
       {zoomedImage && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"

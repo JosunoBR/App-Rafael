@@ -17,7 +17,12 @@ function getAvariaUnits(quantidade: number, unidadeMedida?: string, qtdPorPacote
 // 1. EXPORTAÇÃO DO PEDIDO DE COMPRA COMERCIAL (PROPOSTA PARA FORNECEDOR)
 // Formato: A4 Retrato (Portrait) | SEM NENHUMA LOJA | Foco Comercial Puro
 // =========================================================================
-export function exportCommercialOrderPDF(order: PurchaseOrder) {
+export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
+  const order: PurchaseOrder = {
+    ...rawOrder,
+    items: (rawOrder.items || []).filter(it => Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoInterno?.trim() || it.codigoFornecedor?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0))
+  };
+
   const numeroPedido = (order.header?.numeroPedido || 'PED-0001').replace(/[^a-zA-Z0-9_-]/g, '');
   const cleanFornecedor = (order.header?.fornecedor || 'Fornecedor').replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = `Pedido_${numeroPedido}_${cleanFornecedor}.pdf`;
@@ -122,30 +127,27 @@ export function exportCommercialOrderPDF(order: PurchaseOrder) {
       'Cód. Interno',
       'Ref. Fornec.',
       'Descrição do Produto',
-      'Emb. (Pç/Cx)',
-      'Qtd Cx',
-      'Total Peças',
+      'Qtd (Unidades)',
       'Preço Unit.',
-      'Preço Cx.',
-      'Total Item'
+      'Total Item',
+      'PDV Alvo'
     ];
 
-    let totalVolumesGeral = 0;
     let totalPecasGeral = 0;
+    let totalVolumesGeral = 0;
     let subtotalBrutoGeral = 0;
 
     const bodyRows = (order.items || []).map((item, idx) => {
       const codInterno = item.codigoInterno || item.codigo || `PRD-${idx + 1}`;
       const codFornecedor = item.codigoFornecedor || '-';
-      const pack = Number(item.qtdPorPacote) || 1;
-      const caixas = Number(item.qtdPacotes) || 0;
-      const pecas = Number(item.qtdTotalUnidades) || (caixas * pack);
+      const pecas = Number(item.qtdTotalUnidades) || 0;
+      const pacotes = Number(item.qtdPacotes) || 0;
       const precoUnit = Number(item.precoUnitario) || 0;
-      const precoCx = precoUnit * pack;
       const valorTotal = Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const pdv = Number(item.pdvAlvo) || 12.00;
 
-      totalVolumesGeral += caixas;
       totalPecasGeral += pecas;
+      totalVolumesGeral += pacotes;
       subtotalBrutoGeral += valorTotal;
 
       return [
@@ -153,12 +155,10 @@ export function exportCommercialOrderPDF(order: PurchaseOrder) {
         codInterno,
         codFornecedor,
         item.descricao || 'Produto sem descrição',
-        String(pack),
-        caixas.toLocaleString('pt-BR'),
-        pecas.toLocaleString('pt-BR'),
+        pecas.toLocaleString('pt-BR') + ' un',
         `R$ ${precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        `R$ ${precoCx.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `R$ ${pdv.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       ];
     });
 
@@ -171,12 +171,10 @@ export function exportCommercialOrderPDF(order: PurchaseOrder) {
       'TOTAL DO PEDIDO',
       '',
       `${(order.items || []).length} itens`,
-      '',
-      totalVolumesGeral.toLocaleString('pt-BR') + ' cx',
       totalPecasGeral.toLocaleString('pt-BR') + ' un',
       '',
-      '',
-      `R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      `R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      ''
     ];
 
     autoTable(doc, {
@@ -184,19 +182,17 @@ export function exportCommercialOrderPDF(order: PurchaseOrder) {
       head: [headCols],
       body: [...bodyRows, footerRow],
       theme: 'grid',
-      styles: { fontSize: 7, cellPadding: 1.2, halign: 'center', valign: 'middle' },
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.2 },
+      styles: { fontSize: 7.5, cellPadding: 1.5, halign: 'center', valign: 'middle' },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
       columnStyles: {
-        0: { cellWidth: 8, halign: 'center' },
-        1: { cellWidth: 20, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
-        2: { cellWidth: 20, halign: 'center', textColor: [100, 116, 139] },
-        3: { cellWidth: 52, halign: 'left', fontStyle: 'bold' },
-        4: { cellWidth: 14, halign: 'center' },
-        5: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
-        6: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
-        7: { cellWidth: 18, halign: 'right' },
-        8: { cellWidth: 18, halign: 'right' },
-        9: { cellWidth: 22, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 24, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
+        2: { cellWidth: 24, halign: 'center', textColor: [100, 116, 139] },
+        3: { cellWidth: 80, halign: 'left', fontStyle: 'bold' },
+        4: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
+        5: { cellWidth: 24, halign: 'right' },
+        6: { cellWidth: 28, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] },
+        7: { cellWidth: 22, halign: 'right', textColor: [5, 150, 105] }
       },
       didParseCell: (data) => {
         if (data.row.index === bodyRows.length) {
@@ -292,7 +288,12 @@ export function exportCommercialOrderPDF(order: PurchaseOrder) {
 // 2. EXPORTAÇÃO DO ROMANEIO DE SEPARAÇÃO (PARA DOCA & 20 LOJAS)
 // Formato: A4 Paisagem (Landscape) | GRADE DAS 20 LOJAS, AVARIAS E DOCA
 // =========================================================================
-export function exportRomaneioPDF(order: PurchaseOrder, fallbackStores?: StoreConfig[]) {
+export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: StoreConfig[]) {
+  const order: PurchaseOrder = {
+    ...rawOrder,
+    items: (rawOrder.items || []).filter(it => Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoInterno?.trim() || it.codigoFornecedor?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0))
+  };
+
   const numeroPedido = (order.header?.numeroPedido || 'PED-0001').replace(/[^a-zA-Z0-9_-]/g, '');
   const cleanFornecedor = (order.header?.fornecedor || 'Fornecedor').replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = `Romaneio_${numeroPedido}_${cleanFornecedor}.pdf`;

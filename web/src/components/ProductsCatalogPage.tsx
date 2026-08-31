@@ -114,7 +114,7 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
       fotoUrl: '',
       qtdPorPacote: 12,
       precoUnitarioPadrao: 0,
-      pdvSugerido: 0,
+      pdvSugerido: 12.00,
       ncm: '',
       supplierId: targetSupplier?.id || '',
       nomeFornecedor: targetSupplier?.razaoSocial || '',
@@ -166,7 +166,7 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
       fotoUrl: editingProduct.fotoUrl || '',
       qtdPorPacote: Math.max(1, Number(editingProduct.qtdPorPacote) || 1),
       precoUnitarioPadrao: Math.max(0, Number(editingProduct.precoUnitarioPadrao) || 0),
-      pdvSugerido: 12.00,
+      pdvSugerido: editingProduct.pdvSugerido !== undefined ? Number(editingProduct.pdvSugerido) : 12.00,
       ncm: editingProduct.ncm?.trim() || '',
       supplierId: editingProduct.supplierId || '',
       nomeFornecedor: editingProduct.nomeFornecedor || '',
@@ -751,8 +751,35 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                 />
               </div>
 
-              {/* Linha 2: Categoria, Fornecedor & Embalagem */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Fornecedor (Largura Total até o final da tela) */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Fornecedor
+                </label>
+                <select
+                  value={editingProduct.supplierId || ''}
+                  onChange={(e) => {
+                    const sId = e.target.value;
+                    const sObj = suppliers.find(s => s.id === sId);
+                    setEditingProduct(prev => prev ? { 
+                      ...prev, 
+                      supplierId: sId,
+                      nomeFornecedor: sObj ? sObj.razaoSocial : ''
+                    } : null);
+                  }}
+                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value="">Sem fornecedor fixo (Catálogo Geral)</option>
+                  {suppliers.map(sup => (
+                    <option key={sup.id} value={sup.id}>
+                      {sup.razaoSocial} {sup.nomeFantasia ? `(${sup.nomeFantasia})` : ''} {sup.cnpj ? `• ${sup.cnpj}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Linha de Categoria, Preço Compra, PDV e NCM */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     Categoria / Setor
@@ -761,46 +788,11 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                     type="text"
                     value={editingProduct.categoria || ''}
                     onChange={(e) => setEditingProduct(prev => prev ? { ...prev, categoria: e.target.value } : null)}
-                    placeholder="Ex: Decoração & Presentes"
+                    placeholder="Ex: Utilidades"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                   />
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Fornecedor Habitual
-                  </label>
-                  <select
-                    value={editingProduct.supplierId || ''}
-                    onChange={(e) => handleSupplierChangeInModal(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden cursor-pointer"
-                  >
-                    <option value="">Selecione um fornecedor...</option>
-                    {suppliers.map(sup => (
-                      <option key={sup.id} value={sup.id}>
-                        {sup.razaoSocial}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Embalagem Padrão (un/cx) *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={editingProduct.qtdPorPacote || 1}
-                    onChange={(e) => setEditingProduct(prev => prev ? { ...prev, qtdPorPacote: Math.max(1, parseInt(e.target.value) || 1) } : null)}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden text-center"
-                  />
-                </div>
-              </div>
-
-              {/* Linha 3: Preço Compra, PDV Sugerido, NCM */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     Preço Compra Padrão (R$)
@@ -817,15 +809,18 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    PDV Alvo (Preço Único Mega 12) *
+                    Preço de Venda / PDV (R$) *
                   </label>
-                  <div className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
-                    <span>R$ 12,00</span>
-                    <span className="text-[10px] font-sans font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200">
-                      Fixo Mega 12
-                    </span>
-                  </div>
-                  <span className="text-[9px] text-slate-400 block mt-0.5">Preço único da rede</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editingProduct.pdvSugerido !== undefined ? editingProduct.pdvSugerido : 12.00}
+                    onChange={(e) => setEditingProduct(prev => prev ? { ...prev, pdvSugerido: parseFloat(e.target.value) || 0 } : null)}
+                    placeholder="12.00"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <span className="text-[9px] text-slate-400 block mt-0.5">Preço no caixa (Padrão R$ 12,00)</span>
                 </div>
 
                 <div>

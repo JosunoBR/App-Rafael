@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Building2, 
   User, 
@@ -15,7 +15,11 @@ import {
   Clock, 
   AlertTriangle, 
   CheckCircle2, 
-  Sparkles 
+  Sparkles,
+  Star,
+  BookmarkCheck,
+  PackageCheck,
+  X
 } from 'lucide-react';
 import { OrderHeader, Supplier } from '../shared/types';
 import { 
@@ -32,6 +36,10 @@ interface OrderHeaderFormProps {
   onChange: (updatedHeader: OrderHeader) => void;
   onOpenSupplierModal: (supplierToEdit?: Supplier | null) => void;
   orderTotal?: number;
+  onSaveAsSupplierTemplate?: () => void;
+  onLoadSupplierTemplate?: (supplierId?: string) => void;
+  hasSupplierTemplate?: boolean;
+  supplierTemplateItemsCount?: number;
 }
 
 export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({ 
@@ -39,7 +47,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   suppliers, 
   onChange,
   onOpenSupplierModal,
-  orderTotal
+  orderTotal,
+  onSaveAsSupplierTemplate,
+  onLoadSupplierTemplate,
+  hasSupplierTemplate = false,
+  supplierTemplateItemsCount = 0
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -85,13 +97,26 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     });
   };
 
-  // Condição de Pagamento estruturada (Dropdown Duplo)
+  // Condição de Pagamento estruturada (Dropdown Duplo & Entrada Mista)
   const parsedPayment = parsePaymentConditionString(header.condicaoPagamento);
   const currentParcelas = header.parcelasCount ?? parsedPayment.parcelas;
   const currentPrazo = String(header.prazoDias ?? parsedPayment.prazo);
 
+  const isEntradaMista = currentPrazo === 'entrada_com_parcelamento';
+  const isVistaIntegral = currentPrazo === 'vista';
+
+  const valorTotalPedido = orderTotal || 0;
+  const valorEntrada = header.valorEntradaAVista !== undefined 
+    ? header.valorEntradaAVista 
+    : (valorTotalPedido > 0 ? Number((valorTotalPedido * 0.3).toFixed(2)) : 0);
+  const saldoParcelas = header.saldoParcelasCount || 2;
+  const saldoPrazo = String(header.saldoPrazoDias || '30');
+
+  const saldoRestante = Math.max(0, valorTotalPedido - valorEntrada);
+  const valorPorParcelaSaldo = saldoParcelas > 0 ? (saldoRestante / saldoParcelas) : 0;
+
   const handlePaymentParcelasChange = (newParcelas: number) => {
-    const newCondString = formatPaymentConditionString(newParcelas, currentPrazo);
+    const newCondString = formatPaymentConditionString(newParcelas, currentPrazo, valorEntrada, saldoParcelas, saldoPrazo);
     onChange({
       ...header,
       parcelasCount: newParcelas,
@@ -100,34 +125,121 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   };
 
   const handlePaymentPrazoChange = (newPrazo: string) => {
-    const newCondString = formatPaymentConditionString(currentParcelas, newPrazo);
+    if (newPrazo === 'entrada_com_parcelamento') {
+      const initEntrada = header.valorEntradaAVista !== undefined 
+        ? header.valorEntradaAVista 
+        : (valorTotalPedido > 0 ? Number((valorTotalPedido * 0.3).toFixed(2)) : 0);
+      const initSaldoParc = header.saldoParcelasCount || 2;
+      const initSaldoPrazo = header.saldoPrazoDias || '30';
+      const newCondString = formatPaymentConditionString(currentParcelas, newPrazo, initEntrada, initSaldoParc, initSaldoPrazo);
+      onChange({
+        ...header,
+        prazoDias: newPrazo,
+        valorEntradaAVista: initEntrada,
+        saldoParcelasCount: initSaldoParc,
+        saldoPrazoDias: initSaldoPrazo,
+        condicaoPagamento: newCondString
+      });
+    } else if (newPrazo === 'vista') {
+      const newCondString = formatPaymentConditionString(1, 'vista');
+      onChange({
+        ...header,
+        prazoDias: newPrazo,
+        parcelasCount: 1,
+        condicaoPagamento: newCondString
+      });
+    } else {
+      const newCondString = formatPaymentConditionString(currentParcelas, newPrazo);
+      onChange({
+        ...header,
+        prazoDias: newPrazo,
+        condicaoPagamento: newCondString
+      });
+    }
+  };
+
+  const handleEntradaChange = (val: number) => {
+    const valFinal = Math.max(0, Math.min(valorTotalPedido, val));
+    const newCondString = formatPaymentConditionString(currentParcelas, currentPrazo, valFinal, saldoParcelas, saldoPrazo);
     onChange({
       ...header,
-      prazoDias: newPrazo,
+      valorEntradaAVista: valFinal,
       condicaoPagamento: newCondString
     });
   };
 
-  // Previsão dinâmica das datas das parcelas
-  const baseDate = header.dataPedido || new Date().toISOString().split('T')[0];
-  const previewInstallments = Array.from({ length: currentParcelas }, (_, idx) => {
-    const num = idx + 1;
-    let dueDays = 0;
-    if (currentPrazo === 'vista') {
-      dueDays = 0;
-    } else if (currentPrazo === '45') {
-      dueDays = 45 + (num - 1) * 30;
-    } else if (currentPrazo === '60') {
-      dueDays = 60 + (num - 1) * 30;
-    } else {
-      const interval = Number(currentPrazo) || 30;
-      dueDays = num * interval;
-    }
-    return {
-      numeroParcela: num,
-      dataVencimento: addDaysToDate(baseDate, dueDays)
-    };
-  });
+  const handleSaldoParcelasChange = (newSaldoParc: number) => {
+    const newCondString = formatPaymentConditionString(currentParcelas, currentPrazo, valorEntrada, newSaldoParc, saldoPrazo);
+    onChange({
+      ...header,
+      saldoParcelasCount: newSaldoParc,
+      condicaoPagamento: newCondString
+    });
+  };
+
+  const handleSaldoPrazoChange = (newSaldoPrazo: string) => {
+    const newCondString = formatPaymentConditionString(currentParcelas, currentPrazo, valorEntrada, saldoParcelas, newSaldoPrazo);
+    onChange({
+      ...header,
+      saldoPrazoDias: newSaldoPrazo,
+      condicaoPagamento: newCondString
+    });
+  };
+
+  // Previsão dinâmica das datas das parcelas a partir da data de entrega da mercadoria
+  const baseDate = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
+  const orderDate = header.dataPedido || new Date().toISOString().split('T')[0];
+
+  const previewInstallments = isEntradaMista
+    ? [
+        {
+          numeroParcela: 1,
+          rotulo: 'Entrada À Vista',
+          dataVencimento: orderDate,
+          valor: valorEntrada,
+          isEntrada: true
+        },
+        ...Array.from({ length: saldoParcelas }, (_, idx) => {
+          const num = idx + 1;
+          let dueDays = 0;
+          if (saldoPrazo === '45') {
+            dueDays = 45 + (num - 1) * 30;
+          } else if (saldoPrazo === '60') {
+            dueDays = 60 + (num - 1) * 30;
+          } else {
+            const interval = Number(saldoPrazo) || 30;
+            dueDays = num * interval;
+          }
+          return {
+            numeroParcela: num + 1,
+            rotulo: `Saldo ${num}/${saldoParcelas}`,
+            dataVencimento: addDaysToDate(baseDate, dueDays),
+            valor: valorPorParcelaSaldo,
+            isEntrada: false
+          };
+        })
+      ]
+    : Array.from({ length: currentParcelas }, (_, idx) => {
+        const num = idx + 1;
+        let dueDays = 0;
+        if (currentPrazo === 'vista') {
+          dueDays = 0;
+        } else if (currentPrazo === '45') {
+          dueDays = 45 + (num - 1) * 30;
+        } else if (currentPrazo === '60') {
+          dueDays = 60 + (num - 1) * 30;
+        } else {
+          const interval = Number(currentPrazo) || 30;
+          dueDays = num * interval;
+        }
+        return {
+          numeroParcela: num,
+          rotulo: currentPrazo === 'vista' ? 'À Vista' : `${num}ª Parcela`,
+          dataVencimento: addDaysToDate(baseDate, dueDays),
+          valor: currentParcelas > 0 ? valorTotalPedido / currentParcelas : valorTotalPedido,
+          isEntrada: currentPrazo === 'vista'
+        };
+      });
 
   // Quando o usuário seleciona um fornecedor no autocomplete
   const handleSelectSupplier = (supplier: Supplier) => {
@@ -150,11 +262,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     setIsDropdownOpen(false);
   };
 
-  // Filtrar fornecedores conforme digitação
-  const filteredSuppliers = suppliers.filter(s =>
-    s.razaoSocial.toLowerCase().includes((header.fornecedor || '').toLowerCase()) ||
-    (s.nomeFantasia && s.nomeFantasia.toLowerCase().includes((header.fornecedor || '').toLowerCase()))
-  );
+  // Filtrar fornecedores conforme digitação (busca ampla por razão, nome fantasia, cnpj e vendedor)
+  const supplierSearchQuery = (header.fornecedor || '').trim().toLowerCase();
+  const filteredSuppliers = useMemo(() => {
+    if (!supplierSearchQuery) return suppliers;
+    const cleanQuery = supplierSearchQuery.replace(/\D/g, '');
+    return suppliers.filter(s =>
+      s.razaoSocial.toLowerCase().includes(supplierSearchQuery) ||
+      (s.nomeFantasia && s.nomeFantasia.toLowerCase().includes(supplierSearchQuery)) ||
+      (cleanQuery && s.cnpj && s.cnpj.replace(/\D/g, '').includes(cleanQuery)) ||
+      (s.vendedorPadrao && s.vendedorPadrao.toLowerCase().includes(supplierSearchQuery))
+    );
+  }, [suppliers, supplierSearchQuery]);
 
   return (
     <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-6 overflow-hidden transition-all">
@@ -181,6 +300,21 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shadow-xs">
                 ST: {aliquotaStCadastrada > 0 ? `+${aliquotaStCadastrada}%` : '0% (Isento)'}
               </span>
+
+              {/* Badge de Pedido Padrão se existir */}
+              {hasSupplierTemplate && (
+                <span 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onLoadSupplierTemplate) onLoadSupplierTemplate(currentSupplier?.id);
+                  }}
+                  className="text-xs px-2.5 py-0.5 rounded-full font-extrabold bg-indigo-100 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 shadow-xs flex items-center gap-1 cursor-pointer hover:bg-indigo-200 dark:hover:bg-indigo-900 transition"
+                  title="Clique para carregar o Pedido Padrão deste fornecedor"
+                >
+                  <Sparkles className="w-3 h-3 text-indigo-600" />
+                  Compra Padrão ({supplierTemplateItemsCount} itens)
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -217,32 +351,60 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
             {/* 2. Fornecedor (Ocupa 2 colunas) */}
             <div className="sm:col-span-2 relative" ref={dropdownRef}>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-emerald-500" />
                   Fornecedor (Razão Social / Nome)
                 </label>
 
-                {currentSupplier ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenSupplierModal(currentSupplier)}
-                    className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
-                    title="Editar dados cadastrais deste fornecedor (ST, Vendedor, Condições)"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    Editar Fornecedor
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onOpenSupplierModal(null)}
-                    className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Cadastrar Fornecedor
-                  </button>
-                )}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Botão Carregar Pedido Padrão se o fornecedor possuir template */}
+                  {hasSupplierTemplate && onLoadSupplierTemplate && (
+                    <button
+                      type="button"
+                      onClick={() => onLoadSupplierTemplate(currentSupplier?.id)}
+                      className="text-[11px] font-extrabold text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                      title="Carregar todos os itens e condições de compra padrão deste fornecedor"
+                    >
+                      <Sparkles className="w-3 h-3 text-indigo-500" />
+                      Carregar Padrão ({supplierTemplateItemsCount})
+                    </button>
+                  )}
+
+                  {/* Botão Salvar como Pedido Padrão */}
+                  {onSaveAsSupplierTemplate && currentSupplier && (
+                    <button
+                      type="button"
+                      onClick={onSaveAsSupplierTemplate}
+                      className="text-[11px] font-bold text-amber-700 dark:text-amber-300 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/80 dark:hover:bg-amber-900 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800 transition flex items-center gap-1 cursor-pointer"
+                      title="Salvar a lista atual de itens e negociação como a Compra Padrão deste fornecedor"
+                    >
+                      <Star className="w-3 h-3 text-amber-500 fill-amber-400" />
+                      Salvar como Padrão
+                    </button>
+                  )}
+
+                  {currentSupplier ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenSupplierModal(currentSupplier)}
+                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
+                      title="Editar dados cadastrais deste fornecedor (ST, Vendedor, Condições)"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      Editar Fornecedor
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onOpenSupplierModal(null)}
+                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Cadastrar Fornecedor
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="relative">
@@ -254,40 +416,148 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     setIsDropdownOpen(true);
                   }}
                   onFocus={() => {
-                    if (filteredSuppliers.length > 0) setIsDropdownOpen(true);
+                    setIsDropdownOpen(true);
                   }}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium"
-                  placeholder="Digite o nome do fornecedor..."
+                  onClick={() => {
+                    setIsDropdownOpen(true);
+                  }}
+                  className="w-full pl-3 pr-16 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium"
+                  placeholder="Selecione ou digite o fornecedor..."
                 />
+                
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {header.fornecedor && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleFieldChange('fornecedor', '');
+                        setIsDropdownOpen(true);
+                      }}
+                      className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded cursor-pointer"
+                      title="Limpar seleção"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsDropdownOpen(prev => !prev)}
+                    className="p-1 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded cursor-pointer transition"
+                    title={isDropdownOpen ? "Fechar lista de fornecedores" : "Abrir lista de fornecedores"}
+                  >
+                    {isDropdownOpen ? <ChevronUp className="w-4 h-4 text-emerald-500" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
-              {/* Dropdown Suggestions List */}
-              {isDropdownOpen && header.fornecedor && filteredSuppliers.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 max-h-60 overflow-y-auto z-40 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="py-1 divide-y divide-slate-100 dark:divide-slate-700/50">
-                    {filteredSuppliers.map(sup => (
-                      <div
-                        key={sup.id}
-                        onClick={() => handleSelectSupplier(sup)}
-                        className="px-3.5 py-2 hover:bg-emerald-50 dark:hover:bg-slate-700/60 cursor-pointer transition flex items-center justify-between"
-                      >
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 dark:text-white">
-                            {sup.razaoSocial}
-                          </div>
-                          <div className="text-[11px] text-slate-400 flex items-center gap-2">
-                            {sup.vendedorPadrao && <span>Vendedor: {sup.vendedorPadrao}</span>}
-                            {sup.condicaoPagamentoPadrao && <span>• {sup.condicaoPagamentoPadrao}</span>}
-                          </div>
-                        </div>
+              {/* Dropdown Suggestions List (Abre ao clicar ou focar) */}
+              {isDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-72 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2 duration-150 divide-y divide-slate-100 dark:divide-slate-700/60">
+                  <div className="px-3.5 py-2 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                    <span>Fornecedores Cadastrados ({filteredSuppliers.length})</span>
+                    {supplierSearchQuery && (
+                      <span className="text-[10px] lowercase text-emerald-600 dark:text-emerald-400 font-normal">
+                        filtrado por "{supplierSearchQuery}"
+                      </span>
+                    )}
+                  </div>
 
-                        {sup.descontoOffPadrao && sup.descontoOffPadrao > 0 ? (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                            -{sup.descontoOffPadrao}% OFF
-                          </span>
-                        ) : null}
-                      </div>
-                    ))}
+                  {filteredSuppliers.length === 0 ? (
+                    <div className="p-4 text-center">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                        Nenhum fornecedor encontrado para "<strong>{header.fornecedor}</strong>"
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          onOpenSupplierModal(null);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Cadastrar "{header.fornecedor}" Agora</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                      {filteredSuppliers.map(sup => {
+                        const hasTemplate = Boolean(sup.pedidoPadrao || sup.pedidoPadraoJson);
+                        const isSelected = currentSupplier?.id === sup.id;
+
+                        return (
+                          <div
+                            key={sup.id}
+                            onClick={() => handleSelectSupplier(sup)}
+                            className={`px-3.5 py-2.5 hover:bg-emerald-50/80 dark:hover:bg-slate-700/70 cursor-pointer transition flex items-center justify-between gap-3 ${
+                              isSelected ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-l-4 border-emerald-500' : ''
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                  {sup.razaoSocial}
+                                </span>
+                                {sup.nomeFantasia && (
+                                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">
+                                    {sup.nomeFantasia}
+                                  </span>
+                                )}
+                                {hasTemplate && (
+                                  <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 px-1.5 py-0.2 rounded-full border border-amber-200 dark:border-amber-800 flex items-center gap-0.5">
+                                    <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-500" />
+                                    Compra Padrão
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
+                                {sup.vendedorPadrao && (
+                                  <span>Rep: <strong className="text-slate-700 dark:text-slate-300">{sup.vendedorPadrao}</strong></span>
+                                )}
+                                {sup.contatoVendedor && (
+                                  <span className="font-mono text-[10px]">({sup.contatoVendedor})</span>
+                                )}
+                                {sup.condicaoPagamentoPadrao && (
+                                  <span>• Pagto: {sup.condicaoPagamentoPadrao}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {sup.aliquotaStPadrao !== undefined && sup.aliquotaStPadrao > 0 ? (
+                                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                  ST +{sup.aliquotaStPadrao}%
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                                  ST 0%
+                                </span>
+                              )}
+                              {sup.descontoOffPadrao && sup.descontoOffPadrao > 0 ? (
+                                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300">
+                                  -{sup.descontoOffPadrao}% OFF
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="p-2 bg-slate-50 dark:bg-slate-900/80 flex items-center justify-between border-t border-slate-100 dark:border-slate-700/60 sticky bottom-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        onOpenSupplierModal(null);
+                      }}
+                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer px-2 py-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Cadastrar Novo Fornecedor
+                    </button>
+                    <span className="text-[10px] text-slate-400">Clique para selecionar</span>
                   </div>
                 </div>
               )}
@@ -370,12 +640,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
           </div>
 
-          {/* SEÇÃO 2: CONDIÇÕES COMERCIAIS, PAGAMENTO & BOLETOS (Card Destacado em 4 Colunas com Validação de Limite) */}
+          {/* SEÇÃO 2: CONDIÇÕES COMERCIAIS, PAGAMENTO & BOLETOS (Card Destacado com Validação de Limite) */}
           {(() => {
             const LIMITE_MAXIMO_BOLETO = 9999;
-            const valorTotalPedido = orderTotal || 0;
-            const valorPorParcela = (valorTotalPedido > 0 && currentParcelas > 0) ? (valorTotalPedido / currentParcelas) : 0;
-            const isParcelaExcedente = valorPorParcela > LIMITE_MAXIMO_BOLETO;
+            const valorMaximoBoletoCalculado = isEntradaMista ? valorPorParcelaSaldo : (valorTotalPedido > 0 && currentParcelas > 0 ? (valorTotalPedido / currentParcelas) : 0);
+            const isParcelaExcedente = valorMaximoBoletoCalculado > LIMITE_MAXIMO_BOLETO;
             const parcelasMinimasSugeridas = (valorTotalPedido > 0) ? Math.min(12, Math.max(1, Math.ceil(valorTotalPedido / LIMITE_MAXIMO_BOLETO))) : 1;
 
             return (
@@ -394,7 +663,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       <CreditCard className="w-3.5 h-3.5" />
                     </div>
                     <span className="text-xs font-bold text-slate-900 dark:text-white">
-                      Condições Comerciais & Prazos de Boletos
+                      Condições Comerciais & Prazos de Pagamento
                     </span>
                   </div>
 
@@ -405,46 +674,48 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1.5 animate-pulse">
                             <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-                            <span>Boleto: R$ {valorPorParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Excede teto de R$ 9.999)</span>
+                            <span>Boleto: R$ {valorMaximoBoletoCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Excede teto de R$ 9.999)</span>
                           </span>
 
                           <button
                             type="button"
-                            onClick={() => handlePaymentParcelasChange(parcelasMinimasSugeridas)}
+                            onClick={() => {
+                              if (isEntradaMista) {
+                                handleSaldoParcelasChange(Math.min(12, Math.ceil(saldoRestante / LIMITE_MAXIMO_BOLETO)));
+                              } else {
+                                handlePaymentParcelasChange(parcelasMinimasSugeridas);
+                              }
+                            }}
                             className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-amber-600 hover:bg-amber-500 text-white shadow-xs transition flex items-center gap-1 cursor-pointer"
                             title="Auto-ajustar número de parcelas para manter boletos abaixo de R$ 9.999,00"
                           >
                             <Sparkles className="w-3.5 h-3.5" />
-                            <span>Sugerir {parcelasMinimasSugeridas}x (R$ {(valorTotalPedido / parcelasMinimasSugeridas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                            <span>Sugerir {isEntradaMista ? `${Math.min(12, Math.ceil(saldoRestante / LIMITE_MAXIMO_BOLETO))}x no Saldo` : `${parcelasMinimasSugeridas}x`}</span>
                           </button>
                         </div>
                       ) : (
                         <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-emerald-100/80 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800 flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                          <span>Parcela: R$ {valorPorParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (≤ R$ 9.999)</span>
+                          <span>Boleto: R$ {valorMaximoBoletoCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (≤ R$ 9.999)</span>
                         </span>
                       )
                     )}
                   </div>
                 </div>
 
+                {/* LINHA 1: CONFIGURAÇÃO GERAL DE PAGAMENTO & DESCONTOS */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                  {/* Dropdown 1: Quantidade de Parcelas */}
+                  {/* Dropdown 1: Forma de Pagamento / Intervalo de Prazo */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>1. Quantidade de Parcelas</span>
-                      {isParcelaExcedente && (
-                        <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">Teto excedido</span>
-                      )}
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      1. Modalidade de Pagamento / Prazo
                     </label>
                     <select
-                      value={currentParcelas}
-                      onChange={(e) => handlePaymentParcelasChange(Number(e.target.value))}
-                      className={`w-full px-3 py-2 text-xs rounded-xl border bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs ${
-                        isParcelaExcedente ? 'border-rose-400 dark:border-rose-700 text-rose-700 dark:text-rose-300' : 'border-slate-200 dark:border-slate-700'
-                      }`}
+                      value={currentPrazo}
+                      onChange={(e) => handlePaymentPrazoChange(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
                     >
-                      {PARCELAS_OPTIONS.map((opt) => (
+                      {PRAZO_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
@@ -452,21 +723,33 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </select>
                   </div>
 
-                  {/* Dropdown 2: Intervalo de Vencimento */}
+                  {/* Dropdown 2: Quantidade de Parcelas (Oculto/Fixo em À Vista ou Entrada Mista) */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      2. Intervalo de Vencimento / Prazo
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span>2. Quantidade de Parcelas</span>
+                      {isParcelaExcedente && !isEntradaMista && (
+                        <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">Teto excedido</span>
+                      )}
                     </label>
                     <select
-                      value={currentPrazo}
-                      onChange={(e) => handlePaymentPrazoChange(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs"
+                      value={isVistaIntegral ? 1 : isEntradaMista ? (1 + saldoParcelas) : currentParcelas}
+                      disabled={isVistaIntegral || isEntradaMista}
+                      onChange={(e) => handlePaymentParcelasChange(Number(e.target.value))}
+                      className={`w-full px-3 py-2 text-xs rounded-xl border bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed ${
+                        isParcelaExcedente && !isEntradaMista ? 'border-rose-400 dark:border-rose-700 text-rose-700 dark:text-rose-300' : 'border-slate-200 dark:border-slate-700'
+                      }`}
                     >
-                      {PRAZO_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
+                      {isVistaIntegral ? (
+                        <option value="1">1x (100% À Vista)</option>
+                      ) : isEntradaMista ? (
+                        <option value={1 + saldoParcelas}>1x Entrada + {saldoParcelas}x Saldo ({1 + saldoParcelas}x Total)</option>
+                      ) : (
+                        PARCELAS_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
 
@@ -519,37 +802,149 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
                 </div>
 
+                {/* LINHA 2 INSERIDA DINAMICAMENTE: NEGOCIAÇÃO DE ENTRADA À VISTA + SALDO PARCELADO */}
+                {isEntradaMista && (
+                  <div className="mt-3.5 pt-3.5 border-t border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20 p-3 rounded-xl border">
+                    <div className="text-[11px] font-extrabold text-emerald-800 dark:text-emerald-300 mb-2.5 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Detalhamento da Negociação: Entrada À Vista + Parcelas do Saldo</span>
+                      </div>
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono">
+                        Saldo a Parcelar: R$ {saldoRestante.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {/* 1. Valor da Entrada À Vista */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                          <span>Valor Entrada À Vista (R$)</span>
+                          <span className="text-[9px] font-mono text-emerald-600">
+                            {valorTotalPedido > 0 ? `${((valorEntrada / valorTotalPedido) * 100).toFixed(0)}% do Pedido` : ''}
+                          </span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={valorTotalPedido}
+                            value={valorEntrada}
+                            onChange={(e) => handleEntradaChange(parseFloat(e.target.value) || 0)}
+                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold font-mono focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                            placeholder="0,00"
+                          />
+                        </div>
+                        {/* Botões de porcentagem rápida */}
+                        {valorTotalPedido > 0 && (
+                          <div className="flex items-center gap-1 mt-1.5">
+                            {[10, 20, 30, 50].map((pct) => (
+                              <button
+                                key={pct}
+                                type="button"
+                                onClick={() => handleEntradaChange(Number((valorTotalPedido * (pct / 100)).toFixed(2)))}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/60 dark:hover:bg-emerald-800 text-emerald-800 dark:text-emerald-200 transition cursor-pointer"
+                              >
+                                {pct}%
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2. Parcelas do Saldo Restante */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Qtd Parcelas do Saldo
+                        </label>
+                        <select
+                          value={saldoParcelas}
+                          onChange={(e) => handleSaldoParcelasChange(Number(e.target.value))}
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
+                        >
+                          {PARCELAS_OPTIONS.filter(o => o.value > 0).map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.value}x Parcela{opt.value > 1 ? 's' : ''} do Saldo
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* 3. Intervalo de Vencimento do Saldo */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Vencimento do Saldo (pós-entrega)
+                        </label>
+                        <select
+                          value={saldoPrazo}
+                          onChange={(e) => handleSaldoPrazoChange(e.target.value)}
+                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
+                        >
+                          <option value="30">A cada 30 dias (30/60/90...)</option>
+                          <option value="28">A cada 28 dias (28/56/84...)</option>
+                          <option value="15">A cada 15 dias (15/30/45...)</option>
+                          <option value="21">A cada 21 dias (21/42/63...)</option>
+                          <option value="45">45 dias direto</option>
+                          <option value="60">60 dias direto</option>
+                        </select>
+                      </div>
+
+                      {/* 4. Resumo de Boletos do Saldo */}
+                      <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-emerald-200/80 dark:border-emerald-800 flex flex-col justify-center">
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                          Boletos do Saldo a Prazo:
+                        </span>
+                        <div className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+                          {saldoParcelas}x de R$ {valorPorParcelaSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <span className="text-[9px] text-slate-400 mt-0.5">
+                          Contados a partir da data de entrega
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Prévia dos Boletos e Parcelas */}
                 {previewInstallments.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-700">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 flex items-center gap-1.5">
                       <Clock className="w-3 h-3 text-slate-400" />
-                      <span>Previsão de Vencimento dos Boletos ({currentParcelas}x):</span>
+                      <span>Previsão de Vencimento dos Boletos ({previewInstallments.length}x):</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {previewInstallments.map((inst) => {
                         const [y, m, d] = inst.dataVencimento.split('-');
                         const formattedDate = d && m && y ? `${d}/${m}/${y}` : inst.dataVencimento;
+                        const isEntradaItem = inst.isEntrada;
+
                         return (
                           <div 
                             key={inst.numeroParcela}
                             className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 shadow-xs ${
-                              isParcelaExcedente
+                              isEntradaItem
+                                ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                                : (inst.valor > LIMITE_MAXIMO_BOLETO)
                                 ? 'bg-rose-50/90 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
                             }`}
                           >
-                            <span className="font-bold text-slate-500 dark:text-slate-400">
-                              {inst.numeroParcela}ª Parcela:
+                            <span className="font-bold text-slate-600 dark:text-slate-300">
+                              {inst.rotulo}:
                             </span>
                             {valorTotalPedido > 0 ? (
                               <span className={`font-extrabold font-mono ${
-                                isParcelaExcedente ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+                                isEntradaItem 
+                                  ? 'text-emerald-700 dark:text-emerald-300' 
+                                  : (inst.valor > LIMITE_MAXIMO_BOLETO) 
+                                  ? 'text-rose-600 dark:text-rose-400' 
+                                  : 'text-slate-900 dark:text-white'
                               }`}>
-                                R$ {valorPorParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                R$ {inst.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             ) : null}
-                            <span className="text-slate-700 dark:text-slate-300 font-mono text-[11px]">
+                            <span className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
                               📅 {formattedDate}
                             </span>
                           </div>

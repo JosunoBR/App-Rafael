@@ -23,14 +23,16 @@ import {
   Eye,
   X
 } from 'lucide-react';
-import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection } from '../shared/types';
-import { calculateBoxesSeparation, validateSeparation } from '../shared/separationEngine';
+import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User } from '../shared/types';
+import { calculateAutomaticSeparation, validateSeparation } from '../shared/separationEngine';
 import { SeparationMatrixModal } from './SeparationMatrixModal';
+import { OrderPipelineStepper } from './OrderPipelineStepper';
 
 interface SeparationPageProps {
   order: PurchaseOrder;
   orders?: PurchaseOrder[];
   stores: StoreConfig[];
+  currentUser?: User | null;
   onExportPDF: () => void;
   onExportExcel: () => void;
   onLoadMockOrder: () => void;
@@ -39,6 +41,8 @@ interface SeparationPageProps {
   onChangeOrder?: (updatedOrder: PurchaseOrder) => void;
   onSelectOrder?: (order: PurchaseOrder) => void;
   onFinalizeOrder?: (order: PurchaseOrder) => void;
+  onReleaseToSeparation?: (order: PurchaseOrder) => void;
+  onApproveOrder?: (order: PurchaseOrder) => void;
 }
 
 // Função para converter qualquer unidade de medida em unidades reais de peças
@@ -64,6 +68,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   order,
   orders = [],
   stores,
+  currentUser,
   onExportPDF,
   onExportExcel,
   onLoadMockOrder,
@@ -71,7 +76,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   onNavigateToHistory,
   onChangeOrder,
   onSelectOrder,
-  onFinalizeOrder
+  onFinalizeOrder,
+  onReleaseToSeparation,
+  onApproveOrder
 }) => {
   const activeStores = stores.filter(s => s.active);
 
@@ -150,49 +157,33 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     }, 0);
   }, [avariasList, possuiAvarias, order.items]);
 
-  // Status de cada item: Caixas Compradas, Caixas nas Lojas, Caixas no Estoque CD e Validação
+  // Status de cada item: Unidades Compradas, Unidades nas Lojas, Unidades no Estoque CD e Validação
   const itemStatusList = useMemo(() => {
     return order.items.map(item => {
-      const pack = Math.max(1, item.qtdPorPacote || 1);
       const allocatedUnits = activeStores.reduce((acc, store) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);
       const totalCompradoUnits = Number(item.qtdTotalUnidades) || 0;
       const reserveStockUnits = Math.max(0, totalCompradoUnits - allocatedUnits);
-      
-      const totalCompradoBoxes = Number(item.qtdPacotes) || Math.ceil(totalCompradoUnits / pack);
-      const allocatedBoxes = allocatedUnits / pack;
-      const reserveStockBoxes = reserveStockUnits / pack;
 
       const isOverAllocated = allocatedUnits > totalCompradoUnits;
       const excessUnits = isOverAllocated ? allocatedUnits - totalCompradoUnits : 0;
-      const excessBoxes = isOverAllocated ? excessUnits / pack : 0;
 
       return {
         item,
-        pack,
         allocatedUnits,
-        allocatedBoxes,
         reserveStockUnits,
-        reserveStockBoxes,
         totalCompradoUnits,
-        totalCompradoBoxes,
         isOverAllocated,
         excessUnits,
-        excessBoxes,
         isBalanced: !isOverAllocated
       };
     });
   }, [order.items, activeStores]);
 
-  // Totais Gerais em Caixas e Peças
-  const totalCaixasGeral = order.items.reduce((acc, item) => acc + (item.qtdPacotes || 0), 0);
+  // Totais Gerais em Peças
   const totalPecasGeralBruto = order.items.reduce((acc, item) => acc + (item.qtdTotalUnidades || 0), 0);
-  
   const totalPecasDistribuidoLojasBruto = itemStatusList.reduce((acc, s) => acc + s.allocatedUnits, 0);
-  const totalCaixasDistribuidoLojasBruto = itemStatusList.reduce((acc, s) => acc + s.allocatedBoxes, 0);
-  
   const totalPecasDistribuidoLojasLiquido = Math.max(0, totalPecasDistribuidoLojasBruto - totalPecasAvariadasUnidades);
   const totalPecasGuardadasEstoque = itemStatusList.reduce((acc, s) => acc + s.reserveStockUnits, 0);
-  const totalCaixasGuardadasEstoque = itemStatusList.reduce((acc, s) => acc + s.reserveStockBoxes, 0);
   
   const percentualEstoque = totalPecasGeralBruto > 0 ? Math.round((totalPecasGuardadasEstoque / totalPecasGeralBruto) * 100) : 0;
   const hasAnyOverAllocation = itemStatusList.some(s => s.isOverAllocated);
@@ -266,19 +257,18 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     });
   };
 
-  const handleUpdateItemReserveBoxes = (item: OrderItem, rawBoxes: number) => {
+  const handleUpdateItemReserveUnits = (item: OrderItem, rawReserveUnits: number) => {
     if (!onChangeOrder) return;
-    const pack = Math.max(1, item.qtdPorPacote || 1);
-    const safeBoxes = Math.max(0, Math.min(item.qtdPacotes, Math.floor(rawBoxes || 0)));
+    const safeUnits = Math.max(0, Math.min(item.qtdTotalUnidades, Math.floor(rawReserveUnits || 0)));
 
-    const boxSep = calculateBoxesSeparation(item.qtdPacotes, pack, stores, safeBoxes);
+    const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, safeUnits);
 
     const updatedItems = order.items.map(it => {
       if (it.id !== item.id) return it;
       return {
         ...it,
-        separacaoLojas: boxSep.allocations,
-        qtdReservaEstoque: boxSep.reserveStock,
+        separacaoLojas: sep.allocations,
+        qtdReservaEstoque: sep.reserveStock,
         separacaoManual: false
       };
     });
@@ -294,19 +284,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     const itemToUpdate = order.items.find(i => i.id === itemId);
     if (!itemToUpdate) return;
 
-    const pack = Math.max(1, itemToUpdate.qtdPorPacote || 1);
-    const currentReserveBoxes = itemToUpdate.qtdReservaEstoque !== undefined 
-      ? Math.floor(itemToUpdate.qtdReservaEstoque / pack)
-      : undefined;
-
-    const boxSep = calculateBoxesSeparation(itemToUpdate.qtdPacotes, pack, stores, currentReserveBoxes);
+    const sep = calculateAutomaticSeparation(itemToUpdate.qtdTotalUnidades, stores, itemToUpdate.qtdReservaEstoque);
 
     const updatedItems = order.items.map(it => {
       if (it.id !== itemId) return it;
       return {
         ...it,
-        separacaoLojas: boxSep.allocations,
-        qtdReservaEstoque: boxSep.reserveStock,
+        separacaoLojas: sep.allocations,
+        qtdReservaEstoque: sep.reserveStock,
         separacaoManual: false
       };
     });
@@ -345,13 +330,12 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     if (!onChangeOrder) return;
 
     const updatedItems = order.items.map(item => {
-      const pack = Math.max(1, item.qtdPorPacote || 1);
-      const reserveBoxes = Math.round((item.qtdPacotes * percent) / 100);
-      const boxSep = calculateBoxesSeparation(item.qtdPacotes, pack, stores, reserveBoxes);
+      const reserveUnits = Math.round((item.qtdTotalUnidades * percent) / 100);
+      const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, reserveUnits);
       return {
         ...item,
-        separacaoLojas: boxSep.allocations,
-        qtdReservaEstoque: boxSep.reserveStock,
+        separacaoLojas: sep.allocations,
+        qtdReservaEstoque: sep.reserveStock,
         separacaoManual: false
       };
     });
@@ -463,6 +447,21 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
+      {/* Esteira Operacional Visual do Pedido */}
+      <OrderPipelineStepper
+        order={order}
+        currentUser={currentUser}
+        onApproveOrder={onApproveOrder}
+        onOpenDistribution={(ord) => {
+          if (onSelectOrder) onSelectOrder(ord);
+        }}
+        onReleaseToSeparation={onReleaseToSeparation}
+        onOpenSeparation={(ord) => {
+          if (onSelectOrder) onSelectOrder(ord);
+        }}
+        onFinalizeSeparation={onFinalizeOrder}
+      />
+
       {/* Banner Informativo quando visualizando pedido já finalizado */}
       {isCurrentFinalized && (
         <div className="p-3.5 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -614,11 +613,11 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           <div>
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Status dos Volumes</span>
             <div className="text-base font-extrabold text-slate-900 dark:text-white mt-1">
-              {!hasAnyOverAllocation ? '100% Válido (Caixas Fechadas)' : 'Excedente Detectado'}
+              {!hasAnyOverAllocation ? '100% Válido' : 'Excedente Detectado'}
             </div>
             <span className="text-[11px] text-slate-400 mt-0.5 block">
               {!hasAnyOverAllocation 
-                ? `${totalCaixasDistribuidoLojasBruto} cx lojas • ${totalCaixasGuardadasEstoque} cx no CD`
+                ? `${totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un lojas • ${totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un no CD`
                 : 'Alguma linha ultrapassou o total comprado'}
             </span>
           </div>
@@ -631,13 +630,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
           <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Total Enviado às Lojas</span>
           <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1 font-mono flex items-baseline gap-2">
-            <span>{totalCaixasDistribuidoLojasBruto} cx</span>
-            <span className="text-xs font-normal text-slate-400">
-              ({totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} peças)
-            </span>
+            <span>{totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un</span>
           </div>
           <span className="text-[11px] text-slate-400 mt-0.5 block">
-            {totalCaixasGeral.toLocaleString('pt-BR')} caixas compradas no pedido
+            {totalPecasGeralBruto.toLocaleString('pt-BR')} unidades compradas no pedido
           </span>
         </div>
 
@@ -645,7 +641,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
           <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Guardado no Estoque (CD)</span>
           <div className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mt-1 font-mono flex items-baseline gap-2">
-            <span>{totalCaixasGuardadasEstoque} cx</span>
+            <span>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un</span>
             <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded-full">
               {percentualEstoque}% retido
             </span>
@@ -773,7 +769,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {order.items.map((item, idx) => {
                 const status = itemStatusList[idx];
-                const pack = status.pack;
+                const pack = Math.max(1, item.qtdPorPacote || 1);
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition">
@@ -800,10 +796,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
                             <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.codigoInterno || item.codigo || 'S/ CÓD'}</span>
-                            <span>•</span>
-                            <span className="font-bold text-slate-700 dark:text-slate-300">{item.qtdPacotes} cx</span>
-                            <span>×</span>
-                            <span>{item.qtdPorPacote} un</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-300">{item.qtdTotalUnidades.toLocaleString('pt-BR')} un</span>
                             {item.separacaoManual && (
                               <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-sans font-semibold text-[9px]">
                                 Manual
@@ -814,36 +807,30 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       </div>
                     </td>
 
-                    {/* 2. Total Comprado (Caixas em destaque + Peças embaixo) */}
+                    {/* 2. Total Comprado (Unidades) */}
                     <td className="py-2.5 px-2 text-center font-mono font-extrabold border-r border-slate-200 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
                       <div className="text-xs">
-                        {item.qtdPacotes} cx
-                      </div>
-                      <div className="text-[9px] font-normal text-slate-400 mt-0.5">
                         {item.qtdTotalUnidades.toLocaleString('pt-BR')} un
                       </div>
                     </td>
 
-                    {/* 3. Coluna Estoque CD (Guardado) - Editável em Caixas */}
+                    {/* 3. Coluna Estoque CD (Guardado) - Editável em Unidades */}
                     <td className="py-1.5 px-1.5 text-center border-r border-slate-200 dark:border-slate-700 bg-amber-50/40 dark:bg-amber-950/20">
                       <div className="flex flex-col items-center justify-center">
                         <div className="flex items-center gap-1">
                           <input
                             type="number"
                             min="0"
-                            max={item.qtdPacotes}
-                            value={status.reserveStockBoxes}
-                            onChange={(e) => handleUpdateItemReserveBoxes(item, parseFloat(e.target.value) || 0)}
-                            className="w-14 px-1 py-1 text-center font-mono font-extrabold text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-200 focus:ring-2 focus:ring-amber-500 outline-hidden"
-                            title="Quantidade de caixas que ficará guardada no Estoque Central"
+                            max={item.qtdTotalUnidades}
+                            value={status.reserveStockUnits}
+                            onChange={(e) => handleUpdateItemReserveUnits(item, parseFloat(e.target.value) || 0)}
+                            className="w-16 px-1 py-1 text-center font-mono font-extrabold text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-200 focus:ring-2 focus:ring-amber-500 outline-hidden"
+                            title="Quantidade de unidades que ficará guardada no Estoque Central"
                           />
                           <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                            cx
+                            un
                           </span>
                         </div>
-                        <span className="text-[9px] text-amber-700/80 dark:text-amber-400 font-mono mt-0.5">
-                          = {status.reserveStockUnits} un
-                        </span>
                       </div>
                     </td>
 
@@ -854,28 +841,23 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
                     }`}>
                       <div className="text-xs">
-                        {status.allocatedBoxes} cx
-                      </div>
-                      <div className="text-[9px] font-normal text-slate-400 mt-0.5">
                         {status.allocatedUnits.toLocaleString('pt-BR')} un
                       </div>
                       {status.isOverAllocated && (
                         <div className="text-[9px] font-bold text-rose-600 dark:text-rose-400 mt-0.5">
-                          +{status.excessBoxes} cx excedente
+                          +{status.excessUnits} un excedente
                         </div>
                       )}
                     </td>
 
-                    {/* 5. Células de Cada Loja - Editáveis em Caixas com Peças Embaixo */}
+                    {/* 5. Células de Cada Loja - Editáveis em Unidades */}
                     {activeStores.map(store => {
                       const rawAllocUnits = item.separacaoLojas?.[store.id] || 0;
-                      const rawAllocBoxes = rawAllocUnits / pack;
                       
                       const avariaInfo = avariasMap.get(`${item.id}_${store.id}`);
                       const hasAvaria = avariaInfo !== undefined && avariaInfo.totalDeductedUnits > 0;
                       const deductedUnits = hasAvaria ? avariaInfo.totalDeductedUnits : 0;
                       const effectiveUnits = Math.max(0, rawAllocUnits - deductedUnits);
-                      const effectiveBoxes = effectiveUnits / pack;
 
                       return (
                         <td 
@@ -891,28 +873,22 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                               type="number"
                               min="0"
                               step="1"
-                              value={rawAllocBoxes}
+                              value={rawAllocUnits}
                               onChange={(e) => handleUpdateStoreAllocationBoxes(item, store.id, parseFloat(e.target.value) || 0)}
-                              className={`w-12 px-1 py-1 text-center font-mono font-bold text-xs rounded-md border outline-hidden transition ${
-                                rawAllocBoxes > 0
+                              className={`w-14 px-1 py-1 text-center font-mono font-bold text-xs rounded-md border outline-hidden transition ${
+                                rawAllocUnits > 0
                                   ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
                                   : 'border-dashed border-slate-200 dark:border-slate-700 bg-transparent text-slate-300 dark:text-slate-600 focus:bg-white dark:focus:bg-slate-900 focus:text-slate-900'
                               }`}
-                              title={`Loja: ${store.name} (${store.cluster}) • ${rawAllocBoxes} caixas (${rawAllocUnits} peças)`}
+                              title={`Loja: ${store.name} (${store.cluster}) • ${rawAllocUnits} unidades`}
                             />
-
-                            {rawAllocBoxes > 0 && (
-                              <span className="text-[8.5px] text-slate-400 font-mono mt-0.5">
-                                {rawAllocUnits} un
-                              </span>
-                            )}
 
                             {hasAvaria && (
                               <span 
                                 className="text-[9px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/90 px-1 py-0.2 rounded-sm mt-0.5 border border-rose-300 dark:border-rose-800 whitespace-nowrap"
-                                title={`Original: ${rawAllocBoxes} cx • Avaria: -${deductedUnits} un (Efetivo: ${effectiveBoxes} cx)`}
+                                title={`Original: ${rawAllocUnits} un • Avaria: -${deductedUnits} un (Efetivo: ${effectiveUnits} un)`}
                               >
-                                {effectiveBoxes} cx
+                                {effectiveUnits} un
                               </span>
                             )}
                           </div>
@@ -927,7 +903,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                           type="button"
                           onClick={() => handleAutoRateioItem(item.id)}
                           className="p-1 rounded-md text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition"
-                          title="Recalcular rateio em caixas fechadas para este produto"
+                          title="Recalcular rateio em unidades para este produto"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
                         </button>
@@ -959,25 +935,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <tfoot>
               <tr className="bg-emerald-100 dark:bg-emerald-950 border-t-2 border-emerald-500 font-extrabold text-xs text-emerald-950 dark:text-emerald-200">
                 <td className="py-3 px-3 border-r border-emerald-200 dark:border-emerald-800 sticky left-0 bg-emerald-100 dark:bg-emerald-950 z-10 uppercase">
-                  Total Geral (Volumes / Caixas)
+                  Total Geral (Unidades)
                 </td>
                 <td className="py-3 px-2 text-center border-r border-emerald-200 dark:border-emerald-800 font-mono text-sm">
-                  <div>{totalCaixasGeral} cx</div>
-                  <div className="text-[9px] font-normal text-emerald-800 dark:text-emerald-400">
-                    {totalPecasGeralBruto.toLocaleString('pt-BR')} un
-                  </div>
+                  <div>{totalPecasGeralBruto.toLocaleString('pt-BR')} un</div>
                 </td>
                 <td className="py-3 px-2 text-center border-r border-emerald-200 dark:border-emerald-800 font-mono text-xs text-amber-900 dark:text-amber-200 bg-amber-100/60 dark:bg-amber-950/60">
-                  <div>{totalCaixasGuardadasEstoque} cx</div>
-                  <div className="text-[9px] font-normal text-amber-800 dark:text-amber-300">
-                    {totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un
-                  </div>
+                  <div>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un</div>
                 </td>
                 <td className="py-3 px-2 text-center border-r border-emerald-200 dark:border-emerald-800 font-mono text-sm">
-                  <div>{totalCaixasDistribuidoLojasBruto} cx</div>
-                  <div className="text-[9px] font-normal text-emerald-800 dark:text-emerald-400">
-                    {totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un
-                  </div>
+                  <div>{totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un</div>
                 </td>
                 {activeStores.map(store => {
                   const somaLojaUnidades = order.items.reduce((acc, item) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);

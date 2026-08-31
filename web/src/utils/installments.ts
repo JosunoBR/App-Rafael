@@ -21,7 +21,8 @@ export const PRAZO_OPTIONS = [
   { value: '21', label: 'A cada 21 dias (21/42/63...)' },
   { value: '45', label: '45 dias direto' },
   { value: '60', label: '60 dias direto' },
-  { value: 'vista', label: 'À Vista / TED / PIX' },
+  { value: 'vista', label: '100% À Vista Integral (TED / PIX)' },
+  { value: 'entrada_com_parcelamento', label: 'Entrada À Vista + Saldo Parcelado' },
   { value: 'custom', label: 'Personalizado' },
 ];
 
@@ -39,11 +40,26 @@ export function calculateOrderNetTotal(order: PurchaseOrder): number {
 }
 
 /**
- * Formata a string de condição de pagamento (ex: "3x (30/60/90 Dias)")
+ * Formata a string de condição de pagamento (ex: "3x (30/60/90 Dias)" ou "Entrada R$ 5.000 + 2x (30/60 Dias)")
  */
-export function formatPaymentConditionString(parcelas: number, prazo: string | number): string {
+export function formatPaymentConditionString(
+  parcelas: number, 
+  prazo: string | number,
+  valorEntrada?: number,
+  saldoParcelas?: number,
+  saldoPrazo?: string | number
+): string {
   if (prazo === 'vista' || (parcelas === 1 && prazo === 'vista')) {
-    return 'À Vista (TED/PIX)';
+    return '100% À Vista (TED/PIX)';
+  }
+  if (prazo === 'entrada_com_parcelamento') {
+    const entradaStr = valorEntrada && valorEntrada > 0 
+      ? `Entrada R$ ${valorEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
+      : 'Entrada À Vista';
+    const sParc = saldoParcelas || 2;
+    const sPrazo = saldoPrazo || '30';
+    const sPrazoStr = formatPaymentConditionString(sParc, sPrazo);
+    return `${entradaStr} + ${sPrazoStr}`;
   }
   const intervalo = Number(prazo);
   if (!isNaN(intervalo) && intervalo > 0) {
@@ -70,6 +86,9 @@ export function parsePaymentConditionString(cond?: string): { parcelas: number; 
     return { parcelas: 3, prazo: '30' };
   }
   const lower = cond.toLowerCase();
+  if (lower.includes('entrada') && (lower.includes('+') || lower.includes('saldo') || lower.includes('dias') || lower.includes('x'))) {
+    return { parcelas: 3, prazo: 'entrada_com_parcelamento' };
+  }
   if (lower.includes('vista') || lower.includes('ted') || lower.includes('pix')) {
     return { parcelas: 1, prazo: 'vista' };
   }
@@ -155,15 +174,12 @@ export function generateOrderInstallments(
   if (!order || !order.header) return [];
 
   const parsed = parsePaymentConditionString(order.header.condicaoPagamento);
-  const totalParcelas = customParcelas ?? order.header.parcelasCount ?? parsed.parcelas ?? 3;
   const prazo = String(customPrazo ?? order.header.prazoDias ?? parsed.prazo ?? '30');
-
-  const baseDate = order.header.dataPedido || new Date().toISOString().split('T')[0];
   const netTotal = calculateOrderNetTotal(order);
 
-  // Valor base por parcela arredondado
-  const baseValue = totalParcelas > 0 ? Number((netTotal / totalParcelas).toFixed(2)) : netTotal;
-  const remainder = totalParcelas > 0 ? Number((netTotal - baseValue * totalParcelas).toFixed(2)) : 0;
+  // A primeira parcela a prazo é contada a partir da data de entrega da mercadoria
+  const baseDeliveryDate = order.header.dataEntregaPrevista || order.header.dataPedido || new Date().toISOString().split('T')[0];
+  const orderDate = order.header.dataPedido || new Date().toISOString().split('T')[0];
 
   const existingMap = new Map<number, PaymentInstallment>();
   if (preserveExistingEdits && Array.isArray(order.installments)) {
@@ -174,10 +190,91 @@ export function generateOrderInstallments(
 
   const list: PaymentInstallment[] = [];
 
+  // CENÁRIO A: ENTRADA À VISTA + SALDO PARCELADO A PRAZO
+  if (prazo === 'entrada_com_parcelamento') {
+    const valorEntrada = Math.min(netTotal, Math.max(0, order.header.valorEntradaAVista || 0));
+    const saldoRestante = Math.max(0, netTotal - valorEntrada);
+    const totalParcelasSaldo = Math.max(1, order.header.saldoParcelasCount || 2);
+    const saldoPrazo = String(order.header.saldoPrazoDias || '30');
+    const totalParcelasGeral = 1 + totalParcelasSaldo;
+
+    // 1. Parcela de Entrada (À Vista)
+    const existingEntrada = existingMap.get(1);
+    const dataVencEntrada = existingEntrada?.dataVencimento || orderDate;
+    const valorEntradaFinal = existingEntrada?.valor !== undefined ? existingEntrada.valor : valorEntrada;
+    const statusEntrada = existingEntrada?.status || getInstallmentStatus(dataVencEntrada, existingEntrada?.dataPagamento);
+
+    list.push({
+      id: existingEntrada?.id || `inst_${order.header.id || 'ord'}_1_${Date.now()}`,
+      orderId: order.header.id,
+      numeroPedido: order.header.numeroPedido,
+      fornecedor: order.header.fornecedor,
+      numeroParcela: 1,
+      totalParcelas: totalParcelasGeral,
+      dataVencimento: dataVencEntrada,
+      valor: valorEntradaFinal,
+      valorOriginal: existingEntrada?.valorOriginal ?? valorEntrada,
+      status: statusEntrada,
+      dataPagamento: existingEntrada?.dataPagamento,
+      observacao: existingEntrada?.observacao || 'Entrada / Sinal À Vista (TED/PIX)',
+      documentoRef: existingEntrada?.documentoRef,
+      updatedAt: new Date().toISOString()
+    });
+
+    // 2. Parcelas do Saldo a Prazo (Contadas a partir da entrega)
+    const saldoBaseValue = totalParcelasSaldo > 0 ? Number((saldoRestante / totalParcelasSaldo).toFixed(2)) : saldoRestante;
+    const saldoRemainder = totalParcelasSaldo > 0 ? Number((saldoRestante - saldoBaseValue * totalParcelasSaldo).toFixed(2)) : 0;
+
+    for (let j = 1; j <= totalParcelasSaldo; j++) {
+      const numParcela = j + 1;
+      const existing = existingMap.get(numParcela);
+
+      let dueDays = 0;
+      if (saldoPrazo === '45') {
+        dueDays = 45 + (j - 1) * 30;
+      } else if (saldoPrazo === '60') {
+        dueDays = 60 + (j - 1) * 30;
+      } else {
+        const intervalNum = Number(saldoPrazo) || 30;
+        dueDays = j * intervalNum;
+      }
+
+      const calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
+      const originalProportionalVal = j === 1 ? Number((saldoBaseValue + saldoRemainder).toFixed(2)) : saldoBaseValue;
+
+      const valorFinal = existing?.valor !== undefined ? existing.valor : originalProportionalVal;
+      const dataVencimentoFinal = existing?.dataVencimento || calculatedDueDate;
+      const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
+
+      list.push({
+        id: existing?.id || `inst_${order.header.id || 'ord'}_${numParcela}_${Date.now()}`,
+        orderId: order.header.id,
+        numeroPedido: order.header.numeroPedido,
+        fornecedor: order.header.fornecedor,
+        numeroParcela: numParcela,
+        totalParcelas: totalParcelasGeral,
+        dataVencimento: dataVencimentoFinal,
+        valor: valorFinal,
+        valorOriginal: existing?.valorOriginal ?? originalProportionalVal,
+        status: statusFinal,
+        dataPagamento: existing?.dataPagamento,
+        observacao: existing?.observacao || `Saldo Parcela ${j}/${totalParcelasSaldo} (${dueDays}d da Entrega)`,
+        documentoRef: existing?.documentoRef,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    return list;
+  }
+
+  // CENÁRIO B: PARCELAMENTO PADRÃO (OU 100% À VISTA)
+  const totalParcelas = customParcelas ?? order.header.parcelasCount ?? parsed.parcelas ?? 3;
+  const baseValue = totalParcelas > 0 ? Number((netTotal / totalParcelas).toFixed(2)) : netTotal;
+  const remainder = totalParcelas > 0 ? Number((netTotal - baseValue * totalParcelas).toFixed(2)) : 0;
+
   for (let i = 1; i <= totalParcelas; i++) {
     const existing = existingMap.get(i);
 
-    // Calcular data de vencimento padrão
     let dueDays = 0;
     if (prazo === 'vista') {
       dueDays = 0;
@@ -190,10 +287,9 @@ export function generateOrderInstallments(
       dueDays = i * intervalNum;
     }
 
-    const calculatedDueDate = addDaysToDate(baseDate, dueDays);
+    const calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
     const originalProportionalVal = i === 1 ? Number((baseValue + remainder).toFixed(2)) : baseValue;
 
-    // Se já havia uma parcela com edição de acordo ou status, preserva
     const valorFinal = existing?.valor !== undefined ? existing.valor : originalProportionalVal;
     const dataVencimentoFinal = existing?.dataVencimento || calculatedDueDate;
     const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
@@ -210,7 +306,7 @@ export function generateOrderInstallments(
       valorOriginal: existing?.valorOriginal ?? originalProportionalVal,
       status: statusFinal,
       dataPagamento: existing?.dataPagamento,
-      observacao: existing?.observacao,
+      observacao: existing?.observacao || (prazo === 'vista' ? 'Pagamento 100% À Vista' : `Parcela ${i}/${totalParcelas} (${dueDays}d da Entrega)`),
       documentoRef: existing?.documentoRef,
       updatedAt: new Date().toISOString()
     });

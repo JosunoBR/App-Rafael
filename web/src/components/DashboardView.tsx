@@ -101,7 +101,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const supplierBargainMetrics = useMemo(() => {
     let totalInvestido = 0;
     let totalPecas = 0;
-    let totalCaixas = 0;
     let faturamentoPdv = 0;
     let lucroReal = 0;
     let totalAvariasPecas = 0;
@@ -126,7 +125,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         totalInvestido += investItem;
         totalPecas += item.qtdTotalUnidades || 0;
-        totalCaixas += item.qtdPacotes || 0;
         faturamentoPdv += fatItem;
         lucroReal += lucroItem;
 
@@ -176,7 +174,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return {
       totalInvestido,
       totalPecas,
-      totalCaixas,
       faturamentoPdv,
       lucroReal,
       margemMedia,
@@ -400,7 +397,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {metrics.totalPecas.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
             </div>
             <span className="text-[11px] text-slate-400 mt-0.5 block truncate">
-              {metrics.totalCaixas.toLocaleString('pt-BR')} caixas / pacotes
+              Unidades totais compradas
             </span>
           </div>
         </div>
@@ -767,8 +764,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   <th className="py-3 px-3 text-center">Posição</th>
                   <th className="py-3 px-3">Código & Descrição</th>
-                  <th className="py-3 px-3 text-right">Qtd Peças</th>
-                  <th className="py-3 px-3 text-right">Caixas</th>
+                  <th className="py-3 px-3 text-right">Qtd Unidades</th>
                   <th className="py-3 px-3 text-right">Total Compra (R$)</th>
                   <th className="py-3 px-3 text-right">Faturamento PDV (R$)</th>
                   <th className="py-3 px-3 text-right">Lucro Real (R$)</th>
@@ -805,9 +801,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </td>
                       <td className="py-3 px-3 text-right font-mono font-extrabold text-slate-900 dark:text-white">
                         {item.totalPecas.toLocaleString('pt-BR')} un
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono text-slate-500">
-                        {item.totalCaixas.toLocaleString('pt-BR')} cx
                       </td>
                       <td className="py-3 px-3 text-right font-mono">
                         R$ {item.totalInvestimento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -934,7 +927,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     {supplierBargainMetrics.totalPecas.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
                   </div>
                   <span className="text-[11px] text-slate-400 mt-0.5 block">
-                    {supplierBargainMetrics.totalCaixas.toLocaleString('pt-BR')} caixas / pacotes movimentados
+                    Unidades totais movimentadas com o fornecedor
                   </span>
                 </div>
 

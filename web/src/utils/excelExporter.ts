@@ -8,6 +8,11 @@ export function exportOrderToExcel(order: PurchaseOrder, fallbackStores?: StoreC
   const cleanFornecedor = (order.header?.fornecedor || 'Fornecedor').replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = `Pedido_${numeroPedido}_${cleanFornecedor}.xlsx`;
 
+  const cleanOrder = {
+    ...order,
+    items: (order.items || []).filter(it => Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoInterno?.trim() || it.codigoFornecedor?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0))
+  };
+
   // 1. Download nativo via Formulário POST HTTP (O navegador salva com o nome real e extensão .xlsx)
   try {
     const form = document.createElement('form');
@@ -18,7 +23,7 @@ export function exportOrderToExcel(order: PurchaseOrder, fallbackStores?: StoreC
     const input = document.createElement('input');
     input.type = 'hidden';
     input.name = 'payload';
-    input.value = JSON.stringify({ order, stores: fallbackStores, fiscal: fallbackFiscal });
+    input.value = JSON.stringify({ order: cleanOrder, stores: fallbackStores, fiscal: fallbackFiscal });
 
     form.appendChild(input);
     document.body.appendChild(form);
@@ -55,15 +60,13 @@ export function exportOrderToExcel(order: PurchaseOrder, fallbackStores?: StoreC
     ];
 
     const itemHeaders = [
-      'Código', 'Descrição do Item', 'Qtd / Pct (F)', 'Qtd Pacotes (G)', 'Total Unidades (H)',
-      'Preço Compra Unit (I)', 'Valor Total Bruto (J)', 'PDV Alvo (R$)'
+      'Código', 'Descrição do Item', 'Quantidade (Unidades)',
+      'Preço Compra Unit (R$)', 'Valor Total Bruto (R$)', 'PDV Alvo (R$)'
     ];
 
     const itemRows = (order.items || []).map(item => [
       item.codigo || '',
       item.descricao || 'Produto',
-      Number(item.qtdPorPacote) || 0,
-      Number(item.qtdPacotes) || 0,
       Number(item.qtdTotalUnidades) || 0,
       Number(item.precoUnitario) || 0,
       Number(item.valorTotalBruto) || 0,
@@ -72,8 +75,7 @@ export function exportOrderToExcel(order: PurchaseOrder, fallbackStores?: StoreC
 
     const totalBruto = (order.items || []).reduce((acc, i) => acc + (Number(i.valorTotalBruto) || 0), 0);
     const totalUnidades = (order.items || []).reduce((acc, i) => acc + (Number(i.qtdTotalUnidades) || 0), 0);
-    const totalPacotes = (order.items || []).reduce((acc, i) => acc + (Number(i.qtdPacotes) || 0), 0);
-    const totalRow = ['TOTAL GERAL', '', '', totalPacotes, totalUnidades, '', totalBruto, ''];
+    const totalRow = ['TOTAL GERAL', '', totalUnidades, '', totalBruto, ''];
 
     const wsBazar = XLSX.utils.aoa_to_sheet([...headerInfo, itemHeaders, ...itemRows, [], totalRow]);
     XLSX.utils.book_append_sheet(wb, wsBazar, 'MEGA 12 BAZAR');

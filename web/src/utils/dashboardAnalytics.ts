@@ -14,7 +14,6 @@ export interface ItemRanking {
   codigo?: string;
   descricao: string;
   totalPecas: number;
-  totalCaixas: number;
   totalInvestimento: number;
   faturamentoPdv: number;
   lucroReal: number;
@@ -55,7 +54,6 @@ export interface MonthlyChartData {
 export interface DashboardMetrics {
   totalInvestido: number;
   totalPecas: number;
-  totalCaixas: number;
   faturamentoPdv: number;
   lucroReal: number;
   margemMedia: number;
@@ -240,7 +238,6 @@ export function calculateDashboardMetrics(
   // 2. Acumuladores globais
   let totalInvestido = 0;
   let totalPecas = 0;
-  let totalCaixas = 0;
   let faturamentoPdv = 0;
   let custoRealTotal = 0;
   let totalStValor = 0;
@@ -280,7 +277,6 @@ export function calculateDashboardMetrics(
     // Itens
     order.items.forEach(item => {
       totalPecas += item.qtdTotalUnidades || 0;
-      totalCaixas += item.qtdPacotes || 0;
       const itemFaturamento = (item.qtdTotalUnidades || 0) * (item.pdvAlvo || 0);
       const itemCustoReal = (item.qtdTotalUnidades || 0) * (item.custoRealEfetivo || 0);
       faturamentoPdv += itemFaturamento;
@@ -296,7 +292,6 @@ export function calculateDashboardMetrics(
           codigo: item.codigo,
           descricao: item.descricao,
           totalPecas: 0,
-          totalCaixas: 0,
           totalInvestimento: 0,
           faturamentoPdv: 0,
           lucroReal: 0,
@@ -305,7 +300,6 @@ export function calculateDashboardMetrics(
         };
       }
       itemsMap[itemKey].totalPecas += item.qtdTotalUnidades;
-      itemsMap[itemKey].totalCaixas += item.qtdPacotes;
       itemsMap[itemKey].totalInvestimento += item.valorTotalBruto;
       itemsMap[itemKey].faturamentoPdv += itemFaturamento;
       itemsMap[itemKey].lucroReal += (itemFaturamento - itemCustoReal);
@@ -416,7 +410,6 @@ export function calculateDashboardMetrics(
   return {
     totalInvestido,
     totalPecas,
-    totalCaixas,
     faturamentoPdv,
     lucroReal,
     margemMedia,

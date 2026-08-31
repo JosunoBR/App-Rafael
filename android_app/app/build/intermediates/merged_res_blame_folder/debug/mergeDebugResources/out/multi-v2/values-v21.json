@@ -4,7 +4,7 @@
             "outputFile": "br.com.mega12.app-mergeDebugResources-55:/values-v21/values-v21.xml",
             "map": [
                 {
-                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/edd3a04f152ce22eb468c5cfe9e201cb/transformed/core-1.15.0/res/values-v21/values-v21.xml",
+                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/e2d059cb58c07022637fae6478c1da99/transformed/core-1.15.0/res/values-v21/values-v21.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,13",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4",

@@ -24,6 +24,7 @@ import br.com.mega12.app.ui.components.Mega12TopBar
 import br.com.mega12.app.ui.components.MetricCard
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
+import br.com.mega12.app.util.NumberFormatUtils
 
 @Composable
 fun QuickCalculatorScreen(
@@ -188,14 +189,14 @@ fun QuickCalculatorScreen(
                                 Column {
                                     Text(text = "Custo Real Efetivo", style = MaterialTheme.typography.labelMedium.copy(color = Slate400))
                                     Text(
-                                        text = "R$ %.2f".format(res.custoRealEfetivo),
+                                        text = NumberFormatUtils.formatCurrency(res.custoRealEfetivo),
                                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Color.White)
                                     )
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(text = "Lucro Líquido Unitário", style = MaterialTheme.typography.labelMedium.copy(color = Slate400))
                                     Text(
-                                        text = "R$ %.2f".format(res.margemRealUnit),
+                                        text = NumberFormatUtils.formatCurrency(res.margemRealUnit),
                                         style = MaterialTheme.typography.titleLarge.copy(
                                             fontWeight = FontWeight.Bold,
                                             color = if (res.isLucrativo) Emerald400 else Rose500
@@ -241,7 +242,7 @@ fun QuickCalculatorScreen(
                                     )
                                 }
                                 Text(
-                                    text = "${sep.totalAllocatedBoxes} CX (${sep.totalAllocated} UN)",
+                                    text = "${NumberFormatUtils.formatInteger(sep.totalAllocatedBoxes)} CX (${NumberFormatUtils.formatInteger(sep.totalAllocated)} UN)",
                                     style = MaterialTheme.typography.labelMedium.copy(color = Emerald400, fontWeight = FontWeight.Bold)
                                 )
                             }
@@ -249,7 +250,7 @@ fun QuickCalculatorScreen(
                             Spacer(modifier = Modifier.height(8.dp))
 
                             Text(
-                                text = "Estoque Central Reserva: ${sep.reserveStockBoxes} CX (${sep.reserveStock} UN)",
+                                text = "Estoque Central Reserva: ${NumberFormatUtils.formatInteger(sep.reserveStockBoxes)} CX (${NumberFormatUtils.formatInteger(sep.reserveStock)} UN)",
                                 style = MaterialTheme.typography.bodyMedium.copy(color = Amber500)
                             )
 
@@ -267,7 +268,7 @@ fun QuickCalculatorScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text("Cluster A", color = Slate400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Text("${sep.clusterTotalsBoxes.A} CX", color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text("${NumberFormatUtils.formatInteger(sep.clusterTotalsBoxes.A)} CX", color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 Surface(
@@ -277,7 +278,7 @@ fun QuickCalculatorScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text("Cluster B", color = Slate400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Text("${sep.clusterTotalsBoxes.B} CX", color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text("${NumberFormatUtils.formatInteger(sep.clusterTotalsBoxes.B)} CX", color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 Surface(
@@ -287,7 +288,7 @@ fun QuickCalculatorScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text("Cluster C", color = Slate400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Text("${sep.clusterTotalsBoxes.C} CX", color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text("${NumberFormatUtils.formatInteger(sep.clusterTotalsBoxes.C)} CX", color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }

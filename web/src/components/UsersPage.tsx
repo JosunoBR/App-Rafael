@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../utils/config';
+import { fetchUsersFromDb, saveUserToDb, deleteUserFromDb } from '../utils/api';
 import {
   Users as UsersIcon, 
   UserPlus, 
@@ -7,6 +7,7 @@ import {
   ShoppingBag, 
   PackageCheck, 
   Truck, 
+  Warehouse,
   Search, 
   Edit2, 
   Trash2, 
@@ -34,26 +35,15 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
     nome: '',
     email: '',
     senha: '123456',
-    role: 'comprador',
+    role: 'deposito',
     cargo: '',
     telefone: '',
     ativo: 1
   });
 
-  const getAuthHeaders = (extra: Record<string, string> = {}) => {
-    const headers: Record<string, string> = { ...extra };
-    if (currentUser?.token) {
-      headers['Authorization'] = `Bearer ${currentUser.token}`;
-    }
-    return headers;
-  };
-
   const loadUsers = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/users`, {
-        headers: getAuthHeaders()
-      });
-      const data = await res.json();
+      const data = await fetchUsersFromDb();
       if (Array.isArray(data)) {
         setUsers(data);
       }
@@ -81,7 +71,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
       nome: '',
       email: '',
       senha: '123456',
-      role: 'comprador',
+      role: 'deposito',
       cargo: '',
       telefone: '',
       ativo: 1
@@ -105,16 +95,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/users`, {
-        method: 'POST',
-        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(editingUser)
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Falha ao salvar usuário');
-      }
+      await saveUserToDb(editingUser);
       await loadUsers();
       setIsEditing(false);
     } catch (err: any) {
@@ -131,14 +112,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
     if (!confirm('Deseja realmente remover este usuário?')) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/users/${userId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Falha ao remover usuário');
-      }
+      await deleteUserFromDb(userId);
       await loadUsers();
     } catch (err: any) {
       alert(err.message);
@@ -151,34 +125,37 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
             <ShieldCheck className="w-3 h-3 text-amber-600" />
-            Diretoria / Admin
+            👑 Diretoria (Acesso Total)
           </span>
         );
-      case 'comprador':
+      case 'deposito':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800">
-            <ShoppingBag className="w-3 h-3 text-blue-600" />
-            Comprador
+            <Warehouse className="w-3 h-3 text-blue-600" />
+            🏢 Depósito & Estoque CD
           </span>
         );
-      case 'conferente':
+      case 'separacao':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-300 dark:border-teal-800">
-            <PackageCheck className="w-3 h-3 text-teal-600" />
-            Conferente de Doca
-          </span>
-        );
-      case 'motorista':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
-            <Truck className="w-3 h-3 text-purple-600" />
-            Motorista / Expedição
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+            <PackageCheck className="w-3 h-3 text-emerald-600" />
+            📦 Separação & Doca
           </span>
         );
       default:
         return null;
     }
   };
+
+  if (currentUser.role !== 'diretoria') {
+    return (
+      <div className="p-12 text-center bg-white dark:bg-slate-800/90 rounded-3xl border border-slate-200 dark:border-slate-700">
+        <ShieldCheck className="w-12 h-12 text-amber-500 mx-auto mb-3" />
+        <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">Acesso Restrito à Diretoria</h3>
+        <p className="text-xs text-slate-400 mt-1">Apenas usuários com perfil de Diretoria podem gerenciar usuários e permissões do sistema.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -238,9 +215,8 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
           >
             <option value="all">Todos os Perfis ({users.length})</option>
             <option value="diretoria">👑 Diretoria</option>
-            <option value="comprador">🛒 Comprador</option>
-            <option value="conferente">📦 Conferente de Doca</option>
-            <option value="motorista">🚚 Motorista / Expedição</option>
+            <option value="deposito">🏢 Depósito & CD</option>
+            <option value="separacao">📦 Separação & Doca</option>
           </select>
         </div>
 
@@ -373,14 +349,13 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 dark:text-slate-300">Perfil de Acesso (Role)</label>
                   <select
-                    value={editingUser.role || 'comprador'}
+                    value={editingUser.role || 'deposito'}
                     onChange={(e) => setEditingUser(prev => ({ ...prev, role: e.target.value as UserRole }))}
                     className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-bold"
                   >
                     <option value="diretoria">👑 Diretoria (Acesso Total)</option>
-                    <option value="comprador">🛒 Comprador (Cotação & Viagens)</option>
-                    <option value="conferente">📦 Conferente (Separação & Doca)</option>
-                    <option value="motorista">🚚 Motorista (Expedição & Rotas)</option>
+                    <option value="deposito">🏢 Depósito (Estoque & Rateio)</option>
+                    <option value="separacao">📦 Separação (Doca & Lojas)</option>
                   </select>
                 </div>
 

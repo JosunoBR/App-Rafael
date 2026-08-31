@@ -14,7 +14,7 @@ import {
   Minus
 } from 'lucide-react';
 import { OrderItem, StoreConfig } from '../shared/types';
-import { calculateBoxesSeparation, validateSeparation } from '../shared/separationEngine';
+import { calculateAutomaticSeparation, validateSeparation } from '../shared/separationEngine';
 
 interface SeparationMatrixModalProps {
   item: OrderItem | null;
@@ -33,7 +33,6 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
 }) => {
   if (!isOpen || !item) return null;
 
-  const pack = Math.max(1, item.qtdPorPacote || 1);
   const [allocations, setAllocations] = useState<Record<string, number>>(item.separacaoLojas || {});
   const [isManual, setIsManual] = useState<boolean>(item.separacaoManual || false);
   const [reserveStock, setReserveStock] = useState<number>(item.qtdReservaEstoque || 0);
@@ -41,9 +40,9 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   // Inicializar caso vazio
   useEffect(() => {
     if (!item.separacaoLojas || Object.keys(item.separacaoLojas).length === 0) {
-      const boxSep = calculateBoxesSeparation(item.qtdPacotes, pack, stores, Math.floor((item.qtdReservaEstoque || 0) / pack));
-      setAllocations(boxSep.allocations);
-      setReserveStock(boxSep.reserveStock);
+      const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, item.qtdReservaEstoque || 0);
+      setAllocations(sep.allocations);
+      setReserveStock(sep.reserveStock);
       setIsManual(false);
     } else {
       setAllocations(item.separacaoLojas);
@@ -54,55 +53,41 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   }, [item, stores]);
 
   const validation = validateSeparation(allocations, item.qtdTotalUnidades, stores);
-  const totalAllocatedBoxes = Math.round(validation.totalAllocated / pack);
-  const reserveStockBoxes = Math.round(validation.reserveStock / pack);
-  const totalBoxes = item.qtdPacotes || Math.ceil(item.qtdTotalUnidades / pack);
 
-  const handleStoreBoxesChange = (storeId: string, rawBoxes: number) => {
+  const handleStoreUnitsChange = (storeId: string, rawUnits: number) => {
     setIsManual(true);
-    const boxes = Math.max(0, Math.floor(rawBoxes || 0));
-    const unitVal = boxes * pack;
+    const units = Math.max(0, Math.floor(rawUnits || 0));
 
     const newAllocations = {
       ...allocations,
-      [storeId]: unitVal
+      [storeId]: units
     };
     setAllocations(newAllocations);
     const newSum = Object.values(newAllocations).reduce((a, b) => a + (Number(b) || 0), 0);
     setReserveStock(Math.max(0, item.qtdTotalUnidades - newSum));
   };
 
-  const handleStepStoreBoxes = (storeId: string, delta: number) => {
+  const handleStepStoreUnits = (storeId: string, delta: number) => {
     const currentUnits = allocations[storeId] || 0;
-    const currentBoxes = currentUnits / pack;
-    const newBoxes = Math.max(0, currentBoxes + delta);
-    handleStoreBoxesChange(storeId, newBoxes);
+    const newUnits = Math.max(0, currentUnits + delta);
+    handleStoreUnitsChange(storeId, newUnits);
   };
 
   const handleZeroStore = (storeId: string) => {
-    handleStoreBoxesChange(storeId, 0);
-  };
-
-  const handleReserveStockBoxesChange = (rawReserveBoxes: number) => {
-    const safeReserveBoxes = Math.max(0, Math.min(totalBoxes, Math.floor(rawReserveBoxes || 0)));
-    const boxSep = calculateBoxesSeparation(totalBoxes, pack, stores, safeReserveBoxes);
-    setReserveStock(boxSep.reserveStock);
-    setAllocations(boxSep.allocations);
-    setIsManual(false);
+    handleStoreUnitsChange(storeId, 0);
   };
 
   const handleReservePercent = (percent: number) => {
-    const reserveBoxes = Math.round((totalBoxes * percent) / 100);
-    const boxSep = calculateBoxesSeparation(totalBoxes, pack, stores, reserveBoxes);
-    setReserveStock(boxSep.reserveStock);
-    setAllocations(boxSep.allocations);
+    const reserveUnits = Math.round((item.qtdTotalUnidades * percent) / 100);
+    const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, reserveUnits);
+    setReserveStock(sep.reserveStock);
+    setAllocations(sep.allocations);
     setIsManual(false);
   };
 
   const handleResetToAutomatic = () => {
-    const reserveBoxes = Math.floor(reserveStock / pack);
-    const boxSep = calculateBoxesSeparation(totalBoxes, pack, stores, reserveBoxes);
-    setAllocations(boxSep.allocations);
+    const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, reserveStock);
+    setAllocations(sep.allocations);
     setIsManual(false);
   };
 
@@ -138,7 +123,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Grade de Separação em Caixas (20 Lojas)
+                  Grade de Separação em Unidades (20 Lojas)
                 </h3>
                 {isManual ? (
                   <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
@@ -147,12 +132,12 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                 ) : (
                   <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
                     <Sparkles className="w-3 h-3" />
-                    Rateio Automático por Caixas Fechadas
+                    Rateio Automático por Unidades
                   </span>
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-lg">
-                {item.descricao} • Total Comprado: <strong className="text-slate-900 dark:text-white">{item.qtdPacotes} cx ({item.qtdTotalUnidades.toLocaleString('pt-BR')} peças)</strong> • Emb: {item.qtdPorPacote} un/cx
+                <strong className="text-indigo-600 dark:text-indigo-400 font-mono">[{item.codigoInterno || item.codigo || 'S/ CÓD'}]</strong> {item.descricao} • Total: <strong className="text-slate-900 dark:text-white">{item.qtdTotalUnidades.toLocaleString('pt-BR')} unidades</strong>
               </p>
             </div>
           </div>
@@ -203,13 +188,13 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
               <input
                 type="number"
                 min="0"
-                max={totalBoxes}
-                value={reserveStockBoxes}
-                onChange={(e) => handleReserveStockBoxesChange(parseFloat(e.target.value) || 0)}
-                className="w-16 px-2 py-1 text-xs font-mono font-extrabold text-center rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 outline-hidden"
+                max={item.qtdTotalUnidades}
+                value={reserveStock}
+                onChange={(e) => setReserveStock(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                className="w-20 px-2 py-1 text-xs font-mono font-extrabold text-center rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 outline-hidden"
               />
               <span className="text-xs font-bold text-amber-800 dark:text-amber-300">
-                cx
+                un
               </span>
             </div>
           </div>
@@ -226,14 +211,14 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
               <>
                 <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
                 <span className="text-xs font-bold text-rose-800 dark:text-rose-300">
-                  Atenção: Total alocado ({totalAllocatedBoxes} cx) ultrapassou o total comprado ({totalBoxes} cx)!
+                  Atenção: Total distribuído ({validation.totalAllocated.toLocaleString('pt-BR')} un) ultrapassou o total comprado ({item.qtdTotalUnidades.toLocaleString('pt-BR')} un)!
                 </span>
               </>
             ) : (
               <>
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                  Distribuição: {totalAllocatedBoxes} cx nas lojas • {reserveStockBoxes} cx no CD (Total: {totalBoxes} cx / {validation.targetTotal.toLocaleString('pt-BR')} peças).
+                  Distribuição: {validation.totalAllocated.toLocaleString('pt-BR')} un nas lojas • {validation.reserveStock.toLocaleString('pt-BR')} un no CD (Total: {item.qtdTotalUnidades.toLocaleString('pt-BR')} un).
                 </span>
               </>
             )}
@@ -273,14 +258,13 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                 </span>
               </div>
               <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950 px-2.5 py-0.5 rounded-full">
-                Total Cluster A: {Math.round(validation.clusterTotals.A / pack)} cx ({validation.clusterTotals.A} un)
+                Total Cluster A: {validation.clusterTotals.A.toLocaleString('pt-BR')} un
               </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {clusterAStores.map(store => {
                 const units = allocations[store.id] ?? 0;
-                const boxes = units / pack;
 
                 return (
                   <div key={store.id} className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
@@ -288,7 +272,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                       <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate" title={store.name}>
                         {store.name}
                       </span>
-                      {boxes > 0 && (
+                      {units > 0 && (
                         <button
                           type="button"
                           onClick={() => handleZeroStore(store.id)}
@@ -303,9 +287,9 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                     <div className="mt-1.5 flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => handleStepStoreBoxes(store.id, -1)}
-                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-                        title="Diminuir 1 caixa"
+                        onClick={() => handleStepStoreUnits(store.id, -10)}
+                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]"
+                        title="Diminuir 10 unidades"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
@@ -313,10 +297,10 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                       <input
                         type="number"
                         min="0"
-                        value={boxes}
-                        onChange={(e) => handleStoreBoxesChange(store.id, parseFloat(e.target.value) || 0)}
+                        value={units}
+                        onChange={(e) => handleStoreUnitsChange(store.id, parseFloat(e.target.value) || 0)}
                         className={`w-full text-center py-1 text-xs font-bold rounded-lg border outline-hidden transition ${
-                          boxes > 0
+                          units > 0
                             ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
                             : 'border-dashed border-slate-300 dark:border-slate-700 bg-transparent text-slate-400'
                         }`}
@@ -324,16 +308,16 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => handleStepStoreBoxes(store.id, 1)}
-                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-                        title="Aumentar 1 caixa"
+                        onClick={() => handleStepStoreUnits(store.id, 10)}
+                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]"
+                        title="Aumentar 10 unidades"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
 
                     <div className="text-[9px] text-center text-slate-400 font-mono mt-0.5">
-                      = {units} un
+                      unidades
                     </div>
                   </div>
                 );
@@ -353,14 +337,13 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                 </span>
               </div>
               <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-950 px-2.5 py-0.5 rounded-full">
-                Total Cluster B: {Math.round(validation.clusterTotals.B / pack)} cx ({validation.clusterTotals.B} un)
+                Total Cluster B: {validation.clusterTotals.B.toLocaleString('pt-BR')} un
               </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {clusterBStores.map(store => {
                 const units = allocations[store.id] ?? 0;
-                const boxes = units / pack;
 
                 return (
                   <div key={store.id} className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
@@ -368,7 +351,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                       <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate" title={store.name}>
                         {store.name}
                       </span>
-                      {boxes > 0 && (
+                      {units > 0 && (
                         <button
                           type="button"
                           onClick={() => handleZeroStore(store.id)}
@@ -383,9 +366,9 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                     <div className="mt-1.5 flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => handleStepStoreBoxes(store.id, -1)}
-                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-                        title="Diminuir 1 caixa"
+                        onClick={() => handleStepStoreUnits(store.id, -10)}
+                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]"
+                        title="Diminuir 10 unidades"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
@@ -393,10 +376,10 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                       <input
                         type="number"
                         min="0"
-                        value={boxes}
-                        onChange={(e) => handleStoreBoxesChange(store.id, parseFloat(e.target.value) || 0)}
+                        value={units}
+                        onChange={(e) => handleStoreUnitsChange(store.id, parseFloat(e.target.value) || 0)}
                         className={`w-full text-center py-1 text-xs font-bold rounded-lg border outline-hidden transition ${
-                          boxes > 0
+                          units > 0
                             ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500'
                             : 'border-dashed border-slate-300 dark:border-slate-700 bg-transparent text-slate-400'
                         }`}
@@ -404,16 +387,16 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => handleStepStoreBoxes(store.id, 1)}
-                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-                        title="Aumentar 1 caixa"
+                        onClick={() => handleStepStoreUnits(store.id, 10)}
+                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]"
+                        title="Aumentar 10 unidades"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
 
                     <div className="text-[9px] text-center text-slate-400 font-mono mt-0.5">
-                      = {units} un
+                      unidades
                     </div>
                   </div>
                 );
@@ -433,14 +416,13 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                 </span>
               </div>
               <span className="text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-100 dark:bg-teal-950 px-2.5 py-0.5 rounded-full">
-                Total Cluster C: {Math.round(validation.clusterTotals.C / pack)} cx ({validation.clusterTotals.C} un)
+                Total Cluster C: {validation.clusterTotals.C.toLocaleString('pt-BR')} un
               </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {clusterCStores.map(store => {
                 const units = allocations[store.id] ?? 0;
-                const boxes = units / pack;
 
                 return (
                   <div key={store.id} className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
@@ -448,7 +430,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                       <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate" title={store.name}>
                         {store.name}
                       </span>
-                      {boxes > 0 && (
+                      {units > 0 && (
                         <button
                           type="button"
                           onClick={() => handleZeroStore(store.id)}
@@ -463,9 +445,9 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                     <div className="mt-1.5 flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => handleStepStoreBoxes(store.id, -1)}
-                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-                        title="Diminuir 1 caixa"
+                        onClick={() => handleStepStoreUnits(store.id, -10)}
+                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]"
+                        title="Diminuir 10 unidades"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
@@ -473,10 +455,10 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                       <input
                         type="number"
                         min="0"
-                        value={boxes}
-                        onChange={(e) => handleStoreBoxesChange(store.id, parseFloat(e.target.value) || 0)}
+                        value={units}
+                        onChange={(e) => handleStoreUnitsChange(store.id, parseFloat(e.target.value) || 0)}
                         className={`w-full text-center py-1 text-xs font-bold rounded-lg border outline-hidden transition ${
-                          boxes > 0
+                          units > 0
                             ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500'
                             : 'border-dashed border-slate-300 dark:border-slate-700 bg-transparent text-slate-400'
                         }`}
@@ -484,16 +466,16 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => handleStepStoreBoxes(store.id, 1)}
-                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-                        title="Aumentar 1 caixa"
+                        onClick={() => handleStepStoreUnits(store.id, 10)}
+                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]"
+                        title="Aumentar 10 unidades"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
 
                     <div className="text-[9px] text-center text-slate-400 font-mono mt-0.5">
-                      = {units} un
+                      unidades
                     </div>
                   </div>
                 );
@@ -507,13 +489,13 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
         <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/80 sticky bottom-0">
           <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-3">
             <div>
-              Total Lojas: <strong className="text-slate-900 dark:text-white font-mono">{totalAllocatedBoxes} cx ({validation.totalAllocated.toLocaleString('pt-BR')} un)</strong>
+              Total Lojas: <strong className="text-slate-900 dark:text-white font-mono">{validation.totalAllocated.toLocaleString('pt-BR')} un</strong>
             </div>
             <div>
-              Estoque CD: <strong className="text-amber-700 dark:text-amber-300 font-mono">{reserveStockBoxes} cx ({validation.reserveStock.toLocaleString('pt-BR')} un)</strong>
+              Estoque CD: <strong className="text-amber-700 dark:text-amber-300 font-mono">{validation.reserveStock.toLocaleString('pt-BR')} un</strong>
             </div>
             <div>
-              Total Comprado: <strong className="text-slate-900 dark:text-white font-mono">{totalBoxes} cx ({validation.targetTotal.toLocaleString('pt-BR')} un)</strong>
+              Total Comprado: <strong className="text-slate-900 dark:text-white font-mono">{item.qtdTotalUnidades.toLocaleString('pt-BR')} un</strong>
             </div>
           </div>
           

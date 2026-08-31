@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import br.com.mega12.app.ui.components.Mega12TopBar
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
+import br.com.mega12.app.util.NumberFormatUtils
 
 @Composable
 fun SeparationListScreen(
@@ -142,7 +143,7 @@ fun SeparationListScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "${order.items.size} itens | ${order.totalPecas} peças",
+                                    text = "${NumberFormatUtils.formatInteger(order.items.size)} itens | ${NumberFormatUtils.formatInteger(order.totalPecas)} peças",
                                     style = MaterialTheme.typography.bodyMedium.copy(color = Slate400)
                                 )
                                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Slate400)

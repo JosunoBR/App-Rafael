@@ -16,29 +16,38 @@ class ProductRepository {
   async upsert(product) {
     const existing = await this.findById(product.id);
     const now = new Date().toISOString();
+    const codInterno = product.codigoInterno || product.codigo;
+    const codForn = product.codigoFornecedor || '';
+    const codBarras = product.codigoBarras || product.eanBarcode || '';
+    const supplierId = product.supplierId || product.fornecedorPadraoId || '';
+    const nomeFornecedor = product.nomeFornecedor || product.fornecedorPadraoNome || '';
 
     if (existing) {
       const sql = `
         UPDATE products SET
-          codigo = ?, descricao = ?, categoria = ?, subcategoria = ?,
-          fornecedorPadraoId = ?, fornecedorPadraoNome = ?, precoUnitarioPadrao = ?,
+          codigo = ?, codigoInterno = ?, codigoFornecedor = ?, codigoBarras = ?,
+          descricao = ?, categoria = ?, subcategoria = ?,
+          supplierId = ?, nomeFornecedor = ?, precoUnitarioPadrao = ?,
           pdvSugerido = ?, qtdPorPacote = ?, fotoUrl = ?, ncm = ?, eanBarcode = ?,
           ativo = ?, updatedAt = ?
         WHERE id = ?
       `;
       await execute(sql, [
-        product.codigo,
+        codInterno,
+        codInterno,
+        codForn,
+        codBarras,
         product.descricao,
         product.categoria || 'Utilidades',
         product.subcategoria || '',
-        product.fornecedorPadraoId || '',
-        product.fornecedorPadraoNome || '',
+        supplierId,
+        nomeFornecedor,
         Number(product.precoUnitarioPadrao) || 0,
-        Number(product.pdvSugerido) || 0,
+        Number(product.pdvSugerido) || 12.0,
         Number(product.qtdPorPacote) || 12,
         product.fotoUrl || '',
         product.ncm || '',
-        product.eanBarcode || '',
+        codBarras,
         product.ativo !== undefined ? (product.ativo ? 1 : 0) : 1,
         now,
         product.id
@@ -46,25 +55,29 @@ class ProductRepository {
     } else {
       const sql = `
         INSERT INTO products (
-          id, codigo, descricao, categoria, subcategoria, fornecedorPadraoId,
-          fornecedorPadraoNome, precoUnitarioPadrao, pdvSugerido, qtdPorPacote,
+          id, codigo, codigoInterno, codigoFornecedor, codigoBarras,
+          descricao, categoria, subcategoria, supplierId,
+          nomeFornecedor, precoUnitarioPadrao, pdvSugerido, qtdPorPacote,
           fotoUrl, ncm, eanBarcode, ativo, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await execute(sql, [
         product.id,
-        product.codigo,
+        codInterno,
+        codInterno,
+        codForn,
+        codBarras,
         product.descricao,
         product.categoria || 'Utilidades',
         product.subcategoria || '',
-        product.fornecedorPadraoId || '',
-        product.fornecedorPadraoNome || '',
+        supplierId,
+        nomeFornecedor,
         Number(product.precoUnitarioPadrao) || 0,
-        Number(product.pdvSugerido) || 0,
+        Number(product.pdvSugerido) || 12.0,
         Number(product.qtdPorPacote) || 12,
         product.fotoUrl || '',
         product.ncm || '',
-        product.eanBarcode || '',
+        codBarras,
         product.ativo !== undefined ? (product.ativo ? 1 : 0) : 1,
         product.createdAt || now,
         now

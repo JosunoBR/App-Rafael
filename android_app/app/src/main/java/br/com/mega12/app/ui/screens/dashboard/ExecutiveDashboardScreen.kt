@@ -25,14 +25,13 @@ import br.com.mega12.app.ui.components.Mega12Card
 import br.com.mega12.app.ui.components.MetricCard
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
-import java.text.NumberFormat
+import br.com.mega12.app.util.NumberFormatUtils
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExecutiveDashboardScreen(viewModel: Mega12ViewModel, onNavigateBack: () -> Unit) {
     val metrics by viewModel.dashboardMetrics.collectAsState()
-    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
 
     Scaffold(
         topBar = {
@@ -72,18 +71,18 @@ fun ExecutiveDashboardScreen(viewModel: Mega12ViewModel, onNavigateBack: () -> U
 
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MetricCard(
+                    LocalMetricCard(
                         modifier = Modifier.weight(1f),
                         title = "Total Compras",
-                        value = currencyFormatter.format(metrics.totalInvestido),
-                        subtitle = "${metrics.pedidosCount} pedidos",
+                        value = NumberFormatUtils.formatCurrency(metrics.totalInvestido),
+                        subtitle = "${NumberFormatUtils.formatInteger(metrics.pedidosCount)} pedidos",
                         icon = Icons.Default.ShoppingCart,
                         iconColor = Emerald500
                     )
-                    MetricCard(
+                    LocalMetricCard(
                         modifier = Modifier.weight(1f),
                         title = "Ticket Médio",
-                        value = currencyFormatter.format(metrics.ticketMedio),
+                        value = NumberFormatUtils.formatCurrency(metrics.ticketMedio),
                         subtitle = "Média por cotação",
                         icon = Icons.Default.PriceCheck,
                         iconColor = Blue500
@@ -93,18 +92,18 @@ fun ExecutiveDashboardScreen(viewModel: Mega12ViewModel, onNavigateBack: () -> U
 
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MetricCard(
+                    LocalMetricCard(
                         modifier = Modifier.weight(1f),
                         title = "Faturamento PDV",
-                        value = currencyFormatter.format(metrics.faturamentoPdv),
+                        value = NumberFormatUtils.formatCurrency(metrics.faturamentoPdv),
                         subtitle = "Projetado 20 lojas",
                         icon = Icons.AutoMirrored.Filled.TrendingUp,
                         iconColor = Blue500
                     )
-                    MetricCard(
+                    LocalMetricCard(
                         modifier = Modifier.weight(1f),
                         title = "Lucro Real",
-                        value = currencyFormatter.format(metrics.lucroReal),
+                        value = NumberFormatUtils.formatCurrency(metrics.lucroReal),
                         subtitle = "Líquido final",
                         icon = Icons.AutoMirrored.Filled.ReceiptLong,
                         iconColor = Emerald600,
@@ -126,7 +125,7 @@ fun ExecutiveDashboardScreen(viewModel: Mega12ViewModel, onNavigateBack: () -> U
                         
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(
-                                String.format("%.1f%%", metrics.margemMedia),
+                                NumberFormatUtils.formatPercentRaw(metrics.margemMedia),
                                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
                                 color = if (metrics.margemMedia >= 20) Emerald600 else Amber500
                             )
@@ -214,7 +213,7 @@ fun ExecutiveDashboardScreen(viewModel: Mega12ViewModel, onNavigateBack: () -> U
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "${metrics.totalPecas}",
+                            NumberFormatUtils.formatInteger(metrics.totalPecas),
                             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
                             color = Color.White
                         )
@@ -303,13 +302,13 @@ fun ClusterProgressCard(label: String, percent: Double, color: Color, units: Int
                 strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
             )
             Spacer(Modifier.height(4.dp))
-            Text("${units} unidades projetadas", style = MaterialTheme.typography.labelSmall, color = Slate400)
+            Text("${NumberFormatUtils.formatInteger(units)} unidades projetadas", style = MaterialTheme.typography.labelSmall, color = Slate400)
         }
     }
 }
 
 @Composable
-fun MetricCard(
+fun LocalMetricCard(
     modifier: Modifier = Modifier,
     title: String,
     value: String,

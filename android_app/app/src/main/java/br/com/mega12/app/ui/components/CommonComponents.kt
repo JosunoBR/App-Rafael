@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.mega12.app.domain.MarginStatus
 import br.com.mega12.app.ui.theme.*
+import br.com.mega12.app.util.NumberFormatUtils
 
 @Composable
 fun FiscalBadge(
@@ -210,7 +211,7 @@ fun MarginBadge(
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "%.1f%% ($label)".format(marginPercent),
+            text = "${NumberFormatUtils.formatPercentRaw(marginPercent)} ($label)",
             style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight.Bold,
                 color = textColor

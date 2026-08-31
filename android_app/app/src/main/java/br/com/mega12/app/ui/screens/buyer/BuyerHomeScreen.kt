@@ -5,6 +5,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +21,7 @@ import br.com.mega12.app.ui.components.Mega12TopBar
 import br.com.mega12.app.ui.components.MetricCard
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
+import br.com.mega12.app.util.NumberFormatUtils
 
 @Composable
 fun BuyerHomeScreen(
@@ -57,25 +60,27 @@ fun BuyerHomeScreen(
                         Icon(Icons.Default.Refresh, contentDescription = "Atualizar", tint = Color.White)
                     }
                     IconButton(onClick = onLogout) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = "Sair", tint = Rose500)
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Sair", tint = Rose500)
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToNewOrder,
-                containerColor = Emerald500,
-                contentColor = Slate900,
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            if (currentUser?.role != "conferente") {
+                FloatingActionButton(
+                    onClick = onNavigateToNewOrder,
+                    containerColor = Emerald500,
+                    contentColor = Slate900,
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Novo Pedido", fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Novo Pedido", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         },
@@ -202,8 +207,8 @@ fun BuyerHomeScreen(
                 ) {
                     MetricCard(
                         title = "Investimento Total",
-                        value = "R$ %.2f".format(metrics.totalInvestido),
-                        subtitle = "${orders.size} pedidos lançados",
+                        value = NumberFormatUtils.formatCurrency(metrics.totalInvestido),
+                        subtitle = "${NumberFormatUtils.formatInteger(orders.size)} pedidos",
                         icon = Icons.Default.AttachMoney,
                         containerColor = Slate800,
                         modifier = Modifier.weight(1f)
@@ -211,8 +216,8 @@ fun BuyerHomeScreen(
 
                     MetricCard(
                         title = "Lucro Líquido Real",
-                        value = "R$ %.2f".format(metrics.lucroReal),
-                        subtitle = "Projeção PDV",
+                        value = NumberFormatUtils.formatCurrency(metrics.lucroReal),
+                        subtitle = "Projeção Rede",
                         icon = Icons.Default.Insights,
                         containerColor = Emerald900.copy(alpha = 0.3f),
                         modifier = Modifier.weight(1f)
@@ -235,7 +240,7 @@ fun BuyerHomeScreen(
                         )
                     )
                     Text(
-                        text = "${orders.size} no total",
+                        text = "${NumberFormatUtils.formatInteger(orders.size)} no total",
                         style = MaterialTheme.typography.labelMedium.copy(color = Slate400)
                     )
                 }
@@ -255,7 +260,7 @@ fun BuyerHomeScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ReceiptLong,
+                                imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
                                 contentDescription = null,
                                 tint = Slate600,
                                 modifier = Modifier.size(48.dp)
@@ -278,7 +283,8 @@ fun BuyerHomeScreen(
                 items(orders) { order ->
                     Mega12Card(
                         containerColor = Slate800,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { /* Implementar clique se necessário */ }
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -294,12 +300,12 @@ fun BuyerHomeScreen(
                                     )
                                 )
                                 Surface(
-                                    color = if (order.separationStatus == "Finalizado") Emerald500.copy(alpha = 0.2f) else Amber500.copy(alpha = 0.2f),
+                                    color = if (order.header.status == "Finalizado") Emerald500.copy(alpha = 0.2f) else Amber500.copy(alpha = 0.2f),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
-                                        text = order.separationStatus,
-                                        color = if (order.separationStatus == "Finalizado") Emerald400 else Amber500,
+                                        text = order.header.status,
+                                        color = if (order.header.status == "Finalizado") Emerald400 else Amber500,
                                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                     )
@@ -323,11 +329,11 @@ fun BuyerHomeScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "${order.items.size} itens | ${order.totalPecas} peças",
+                                    text = "${NumberFormatUtils.formatInteger(order.items.size)} itens | ${NumberFormatUtils.formatInteger(order.effectiveTotalPecas)} peças",
                                     style = MaterialTheme.typography.bodyMedium.copy(color = Slate400)
                                 )
                                 Text(
-                                    text = "R$ %.2f".format(order.totalLiquido),
+                                    text = NumberFormatUtils.formatCurrency(order.effectiveTotalLiquido),
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White

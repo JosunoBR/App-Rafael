@@ -11,8 +11,15 @@ class UserRepository {
 
   async findByEmailOrAlias(cleanEmail) {
     return await queryOne(
-      "SELECT * FROM users WHERE (LOWER(email) = ? OR LOWER(nome) = ? OR (role = 'diretoria' AND ? IN ('diretoria', 'diretoria@mega12.com.br', 'rafael')) OR (role = 'conferente' AND ? IN ('separacao', 'separacao@mega12.com.br', 'doca@mega12.com.br', 'jorge'))) AND ativo = 1",
-      [cleanEmail, cleanEmail, cleanEmail, cleanEmail]
+      `SELECT * FROM users 
+       WHERE (
+         LOWER(email) = ? 
+         OR LOWER(nome) = ? 
+         OR (role = 'diretoria' AND ? IN ('diretoria', 'diretoria@mega12.com.br', 'rafael')) 
+         OR (role = 'deposito' AND ? IN ('deposito', 'deposito@mega12.com.br', 'cd@mega12.com.br', 'marcos', 'estoque')) 
+         OR (role = 'separacao' AND ? IN ('separacao', 'separacao@mega12.com.br', 'doca@mega12.com.br', 'jorge', 'conferente'))
+       ) AND ativo = 1`,
+      [cleanEmail, cleanEmail, cleanEmail, cleanEmail, cleanEmail]
     );
   }
 

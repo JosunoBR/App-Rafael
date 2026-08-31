@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Plus, 
   Trash2, 
@@ -6,25 +7,39 @@ import {
   Calculator, 
   Store, 
   Sparkles, 
+  FileSpreadsheet, 
+  HelpCircle,
+  TrendingUp,
+  AlertCircle,
   Image as ImageIcon,
   Upload,
+  Eye,
   X,
   Search,
   Package,
   Building2,
-  TrendingUp,
-  Layers,
-  ArrowRight
+  Check,
+  Zap,
+  ChevronDown,
+  PackagePlus,
+  PackageCheck,
+  Link as LinkIcon,
+  UploadCloud,
+  CheckCircle2,
+  Trash
 } from 'lucide-react';
 import { OrderItem, FiscalConfig, StoreConfig, Product } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
+import { isOrderItemBlank, generateNextProductCode } from '../utils/orderItemUtils';
 
 interface OrderItemsTableProps {
   items: OrderItem[];
   globalFiscal: FiscalConfig;
   stores: StoreConfig[];
   products?: Product[];
+  currentSupplierName?: string;
+  currentSupplierId?: string;
   onUpdateItem: (itemId: string, updatedFields: Partial<OrderItem>) => void;
   onAddItem: (customItem?: OrderItem) => void;
   onDuplicateItem: (item: OrderItem) => void;
@@ -32,6 +47,28 @@ interface OrderItemsTableProps {
   onOpenFiscalModal: (item: OrderItem) => void;
   onOpenSeparationModal: (item: OrderItem) => void;
   onLoadMockOrder?: () => void;
+  onSaveProduct?: (product: Product) => void;
+}
+
+// Helper para destacar os caracteres digitados no texto
+function highlightMatch(text: string, query: string) {
+  if (!query || !text || query.trim().length === 0) return text;
+  const cleanQ = query.trim();
+  const regex = new RegExp(`(${cleanQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <span>
+      {parts.map((part, i) =>
+        part.toLowerCase() === cleanQ.toLowerCase() ? (
+          <mark key={i} className="bg-emerald-200 dark:bg-emerald-900/70 text-emerald-950 dark:text-emerald-200 font-extrabold px-0.5 rounded">
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </span>
+  );
 }
 
 export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
@@ -39,34 +76,132 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   globalFiscal,
   stores,
   products = [],
+  currentSupplierName,
+  currentSupplierId,
   onUpdateItem,
   onAddItem,
   onDuplicateItem,
   onDeleteItem,
   onOpenFiscalModal,
   onOpenSeparationModal,
-  onLoadMockOrder
+  onLoadMockOrder,
+  onSaveProduct
 }) => {
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
   const [isCatalogPickerOpen, setIsCatalogPickerOpen] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState('');
-  const fileInputRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  
+  // Estado do Modal Especializado de Foto
+  const [photoModalItem, setPhotoModalItem] = useState<OrderItem | null>(null);
+  const [photoTab, setPhotoTab] = useState<'upload' | 'url'>('upload');
+  const [photoUrlInput, setPhotoUrlInput] = useState('');
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSelectProductForNewItem = (prod: Product) => {
-    const defaultItem: OrderItem = {
-      id: 'item_' + Date.now(),
-      codigo: prod.codigo,
-      descricao: prod.descricao,
-      fotoUrl: prod.fotoUrl || '',
-      qtdPorPacote: prod.qtdPorPacote || 1,
-      qtdPacotes: 10,
-      qtdTotalUnidades: (prod.qtdPorPacote || 1) * 10,
-      precoUnitario: prod.precoUnitarioPadrao || 0,
-      valorTotalBruto: ((prod.qtdPorPacote || 1) * 10) * (prod.precoUnitarioPadrao || 0),
-      pdvAlvo: prod.pdvSugerido || 0
+  // Estado do Filtro Inteligente / Autocomplete nas Linhas da Tabela
+  const [activeAutocompleteItemId, setActiveAutocompleteItemId] = useState<string | null>(null);
+  const [activeAutocompleteField, setActiveAutocompleteField] = useState<'descricao' | 'codigoInterno' | 'codigoFornecedor' | null>(null);
+  const [autocompleteQuery, setAutocompleteQuery] = useState('');
+  const [dropdownCoords, setDropdownCoords] = useState<{ top: number; left: number; width: number; isFlipped: boolean } | null>(null);
+
+  // Estado da Barra de Inclusão Rápida Superior
+  const [quickSearchText, setQuickSearchText] = useState('');
+  const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
+  const quickSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const fileInputRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  const activeInputRef = useRef<HTMLInputElement | null>(null);
+  const autocompletePortalRef = useRef<HTMLDivElement | null>(null);
+
+  const updateDropdownPosition = (el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const isFlipped = spaceBelow < 280 && rect.top > 280;
+    setDropdownCoords({
+      top: isFlipped ? rect.top - 6 : rect.bottom + 6,
+      left: Math.max(12, Math.min(rect.left, window.innerWidth - 460)),
+      width: Math.max(400, rect.width),
+      isFlipped
+    });
+  };
+
+  // Fechar dropdowns ao clicar fora e reposicionar no scroll/resize
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        autocompletePortalRef.current &&
+        !autocompletePortalRef.current.contains(target) &&
+        activeInputRef.current &&
+        !activeInputRef.current.contains(target)
+      ) {
+        setActiveAutocompleteItemId(null);
+      }
     };
 
-    const fiscal = calculateItemFiscal(defaultItem.precoUnitario, defaultItem.pdvAlvo, globalFiscal);
+    const handleScrollOrResize = () => {
+      if (activeInputRef.current && activeAutocompleteItemId) {
+        updateDropdownPosition(activeInputRef.current);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [activeAutocompleteItemId]);
+
+  // Produtos filtrados para o autocomplete ativo na linha
+  const matchingProductsForRow = useMemo(() => {
+    if (!autocompleteQuery || autocompleteQuery.trim().length === 0) return [];
+    const q = autocompleteQuery.trim().toLowerCase();
+    return products.filter(p => {
+      const desc = (p.descricao || '').toLowerCase();
+      const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+      const codForn = (p.codigoFornecedor || '').toLowerCase();
+      const ean = (p.codigoBarras || p.eanBarcode || '').toLowerCase();
+      const cat = (p.categoria || '').toLowerCase();
+      return desc.includes(q) || codInt.includes(q) || codForn.includes(q) || ean.includes(q) || cat.includes(q);
+    }).slice(0, 8);
+  }, [products, autocompleteQuery]);
+
+  // Produtos filtrados para a Barra de Inclusão Rápida Superior
+  const matchingProductsForQuickBar = useMemo(() => {
+    if (!quickSearchText || quickSearchText.trim().length === 0) return [];
+    const q = quickSearchText.trim().toLowerCase();
+    return products.filter(p => {
+      const desc = (p.descricao || '').toLowerCase();
+      const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+      const codForn = (p.codigoFornecedor || '').toLowerCase();
+      const ean = (p.codigoBarras || p.eanBarcode || '').toLowerCase();
+      const cat = (p.categoria || '').toLowerCase();
+      return desc.includes(q) || codInt.includes(q) || codForn.includes(q) || ean.includes(q) || cat.includes(q);
+    }).slice(0, 6);
+  }, [products, quickSearchText]);
+
+  // Inserir novo produto selecionado do catálogo
+  const handleSelectProductForNewItem = (prod: Product) => {
+    const codInterno = prod.codigoInterno || prod.codigo || '';
+    const codFornecedor = prod.codigoFornecedor || '';
+
+    const defaultItem: OrderItem = {
+      id: 'item_' + Date.now(),
+      codigoInterno: codInterno,
+      codigoFornecedor: codFornecedor,
+      codigo: codInterno,
+      descricao: prod.descricao,
+      fotoUrl: prod.fotoUrl || '',
+      qtdTotalUnidades: 100,
+      precoUnitario: prod.precoUnitarioPadrao || 0,
+      valorTotalBruto: 100 * (prod.precoUnitarioPadrao || 0),
+      pdvAlvo: 12.00
+    };
+
+    const fiscal = calculateItemFiscal(defaultItem.precoUnitario, 12.00, globalFiscal);
     const separation = calculateAutomaticSeparation(defaultItem.qtdTotalUnidades, stores);
 
     const fullItem: OrderItem = {
@@ -82,37 +217,193 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
     onAddItem(fullItem);
     setIsCatalogPickerOpen(false);
+    setQuickSearchText('');
+    setIsQuickSearchOpen(false);
   };
 
-  const handleUploadItemPhoto = (item: OrderItem, e: React.ChangeEvent<HTMLInputElement>) => {
+  // Preencher linha existente com o produto selecionado no autocomplete inteligente
+  const handleSelectProductForExistingItem = (item: OrderItem, prod: Product) => {
+    const codInterno = prod.codigoInterno || prod.codigo || item.codigoInterno || item.codigo || '';
+    const codFornecedor = prod.codigoFornecedor || item.codigoFornecedor || '';
+    const preco = prod.precoUnitarioPadrao || item.precoUnitario || 0;
+    const pdv = 12.00;
+    const qtdTotal = item.qtdTotalUnidades || 100;
+    const totalBruto = qtdTotal * preco;
+
+    const fiscal = calculateItemFiscal(preco, pdv, globalFiscal, item.fiscalOverride);
+    const separation = !item.separacaoManual 
+      ? calculateAutomaticSeparation(qtdTotal, stores, item.qtdReservaEstoque || 0)
+      : null;
+
+    const updatedItem: OrderItem = {
+      ...item,
+      codigoInterno: codInterno,
+      codigoFornecedor: codFornecedor,
+      codigo: codInterno,
+      descricao: prod.descricao,
+      fotoUrl: prod.fotoUrl || item.fotoUrl || '',
+      qtdTotalUnidades: qtdTotal,
+      precoUnitario: preco,
+      valorTotalBruto: totalBruto,
+      pdvAlvo: pdv,
+      despesasPdvUnit: fiscal.despesasPdvUnit,
+      creditoIcmsUnit: fiscal.creditoIcmsUnit,
+      custoRealEfetivo: fiscal.custoRealEfetivo,
+      margemRealUnit: fiscal.margemRealUnit,
+      margemPercentual: fiscal.margemPercentual,
+      ...(separation ? { separacaoLojas: separation.allocations, qtdReservaEstoque: separation.reserveStock } : {})
+    };
+
+    onUpdateItem(item.id, updatedItem);
+    setActiveAutocompleteItemId(null);
+    setActiveAutocompleteField(null);
+    setAutocompleteQuery('');
+  };
+
+  // Encontra produto no catálogo correspondente ao item
+  const findCatalogProduct = (item: OrderItem): Product | undefined => {
+    if (!products || products.length === 0) return undefined;
+    const desc = (item.descricao || '').trim().toLowerCase();
+    const codInt = (item.codigoInterno || item.codigo || '').trim().toLowerCase();
+    const codForn = (item.codigoFornecedor || '').trim().toLowerCase();
+
+    return products.find(p => {
+      const pDesc = (p.descricao || '').trim().toLowerCase();
+      const pCodInt = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
+      const pCodForn = (p.codigoFornecedor || '').trim().toLowerCase();
+
+      if (codInt && pCodInt && codInt === pCodInt) return true;
+      if (codForn && pCodForn && codForn === pCodForn) return true;
+      if (desc && pDesc && desc === pDesc) return true;
+      return false;
+    });
+  };
+
+  // Cadastro rápido do produto no catálogo direto da linha do pedido
+  const handleQuickRegisterProduct = (item: OrderItem) => {
+    if (!item.descricao || item.descricao.trim().length === 0) {
+      return;
+    }
+    if (!onSaveProduct) return;
+
+    const existing = findCatalogProduct(item);
+    const codInterno = item.codigoInterno || item.codigo || existing?.codigoInterno || generateNextProductCode(products, items);
+
+    const prodToSave: Product = {
+      id: existing?.id || ('prod_' + Date.now()),
+      codigoInterno: codInterno,
+      codigo: codInterno,
+      codigoFornecedor: item.codigoFornecedor || existing?.codigoFornecedor || '',
+      codigoBarras: existing?.codigoBarras || '',
+      eanBarcode: existing?.codigoBarras || '',
+      descricao: item.descricao.trim(),
+      categoria: existing?.categoria || 'Geral',
+      fotoUrl: item.fotoUrl || existing?.fotoUrl || '',
+      precoUnitarioPadrao: item.precoUnitario > 0 ? item.precoUnitario : (existing?.precoUnitarioPadrao || 0),
+      pdvSugerido: item.pdvAlvo || existing?.pdvSugerido || 12.00,
+      ncm: existing?.ncm || '',
+      supplierId: currentSupplierId || existing?.supplierId || '',
+      nomeFornecedor: currentSupplierName || existing?.nomeFornecedor || '',
+      ativo: true,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    onSaveProduct(prodToSave);
+
+    // Se o item não tinha código interno, atualiza o item com o código gerado
+    if (!item.codigoInterno || !item.codigo) {
+      onUpdateItem(item.id, {
+        ...item,
+        codigoInterno: codInterno,
+        codigo: codInterno
+      });
+    }
+  };
+
+  // Abrir Modal Especializado de Foto
+  const handleOpenPhotoModal = (item: OrderItem) => {
+    setPhotoModalItem(item);
+    setPhotoPreview(item.fotoUrl || null);
+    setPhotoUrlInput(item.fotoUrl && item.fotoUrl.startsWith('http') ? item.fotoUrl : '');
+    setPhotoTab('upload');
+  };
+
+  // Salvar foto do modal no item do pedido e sincronizar com o Catálogo de Produtos
+  const handleSavePhotoFromModal = () => {
+    if (!photoModalItem) return;
+    const finalPhoto = photoPreview || '';
+
+    // Atualiza na linha do pedido
+    onUpdateItem(photoModalItem.id, {
+      ...photoModalItem,
+      fotoUrl: finalPhoto || undefined
+    });
+
+    // Se houver onSaveProduct e descrição preenchida, sincroniza no Catálogo de Produtos
+    if (onSaveProduct && photoModalItem.descricao && photoModalItem.descricao.trim().length > 0) {
+      const existing = findCatalogProduct(photoModalItem);
+      const codInterno = photoModalItem.codigoInterno || photoModalItem.codigo || existing?.codigoInterno || `PROD-${Date.now().toString().slice(-4)}`;
+
+      const prodToSave: Product = {
+        id: existing?.id || ('prod_' + Date.now()),
+        codigoInterno: codInterno,
+        codigo: codInterno,
+        codigoFornecedor: photoModalItem.codigoFornecedor || existing?.codigoFornecedor || '',
+        codigoBarras: existing?.codigoBarras || '',
+        eanBarcode: existing?.codigoBarras || '',
+        descricao: photoModalItem.descricao.trim(),
+        categoria: existing?.categoria || 'Geral',
+        fotoUrl: finalPhoto,
+        precoUnitarioPadrao: photoModalItem.precoUnitario > 0 ? photoModalItem.precoUnitario : (existing?.precoUnitarioPadrao || 0),
+        pdvSugerido: photoModalItem.pdvAlvo || existing?.pdvSugerido || 12.00,
+        ncm: existing?.ncm || '',
+        supplierId: currentSupplierId || existing?.supplierId || '',
+        nomeFornecedor: currentSupplierName || existing?.nomeFornecedor || '',
+        ativo: true,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      onSaveProduct(prodToSave);
+    }
+
+    setPhotoModalItem(null);
+  };
+
+  // Remover foto no modal
+  const handleRemovePhotoFromModal = () => {
+    setPhotoPreview(null);
+    setPhotoUrlInput('');
+  };
+
+  // Upload de arquivo dentro do modal
+  const handleFileSelectedInModal = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
-      onUpdateItem(item.id, { ...item, fotoUrl: base64 });
+      setPhotoPreview(base64);
     };
     reader.readAsDataURL(file);
   };
 
   const handleFieldChange = (item: OrderItem, field: keyof OrderItem, rawValue: any) => {
     let value = rawValue;
-    if (['qtdPorPacote', 'qtdPacotes', 'precoUnitario', 'pdvAlvo'].includes(field as string)) {
+    if (['qtdTotalUnidades', 'precoUnitario', 'pdvAlvo'].includes(field as string)) {
       value = parseFloat(rawValue) || 0;
     }
 
     const updatedItem = { ...item, [field]: value };
 
-    // Auto-cálculo do multiplicador de caixas: H = F * G
-    if (field === 'qtdPorPacote' || field === 'qtdPacotes') {
-      const qtdPorPacote = field === 'qtdPorPacote' ? value : item.qtdPorPacote;
-      const qtdPacotes = field === 'qtdPacotes' ? value : item.qtdPacotes;
-      updatedItem.qtdTotalUnidades = Number(qtdPorPacote) * Number(qtdPacotes);
-      updatedItem.valorTotalBruto = updatedItem.qtdTotalUnidades * item.precoUnitario;
+    // Auto-cálculo do valor total bruto
+    if (field === 'qtdTotalUnidades') {
+      updatedItem.valorTotalBruto = Number(value) * item.precoUnitario;
 
       // Se a separação não for manual, recalcula o rateio automático das 20 lojas
       if (!updatedItem.separacaoManual) {
-        const autoSep = calculateAutomaticSeparation(updatedItem.qtdTotalUnidades, stores, updatedItem.qtdReservaEstoque || 0);
+        const autoSep = calculateAutomaticSeparation(Number(value), stores, updatedItem.qtdReservaEstoque || 0);
         updatedItem.separacaoLojas = autoSep.allocations;
         updatedItem.qtdReservaEstoque = autoSep.reserveStock;
       }
@@ -123,103 +414,179 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       updatedItem.valorTotalBruto = updatedItem.qtdTotalUnidades * Number(value);
     }
 
-    // Auto-cálculo do limite de preço e custo real efetivo
+    // Auto-cálculo do limite de preço e custo real efetivo com PDV travado em R$ 12,00
     const preco = field === 'precoUnitario' ? Number(value) : updatedItem.precoUnitario;
-    const pdv = field === 'pdvAlvo' ? Number(value) : updatedItem.pdvAlvo;
+    const pdv = 12.00;
     const fiscal = calculateItemFiscal(preco, pdv, globalFiscal, updatedItem.fiscalOverride);
 
+    updatedItem.pdvAlvo = 12.00;
     updatedItem.despesasPdvUnit = fiscal.despesasPdvUnit;
     updatedItem.creditoIcmsUnit = fiscal.creditoIcmsUnit;
     updatedItem.custoRealEfetivo = fiscal.custoRealEfetivo;
     updatedItem.margemRealUnit = fiscal.margemRealUnit;
     updatedItem.margemPercentual = fiscal.margemPercentual;
 
+    // Se o usuário começou a digitar a descrição do produto e o código interno estiver vazio,
+    // gera automaticamente o próximo código sequencial oficial (ex: PRD-051)
+    if (field === 'descricao' && typeof value === 'string' && value.trim().length > 0) {
+      if (!updatedItem.codigoInterno && !updatedItem.codigo) {
+        const nextCode = generateNextProductCode(products, items);
+        updatedItem.codigoInterno = nextCode;
+        updatedItem.codigo = nextCode;
+      }
+    }
+
     onUpdateItem(item.id, updatedItem);
   };
 
+  const validItemsCount = useMemo(() => items.filter(it => !isOrderItemBlank(it)).length, [items]);
+
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm mb-8 overflow-hidden transition-all">
+    <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-visible">
       
-      {/* Header bar */}
-      <div className="px-6 py-4.5 bg-slate-50/80 dark:bg-slate-850/60 border-b border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+      {/* Header bar com ações e busca inteligente rápida */}
+      <div className="px-5 py-4 bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-200/70 dark:border-slate-700/70 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <Layers className="w-4 h-4" />
-            </div>
-            <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
               Grade de Produtos & Pedido ao Fornecedor
             </h2>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-              {items.length} {items.length === 1 ? 'item' : 'itens'}
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+              {validItemsCount} {validItemsCount === 1 ? 'item' : 'itens'}
             </span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Multiplicador de pacotes, formação de custo real efetivo e distribuição para as 20 lojas
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Digitação contínua com auto-inclusão de linhas, códigos, custos e rateio de 20 lojas
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Barra de Filtro Inteligente Rápido + Botões */}
+        <div className="flex flex-wrap items-center gap-2">
+          
+          {/* Campo de Busca Rápida no Topo com Autocomplete */}
+          <div className="relative min-w-[260px] sm:min-w-[320px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              ref={quickSearchInputRef}
+              type="text"
+              value={quickSearchText}
+              onChange={(e) => {
+                setQuickSearchText(e.target.value);
+                setIsQuickSearchOpen(true);
+              }}
+              onFocus={() => {
+                if (quickSearchText.trim().length > 0) setIsQuickSearchOpen(true);
+              }}
+              placeholder="🔍 Buscar produto no catálogo..."
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-hidden shadow-2xs font-medium"
+            />
+            {quickSearchText && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickSearchText('');
+                  setIsQuickSearchOpen(false);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Dropdown de Resultados da Busca Rápida */}
+            {isQuickSearchOpen && quickSearchText.trim().length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto p-1.5 space-y-1">
+                {products
+                  .filter(p => {
+                    const q = quickSearchText.toLowerCase();
+                    const desc = (p.descricao || '').toLowerCase();
+                    const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+                    const codForn = (p.codigoFornecedor || '').toLowerCase();
+                    return desc.includes(q) || codInt.includes(q) || codForn.includes(q);
+                  })
+                  .slice(0, 8)
+                  .map(prod => (
+                    <button
+                      key={prod.id}
+                      type="button"
+                      onClick={() => handleSelectProductForNewItem(prod)}
+                      className="w-full p-2 rounded-xl text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                        {prod.fotoUrl ? (
+                          <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Package className="w-4 h-4 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {highlightMatch(prod.descricao, quickSearchText)}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
+                          <span>{prod.codigoInterno || prod.codigo}</span>
+                          <span>•</span>
+                          <span className="text-emerald-600 font-bold">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+
           {products && products.length > 0 && (
             <button
               onClick={() => setIsCatalogPickerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition cursor-pointer"
-              title="Buscar e adicionar produto cadastrado com foto no catálogo"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition cursor-pointer shadow-2xs"
             >
-              <Package className="w-3.5 h-3.5 text-purple-600" />
-              <span>+ Do Catálogo ({products.length})</span>
+              <Package className="w-3.5 h-3.5" />
+              <span>Catálogo ({products.length})</span>
             </button>
           )}
 
           {onLoadMockOrder && (
             <button
               onClick={onLoadMockOrder}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
-              title="Carregar exemplo realista de produtos para testes rápidos"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition cursor-pointer shadow-2xs"
+              title="Carregar 20 itens fictícios de loja de presentes para testes completos"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>Exemplo Bazar</span>
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+              <span>Exemplo Presentes</span>
             </button>
           )}
-
-          <button
-            onClick={() => onAddItem()}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-extrabold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 transition cursor-pointer hover:scale-102 active:scale-98"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Adicionar Item</span>
-          </button>
         </div>
       </div>
 
       {/* Table responsive container */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[1000px]">
+      <div className="overflow-x-auto overflow-y-visible">
+        <table className="w-full text-left border-collapse min-w-[1060px]">
           <thead>
-            <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-900/80 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100/50 dark:bg-slate-900/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               <th className="py-3 px-2 w-8 text-center">#</th>
               <th className="py-3 px-2 w-14 text-center">Foto</th>
-              <th className="py-3 px-3 w-28">Código</th>
-              <th className="py-3 px-3 min-w-[220px]">Descrição do Item</th>
-              <th className="py-3 px-2 w-20 text-center" title="Qtd no Pacote (F)">Qtd/Pct</th>
-              <th className="py-3 px-2 w-20 text-center" title="Qtd de Pacotes (G)">Pacotes</th>
-              <th className="py-3 px-3 w-24 text-center" title="Qtd Total Peças (H = F * G)">Total Un</th>
-              <th className="py-3 px-3 w-28 text-right" title="Preço Unitário Compra (I)">Compra (R$)</th>
+              <th className="py-3 px-2 w-28">Cód. Interno</th>
+              <th className="py-3 px-2 w-28">Cód. Fornecedor</th>
+              <th className="py-3 px-3 min-w-[240px]">Descrição do Item (Filtro Inteligente)</th>
+              <th className="py-3 px-3 w-24 text-center" title="Quantidade Total de Unidades">Qtd (un)</th>
+              <th className="py-3 px-3 w-28 text-right" title="Preço Unitário Compra">Compra (R$)</th>
               <th className="py-3 px-3 w-28 text-right" title="Total Compra (J = H * I)">Total (R$)</th>
-              <th className="py-3 px-3 w-28 text-right" title="Preço Venda PDV Alvo">PDV Alvo</th>
-              <th className="py-3 px-3 w-28 text-right" title="Custo Real Efetivo (Compra + Custos - Crédito ICMS)">Custo Real</th>
-              <th className="py-3 px-3 w-32 text-center" title="Margem de Lucro Real">Margem Real</th>
+              <th className="py-3 px-3 w-28 text-center" title="Preço de Venda Único Rede Mega 12 (Travado em R$ 12,00)">PDV (R$ 12 Fixo)</th>
+              <th className="py-3 px-3 w-28 text-right" title="Custo Real Efetivo (Compra + 40% PDV - 19.5% ICMS)">Custo Real</th>
+              <th className="py-3 px-3 w-32 text-center" title="Margem de Lucro Real">Margem</th>
               <th className="py-3 px-3 w-28 text-center">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200/70 dark:divide-slate-800/80 text-xs">
+          <tbody className="divide-y divide-slate-200/70 dark:divide-slate-700/60 text-xs">
             {items.map((item, index) => {
               const fiscal = calculateItemFiscal(item.precoUnitario, item.pdvAlvo, globalFiscal, item.fiscalOverride);
+              const isLucrativo = fiscal.isLucrativo;
+              const isItemRowActive = activeAutocompleteItemId === item.id;
 
               return (
                 <tr 
                   key={item.id}
-                  className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors group"
+                  className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
                 >
                   {/* Index */}
                   <td className="py-2.5 px-2 text-center text-slate-400 font-mono text-[11px]">
@@ -228,40 +595,24 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
                   {/* Foto do Produto */}
                   <td className="py-1.5 px-1.5 text-center">
-                    <div className="relative group/photo flex items-center justify-center">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        ref={el => { fileInputRef.current[item.id] = el; }}
-                        onChange={(e) => handleUploadItemPhoto(item, e)}
-                        className="hidden"
-                      />
-
+                    <div className="flex items-center justify-center">
                       {item.fotoUrl ? (
                         <div 
-                          className="w-10 h-10 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 cursor-pointer relative shadow-xs"
-                          onClick={() => setZoomedImage({ url: item.fotoUrl!, title: item.descricao })}
-                          title="Clique para ampliar ou trocar foto"
+                          className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer relative group/photo shadow-xs"
+                          onClick={() => handleOpenPhotoModal(item)}
+                          title="Clique para trocar, ver ampliado ou remover foto"
                         >
                           <img src={item.fotoUrl} alt="" className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              fileInputRef.current[item.id]?.click();
-                            }}
-                            className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition"
-                            title="Trocar Foto"
-                          >
+                          <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition">
                             <Upload className="w-3.5 h-3.5" />
-                          </button>
+                          </div>
                         </div>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => fileInputRef.current[item.id]?.click()}
-                          className="w-10 h-10 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-center text-slate-400 hover:text-emerald-600 transition cursor-pointer"
-                          title="Anexar foto do produto"
+                          onClick={() => handleOpenPhotoModal(item)}
+                          className="w-10 h-10 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                          title="Anexar foto do produto (Upload ou URL)"
                         >
                           <ImageIcon className="w-4 h-4" />
                         </button>
@@ -269,67 +620,109 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Código */}
-                  <td className="py-2 px-2">
+                  {/* Código Interno */}
+                  <td className="py-2 px-1.5">
                     <input
                       type="text"
-                      value={item.codigo || ''}
-                      onChange={(e) => handleFieldChange(item, 'codigo', e.target.value)}
-                      placeholder="CÓD"
-                      className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold"
+                      value={item.codigoInterno || item.codigo || ''}
+                      onChange={(e) => {
+                        handleFieldChange(item, 'codigoInterno', e.target.value);
+                        handleFieldChange(item, 'codigo', e.target.value);
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('codigoInterno');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      onFocus={(e) => {
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('codigoInterno');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      placeholder="CÓD INT"
+                      className="w-full px-2 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 font-mono font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                      title="Código Interno Mega12"
                     />
                   </td>
 
-                  {/* Descrição */}
+                  {/* Código do Fornecedor */}
+                  <td className="py-2 px-1.5">
+                    <input
+                      type="text"
+                      value={item.codigoFornecedor || ''}
+                      onChange={(e) => {
+                        handleFieldChange(item, 'codigoFornecedor', e.target.value);
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('codigoFornecedor');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      onFocus={(e) => {
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('codigoFornecedor');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      placeholder="REF FORN"
+                      className="w-full px-2 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800/80 bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 font-mono text-xs focus:ring-2 focus:ring-amber-500 outline-hidden"
+                      title="Código de Referência do Fornecedor"
+                    />
+                  </td>
+
+                  {/* Descrição com FILTRO INTELIGENTE / AUTOCOMPLETE */}
                   <td className="py-2 px-2">
                     <input
                       type="text"
                       value={item.descricao}
-                      onChange={(e) => handleFieldChange(item, 'descricao', e.target.value)}
-                      placeholder="Descrição detalhada do produto"
+                      onChange={(e) => {
+                        handleFieldChange(item, 'descricao', e.target.value);
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('descricao');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      onFocus={(e) => {
+                        activeInputRef.current = e.currentTarget;
+                        updateDropdownPosition(e.currentTarget);
+                        setActiveAutocompleteItemId(item.id);
+                        setActiveAutocompleteField('descricao');
+                        setAutocompleteQuery(e.target.value);
+                      }}
+                      placeholder="Digite o nome ou código do produto..."
                       className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
                   </td>
 
-                  {/* Qtd por Pacote (F) */}
+                  {/* Quantidade Total de Unidades (editável) */}
                   <td className="py-2 px-1.5 text-center">
                     <input
                       type="number"
-                      min="1"
-                      value={item.qtdPorPacote}
-                      onChange={(e) => handleFieldChange(item, 'qtdPorPacote', e.target.value)}
+                      min="0"
+                      value={item.qtdTotalUnidades === 0 ? '' : item.qtdTotalUnidades}
+                      placeholder="0"
+                      onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
                       className="w-full text-center px-1 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
-                  </td>
-
-                  {/* Qtd Pacotes (G) */}
-                  <td className="py-2 px-1.5 text-center">
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.qtdPacotes}
-                      onChange={(e) => handleFieldChange(item, 'qtdPacotes', e.target.value)}
-                      className="w-full text-center px-1 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                    />
-                  </td>
-
-                  {/* Total Unidades (H = F * G) */}
-                  <td className="py-2.5 px-3 text-center">
-                    <span className="inline-flex items-center px-2 py-1 rounded-md font-bold text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-mono">
-                      {item.qtdTotalUnidades.toLocaleString('pt-BR')} un
-                    </span>
                   </td>
 
                   {/* Preço Unitário Compra (I) */}
                   <td className="py-2 px-2 text-right">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.precoUnitario}
-                      onChange={(e) => handleFieldChange(item, 'precoUnitario', e.target.value)}
-                      className="w-full text-right px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={item.precoUnitario === 0 ? '' : item.precoUnitario}
+                        placeholder="0.00"
+                        onChange={(e) => handleFieldChange(item, 'precoUnitario', e.target.value)}
+                        className="w-full text-right px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      />
+                    </div>
                   </td>
 
                   {/* Total Compra (J = H * I) */}
@@ -337,16 +730,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     R$ {item.valorTotalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
 
-                  {/* PDV Alvo */}
+                  {/* PDV Alvo - Fixo R$ 12,00 */}
                   <td className="py-2 px-2 text-right">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.pdvAlvo}
-                      onChange={(e) => handleFieldChange(item, 'pdvAlvo', e.target.value)}
-                      className="w-full text-right px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50/40 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                    />
+                    <div 
+                      className="inline-flex items-center justify-center px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs font-mono w-full shadow-2xs"
+                      title="Preço de Venda Único Rede Mega 12 (Travado em R$ 12,00)"
+                    >
+                      <span>R$ 12,00</span>
+                    </div>
                   </td>
 
                   {/* Custo Real Efetivo */}
@@ -358,14 +749,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
                   {/* Margem Real (R$ / %) */}
                   <td className="py-2.5 px-2 text-center">
-                    <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
+                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
                       fiscal.statusMargem === 'excelente' 
                         ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' 
                         : fiscal.statusMargem === 'boa'
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
                         : fiscal.statusMargem === 'apertada'
-                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                        : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
                     }`}>
                       <span>R$ {fiscal.margemRealUnit.toFixed(2)}</span>
                       <span>({fiscal.margemPercentual.toFixed(0)}%)</span>
@@ -374,43 +765,47 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
                   {/* Botões de Ação */}
                   <td className="py-2 px-2 text-center">
-                    <div className="flex items-center justify-center gap-1 bg-slate-50 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                    <div className="flex items-center justify-center gap-1">
                       
+                      {/* Salvar / Sincronizar no Catálogo */}
+                      {onSaveProduct && item.descricao && item.descricao.trim().length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickRegisterProduct(item)}
+                          className={`p-1.5 rounded-lg transition cursor-pointer ${
+                            findCatalogProduct(item)
+                              ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60'
+                              : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 bg-indigo-50/50 dark:bg-indigo-950/30'
+                          }`}
+                          title={findCatalogProduct(item) ? 'Produto já cadastrado no catálogo (Clique para sincronizar)' : 'Salvar este produto no Catálogo agora'}
+                        >
+                          {findCatalogProduct(item) ? (
+                            <PackageCheck className="w-4 h-4" />
+                          ) : (
+                            <PackagePlus className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                          )}
+                        </button>
+                      )}
+
                       {/* Abrir Modal Fiscal */}
                       <button
                         onClick={() => onOpenFiscalModal(item)}
-                        className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100/60 dark:hover:bg-emerald-950/60 transition cursor-pointer"
+                        className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition cursor-pointer"
                         title="Simulador Fiscal & Limite de Preço"
                       >
-                        <Calculator className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Abrir Grade de Separação (20 Lojas) */}
-                      <button
-                        onClick={() => onOpenSeparationModal(item)}
-                        className="p-1.5 rounded-lg text-teal-600 dark:text-teal-400 hover:bg-teal-100/60 dark:hover:bg-teal-950/60 transition relative cursor-pointer"
-                        title="Ver / Editar Separação (20 Lojas)"
-                      >
-                        <Store className="w-3.5 h-3.5" />
-                        {item.separacaoManual && (
-                          <span className="w-2 h-2 rounded-full bg-amber-500 absolute top-0.5 right-0.5 ring-2 ring-white dark:ring-slate-800" />
-                        )}
-                      </button>
-
-                      {/* Duplicar */}
-                      <button
-                        onClick={() => onDuplicateItem(item)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition cursor-pointer"
-                        title="Duplicar Item"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
+                        <Calculator className="w-4 h-4" />
                       </button>
 
                       {/* Excluir */}
                       <button
                         onClick={() => onDeleteItem(item.id)}
-                        className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
-                        title="Remover Item"
+                        disabled={isOrderItemBlank(item) && index === items.length - 1}
+                        className={`p-1.5 rounded-lg transition ${
+                          isOrderItemBlank(item) && index === items.length - 1
+                            ? 'text-slate-300 dark:text-slate-700 opacity-30 cursor-not-allowed'
+                            : 'text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/60 cursor-pointer'
+                        }`}
+                        title={isOrderItemBlank(item) && index === items.length - 1 ? 'Linha automática' : 'Remover Item'}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -420,73 +815,20 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 </tr>
               );
             })}
-
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={13} className="py-12 px-4 text-center">
-                  <div className="max-w-md mx-auto space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
-                      <Package className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                        Nenhum produto adicionado ao pedido
-                      </h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Adicione um novo produto em branco ou selecione produtos cadastrados com foto diretamente do catálogo.
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-center gap-2 pt-2">
-                      <button
-                        onClick={() => onAddItem()}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Adicionar Item em Branco
-                      </button>
-
-                      {products && products.length > 0 && (
-                        <button
-                          onClick={() => setIsCatalogPickerOpen(true)}
-                          className="px-4 py-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 font-bold text-xs transition inline-flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Package className="w-4 h-4" />
-                          Escolher do Catálogo ({products.length})
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
 
-      {/* Table Footer Actions */}
-      <div className="p-4.5 bg-slate-50/80 dark:bg-slate-850/60 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => onAddItem()}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline transition cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Adicionar Item em Branco
-          </button>
-
-          {products && products.length > 0 && (
-            <button
-              onClick={() => setIsCatalogPickerOpen(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline transition cursor-pointer"
-            >
-              <Package className="w-3.5 h-3.5" />
-              Escolher do Catálogo ({products.length} cadastrados)
-            </button>
-          )}
+      {/* Footer bar com atalhos */}
+      <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200/70 dark:border-slate-700/70 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+            💡 Digite na linha em branco para incluir produtos continuamente
+          </span>
         </div>
 
         <div className="text-xs text-slate-500 dark:text-slate-400">
-          Total de Itens: <strong className="text-slate-900 dark:text-white font-mono">{items.length}</strong>
+          Total de Itens: <strong className="text-slate-900 dark:text-white font-mono">{validItemsCount}</strong>
         </div>
       </div>
 
@@ -497,7 +839,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             
             <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400">
+                <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
                   <Package className="w-5 h-5" />
                 </div>
                 <div>
@@ -519,15 +861,15 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             </div>
 
             {/* Busca no modal */}
-            <div className="p-4 border-b border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   value={catalogSearch}
                   onChange={(e) => setCatalogSearch(e.target.value)}
-                  placeholder="Pesquisar por nome, código ou fornecedor..."
-                  className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-purple-500"
+                  placeholder="Pesquisar por nome, código ou categoria..."
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                   autoFocus
                 />
               </div>
@@ -536,17 +878,19 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             {/* Lista de Produtos com Fotos */}
             <div className="p-4 overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
               {products
-                .filter(p => 
-                  p.descricao.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-                  (p.codigo && p.codigo.toLowerCase().includes(catalogSearch.toLowerCase())) ||
-                  (p.categoria && p.categoria.toLowerCase().includes(catalogSearch.toLowerCase())) ||
-                  (p.nomeFornecedor && p.nomeFornecedor.toLowerCase().includes(catalogSearch.toLowerCase()))
-                )
+                .filter(p => {
+                  const s = catalogSearch.toLowerCase();
+                  const desc = p.descricao.toLowerCase();
+                  const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+                  const codForn = (p.codigoFornecedor || '').toLowerCase();
+                  const cat = (p.categoria || '').toLowerCase();
+                  return desc.includes(s) || codInt.includes(s) || codForn.includes(s) || cat.includes(s);
+                })
                 .map(prod => (
                   <div
                     key={prod.id}
                     onClick={() => handleSelectProductForNewItem(prod)}
-                    className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700/80 hover:border-purple-500 dark:hover:border-purple-500 bg-white dark:bg-slate-850 hover:bg-purple-50/30 dark:hover:bg-purple-950/20 transition cursor-pointer flex items-center gap-3.5 group shadow-xs hover:shadow-md"
+                    className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700/80 hover:border-indigo-500 dark:hover:border-indigo-500 bg-white dark:bg-slate-800/80 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 transition cursor-pointer flex items-center gap-3.5 group shadow-xs hover:shadow-md"
                   >
                     {/* Foto */}
                     <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center relative">
@@ -560,9 +904,19 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     {/* Dados */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <span className="text-[10px] font-bold font-mono text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950 px-1.5 py-0.5 rounded-md border border-purple-100 dark:border-purple-900/50">
-                          {prod.codigo}
+                        <span className="text-[10px] font-bold font-mono text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800/60" title="Código Interno">
+                          {prod.codigoInterno || prod.codigo}
                         </span>
+                        {prod.codigoFornecedor && (
+                          <span className="text-[9px] font-bold font-mono text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800" title="Código do Fornecedor">
+                            Ref: {prod.codigoFornecedor}
+                          </span>
+                        )}
+                        {prod.categoria && (
+                          <span className="text-[10px] text-slate-400 truncate">
+                            {prod.categoria}
+                          </span>
+                        )}
                         {prod.nomeFornecedor && (
                           <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.5 rounded-md flex items-center gap-1 truncate max-w-[150px]">
                             <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
@@ -575,22 +929,23 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         {prod.descricao}
                       </h4>
 
-                      {/* Preço em Destaque */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="inline-flex items-baseline gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200/80 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300">
-                          <span className="text-[10px] font-bold opacity-80">R$</span>
-                          <span className="text-sm font-black font-mono">
+                      {/* Preço em Grande Destaque e Embalagem */}
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="inline-flex items-baseline gap-1 px-3 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200/80 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300 shadow-2xs">
+                          <span className="text-[11px] font-bold tracking-normal opacity-80">R$</span>
+                          <span className="text-base sm:text-lg font-black font-mono tracking-tight leading-none">
                             {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}
                           </span>
+                          <span className="text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400/80">/un</span>
                         </span>
 
-                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-mono">
-                          {prod.qtdPorPacote} un/cx
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 font-mono">
+                          Emb: <strong className="text-slate-800 dark:text-slate-200">{prod.qtdPorPacote} un/cx</strong>
                         </span>
                       </div>
                     </div>
 
-                    <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-750 group-hover:bg-purple-600 group-hover:text-white text-slate-400 transition shrink-0">
+                    <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-700/60 group-hover:bg-indigo-600 group-hover:text-white text-slate-400 transition shrink-0">
                       <Plus className="w-4 h-4" />
                     </div>
                   </div>
@@ -602,6 +957,185 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       )}
 
       {/* Modal: Zoom da Imagem */}
+      {/* MODAL ESPECIALIZADO DE FOTO DO PRODUTO NO PEDIDO */}
+      {photoModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            
+            {/* Header do Modal */}
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
+                  <ImageIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Foto do Produto
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[280px]">
+                    {photoModalItem.descricao || 'Definir imagem do item'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPhotoModalItem(null)}
+                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-5 space-y-4">
+              
+              {/* Tabs de Seleção: Upload vs Link URL */}
+              <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setPhotoTab('upload')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    photoTab === 'upload'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+                  }`}
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  Upload do Computador/Celular
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhotoTab('url')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    photoTab === 'url'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+                  }`}
+                >
+                  <LinkIcon className="w-3.5 h-3.5" />
+                  Link / URL da Imagem
+                </button>
+              </div>
+
+              {/* Área de Preview da Imagem */}
+              <div className="w-full h-44 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 overflow-hidden flex items-center justify-center relative group">
+                {photoPreview ? (
+                  <>
+                    <img src={photoPreview} alt="Preview" className="w-full h-full object-contain" />
+                    <button
+                      type="button"
+                      onClick={handleRemovePhotoFromModal}
+                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-rose-600 text-white shadow-md hover:bg-rose-700 transition cursor-pointer"
+                      title="Remover Imagem"
+                    >
+                      <Trash className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center p-4 space-y-1.5 text-slate-400">
+                    <ImageIcon className="w-10 h-10 mx-auto stroke-1 text-slate-300 dark:text-slate-600" />
+                    <p className="text-xs font-medium">Nenhuma foto selecionada</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                      Envie um arquivo ou cole um link web abaixo
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Tab 1: Upload */}
+              {photoTab === 'upload' && (
+                <div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={photoFileInputRef}
+                    onChange={handleFileSelectedInModal}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => photoFileInputRef.current?.click()}
+                    className="w-full py-2.5 px-4 rounded-xl border border-dashed border-indigo-300 dark:border-indigo-800 hover:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Escolher arquivo de imagem...</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Tab 2: URL */}
+              {photoTab === 'url' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    URL da Imagem na Internet:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={photoUrlInput}
+                      onChange={(e) => {
+                        setPhotoUrlInput(e.target.value);
+                        setPhotoPreview(e.target.value.trim() || null);
+                      }}
+                      placeholder="https://exemplo.com/foto-produto.jpg"
+                      className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPhotoPreview(photoUrlInput.trim() || null)}
+                      className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer"
+                    >
+                      Carregar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200/60 dark:border-amber-900/40 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  Ao salvar, esta foto será gravada no item do pedido e sincronizada automaticamente no <strong>Catálogo de Produtos</strong>!
+                </span>
+              </div>
+
+            </div>
+
+            {/* Rodapé do Modal */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setPhotoModalItem(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <div className="flex items-center gap-2">
+                {photoPreview && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhotoFromModal}
+                    className="px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition cursor-pointer"
+                  >
+                    Remover Foto
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSavePhotoFromModal}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Salvar Foto</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Visualizador Zoom de Foto */}
       {zoomedImage && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
@@ -619,13 +1153,101 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               </span>
               <button
                 onClick={() => setZoomedImage(null)}
-                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* PORTAL FLUTUANTE DE FILTRO INTELIGENTE (RENDERIZADO NO ROOT BODY ACIMA DE QUALQUER TABELA/CONTAINER) */}
+      {activeAutocompleteItemId && matchingProductsForRow.length > 0 && dropdownCoords && createPortal(
+        <div
+          ref={autocompletePortalRef}
+          style={{
+            position: 'fixed',
+            top: dropdownCoords.isFlipped ? undefined : `${dropdownCoords.top}px`,
+            bottom: dropdownCoords.isFlipped ? `${window.innerHeight - dropdownCoords.top}px` : undefined,
+            left: `${dropdownCoords.left}px`,
+            width: `${dropdownCoords.width}px`,
+            zIndex: 999999
+          }}
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-emerald-500/50 dark:border-emerald-500/40 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md"
+        >
+          {/* Cabeçalho do Dropdown */}
+          <div className="px-3.5 py-2.5 bg-emerald-50/90 dark:bg-emerald-950/90 border-b border-emerald-100 dark:border-emerald-900/60 flex items-center justify-between text-[11px] font-bold">
+            <span className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              Produtos do Catálogo ({matchingProductsForRow.length})
+            </span>
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">
+              Clique para preencher a linha
+            </span>
+          </div>
+
+          {/* Lista de Itens Encontrados */}
+          <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+            {matchingProductsForRow.map(prod => (
+              <button
+                key={prod.id}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const targetItem = items.find(it => it.id === activeAutocompleteItemId);
+                  if (targetItem) {
+                    handleSelectProductForExistingItem(targetItem, prod);
+                  }
+                }}
+                className="w-full text-left p-2.5 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/50 transition flex items-center gap-3 group cursor-pointer"
+              >
+                {/* Thumbnail com Foto */}
+                <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden flex items-center justify-center">
+                  {prod.fotoUrl ? (
+                    <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
+                  ) : (
+                    <Package className="w-5 h-5 text-slate-400" />
+                  )}
+                </div>
+
+                {/* Informações do Produto */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                      {prod.codigoInterno || prod.codigo}
+                    </span>
+                    {prod.codigoFornecedor && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+                        Ref: {prod.codigoFornecedor}
+                      </span>
+                    )}
+                    {prod.categoria && (
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                        • {prod.categoria}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate mt-0.5 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
+                    {highlightMatch(prod.descricao, autocompleteQuery)}
+                  </p>
+
+                  <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
+                    <span>Emb: <strong className="text-slate-700 dark:text-slate-300">{prod.qtdPorPacote} pçs</strong></span>
+                    <span>Compra: <strong className="text-emerald-600 dark:text-emerald-400">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</strong></span>
+                    <span>PDV: <strong className="text-slate-700 dark:text-slate-300">R$ 12,00</strong></span>
+                  </div>
+                </div>
+
+                <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white transition shrink-0">
+                  <Check className="w-4 h-4" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body
       )}
 
     </div>

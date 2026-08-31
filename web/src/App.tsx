@@ -5,8 +5,8 @@ import {
   ActiveNavTab
 } from './components/Sidebar';
 import { 
-  OrderActionBar 
-} from './components/OrderActionBar';
+  Header 
+} from './components/Header';
 import { 
   HomePage 
 } from './components/HomePage';
@@ -61,8 +61,14 @@ import {
 import { 
   FinancialBoletosPage 
 } from './components/FinancialBoletosPage';
+import { 
+  CentralStockPage 
+} from './components/CentralStockPage';
+import { 
+  OrderPipelineStepper 
+} from './components/OrderPipelineStepper';
 
-import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment } from './shared/types';
+import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem } from './shared/types';
 import { 
   getInitialFiscalConfig, 
   getInitialStoresConfig, 
@@ -81,7 +87,12 @@ import {
   saveProduct,
   deleteProduct,
   getNextOrderNumber,
-  createRealisticMockOrder
+  createRealisticMockOrder,
+  loadCentralStock,
+  saveCentralStock,
+  updateStockBalance,
+  createStockTransferOrder,
+  saveSavedOrdersList
 } from './utils/storage';
 import { 
   fetchSuppliersFromDb, 
@@ -96,31 +107,33 @@ import {
   updateInstallmentInDb,
   fetchFiscalConfigFromDb,
   saveFiscalConfigToDb,
-  fetchNextOrderNumberFromDb
+  fetchNextOrderNumberFromDb,
+  fetchStoresFromDb,
+  fetchStockFromDb,
+  saveStockItemToDb,
+  updateStockBalanceInDb,
+  deleteStockItemFromDb
 } from './utils/api';
 import { exportOrderToExcel } from './utils/excelExporter';
-import { exportRomaneioPDF } from './utils/pdfExporter';
+import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
 import { calculateOrderNetTotal, generateOrderInstallments } from './utils/installments';
 import { calculateItemFiscal } from './shared/fiscalEngine';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
+import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem } from './utils/orderItemUtils';
 import { CheckCircle2, AlertCircle, Monitor, Smartphone, PackageCheck, AlertTriangle, Save, Trash2, Plus } from 'lucide-react';
 
 export function App() {
-  // 1. Estado de Autenticação (RBAC)
+  // 1. Estado de Autenticação (RBAC) - Inicia nulo para exigir login obrigatório
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('mega12_user');
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try { 
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email) return parsed;
+      } catch {}
     }
-    // Usuário padrão de demonstração para inicialização imediata
-    return {
-      id: 'usr_rafael',
-      nome: 'Rafael',
-      email: 'rafael@mega12.com.br',
-      role: 'diretoria',
-      cargo: 'Diretor Geral / Administrador',
-      ativo: 1
-    };
+    // Sem sessão salva: exige login
+    return null;
   });
 
   // Navigation State: Agora inicia por padrão no Hub / Home
@@ -141,20 +154,33 @@ export function App() {
   const [storeConfigs, setStoreConfigs] = useState<StoreConfig[]>(getInitialStoresConfig);
   const [suppliers, setSuppliers] = useState<Supplier[]>(getSuppliersList);
   const [products, setProducts] = useState<Product[]>(getProductsList);
+  const [centralStock, setCentralStock] = useState<CentralStockItem[]>(() => loadCentralStock());
   const [savedOrders, setSavedOrders] = useState<PurchaseOrder[]>(loadSavedOrdersList);
 
   // Active Purchase Order: carrega rascunho se existir ou inicia limpo
   const [order, setOrder] = useState<PurchaseOrder>(() => {
     const saved = loadCurrentOrder();
-    if (saved) return saved;
-    return createNewOrder(getInitialFiscalConfig(), getInitialStoresConfig());
+    const initFiscal = getInitialFiscalConfig();
+    const initStores = getInitialStoresConfig();
+    if (saved) {
+      return {
+        ...saved,
+        items: ensureTrailingBlankItem(saved.items || [], initFiscal, initStores)
+      };
+    }
+    const newOrd = createNewOrder(initFiscal, initStores);
+    return {
+      ...newOrd,
+      items: ensureTrailingBlankItem(newOrd.items || [], initFiscal, initStores)
+    };
   });
 
   // Identifica se o pedido em memória é um rascunho em aberto não salvo
   const isCurrentOrderSaved = savedOrders.some(o => o.header.id === order.header.id);
+  const hasValidItems = order.items && order.items.some(it => !isOrderItemBlank(it));
   const hasActiveDraft = Boolean(
     order && !isCurrentOrderSaved && (
-      (order.items && order.items.length > 0) || 
+      hasValidItems || 
       (order.header.fornecedor && order.header.fornecedor.trim() !== '')
     )
   );
@@ -190,17 +216,32 @@ export function App() {
   useEffect(() => {
     async function loadFromSqlite() {
       try {
-        const [dbSuppliers, dbProducts, dbOrders, dbFiscal] = await Promise.all([
+        const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock] = await Promise.all([
           fetchSuppliersFromDb().catch(() => null),
           fetchProductsFromDb().catch(() => null),
           fetchOrdersFromDb().catch(() => null),
-          fetchFiscalConfigFromDb().catch(() => null)
+          fetchFiscalConfigFromDb().catch(() => null),
+          fetchStoresFromDb().catch(() => null),
+          fetchStockFromDb().catch(() => null)
         ]);
 
         if (dbSuppliers && dbSuppliers.length > 0) setSuppliers(dbSuppliers);
         if (dbProducts && dbProducts.length > 0) setProducts(dbProducts);
-        if (dbOrders && dbOrders.length > 0) setSavedOrders(dbOrders);
+        if (dbStores && dbStores.length > 0) setStoreConfigs(dbStores);
         if (dbFiscal) setFiscalConfig(dbFiscal);
+        if (dbStock && dbStock.length > 0) setCentralStock(dbStock);
+
+        if (dbOrders && dbOrders.length > 0) {
+          const currentFiscal = dbFiscal || getInitialFiscalConfig();
+          const currentStores = (dbStores && dbStores.length > 0) ? dbStores : getInitialStoresConfig();
+          const hydratedOrders = dbOrders.map((o: PurchaseOrder) => ({
+            ...o,
+            storeConfigs: o.storeConfigs && o.storeConfigs.length > 0 ? o.storeConfigs : currentStores,
+            fiscalConfig: o.fiscalConfig || currentFiscal
+          }));
+          setSavedOrders(hydratedOrders);
+          saveSavedOrdersList(hydratedOrders);
+        }
       } catch (err) {
         console.warn('Usando armazenamento local de contingência:', err);
       }
@@ -231,6 +272,16 @@ export function App() {
   const handleLogout = () => {
     localStorage.removeItem('mega12_user');
     setCurrentUser(null);
+    setActiveNav('home');
+  };
+
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    if (user.role === 'separacao') {
+      setActiveNav('separation');
+    } else {
+      setActiveNav('home');
+    }
   };
 
   // Handlers for Order Header
@@ -240,54 +291,46 @@ export function App() {
 
   // Handlers for Items
   const handleUpdateItem = (itemId: string, updatedFields: Partial<OrderItem>) => {
-    setOrder(prev => ({
-      ...prev,
-      items: prev.items.map(item => item.id === itemId ? { ...item, ...updatedFields } : item)
-    }));
+    setOrder(prev => {
+      const updatedItems = prev.items.map(item => item.id === itemId ? { ...item, ...updatedFields } : item);
+      return {
+        ...prev,
+        items: ensureTrailingBlankItem(updatedItems, fiscalConfig, storeConfigs)
+      };
+    });
   };
 
   const handleAddItem = (customItem?: OrderItem) => {
     if (customItem) {
-      setOrder(prev => ({
-        ...prev,
-        items: [...prev.items, customItem]
-      }));
+      setOrder(prev => {
+        const newItems = [...prev.items];
+        if (newItems.length > 0 && isOrderItemBlank(newItems[newItems.length - 1])) {
+          newItems[newItems.length - 1] = customItem;
+        } else {
+          newItems.push(customItem);
+        }
+        return {
+          ...prev,
+          items: ensureTrailingBlankItem(newItems, fiscalConfig, storeConfigs)
+        };
+      });
       showToast(`Produto "${customItem.descricao}" adicionado.`);
       return;
     }
-    const defaultItem: OrderItem = {
-      id: 'item_' + Date.now(),
-      codigo: `PROD-${order.items.length + 1}`,
-      descricao: 'Novo Produto',
-      qtdPorPacote: 12,
-      qtdPacotes: 10,
-      qtdTotalUnidades: 120,
-      precoUnitario: 5.0,
-      valorTotalBruto: 600,
-      pdvAlvo: 12.0
-    };
-    const fiscalRes = calculateItemFiscal(defaultItem.precoUnitario, defaultItem.pdvAlvo, fiscalConfig);
-    const sepRes = calculateAutomaticSeparation(defaultItem.qtdTotalUnidades, storeConfigs);
-    defaultItem.despesasPdvUnit = fiscalRes.despesasPdvUnit;
-    defaultItem.creditoIcmsUnit = fiscalRes.creditoIcmsUnit;
-    defaultItem.custoRealEfetivo = fiscalRes.custoRealEfetivo;
-    defaultItem.margemRealUnit = fiscalRes.margemRealUnit;
-    defaultItem.margemPercentual = fiscalRes.margemPercentual;
-    defaultItem.separacaoLojas = sepRes.allocations;
-    defaultItem.qtdReservaEstoque = sepRes.reserveStock;
-
     setOrder(prev => ({
       ...prev,
-      items: [...prev.items, defaultItem]
+      items: ensureTrailingBlankItem(prev.items, fiscalConfig, storeConfigs)
     }));
-    showToast('Novo produto adicionado.');
   };
 
   const handleDeleteItem = (itemId: string) => {
-    setOrder(prev => ({
-      ...prev,
-      items: prev.items.filter(item => item.id !== itemId)
-    }));
+    setOrder(prev => {
+      const filtered = prev.items.filter(item => item.id !== itemId);
+      return {
+        ...prev,
+        items: ensureTrailingBlankItem(filtered, fiscalConfig, storeConfigs)
+      };
+    });
     showToast('Item removido do pedido.', 'info');
   };
 
@@ -298,10 +341,13 @@ export function App() {
       descricao: `${itemToClone.descricao} (Cópia)`
     };
 
-    setOrder(prev => ({
-      ...prev,
-      items: [...prev.items, clonedItem]
-    }));
+    setOrder(prev => {
+      const nonTrailing = prev.items.filter((_, idx) => idx < prev.items.length - 1 || !isOrderItemBlank(prev.items[idx]));
+      return {
+        ...prev,
+        items: ensureTrailingBlankItem([...nonTrailing, clonedItem], fiscalConfig, storeConfigs)
+      };
+    });
     showToast('Item duplicado com sucesso!');
   };
 
@@ -310,14 +356,20 @@ export function App() {
     try {
       const nextNum = await fetchNextOrderNumberFromDb();
       const newOrd = createNewOrder(fiscalConfig, storeConfigs, nextNum);
-      setOrder(newOrd);
+      setOrder({
+        ...newOrd,
+        items: ensureTrailingBlankItem(newOrd.items || [], fiscalConfig, storeConfigs)
+      });
       setActiveNav('orders');
       setViewMode('desktop');
       showToast(`Novo pedido ${nextNum} em branco iniciado!`);
     } catch (err) {
       const localNum = getNextOrderNumber();
       const newOrd = createNewOrder(fiscalConfig, storeConfigs, localNum);
-      setOrder(newOrd);
+      setOrder({
+        ...newOrd,
+        items: ensureTrailingBlankItem(newOrd.items || [], fiscalConfig, storeConfigs)
+      });
       setActiveNav('orders');
       setViewMode('desktop');
       showToast(`Novo pedido ${localNum} em branco iniciado!`);
@@ -337,22 +389,170 @@ export function App() {
     try {
       const nextNum = await fetchNextOrderNumberFromDb();
       const clean = createNewOrder(fiscalConfig, storeConfigs, nextNum);
-      setOrder(clean);
+      setOrder({
+        ...clean,
+        items: ensureTrailingBlankItem(clean.items || [], fiscalConfig, storeConfigs)
+      });
     } catch {
       const localNum = getNextOrderNumber();
       const clean = createNewOrder(fiscalConfig, storeConfigs, localNum);
-      setOrder(clean);
+      setOrder({
+        ...clean,
+        items: ensureTrailingBlankItem(clean.items || [], fiscalConfig, storeConfigs)
+      });
     }
     showToast('Rascunho descartado. Pedido zerado.', 'info');
   };
 
+  // Identificar fornecedor ativo no pedido e seu Pedido Padrão / Template
+  const activeSupplier = useMemo(() => {
+    return suppliers.find(s => 
+      (order.header.supplierId && s.id === order.header.supplierId) || 
+      s.razaoSocial.toLowerCase() === (order.header.fornecedor || '').toLowerCase()
+    );
+  }, [suppliers, order.header.supplierId, order.header.fornecedor]);
+
+  const activeSupplierTemplate = useMemo(() => {
+    if (!activeSupplier) return null;
+    let template = activeSupplier.pedidoPadrao;
+    if (!template && activeSupplier.pedidoPadraoJson) {
+      try {
+        template = JSON.parse(activeSupplier.pedidoPadraoJson);
+      } catch {}
+    }
+    return template || null;
+  }, [activeSupplier]);
+
+  // Salvar pedido atual como Compra Padrão do Fornecedor
+  const handleSaveAsSupplierTemplate = async () => {
+    const validItems = order.items.filter(it => !isOrderItemBlank(it));
+    if (validItems.length === 0) {
+      showToast('Adicione ao menos 1 item com quantidade e preço antes de salvar como compra padrão.', 'error');
+      return;
+    }
+
+    if (!activeSupplier) {
+      showToast('Selecione ou cadastre o fornecedor antes de definir a compra padrão.', 'error');
+      return;
+    }
+
+    const templateData = {
+      items: validItems,
+      condicaoPagamento: order.header.condicaoPagamento,
+      aliquotaSt: order.header.aliquotaSt,
+      descontoOff: order.header.percentualDescontoOff,
+      percentualNota: order.header.percentualNota,
+      observacoes: order.header.observacoesDescarga,
+      savedAt: new Date().toISOString()
+    };
+
+    const updatedSup: Supplier = {
+      ...activeSupplier,
+      pedidoPadrao: templateData,
+      pedidoPadraoJson: JSON.stringify(templateData),
+      updatedAt: new Date().toISOString()
+    };
+
+    saveSupplier(updatedSup);
+    setSuppliers(prev => prev.map(s => s.id === updatedSup.id ? updatedSup : s));
+
+    try {
+      await saveSupplierToDb(updatedSup);
+    } catch (err) {
+      console.warn('Persistido localmente. Aviso SQLite:', err);
+    }
+
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.8 }
+    });
+
+    showToast(`⭐ Pedido salvo como Compra Padrão para "${activeSupplier.razaoSocial}" (${validItems.length} itens)!`, 'success');
+  };
+
+  // Carregar Compra Padrão do Fornecedor para a grade
+  const handleLoadSupplierTemplate = (targetSupplierId?: string) => {
+    const targetSup = targetSupplierId 
+      ? (suppliers.find(s => s.id === targetSupplierId) || activeSupplier)
+      : activeSupplier;
+
+    if (!targetSup) {
+      showToast('Fornecedor não selecionado.', 'error');
+      return;
+    }
+
+    let template = targetSup.pedidoPadrao;
+    if (!template && targetSup.pedidoPadraoJson) {
+      try {
+        template = JSON.parse(targetSup.pedidoPadraoJson);
+      } catch {}
+    }
+
+    if (!template || !template.items || template.items.length === 0) {
+      showToast(`O fornecedor "${targetSup.razaoSocial}" ainda não possui um pedido padrão cadastrado.`, 'info');
+      return;
+    }
+
+    // Clona os itens recalculando impostos e rateio de 20 lojas
+    const clonedItems: OrderItem[] = template.items.map((it: OrderItem, idx: number) => {
+      const fiscal = calculateItemFiscal(it.precoUnitario, 12.00, fiscalConfig, it.fiscalOverride);
+      const separation = calculateAutomaticSeparation(it.qtdTotalUnidades, storeConfigs, it.qtdReservaEstoque || 0);
+
+      return {
+        ...it,
+        id: `item_${Date.now()}_${idx + 1}`,
+        pdvAlvo: 12.00,
+        despesasPdvUnit: fiscal.despesasPdvUnit,
+        creditoIcmsUnit: fiscal.creditoIcmsUnit,
+        custoRealEfetivo: fiscal.custoRealEfetivo,
+        margemRealUnit: fiscal.margemRealUnit,
+        margemPercentual: fiscal.margemPercentual,
+        separacaoLojas: it.separacaoManual ? it.separacaoLojas : separation.allocations,
+        qtdReservaEstoque: it.separacaoManual ? it.qtdReservaEstoque : separation.reserveStock
+      };
+    });
+
+    const itemsWithBlank = ensureTrailingBlankItem(clonedItems, fiscalConfig, storeConfigs);
+
+    setOrder(prev => ({
+      ...prev,
+      header: {
+        ...prev.header,
+        fornecedor: targetSup.razaoSocial,
+        supplierId: targetSup.id,
+        vendedor: targetSup.vendedorPadrao || prev.header.vendedor,
+        contatoVendedor: targetSup.contatoVendedor || prev.header.contatoVendedor,
+        condicaoPagamento: template.condicaoPagamento || targetSup.condicaoPagamentoPadrao || prev.header.condicaoPagamento,
+        aliquotaSt: template.aliquotaSt !== undefined ? template.aliquotaSt : (targetSup.aliquotaStPadrao || 0),
+        percentualDescontoOff: template.descontoOff !== undefined ? template.descontoOff : (targetSup.descontoOffPadrao || 0),
+        percentualNota: template.percentualNota !== undefined ? template.percentualNota : (targetSup.percentualNotaPadrao || 100),
+        observacoesDescarga: template.observacoes || prev.header.observacoesDescarga
+      },
+      items: itemsWithBlank
+    }));
+
+    showToast(`📦 Compra Padrão de "${targetSup.razaoSocial}" carregada (${template.items.length} itens)!`, 'success');
+  };
+
   const handleSaveOrder = async () => {
+    const validItems = order.items.filter(it => !isOrderItemBlank(it));
+    if (validItems.length === 0 && (!order.header.fornecedor || order.header.fornecedor.trim() === '')) {
+      showToast('Não é possível salvar um pedido totalmente vazio.', 'error');
+      return;
+    }
+
+    const orderToSave: PurchaseOrder = {
+      ...order,
+      items: validItems
+    };
+
     const savedOrderNumber = order.header.numeroPedido;
     const orderWithInstallments: PurchaseOrder = {
-      ...order,
-      installments: (order.installments && order.installments.length > 0)
-        ? order.installments
-        : generateOrderInstallments(order)
+      ...orderToSave,
+      installments: (orderToSave.installments && orderToSave.installments.length > 0)
+        ? orderToSave.installments
+        : generateOrderInstallments(orderToSave)
     };
 
     try {
@@ -371,7 +571,10 @@ export function App() {
       // Limpa a tela preparando o próximo pedido zerado
       const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
       const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
-      setOrder(cleanOrder);
+      setOrder({
+        ...cleanOrder,
+        items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
+      });
 
       showToast(`Pedido ${savedOrderNumber} gravado no SQLite! Tela pronta para o próximo pedido.`, 'success');
     } catch (err: any) {
@@ -381,9 +584,78 @@ export function App() {
 
       const nextNum = getNextOrderNumber();
       const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
-      setOrder(cleanOrder);
+      setOrder({
+        ...cleanOrder,
+        items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
+      });
 
       showToast(`Pedido ${savedOrderNumber} salvo localmente! Tela pronta para o próximo pedido.`, 'info');
+    }
+  };
+
+  // Handler para Aprovação de Pedido (Comprador/Diretoria -> Depósito)
+  const handleApproveOrder = async (orderToApprove: PurchaseOrder) => {
+    const validItems = orderToApprove.items.filter(it => !isOrderItemBlank(it));
+    if (validItems.length === 0) {
+      showToast('Não é possível aprovar um pedido sem itens.', 'error');
+      return;
+    }
+
+    const updated: PurchaseOrder = {
+      ...orderToApprove,
+      items: validItems,
+      header: {
+        ...orderToApprove.header,
+        status: 'Aprovado',
+        aprovadoPor: currentUser?.nome || 'Diretoria Compras',
+        dataAprovacao: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      installments: (orderToApprove.installments && orderToApprove.installments.length > 0)
+        ? orderToApprove.installments
+        : generateOrderInstallments(orderToApprove)
+    };
+
+    try {
+      await saveOrderToDb(updated);
+      saveOrderToHistory(updated);
+      setSavedOrders(loadSavedOrdersList());
+      setOrder(updated);
+      confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
+      showToast(`Pedido ${updated.header.numeroPedido} APROVADO! Enviado para distribuição do Depósito Central.`, 'success');
+    } catch (err: any) {
+      saveOrderToHistory(updated);
+      setSavedOrders(loadSavedOrdersList());
+      setOrder(updated);
+      showToast(`Pedido ${updated.header.numeroPedido} aprovado localmente!`, 'info');
+    }
+  };
+
+  // Handler para Liberação do Depósito para a Doca (Depósito -> Separação Doca)
+  const handleReleaseToSeparation = async (orderToRelease: PurchaseOrder) => {
+    const updated: PurchaseOrder = {
+      ...orderToRelease,
+      header: {
+        ...orderToRelease.header,
+        status: 'Em Separação',
+        liberadoPorDeposito: currentUser?.nome || 'Depósito Central',
+        dataLiberacaoSeparacao: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    };
+
+    try {
+      await saveOrderToDb(updated);
+      saveOrderToHistory(updated);
+      setSavedOrders(loadSavedOrdersList());
+      setOrder(updated);
+      confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
+      showToast(`Distribuição confirmada! Pedido ${updated.header.numeroPedido} LIBERADO para separação física na doca!`, 'success');
+    } catch (err: any) {
+      saveOrderToHistory(updated);
+      setSavedOrders(loadSavedOrdersList());
+      setOrder(updated);
+      showToast(`Pedido ${updated.header.numeroPedido} liberado localmente!`, 'info');
     }
   };
 
@@ -428,8 +700,72 @@ export function App() {
     }
   };
 
+  // Handlers do Módulo de Estoque do Depósito Central
+  const handleUpdateStockBalance = async (stockId: string, deltaUnidades: number, newLocation?: string) => {
+    try {
+      await updateStockBalanceInDb(stockId, deltaUnidades, newLocation);
+      const updatedList = await fetchStockFromDb();
+      setCentralStock(updatedList);
+      saveCentralStock(updatedList);
+      showToast('Saldo de estoque do depósito atualizado no SQLite!', 'success');
+    } catch {
+      const updated = updateStockBalance(stockId, deltaUnidades, newLocation);
+      setCentralStock([...updated]);
+      showToast('Saldo de estoque do depósito atualizado localmente!', 'info');
+    }
+  };
+
+  const handleSaveNewStockItem = async (item: CentralStockItem) => {
+    try {
+      await saveStockItemToDb(item);
+      const updatedList = await fetchStockFromDb();
+      setCentralStock(updatedList);
+      saveCentralStock(updatedList);
+      showToast(`Produto ${item.descricao} gravado no estoque do CD (SQLite)!`, 'success');
+    } catch {
+      const current = loadCentralStock();
+      const existingIdx = current.findIndex(s => s.id === item.id || (item.productId && s.productId === item.productId));
+      let updated: CentralStockItem[];
+      if (existingIdx >= 0) {
+        current[existingIdx] = { 
+          ...current[existingIdx], 
+          ...item, 
+          saldoUnidades: (current[existingIdx].saldoUnidades || 0) + (item.saldoUnidades || 0)
+        };
+        updated = current;
+      } else {
+        updated = [item, ...current];
+      }
+      saveCentralStock(updated);
+      setCentralStock([...updated]);
+      showToast(`Produto ${item.descricao} salvo localmente!`, 'info');
+    }
+  };
+
+  const handleGenerateStockSeparation = (itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>) => {
+    const transfOrder = createStockTransferOrder(itemsToTransfer, storeConfigs, fiscalConfig);
+    saveOrderToHistory(transfOrder);
+    setSavedOrders(loadSavedOrdersList());
+    setOrder(transfOrder);
+    setActiveNav('separation');
+    confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
+    showToast(`Romaneio ${transfOrder.header.numeroPedido} gerado e enviado para a Separação da Doca!`, 'success');
+  };
+
   const handleFinalizeSeparation = async (finalizedOrder: PurchaseOrder) => {
     try {
+      // Se for transferência do estoque central, realiza a baixa do estoque do CD no SQLite
+      if (finalizedOrder.header.supplierId === 'cd_matriz') {
+        for (const it of finalizedOrder.items) {
+          const match = centralStock.find(s => s.codigo === it.codigo || s.descricao === it.descricao || (s.productId && s.productId === it.id));
+          if (match) {
+            await updateStockBalanceInDb(match.id, -(it.qtdTotalUnidades || 0)).catch(() => {});
+          }
+        }
+        const refreshedStock = await fetchStockFromDb().catch(() => null);
+        if (refreshedStock) setCentralStock(refreshedStock);
+      }
+
       await saveOrderToDb(finalizedOrder);
       saveOrderToHistory(finalizedOrder);
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
@@ -442,9 +778,20 @@ export function App() {
         origin: { y: 0.7 }
       });
       
-      showToast(`Separação do pedido ${finalizedOrder.header.numeroPedido} FINALIZADA! Arquivado no Histórico.`, 'success');
+      showToast(`Separação do pedido ${finalizedOrder.header.numeroPedido} FINALIZADA! Arquivado no SQLite.`, 'success');
       setActiveNav('separationHistory');
     } catch (err: any) {
+      if (finalizedOrder.header.supplierId === 'cd_matriz') {
+        finalizedOrder.items.forEach(it => {
+          const stock = loadCentralStock();
+          const match = stock.find(s => s.codigo === it.codigo || s.descricao === it.descricao);
+          if (match) {
+            updateStockBalance(match.id, -(it.qtdTotalUnidades || 0));
+          }
+        });
+        setCentralStock(loadCentralStock());
+      }
+
       saveOrderToHistory(finalizedOrder);
       setSavedOrders(loadSavedOrdersList());
       setOrder(finalizedOrder);
@@ -491,9 +838,14 @@ export function App() {
     showToast('Planilha Excel (.xlsx) gerada!', 'success');
   };
 
-  const handleExportPDF = () => {
+  const handleExportCommercialPDF = () => {
+    exportCommercialOrderPDF(order);
+    showToast('Pedido Comercial PDF (Proposta para Fornecedor) gerado com sucesso!', 'success');
+  };
+
+  const handleExportSeparationPDF = () => {
     exportRomaneioPDF(order, storeConfigs);
-    showToast('Romaneio PDF gerado com sucesso!', 'success');
+    showToast('Romaneio PDF de Separação (20 Lojas) gerado com sucesso!', 'success');
   };
 
   // Supplier Page Handlers
@@ -551,7 +903,22 @@ export function App() {
     }
   };
 
-  const handleSelectSupplierForOrder = (sup: Supplier) => {
+  const handleSelectSupplierForOrder = (sup: Supplier, forceLoadTemplate: boolean = false) => {
+    let template = sup.pedidoPadrao;
+    if (!template && sup.pedidoPadraoJson) {
+      try {
+        template = JSON.parse(sup.pedidoPadraoJson);
+      } catch {}
+    }
+
+    const isCurrentBlank = order.items.every(it => isOrderItemBlank(it));
+
+    if ((forceLoadTemplate || isCurrentBlank) && template && template.items && template.items.length > 0) {
+      handleLoadSupplierTemplate(sup.id);
+      setActiveNav('orders');
+      return;
+    }
+
     setOrder(prev => ({
       ...prev,
       header: {
@@ -615,17 +982,27 @@ export function App() {
   const handleDeleteOrder = async (orderId: string) => {
     try {
       await deleteOrderFromDb(orderId);
-      const updated = await fetchOrdersFromDb();
-      setSavedOrders(updated);
-      showToast('Pedido excluído do SQLite.', 'info');
+      const updated = await fetchOrdersFromDb().catch(() => null);
+      if (updated && updated.length > 0) {
+        setSavedOrders(updated);
+        saveSavedOrdersList(updated);
+      } else {
+        const list = loadSavedOrdersList().filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId);
+        saveSavedOrdersList(list);
+        setSavedOrders(list);
+      }
+      showToast('Pedido excluído do sistema.', 'info');
     } catch (err) {
-      showToast('Erro ao excluir pedido.', 'error');
+      const list = loadSavedOrdersList().filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId);
+      saveSavedOrdersList(list);
+      setSavedOrders(list);
+      showToast('Pedido excluído localmente.', 'info');
     }
   };
 
   // Se o usuário não estiver logado, exibe a página de login
   if (!currentUser) {
-    return <LoginPage onLoginSuccess={setCurrentUser} />;
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
   return (
@@ -648,7 +1025,7 @@ export function App() {
         </div>
       )}
 
-      {/* Sidebar Lateral de Navegação (4 Blocos Operacionais) */}
+      {/* Sidebar Lateral de Navegação (6 Páginas + Gestão de Usuários) */}
       <Sidebar
         order={order}
         activeNav={activeNav}
@@ -681,53 +1058,22 @@ export function App() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
         
-        {/* Barra Superior de Alternância de Modo (Desktop vs Mobile PWA) */}
-        <header className="bg-white dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 px-6 py-2.5 flex items-center justify-between sticky top-0 z-20 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Modo de Exibição:</span>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
-              <button
-                onClick={() => setViewMode('desktop')}
-                className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'desktop'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                <span>Visão Desktop</span>
-              </button>
-
-              <button
-                onClick={() => setViewMode('mobile_purchases')}
-                className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'mobile_purchases'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-                <span>📱 App Viagens (Feiras)</span>
-              </button>
-
-              <button
-                onClick={() => setViewMode('mobile_separation')}
-                className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'mobile_separation'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <PackageCheck className="w-3.5 h-3.5 text-teal-400" />
-                <span>📦 Romaneio de Bolso (Doca)</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="text-xs font-mono font-bold text-slate-400">
-            {currentUser.nome} ({currentUser.role.toUpperCase()})
-          </div>
-        </header>
+        {/* TopBar Executivo Unificado com Breadcrumbs, Modos e Ações Contextuais */}
+        <Header
+          activeNav={activeNav}
+          order={order}
+          currentUser={currentUser}
+          viewMode={viewMode}
+          onChangeViewMode={setViewMode}
+          hasActiveDraft={hasActiveDraft}
+          isSavedOrder={isCurrentOrderSaved}
+          onNewOrder={handleNewOrder}
+          onSaveOrder={handleSaveOrder}
+          onDiscardDraft={handleDiscardDraft}
+          onExportExcel={handleExportExcel}
+          onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
+          onSelectNav={setActiveNav}
+        />
 
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
           
@@ -740,7 +1086,7 @@ export function App() {
               stores={storeConfigs}
               fiscalConfig={fiscalConfig}
               onUpdateOrder={setOrder}
-              onExportPDF={handleExportPDF}
+              onExportPDF={handleExportCommercialPDF}
               onExportExcel={handleExportExcel}
               onSaveOrder={handleSaveOrder}
               onNewOrder={handleNewOrder}
@@ -789,20 +1135,24 @@ export function App() {
               {/* PÁGINA 1: COTAÇÃO E PEDIDOS */}
               {activeNav === 'orders' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
-                  
-                  {/* Action Bar Unificada de Controle Operacional */}
-                  <OrderActionBar
-                    order={order}
-                    isSaved={isCurrentOrderSaved}
-                    hasActiveDraft={hasActiveDraft}
-                    onSaveOrder={handleSaveOrder}
-                    onNewOrder={handleNewOrder}
-                    onDiscardDraft={handleDiscardDraft}
-                    onExportExcel={handleExportExcel}
-                    onExportPDF={handleExportPDF}
-                  />
-
                   <OrderSummaryCards order={order} />
+
+                  {/* Esteira Operacional Visual do Pedido (Compras ➔ Depósito ➔ Separação ➔ Finalizado) */}
+                  <OrderPipelineStepper
+                    order={order}
+                    currentUser={currentUser}
+                    onApproveOrder={handleApproveOrder}
+                    onOpenDistribution={(ord) => {
+                      setOrder(ord);
+                      setActiveNav('separation');
+                    }}
+                    onReleaseToSeparation={handleReleaseToSeparation}
+                    onOpenSeparation={(ord) => {
+                      setOrder(ord);
+                      setActiveNav('separation');
+                    }}
+                    onFinalizeSeparation={handleFinalizeSeparation}
+                  />
 
                   <OrderHeaderForm 
                     header={order.header} 
@@ -819,13 +1169,70 @@ export function App() {
                       }
                     }}
                     orderTotal={calculateOrderNetTotal(order)}
+                    onSaveAsSupplierTemplate={handleSaveAsSupplierTemplate}
+                    onLoadSupplierTemplate={handleLoadSupplierTemplate}
+                    hasSupplierTemplate={Boolean(activeSupplierTemplate)}
+                    supplierTemplateItemsCount={activeSupplierTemplate?.items?.length || 0}
                   />
+
+                  {/* Banner de Rascunho / Pedido em Aberto acima da Lista de Compras */}
+                  {hasActiveDraft && !isCurrentOrderSaved && (
+                    <div className="p-3.5 px-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                        <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                          Rascunho de Pedido em Andamento ({order.header.numeroPedido}) — não salvo no SQLite
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <button
+                          onClick={handleDiscardDraft}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Descartar / Zerar</span>
+                        </button>
+                        <button
+                          onClick={handleSaveOrder}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>Salvar Pedido</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Banner quando visualizando pedido já salvo / finalizado do histórico */}
+                  {isCurrentOrderSaved && (
+                    <div className="p-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Visualizando Pedido Gravado no Sistema ({order.header.numeroPedido}) • Status: <strong className="text-emerald-600 dark:text-emerald-400">{order.header.status}</strong>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <button
+                          onClick={handleNewOrder}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Novo Pedido em Branco</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <OrderItemsTable
                     items={order.items}
                     globalFiscal={fiscalConfig}
                     stores={storeConfigs}
                     products={products}
+                    currentSupplierName={order.header.fornecedor}
+                    currentSupplierId={order.header.supplierId}
                     onUpdateItem={handleUpdateItem}
                     onAddItem={handleAddItem}
                     onDuplicateItem={handleDuplicateItem}
@@ -833,8 +1240,24 @@ export function App() {
                     onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
                     onOpenSeparationModal={(item) => setSelectedSeparationItem(item)}
                     onLoadMockOrder={handleLoadMockOrder}
+                    onSaveProduct={handleSaveProduct}
                   />
                 </div>
+              )}
+
+              {/* PÁGINA 1.1: GESTÃO DO ESTOQUE DO DEPÓSITO CENTRAL (CD MATRIZ) */}
+              {activeNav === 'stock' && (
+                <CentralStockPage
+                  stockItems={centralStock}
+                  products={products}
+                  suppliers={suppliers}
+                  stores={storeConfigs}
+                  fiscalConfig={fiscalConfig}
+                  onUpdateStockBalance={handleUpdateStockBalance}
+                  onSaveNewStockItem={handleSaveNewStockItem}
+                  onGenerateStockSeparation={handleGenerateStockSeparation}
+                  onNavigateToSeparation={() => setActiveNav('separation')}
+                />
               )}
 
               {/* PÁGINA 2: CONFERÊNCIA DE SEPARAÇÃO E ROMANEIO (20 LOJAS) */}
@@ -843,7 +1266,8 @@ export function App() {
                   order={order}
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
                   stores={storeConfigs}
-                  onExportPDF={handleExportPDF}
+                  currentUser={currentUser}
+                  onExportPDF={handleExportSeparationPDF}
                   onExportExcel={handleExportExcel}
                   onLoadMockOrder={handleLoadMockOrder}
                   onNavigateToOrders={() => setActiveNav('orders')}
@@ -851,6 +1275,8 @@ export function App() {
                   onChangeOrder={setOrder}
                   onSelectOrder={setOrder}
                   onFinalizeOrder={handleFinalizeSeparation}
+                  onReleaseToSeparation={handleReleaseToSeparation}
+                  onApproveOrder={handleApproveOrder}
                 />
               )}
 

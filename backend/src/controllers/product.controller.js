@@ -36,6 +36,15 @@ class ProductController {
       next(err);
     }
   }
+
+  async syncCatalog(req, res, next) {
+    try {
+      const products = await productService.syncCatalog();
+      return res.json(products);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new ProductController();

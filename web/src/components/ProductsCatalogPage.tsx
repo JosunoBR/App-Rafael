@@ -67,18 +67,27 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
   // Filtragem dos produtos por Busca, Categoria E Fornecedor
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
+      const s = searchTerm.toLowerCase();
+      const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+      const codForn = (p.codigoFornecedor || '').toLowerCase();
+      const codBarras = (p.codigoBarras || p.eanBarcode || '').toLowerCase();
+      const desc = p.descricao.toLowerCase();
+      const cat = (p.categoria || '').toLowerCase();
+      const forn = (p.nomeFornecedor || '').toLowerCase();
+
       const matchSearch = 
-        p.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.codigo && p.codigo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (p.categoria && p.categoria.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (p.nomeFornecedor && p.nomeFornecedor.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (p.eanBarcode && p.eanBarcode.includes(searchTerm));
+        desc.includes(s) ||
+        codInt.includes(s) ||
+        codForn.includes(s) ||
+        codBarras.includes(s) ||
+        cat.includes(s) ||
+        forn.includes(s);
 
       const matchCategory = selectedCategory === 'all' || p.categoria === selectedCategory;
 
       let matchSupplier = true;
       if (selectedSupplier !== 'all') {
-        const supObj = suppliers.find(s => s.id === selectedSupplier);
+        const supObj = suppliers.find(sup => sup.id === selectedSupplier);
         matchSupplier = p.supplierId === selectedSupplier || (Boolean(supObj) && p.nomeFornecedor === supObj?.razaoSocial);
       }
 
@@ -91,17 +100,22 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
       ? (suppliers.find(s => s.id === selectedSupplier) || suppliers[0]) 
       : suppliers[0];
 
+    const nextCode = `PRD-${String(products.length + 1).padStart(3, '0')}`;
+
     setEditingProduct({
       id: 'prod_' + Date.now(),
-      codigo: `PRD-${String(products.length + 1).padStart(3, '0')}`,
+      codigoInterno: nextCode,
+      codigo: nextCode,
+      codigoFornecedor: '',
+      codigoBarras: '',
+      eanBarcode: '',
       descricao: '',
       categoria: selectedCategory !== 'all' ? selectedCategory : 'Utilidades',
       fotoUrl: '',
       qtdPorPacote: 12,
       precoUnitarioPadrao: 0,
-      pdvSugerido: 0,
+      pdvSugerido: 12.00,
       ncm: '',
-      eanBarcode: '',
       supplierId: targetSupplier?.id || '',
       nomeFornecedor: targetSupplier?.razaoSocial || '',
       ativo: true
@@ -110,7 +124,12 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
   };
 
   const handleOpenEditProduct = (prod: Product) => {
-    setEditingProduct({ ...prod });
+    setEditingProduct({ 
+      ...prod,
+      codigoInterno: prod.codigoInterno || prod.codigo || '',
+      codigoFornecedor: prod.codigoFornecedor || '',
+      codigoBarras: prod.codigoBarras || prod.eanBarcode || ''
+    });
     setIsModalOpen(true);
   };
 
@@ -131,17 +150,24 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
     e.preventDefault();
     if (!editingProduct || !editingProduct.descricao?.trim()) return;
 
+    const codInterno = editingProduct.codigoInterno?.trim() || editingProduct.codigo?.trim() || `PRD-${Date.now()}`;
+    const codForn = editingProduct.codigoFornecedor?.trim() || '';
+    const codBarras = editingProduct.codigoBarras?.trim() || editingProduct.eanBarcode?.trim() || '';
+
     const fullProduct: Product = {
       id: editingProduct.id || 'prod_' + Date.now(),
-      codigo: editingProduct.codigo?.trim() || `PRD-${Date.now()}`,
+      codigoInterno: codInterno,
+      codigo: codInterno,
+      codigoFornecedor: codForn,
+      codigoBarras: codBarras,
+      eanBarcode: codBarras,
       descricao: editingProduct.descricao.trim(),
       categoria: editingProduct.categoria?.trim() || 'Geral',
       fotoUrl: editingProduct.fotoUrl || '',
       qtdPorPacote: Math.max(1, Number(editingProduct.qtdPorPacote) || 1),
       precoUnitarioPadrao: Math.max(0, Number(editingProduct.precoUnitarioPadrao) || 0),
-      pdvSugerido: Math.max(0, Number(editingProduct.pdvSugerido) || 0),
+      pdvSugerido: editingProduct.pdvSugerido !== undefined ? Number(editingProduct.pdvSugerido) : 12.00,
       ncm: editingProduct.ncm?.trim() || '',
-      eanBarcode: editingProduct.eanBarcode?.trim() || '',
       supplierId: editingProduct.supplierId || '',
       nomeFornecedor: editingProduct.nomeFornecedor || '',
       ativo: editingProduct.ativo !== undefined ? editingProduct.ativo : true,
@@ -347,10 +373,17 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
 
                   {/* Informações do Produto */}
                   <div className="p-3.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.2 rounded">
-                        {product.codigo || 'S/ CÓD'}
-                      </span>
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-[10px] font-extrabold font-mono text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 rounded-md" title="Código Interno Mega12">
+                          {product.codigoInterno || product.codigo || 'S/ CÓD'}
+                        </span>
+                        {product.codigoFornecedor && (
+                          <span className="text-[9px] font-bold font-mono text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 px-1.5 py-0.5 rounded" title="Código do Fornecedor / Fabricante">
+                            Ref: {product.codigoFornecedor}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] font-semibold text-slate-400">
                         Emb: <strong className="text-slate-700 dark:text-slate-300 font-mono">{product.qtdPorPacote} un/cx</strong>
                       </span>
@@ -359,6 +392,14 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                     <h3 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-2 min-h-[32px]" title={product.descricao}>
                       {product.descricao}
                     </h3>
+
+                    {/* Código de Barras EAN */}
+                    {(product.codigoBarras || product.eanBarcode) && (
+                      <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1 bg-slate-50 dark:bg-slate-900/60 px-2 py-1 rounded-md border border-slate-100 dark:border-slate-800" title="Código de Barras EAN-13">
+                        <Barcode className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="tracking-wider">{product.codigoBarras || product.eanBarcode}</span>
+                      </div>
+                    )}
 
                     {product.nomeFornecedor && (
                       <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate" title={product.nomeFornecedor}>
@@ -378,6 +419,14 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                         R$ {Number(product.precoUnitarioPadrao || 0).toFixed(2)}
                       </span>
                     </div>
+                    {product.pdvSugerido ? (
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-bold uppercase tracking-wider">PDV Alvo</span>
+                        <span className="text-xs sm:text-sm font-bold font-mono text-indigo-600 dark:text-indigo-400">
+                          R$ {Number(product.pdvSugerido).toFixed(2)}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -416,7 +465,9 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
                   <th className="py-3 px-3 text-center w-14">Foto</th>
-                  <th className="py-3 px-3">Código</th>
+                  <th className="py-3 px-3">Cód. Interno</th>
+                  <th className="py-3 px-3">Cód. Fornecedor</th>
+                  <th className="py-3 px-3">Cód. Barras (EAN)</th>
                   <th className="py-3 px-3">Descrição do Produto</th>
                   <th className="py-3 px-3">Categoria</th>
                   <th className="py-3 px-3">Fornecedor</th>
@@ -445,11 +496,35 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                       </div>
                     </td>
 
-                    <td className="py-2 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                      {product.codigo || '-'}
+                    {/* Código Interno */}
+                    <td className="py-2 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                      {product.codigoInterno || product.codigo || '-'}
                     </td>
 
-                    <td className="py-2 px-3 font-bold text-slate-900 dark:text-white max-w-[260px] truncate" title={product.descricao}>
+                    {/* Código Fornecedor */}
+                    <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                      {product.codigoFornecedor ? (
+                        <span className="bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800 text-[11px] font-bold">
+                          {product.codigoFornecedor}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+
+                    {/* Código de Barras EAN */}
+                    <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                      {(product.codigoBarras || product.eanBarcode) ? (
+                        <span className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">
+                          <Barcode className="w-3 h-3 text-slate-400" />
+                          {product.codigoBarras || product.eanBarcode}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+
+                    <td className="py-2 px-3 font-bold text-slate-900 dark:text-white max-w-[240px] truncate" title={product.descricao}>
                       {product.descricao}
                     </td>
 
@@ -459,7 +534,7 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                       </span>
                     </td>
 
-                    <td className="py-2 px-3 text-slate-500 dark:text-slate-400 truncate max-w-[160px]">
+                    <td className="py-2 px-3 text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
                       {product.nomeFornecedor || '-'}
                     </td>
 
@@ -524,7 +599,7 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                       : 'Editar Dados do Produto'}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Defina foto, código, embalagem e preços padrão
+                    Defina foto, códigos (interno, fornecedor, barras), embalagem e preços padrão
                   </p>
                 </div>
               </div>
@@ -605,39 +680,106 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                 </div>
               </div>
 
-              {/* Linha 1: Código & Descrição */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div className="sm:col-span-4">
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Código / SKU *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editingProduct.codigo || ''}
-                    onChange={(e) => setEditingProduct(prev => prev ? { ...prev, codigo: e.target.value } : null)}
-                    placeholder="Ex: PRD-001"
-                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
-                  />
+              {/* Seção de Códigos de Identificação (Interno, Fornecedor, Barras) */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
+                <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Tag className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Identificação & Códigos do Produto</span>
                 </div>
 
-                <div className="sm:col-span-8">
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Descrição Completa do Produto *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editingProduct.descricao || ''}
-                    onChange={(e) => setEditingProduct(prev => prev ? { ...prev, descricao: e.target.value } : null)}
-                    placeholder="Ex: Garrafa Térmica Inox 1L..."
-                    className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Código Interno */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Código Interno (SKU Rede) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editingProduct.codigoInterno || editingProduct.codigo || ''}
+                      onChange={(e) => setEditingProduct(prev => prev ? { ...prev, codigoInterno: e.target.value, codigo: e.target.value } : null)}
+                      placeholder="Ex: PRD-001"
+                      className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <span className="text-[9px] text-slate-400 block mt-0.5">Visível em todas as telas</span>
+                  </div>
+
+                  {/* Código Fornecedor */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Código do Fornecedor (Ref)
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProduct.codigoFornecedor || ''}
+                      onChange={(e) => setEditingProduct(prev => prev ? { ...prev, codigoFornecedor: e.target.value } : null)}
+                      placeholder="Ex: BP-1001"
+                      className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 outline-hidden focus:ring-2 focus:ring-amber-500"
+                    />
+                    <span className="text-[9px] text-slate-400 block mt-0.5">Visível na tela de compras</span>
+                  </div>
+
+                  {/* Código de Barras EAN */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Código de Barras (EAN-13)
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProduct.codigoBarras || editingProduct.eanBarcode || ''}
+                      onChange={(e) => setEditingProduct(prev => prev ? { ...prev, codigoBarras: e.target.value, eanBarcode: e.target.value } : null)}
+                      placeholder="Ex: 7891000100011"
+                      className="w-full px-3 py-2 text-xs font-mono font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <span className="text-[9px] text-slate-400 block mt-0.5">Catálogo, estoque e separação</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Linha 2: Categoria, Fornecedor & Embalagem */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Descrição Completa */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Descrição Completa do Produto *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editingProduct.descricao || ''}
+                  onChange={(e) => setEditingProduct(prev => prev ? { ...prev, descricao: e.target.value } : null)}
+                  placeholder="Ex: Garrafa Térmica Inox 1L com Termômetro Digital..."
+                  className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Fornecedor (Largura Total até o final da tela) */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Fornecedor
+                </label>
+                <select
+                  value={editingProduct.supplierId || ''}
+                  onChange={(e) => {
+                    const sId = e.target.value;
+                    const sObj = suppliers.find(s => s.id === sId);
+                    setEditingProduct(prev => prev ? { 
+                      ...prev, 
+                      supplierId: sId,
+                      nomeFornecedor: sObj ? sObj.razaoSocial : ''
+                    } : null);
+                  }}
+                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value="">Sem fornecedor fixo (Catálogo Geral)</option>
+                  {suppliers.map(sup => (
+                    <option key={sup.id} value={sup.id}>
+                      {sup.razaoSocial} {sup.nomeFantasia ? `(${sup.nomeFantasia})` : ''} {sup.cnpj ? `• ${sup.cnpj}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Linha de Categoria, Preço Compra, PDV e NCM */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     Categoria / Setor
@@ -646,46 +788,11 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                     type="text"
                     value={editingProduct.categoria || ''}
                     onChange={(e) => setEditingProduct(prev => prev ? { ...prev, categoria: e.target.value } : null)}
-                    placeholder="Ex: Decoração & Presentes"
+                    placeholder="Ex: Utilidades"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                   />
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Fornecedor Habitual
-                  </label>
-                  <select
-                    value={editingProduct.supplierId || ''}
-                    onChange={(e) => handleSupplierChangeInModal(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden cursor-pointer"
-                  >
-                    <option value="">Selecione um fornecedor...</option>
-                    {suppliers.map(sup => (
-                      <option key={sup.id} value={sup.id}>
-                        {sup.razaoSocial}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Embalagem Padrão (un/cx) *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={editingProduct.qtdPorPacote || 1}
-                    onChange={(e) => setEditingProduct(prev => prev ? { ...prev, qtdPorPacote: Math.max(1, parseInt(e.target.value) || 1) } : null)}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden text-center"
-                  />
-                </div>
-              </div>
-
-              {/* Linha 3: Preço Compra, PDV Sugerido, NCM, EAN */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     Preço Compra Padrão (R$)
@@ -702,16 +809,18 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    PDV Alvo Sugerido (R$)
+                    Preço de Venda / PDV (R$) *
                   </label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
-                    value={editingProduct.pdvSugerido || 0}
+                    value={editingProduct.pdvSugerido !== undefined ? editingProduct.pdvSugerido : 12.00}
                     onChange={(e) => setEditingProduct(prev => prev ? { ...prev, pdvSugerido: parseFloat(e.target.value) || 0 } : null)}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 outline-hidden"
+                    placeholder="12.00"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 outline-hidden focus:ring-2 focus:ring-emerald-500"
                   />
+                  <span className="text-[9px] text-slate-400 block mt-0.5">Preço no caixa (Padrão R$ 12,00)</span>
                 </div>
 
                 <div>
@@ -723,19 +832,6 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                     value={editingProduct.ncm || ''}
                     onChange={(e) => setEditingProduct(prev => prev ? { ...prev, ncm: e.target.value } : null)}
                     placeholder="Ex: 9617.00.10"
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Código de Barras EAN
-                  </label>
-                  <input
-                    type="text"
-                    value={editingProduct.eanBarcode || ''}
-                    onChange={(e) => setEditingProduct(prev => prev ? { ...prev, eanBarcode: e.target.value } : null)}
-                    placeholder="Ex: 7891000100011"
                     className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                   />
                 </div>

@@ -4,7 +4,7 @@
         "source": "br.com.mega12.app-main-59:/xml/file_paths.xml"
     },
     {
-        "merged": "/home/josue/.gradle/daemon/9.0.0/br.com.mega12.app-debug-57:/xml_network_security_config.xml.flat",
-        "source": "/home/josue/.gradle/daemon/9.0.0/br.com.mega12.app-main-59:/xml/network_security_config.xml"
+        "merged": "br.com.mega12.app-debug-57:/xml_network_security_config.xml.flat",
+        "source": "br.com.mega12.app-main-59:/xml/network_security_config.xml"
     }
 ]

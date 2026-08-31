@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import br.com.mega12.app.data.model.OrderItem
 import br.com.mega12.app.domain.FiscalEngine
 import br.com.mega12.app.ui.theme.*
+import br.com.mega12.app.util.NumberFormatUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,7 +27,7 @@ fun FiscalSimulatorBottomSheet(
     onDismiss: () -> Unit,
     onApply: (Double, Double) -> Unit
 ) {
-    var precoCompra by remember { mutableStateOf(item.precoCompraUnitario.toString()) }
+    var precoCompra by remember { mutableStateOf(item.precoUnitario.toString()) }
     var pdvAlvo by remember { mutableStateOf(item.pdvAlvo.toString()) }
     var margemMeta by remember { mutableStateOf(20f) }
 
@@ -99,7 +100,7 @@ fun FiscalSimulatorBottomSheet(
                         color = Slate600
                     )
                     Text(
-                        "R$ %.2f".format(precoMax),
+                        NumberFormatUtils.formatCurrency(precoMax),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Black,
                         color = Blue500
@@ -117,11 +118,11 @@ fun FiscalSimulatorBottomSheet(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
                             Text("CUSTO REAL", style = MaterialTheme.typography.labelSmall, color = Slate400)
-                            Text("R$ %.2f".format(fiscal.custoRealEfetivo), style = MaterialTheme.typography.titleMedium, color = Amber500, fontWeight = FontWeight.Bold)
+                            Text(NumberFormatUtils.formatCurrency(fiscal.custoRealEfetivo), style = MaterialTheme.typography.titleMedium, color = Amber500, fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text("MARGEM REAL", style = MaterialTheme.typography.labelSmall, color = Slate400)
-                            Text("%.1f%%".format(fiscal.margemPercentual), style = MaterialTheme.typography.titleMedium, color = Emerald400, fontWeight = FontWeight.Bold)
+                            Text(NumberFormatUtils.formatPercentRaw(fiscal.margemPercentual), style = MaterialTheme.typography.titleMedium, color = Emerald400, fontWeight = FontWeight.Bold)
                         }
                     }
                     

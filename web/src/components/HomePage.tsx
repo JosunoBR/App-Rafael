@@ -18,10 +18,9 @@ import {
   AlertTriangle,
   Trash2,
   Calendar,
-  Users,
-  ShieldCheck,
   FileEdit,
-  CreditCard
+  CreditCard,
+  Warehouse
 } from 'lucide-react';
 import { PurchaseOrder, User, Supplier, StoreConfig } from '../shared/types';
 import { ActiveNavTab } from './Sidebar';
@@ -98,7 +97,7 @@ export const HomePage: React.FC<HomePageProps> = ({
     <div className="space-y-8 animate-in fade-in duration-300">
       
       {/* 1. Header de Boas-Vindas & Identificação Executiva */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-slate-850 to-emerald-950 text-white p-6 sm:p-8 border border-slate-800 shadow-2xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 text-white p-6 sm:p-8 border border-slate-800 shadow-2xl">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 -mb-8 w-48 h-48 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
         
@@ -119,20 +118,33 @@ export const HomePage: React.FC<HomePageProps> = ({
               {getGreeting()}, <span className="text-emerald-400">{currentUser.nome}</span>!
             </h1>
             <p className="text-sm text-slate-300 mt-1 max-w-xl">
-              Central de compras, simulação fiscal, rateio para 20 lojas e controle de separação da matriz.
+              {currentUser.role === 'deposito' 
+                ? 'Gestão de estoque central CD, controle de saldos, transferências para as lojas e rateio dos pedidos aprovados.'
+                : 'Central de compras, simulação fiscal, rateio para 20 lojas e controle de separação da matriz.'}
             </p>
           </div>
 
           {/* Ação Primária em Destaque */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={onNewOrder}
-              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-sm shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2 cursor-pointer hover:scale-102"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              <span>Novo Pedido de Compras</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            {currentUser.role === 'deposito' ? (
+              <button
+                onClick={() => onNavigate('stock')}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2 cursor-pointer hover:scale-102"
+              >
+                <Warehouse className="w-4 h-4" />
+                <span>Estoque Central CD</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={onNewOrder}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-sm shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2 cursor-pointer hover:scale-102"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>Novo Pedido de Compras</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -364,26 +376,49 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           
-          {/* Card 1: Novo Pedido */}
-          <div 
-            onClick={onNewOrder}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition">
-                <ShoppingCart className="w-5 h-5" />
+          {/* Card 1: Novo Pedido (Diretoria) */}
+          {currentUser.role === 'diretoria' && (
+            <div 
+              onClick={onNewOrder}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition">
+                  <ShoppingCart className="w-5 h-5" />
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-1 transition" />
               </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-1 transition" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
+                Cotação & Digitação de Pedido
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Crie pedidos em branco, simule impostos e calcule a margem real unitária.
+              </p>
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
-              Cotação & Digitação de Pedido
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Crie pedidos em branco, simule impostos e calcule a margem real unitária.
-            </p>
-          </div>
+          )}
 
-          {/* Card 2: Conferência & Romaneio */}
+          {/* Card 2: Depósito / Estoque Central CD (Diretoria e Depósito) */}
+          {(currentUser.role === 'diretoria' || currentUser.role === 'deposito') && (
+            <div 
+              onClick={() => onNavigate('stock')}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition">
+                  <Warehouse className="w-5 h-5" />
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 group-hover:translate-x-1 transition" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                Depósito & Estoque Central CD
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Gerencie saldos em unidades, inventário do galpão e gere transferências para as lojas.
+              </p>
+            </div>
+          )}
+
+          {/* Card 3: Conferência & Romaneio (Todos) */}
           <div 
             onClick={() => onNavigate('separation')}
             className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
@@ -398,104 +433,112 @@ export const HomePage: React.FC<HomePageProps> = ({
               Conferência & Romaneio (20 Lojas)
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Painel de doca com conferência em tempo real, caixas por loja e impressão em PDF.
+              Painel de doca com conferência em tempo real, peças por loja e impressão em PDF.
             </p>
           </div>
 
-          {/* Card 3: Dashboard & BI */}
+          {/* Card 4: Dashboard & BI (Diretoria) */}
+          {currentUser.role === 'diretoria' && (
+            <div 
+              onClick={() => onNavigate('dashboard')}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 group-hover:translate-x-1 transition" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                Dashboard Executivo & BI
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Gráficos de investimento mensal, ranking de fornecedores e análise de rentabilidade.
+              </p>
+            </div>
+          )}
+
+          {/* Card 5: Catálogo de Produtos (Diretoria e Depósito) */}
+          {(currentUser.role === 'diretoria' || currentUser.role === 'deposito') && (
+            <div 
+              onClick={() => onNavigate('products')}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition">
+                  <Package className="w-5 h-5" />
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 group-hover:translate-x-1 transition" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+                Catálogo com Fotos & EAN
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Consulta geral de produtos, fotos em alta resolução, embalagens e dados de código.
+              </p>
+            </div>
+          )}
+
+          {/* Card 6: Gestão Financeira & Boletos (Diretoria) */}
+          {currentUser.role === 'diretoria' && (
+            <div 
+              onClick={() => onNavigate('financial')}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500 dark:hover:border-amber-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-110 transition">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500 group-hover:translate-x-1 transition" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition">
+                Controle Financeiro & Boletos
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Fluxo de pagamentos por fornecedor e mês com parcelas editáveis para acordos comerciais.
+              </p>
+            </div>
+          )}
+
+          {/* Card 7: Histórico de Separações (Todos) */}
           <div 
-            onClick={() => onNavigate('dashboard')}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+            onClick={() => onNavigate('separationHistory')}
+            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition">
-                <BarChart3 className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition">
+                <Boxes className="w-5 h-5" />
               </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 group-hover:translate-x-1 transition" />
+              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-1 transition" />
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-              Dashboard Executivo & BI
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition">
+              Histórico de Romaneios & Cargas
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Gráficos de investimento mensal, ranking de fornecedores e análise de rentabilidade.
+              Consulte romaneios finalizados e cargas expedidas para as 20 lojas.
             </p>
           </div>
 
-          {/* Card 4: Catálogo de Produtos */}
-          <div 
-            onClick={() => onNavigate('products')}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition">
-                <Package className="w-5 h-5" />
+          {/* Card 8: Histórico Geral de Pedidos (Diretoria) */}
+          {currentUser.role === 'diretoria' && (
+            <div 
+              onClick={() => onNavigate('history')}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 transition">
+                  <History className="w-5 h-5" />
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-purple-500 group-hover:translate-x-1 transition" />
               </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 group-hover:translate-x-1 transition" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition">
+                Histórico & Arquivo Geral
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Consulte pedidos antigos gravados no SQLite, reabra ou exporte para Excel.
+              </p>
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
-              Catálogo com Fotos & EAN
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Cadastro de produtos, fotos em alta resolução, embalagens padrão e PDV sugerido.
-            </p>
-          </div>
-
-          {/* Card 5: Gestão Financeira & Boletos */}
-          <div 
-            onClick={() => onNavigate('financial')}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500 dark:hover:border-amber-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-110 transition">
-                <CreditCard className="w-5 h-5" />
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500 group-hover:translate-x-1 transition" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition">
-              Controle Financeiro & Boletos
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Fluxo de pagamentos por fornecedor e mês com parcelas editáveis para acordos comerciais.
-            </p>
-          </div>
-
-          {/* Card 6: App de Viagens (Feiras) */}
-          <div 
-            onClick={() => onSwitchViewMode('mobile_purchases')}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition">
-                <Smartphone className="w-5 h-5" />
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-1 transition" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
-              📱 App Viagens & Feiras (PWA)
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Interface otimizada para celular: digite pedidos no stand e tire fotos na hora.
-            </p>
-          </div>
-
-          {/* Card 7: Histórico de Pedidos */}
-          <div 
-            onClick={() => onNavigate('history')}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 transition">
-                <History className="w-5 h-5" />
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-purple-500 group-hover:translate-x-1 transition" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition">
-              Histórico & Arquivo Geral
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Consulte pedidos antigos gravados no SQLite, reabra ou exporte para Excel.
-            </p>
-          </div>
+          )}
 
         </div>
       </div>
@@ -549,7 +592,7 @@ export const HomePage: React.FC<HomePageProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   <th className="py-3 px-4">Nº Pedido</th>
                   <th className="py-3 px-4">Fornecedor</th>
                   <th className="py-3 px-4">Data</th>

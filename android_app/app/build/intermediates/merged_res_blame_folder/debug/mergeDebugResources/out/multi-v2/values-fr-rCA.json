@@ -4,7 +4,7 @@
             "outputFile": "br.com.mega12.app-mergeDebugResources-55:/values-fr-rCA/values-fr-rCA.xml",
             "map": [
                 {
-                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/d2bf1935f9f3fd6bd6438c060df7d4af/transformed/ui-release/res/values-fr-rCA/values-fr-rCA.xml",
+                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/485c8ecf07ac73d01ac354b7ceda1a7e/transformed/ui-release/res/values-fr-rCA/values-fr-rCA.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
@@ -21,7 +21,7 @@
                     }
                 },
                 {
-                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/edd3a04f152ce22eb468c5cfe9e201cb/transformed/core-1.15.0/res/values-fr-rCA/values-fr-rCA.xml",
+                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/e2d059cb58c07022637fae6478c1da99/transformed/core-1.15.0/res/values-fr-rCA/values-fr-rCA.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9",
                         "startColumns": "4,4,4,4,4,4,4,4",
@@ -38,7 +38,7 @@
                     }
                 },
                 {
-                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/10fb8cb5fca57d44d64be7294b56d837/transformed/foundation-release/res/values-fr-rCA/values-fr-rCA.xml",
+                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/3864a748ba5fc477da24bc6f16467417/transformed/foundation-release/res/values-fr-rCA/values-fr-rCA.xml",
                     "from": {
                         "startLines": "2,3",
                         "startColumns": "4,4",
@@ -55,7 +55,7 @@
                     }
                 },
                 {
-                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/116493193690e2ed5a81faa5af682fbf/transformed/material3-release/res/values-fr-rCA/values-fr-rCA.xml",
+                    "source": "/home/josue/.gradle/caches/9.0.0/transforms/df611c1b56ba7e84f47e6e7e3cf4ee36/transformed/material3-release/res/values-fr-rCA/values-fr-rCA.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",

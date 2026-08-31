@@ -76,6 +76,8 @@ async function getDatabase() {
       observacoesDescarga TEXT,
       valorFreteGlobal REAL DEFAULT 0,
       valorOutrasDespesasGlobal REAL DEFAULT 0,
+      totalLiquido REAL DEFAULT 0,
+      totalPecas INTEGER DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'Em Cotação',
       conferente TEXT,
       possuiAvarias INTEGER DEFAULT 0,

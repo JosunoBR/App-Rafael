@@ -10,7 +10,6 @@ import androidx.core.content.FileProvider
 import br.com.mega12.app.data.model.PurchaseOrder
 import java.io.File
 import java.io.FileOutputStream
-import java.text.NumberFormat
 import java.util.*
 
 object PdfGenerator {
@@ -21,7 +20,6 @@ object PdfGenerator {
         val page = pdfDocument.startPage(pageInfo)
         val canvas: Canvas = page.canvas
         val paint = Paint()
-        val currencyFormatter = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
 
         var y = 40f
 
@@ -37,7 +35,7 @@ object PdfGenerator {
         y += 20f
         canvas.drawText("Fornecedor: ${order.header.fornecedor}", 40f, y, paint)
         y += 20f
-        canvas.drawText("Data: ${order.header.dataEmissao}", 40f, y, paint)
+        canvas.drawText("Data: ${order.header.dataPedido}", 40f, y, paint)
         y += 30f
 
         // Table Header
@@ -57,9 +55,9 @@ object PdfGenerator {
                 // In a real app, we would start a new page
             }
             canvas.drawText(item.descricao.take(40), 40f, y, paint)
-            canvas.drawText("${item.totalPecas}", 350f, y, paint)
-            canvas.drawText(currencyFormatter.format(item.precoCompraUnitario), 420f, y, paint)
-            canvas.drawText(currencyFormatter.format(item.subtotal), 500f, y, paint)
+            canvas.drawText(NumberFormatUtils.formatInteger(item.qtdTotalUnidades), 350f, y, paint)
+            canvas.drawText(NumberFormatUtils.formatCurrency(item.precoUnitario), 420f, y, paint)
+            canvas.drawText(NumberFormatUtils.formatCurrency(item.valorTotalBruto), 500f, y, paint)
             y += 20f
         }
 
@@ -71,7 +69,7 @@ object PdfGenerator {
         paint.isFakeBoldText = true
         paint.textSize = 14f
         canvas.drawText("TOTAL DO PEDIDO:", 300f, y, paint)
-        canvas.drawText(currencyFormatter.format(order.totalLiquido), 450f, y, paint)
+        canvas.drawText(NumberFormatUtils.formatCurrency(order.effectiveTotalLiquido), 450f, y, paint)
 
         pdfDocument.finishPage(page)
 

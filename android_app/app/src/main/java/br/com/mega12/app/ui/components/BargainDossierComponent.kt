@@ -16,12 +16,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
-import java.text.NumberFormat
+import br.com.mega12.app.util.NumberFormatUtils
 import java.util.*
 
 @Composable
 fun BargainDossierComponent(dossier: Mega12ViewModel.SupplierBargainDossier) {
-    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
 
     Mega12Card(
         modifier = Modifier.fillMaxWidth(),
@@ -63,13 +62,13 @@ fun BargainDossierComponent(dossier: Mega12ViewModel.SupplierBargainDossier) {
                 BargainStat(
                     modifier = Modifier.weight(1f),
                     label = "Investido",
-                    value = currencyFormatter.format(dossier.totalInvestido),
+                    value = NumberFormatUtils.formatCurrency(dossier.totalInvestido),
                     icon = Icons.Default.Payments
                 )
                 BargainStat(
                     modifier = Modifier.weight(1f),
                     label = "Peças",
-                    value = "${dossier.totalPecas}",
+                    value = NumberFormatUtils.formatInteger(dossier.totalPecas),
                     icon = Icons.Default.Inventory2
                 )
             }
@@ -80,13 +79,13 @@ fun BargainDossierComponent(dossier: Mega12ViewModel.SupplierBargainDossier) {
                 BargainStat(
                     modifier = Modifier.weight(1f),
                     label = "Pedidos",
-                    value = "${dossier.pedidosCount}",
+                    value = NumberFormatUtils.formatInteger(dossier.pedidosCount),
                     icon = Icons.Default.History
                 )
                 BargainStat(
                     modifier = Modifier.weight(1f),
                     label = "Margem Média",
-                    value = String.format("%.1f%%", dossier.margemMedia),
+                    value = NumberFormatUtils.formatPercentRaw(dossier.margemMedia),
                     icon = Icons.Default.Percent
                 )
             }
@@ -106,7 +105,7 @@ fun BargainDossierComponent(dossier: Mega12ViewModel.SupplierBargainDossier) {
                     Icon(Icons.Default.Lightbulb, contentDescription = null, tint = Amber500, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Use o volume de ${dossier.totalPecas} peças para negociar descontos OFF e melhores prazos.",
+                        "Use o volume de ${NumberFormatUtils.formatInteger(dossier.totalPecas)} peças para negociar descontos OFF e melhores prazos.",
                         style = MaterialTheme.typography.bodySmall,
                         color = Emerald100
                     )

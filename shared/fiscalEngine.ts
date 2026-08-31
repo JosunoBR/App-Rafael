@@ -1,4 +1,4 @@
-import { FiscalConfig, OrderItem, OrderItemFiscalOverride } from './types';
+import { FiscalConfig, OrderItemFiscalOverride } from './types';
 import { DEFAULT_FISCAL_CONFIG } from './constants';
 
 export interface FiscalCalculationResult {
@@ -13,9 +13,6 @@ export interface FiscalCalculationResult {
   statusMargem: 'excelente' | 'boa' | 'apertada' | 'prejuizo';
 }
 
-/**
- * Calcula o custo real efetivo e a margem de um item baseado no preço de compra e no PDV pretendido.
- */
 export function calculateItemFiscal(
   precoCompra: number,
   pdvAlvo: number,
@@ -75,12 +72,9 @@ export function calculateItemFiscal(
   };
 }
 
-/**
- * Calcula o Preço Máximo de Compra para atingir uma margem percentual alvo desejada no PDV.
- */
 export function calculateMaxPurchasePrice(
   pdvAlvo: number,
-  margemAlvoPercentual: number = 20, // 20% de margem desejada
+  margemAlvoPercentual: number = 20,
   globalConfig: FiscalConfig = DEFAULT_FISCAL_CONFIG,
   override?: OrderItemFiscalOverride
 ): number {
@@ -103,10 +97,6 @@ export function calculateMaxPurchasePrice(
   const totalDespesas = icms + ipi + pisCofins + custosFixos;
   const margemDecimal = margemAlvoPercentual / 100;
 
-  // Custo Real = Compra * (1 - creditoEntrada) + PDV * totalDespesas
-  // Margem = PDV - Custo Real
-  // PDV * (1 - margemDecimal - totalDespesas) = Compra * (1 - creditoEntrada)
-  // Compra = [PDV * (1 - margemDecimal - totalDespesas)] / (1 - creditoEntrada)
   const divisor = (1 - creditoEntrada);
   if (divisor <= 0) return 0;
 

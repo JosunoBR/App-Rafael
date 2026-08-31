@@ -24,6 +24,13 @@ async function getDatabase() {
     dbInstance = new SQL.Database();
   }
 
+  // Ativar verificação e integridade de chaves estrangeiras no SQLite
+  try {
+    dbInstance.run("PRAGMA foreign_keys = ON;");
+  } catch (e) {
+    console.warn('Aviso ao ativar PRAGMA foreign_keys:', e.message);
+  }
+
   // Criar tabelas se não existirem
   dbInstance.run(`
     CREATE TABLE IF NOT EXISTS fiscal_config (
@@ -60,6 +67,26 @@ async function getDatabase() {
       updatedAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS central_stock (
+      id TEXT PRIMARY KEY,
+      productId TEXT,
+      codigoInterno TEXT,
+      codigoFornecedor TEXT,
+      codigoBarras TEXT,
+      codigo TEXT,
+      descricao TEXT NOT NULL,
+      categoria TEXT,
+      fotoUrl TEXT,
+      saldoUnidades INTEGER NOT NULL DEFAULT 0,
+      precoUnitario REAL NOT NULL DEFAULT 0,
+      pdvSugerido REAL NOT NULL DEFAULT 12.0,
+      localizacaoGalpao TEXT,
+      fornecedorOrigem TEXT,
+      dataUltimaEntrada TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS purchase_orders (
       id TEXT PRIMARY KEY,
       numeroPedido TEXT NOT NULL UNIQUE,
@@ -79,10 +106,71 @@ async function getDatabase() {
       totalLiquido REAL DEFAULT 0,
       totalPecas INTEGER DEFAULT 0,
       installmentsJson TEXT,
-      itemsJson TEXT NOT NULL,
+      itemsJson TEXT NOT NULL DEFAULT '[]',
       separationDistributionJson TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS order_items (
+      id TEXT PRIMARY KEY,
+      orderId TEXT NOT NULL,
+      codigoInterno TEXT,
+      codigoFornecedor TEXT,
+      codigo TEXT,
+      descricao TEXT NOT NULL,
+      fotoUrl TEXT,
+      qtdTotalUnidades INTEGER NOT NULL DEFAULT 0,
+      precoUnitario REAL NOT NULL DEFAULT 0,
+      valorTotalBruto REAL NOT NULL DEFAULT 0,
+      pdvAlvo REAL NOT NULL DEFAULT 12.0,
+      despesasPdvUnit REAL DEFAULT 0,
+      creditoIcmsUnit REAL DEFAULT 0,
+      custoRealEfetivo REAL DEFAULT 0,
+      margemRealUnit REAL DEFAULT 0,
+      margemPercentual REAL DEFAULT 0,
+      qtdReservaEstoque INTEGER DEFAULT 0,
+      separacaoManual INTEGER DEFAULT 0,
+      separacaoLojasJson TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS order_installments (
+      id TEXT PRIMARY KEY,
+      orderId TEXT NOT NULL,
+      numeroParcela INTEGER NOT NULL,
+      totalParcelas INTEGER NOT NULL,
+      dataVencimento TEXT NOT NULL,
+      valor REAL NOT NULL DEFAULT 0,
+      valorOriginal REAL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'A Vencer',
+      dataPagamento TEXT,
+      observacao TEXT,
+      documentoRef TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS order_avarias (
+      id TEXT PRIMARY KEY,
+      orderId TEXT NOT NULL,
+      itemId TEXT NOT NULL,
+      codigoProduto TEXT,
+      descricaoProduto TEXT,
+      storeId TEXT NOT NULL,
+      nomeLoja TEXT,
+      quantidade INTEGER NOT NULL DEFAULT 0,
+      unidadeMedida TEXT DEFAULT 'UN',
+      custoUnitario REAL DEFAULT 0,
+      valorPrejuizoTotal REAL DEFAULT 0,
+      motivo TEXT NOT NULL,
+      conferente TEXT,
+      dataRegistro TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS separation_audit_logs (
@@ -99,7 +187,8 @@ async function getDatabase() {
       fotosJson TEXT,
       romaneioDataJson TEXT,
       timestamp TEXT NOT NULL,
-      createdAt TEXT NOT NULL
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS products (
@@ -111,8 +200,8 @@ async function getDatabase() {
       fornecedorPadraoId TEXT,
       fornecedorPadraoNome TEXT,
       precoUnitarioPadrao REAL NOT NULL,
-      pdvSugerido REAL NOT NULL,
-      qtdPorPacote INTEGER NOT NULL DEFAULT 12,
+      pdvSugerido REAL NOT NULL DEFAULT 12.0,
+      qtdPorPacote INTEGER NOT NULL DEFAULT 1,
       fotoUrl TEXT,
       ncm TEXT,
       eanBarcode TEXT,
@@ -140,12 +229,65 @@ async function getDatabase() {
     const tableInfo = dbInstance.exec("PRAGMA table_info(purchase_orders)");
     if (tableInfo[0]) {
       const colNames = tableInfo[0].values.map(v => v[1]);
-      if (!colNames.includes('installmentsJson')) {
-        dbInstance.run("ALTER TABLE purchase_orders ADD COLUMN installmentsJson TEXT");
-      }
-      if (!colNames.includes('percentualNota')) {
-        dbInstance.run("ALTER TABLE purchase_orders ADD COLUMN percentualNota REAL DEFAULT 100");
-      }
+      const requiredCols = {
+        dataEmissao: "TEXT",
+        dataEntregaPrevista: "TEXT",
+        totalLiquido: "REAL DEFAULT 0",
+        totalPecas: "INTEGER DEFAULT 0",
+        separationStatus: "TEXT DEFAULT 'Pendente'",
+        observacoes: "TEXT",
+        itemsJson: "TEXT NOT NULL DEFAULT '[]'",
+        separationDistributionJson: "TEXT",
+        installmentsJson: "TEXT",
+        percentualNota: "REAL DEFAULT 100",
+        percentualDescontoOff: "REAL DEFAULT 0",
+        aliquotaSt: "REAL DEFAULT 0",
+        supplierId: "TEXT",
+        vendedor: "TEXT",
+        contatoVendedor: "TEXT",
+        condicaoPagamento: "TEXT"
+      };
+
+      Object.entries(requiredCols).forEach(([col, def]) => {
+        if (!colNames.includes(col)) {
+          try { dbInstance.run(`ALTER TABLE purchase_orders ADD COLUMN ${col} ${def}`); } catch (e) {}
+        }
+      });
+    }
+
+    const prodTableInfo = dbInstance.exec("PRAGMA table_info(products)");
+    if (prodTableInfo[0]) {
+      const colNames = prodTableInfo[0].values.map(v => v[1]);
+      const requiredProdCols = {
+        codigoInterno: "TEXT",
+        codigoFornecedor: "TEXT",
+        codigoBarras: "TEXT",
+        subcategoria: "TEXT",
+        supplierId: "TEXT",
+        nomeFornecedor: "TEXT",
+        fotoUrl: "TEXT"
+      };
+
+      Object.entries(requiredProdCols).forEach(([col, def]) => {
+        if (!colNames.includes(col)) {
+          try { dbInstance.run(`ALTER TABLE products ADD COLUMN ${col} ${def}`); } catch (e) {}
+        }
+      });
+    }
+
+    const supTableInfo = dbInstance.exec("PRAGMA table_info(suppliers)");
+    if (supTableInfo[0]) {
+      const colNames = supTableInfo[0].values.map(v => v[1]);
+      const requiredSupCols = {
+        pedidoPadraoJson: "TEXT",
+        percentualNotaPadrao: "REAL DEFAULT 100"
+      };
+
+      Object.entries(requiredSupCols).forEach(([col, def]) => {
+        if (!colNames.includes(col)) {
+          try { dbInstance.run(`ALTER TABLE suppliers ADD COLUMN ${col} ${def}`); } catch (e) {}
+        }
+      });
     }
   } catch (err) {
     console.error('Aviso na verificação de migrações:', err.message);
@@ -163,8 +305,24 @@ async function getDatabase() {
         ('usr_comprador', 'Mariana Compras', 'compras@mega12.com.br', '123456', 'comprador', 'Compradora Pleno', '(42) 99999-0002', 1, '${now}', '${now}'),
         ('usr_conferente', 'Jorge Doca (Separação)', 'separacao@mega12.com.br', '123456', 'conferente', 'Conferente Líder Doca', '(42) 99999-0003', 1, '${now}', '${now}')
     `);
-    saveDatabaseToDisk();
   }
+
+  // Seeder rico de dados e histórico de compras desde Janeiro de 2026
+  try {
+    const { runFullDatabaseSeed } = require('./seedData');
+    runFullDatabaseSeed(dbInstance);
+  } catch (seedErr) {
+    console.error('Aviso no seeding de histórico:', seedErr.message);
+  }
+
+  // Regra de Negócio Central Rede Mega 12: Todos os produtos com PDV Sugerido travado em R$ 12,00
+  try {
+    dbInstance.run("UPDATE products SET pdvSugerido = 12.0;");
+  } catch (e) {
+    console.error('Aviso na sincronização de PDV para R$ 12,00:', e.message);
+  }
+
+  saveDatabaseToDisk();
 
   return dbInstance;
 }

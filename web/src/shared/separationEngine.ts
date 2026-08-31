@@ -3,155 +3,16 @@ import { DEFAULT_STORES, DEFAULT_RESERVE_STOCK_PERCENT } from './constants';
 
 export interface SeparationResult {
   allocations: Record<string, number>; // Em unidades
-  allocationsBoxes?: Record<string, number>; // Em caixas / volumes
   totalAllocated: number; // Em unidades
-  totalAllocatedBoxes?: number; // Em caixas
   reserveStock: number; // Quantidade guardada no Estoque Central / CD / Matriz (em unidades)
-  reserveStockBoxes?: number; // Guardada em caixas
   targetTotal: number; // Em unidades
-  targetTotalBoxes?: number; // Em caixas
   isBalanced: boolean;  // Se não ultrapassou o total
   isOverAllocated: boolean; // Se ultrapassou o total comprado
   difference: number;   // Saldo guardado em estoque (unidades)
-  differenceBoxes?: number;
   clusterTotals: {
     A: number;
     B: number;
     C: number;
-  };
-  clusterTotalsBoxes?: {
-    A: number;
-    B: number;
-    C: number;
-  };
-}
-
-/**
- * Rateio por Caixas / Volumes Fechados (Padrão Operacional de Galpão)
- */
-export function calculateBoxesSeparation(
-  totalBoxes: number,
-  packSize: number = 1,
-  stores: StoreConfig[] = DEFAULT_STORES,
-  reserveBoxes?: number
-): SeparationResult {
-  const safePackSize = Math.max(1, packSize || 1);
-  const defaultReserve = Math.round(totalBoxes * DEFAULT_RESERVE_STOCK_PERCENT);
-  const actualReserve = reserveBoxes !== undefined ? reserveBoxes : defaultReserve;
-  const safeReserveBoxes = Math.max(0, Math.min(totalBoxes, Math.floor(actualReserve || 0)));
-  const boxesToDistribute = Math.max(0, totalBoxes - safeReserveBoxes);
-
-  const activeStores = stores.filter(s => s.active);
-  const totalWeight = activeStores.reduce((acc, s) => acc + s.defaultWeight, 0);
-
-  const allocationsBoxes: Record<string, number> = {};
-  const allocationsUnits: Record<string, number> = {};
-  stores.forEach(s => { 
-    allocationsBoxes[s.id] = 0; 
-    allocationsUnits[s.id] = 0; 
-  });
-
-  if (boxesToDistribute <= 0 || totalWeight <= 0 || activeStores.length === 0) {
-    return {
-      allocations: allocationsUnits,
-      allocationsBoxes,
-      totalAllocated: 0,
-      totalAllocatedBoxes: 0,
-      reserveStock: totalBoxes * safePackSize,
-      reserveStockBoxes: totalBoxes,
-      targetTotal: totalBoxes * safePackSize,
-      targetTotalBoxes: totalBoxes,
-      isBalanced: true,
-      isOverAllocated: false,
-      difference: totalBoxes * safePackSize,
-      differenceBoxes: totalBoxes,
-      clusterTotals: { A: 0, B: 0, C: 0 },
-      clusterTotalsBoxes: { A: 0, B: 0, C: 0 }
-    };
-  }
-
-  const remainders: { storeId: string; cluster: string; weight: number; remainder: number; originalIndex: number }[] = [];
-  let sumIntegers = 0;
-
-  activeStores.forEach((store, index) => {
-    const exactQuota = (store.defaultWeight / totalWeight) * boxesToDistribute;
-    const integerPart = Math.floor(exactQuota);
-    const remainder = exactQuota - integerPart;
-
-    allocationsBoxes[store.id] = integerPart;
-    sumIntegers += integerPart;
-
-    remainders.push({
-      storeId: store.id,
-      cluster: store.cluster,
-      weight: store.defaultWeight,
-      remainder,
-      originalIndex: index
-    });
-  });
-
-  let leftover = boxesToDistribute - sumIntegers;
-
-  const clusterOrder: Record<string, number> = { A: 3, B: 2, C: 1 };
-  remainders.sort((a, b) => {
-    if (Math.abs(b.remainder - a.remainder) > 0.000001) {
-      return b.remainder - a.remainder;
-    }
-    const clusterDiff = (clusterOrder[b.cluster] || 0) - (clusterOrder[a.cluster] || 0);
-    if (clusterDiff !== 0) return clusterDiff;
-    return b.weight - a.weight;
-  });
-
-  let rIdx = 0;
-  while (leftover > 0 && remainders.length > 0) {
-    const item = remainders[rIdx % remainders.length];
-    allocationsBoxes[item.storeId] += 1;
-    leftover -= 1;
-    rIdx++;
-  }
-
-  const clusterTotals = { A: 0, B: 0, C: 0 };
-  const clusterTotalsBoxes = { A: 0, B: 0, C: 0 };
-
-  stores.forEach(s => {
-    const cx = allocationsBoxes[s.id] || 0;
-    const un = cx * safePackSize;
-    allocationsUnits[s.id] = un;
-
-    if (s.cluster === 'A') {
-      clusterTotalsBoxes.A += cx;
-      clusterTotals.A += un;
-    }
-    if (s.cluster === 'B') {
-      clusterTotalsBoxes.B += cx;
-      clusterTotals.B += un;
-    }
-    if (s.cluster === 'C') {
-      clusterTotalsBoxes.C += cx;
-      clusterTotals.C += un;
-    }
-  });
-
-  const totalAllocatedBoxes = Object.values(allocationsBoxes).reduce((a, b) => a + b, 0);
-  const totalAllocated = totalAllocatedBoxes * safePackSize;
-  const reserveStockBoxes = Math.max(0, totalBoxes - totalAllocatedBoxes);
-  const reserveStock = reserveStockBoxes * safePackSize;
-
-  return {
-    allocations: allocationsUnits,
-    allocationsBoxes,
-    totalAllocated,
-    totalAllocatedBoxes,
-    reserveStock,
-    reserveStockBoxes,
-    targetTotal: totalBoxes * safePackSize,
-    targetTotalBoxes: totalBoxes,
-    isBalanced: totalAllocatedBoxes <= totalBoxes,
-    isOverAllocated: totalAllocatedBoxes > totalBoxes,
-    difference: (totalBoxes * safePackSize) - totalAllocated,
-    differenceBoxes: totalBoxes - totalAllocatedBoxes,
-    clusterTotals,
-    clusterTotalsBoxes
   };
 }
 

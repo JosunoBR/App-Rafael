@@ -23,8 +23,8 @@ import br.com.mega12.app.data.model.OrderItem
 import br.com.mega12.app.ui.components.*
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
+import br.com.mega12.app.util.NumberFormatUtils
 import coil.compose.AsyncImage
-import java.text.NumberFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,14 +52,12 @@ fun OrderCreationScreen(
 
     // Estados para BottomSheets
     var showFiscalItem by remember { mutableStateOf<Pair<Int, OrderItem>?>(null) }
-
-    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
     
     // Cálculo de Totais Líquidos (Paridade Web)
-    val brutoTotal = draftOrder.items.sumOf { it.subtotal }
+    val brutoTotal = draftOrder.items.sumOf { it.valorTotalBruto }
     val descontoVal = (brutoTotal * draftOrder.header.percentualDescontoOff) / 100.0
     val stVal = ((brutoTotal - descontoVal) * draftOrder.header.aliquotaSt) / 100.0
-    val totalInvestimentoLiquido = brutoTotal - descontoVal + stVal
+    val totalInvestimentoLiquido = brutoTotal - descontoVal + stVal + draftOrder.header.valorFreteGlobal
     
     val valorBoleto = if (parcelas > 0) totalInvestimentoLiquido / parcelas else 0.0
     val isBoletoExcedente = valorBoleto > 9999.0
@@ -78,7 +76,7 @@ fun OrderCreationScreen(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
                             Text("TOTAL INVESTIMENTO (LÍQ)", style = MaterialTheme.typography.labelSmall, color = Slate400)
-                            Text(currencyFormatter.format(totalInvestimentoLiquido), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = Emerald400)
+                            Text(NumberFormatUtils.formatCurrency(totalInvestimentoLiquido), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = Emerald400)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (draftOrder.items.isNotEmpty()) {
@@ -185,12 +183,12 @@ fun OrderCreationScreen(
                             }
                         }
 
-                        if (draftOrder.totalLiquido > 0) {
-                            Divider(modifier = Modifier.padding(vertical = 8.dp), color = Slate200)
+                        if (totalInvestimentoLiquido > 0) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Slate200)
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Valor por Boleto:", style = MaterialTheme.typography.bodySmall)
                                 Text(
-                                    currencyFormatter.format(valorBoleto),
+                                    NumberFormatUtils.formatCurrency(valorBoleto),
                                     fontWeight = FontWeight.Black,
                                     color = if (isBoletoExcedente) Color(0xFFE11D48) else Color(0xFF047857)
                                 )
@@ -214,7 +212,7 @@ fun OrderCreationScreen(
                         contentPadding = PaddingValues(horizontal = 12.dp)
                     ) {
                         Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(6.6.dp))
                         Text("CATÁLOGO", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -251,8 +249,6 @@ fun OrderProductCard(
     onOpenMatrix: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -275,9 +271,9 @@ fun OrderProductCard(
                 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(item.descricao, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 14.sp)
-                    Text("Cód: ${item.codigo} • ${item.caixas} CX (${item.totalPecas} un)", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    Text("Cód: ${item.codigo} • ${NumberFormatUtils.formatInteger(item.qtdPacotes)} CX (${NumberFormatUtils.formatInteger(item.qtdTotalUnidades)} un)", style = MaterialTheme.typography.bodySmall, color = Slate500)
                     Spacer(Modifier.height(4.dp))
-                    FiscalBadge(marginPercent = item.margemCalculada, status = item.statusMargem)
+                    FiscalBadge(marginPercent = item.margemPercentual ?: 0.0, status = "boa")
                 }
 
                 IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
@@ -286,13 +282,13 @@ fun OrderProductCard(
             }
 
             Spacer(Modifier.height(12.dp))
-            Divider(color = Slate100)
+            HorizontalDivider(color = Slate100)
             Spacer(Modifier.height(12.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text("VALOR TOTAL", style = MaterialTheme.typography.labelSmall, color = Slate400)
-                    Text(currencyFormatter.format(item.subtotal), fontWeight = FontWeight.Black, color = Slate900)
+                    Text("VALOR TOTAL BRUTO", style = MaterialTheme.typography.labelSmall, color = Slate400)
+                    Text(NumberFormatUtils.formatCurrency(item.valorTotalBruto), fontWeight = FontWeight.Black, color = Slate900)
                 }
                 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -309,7 +305,7 @@ fun OrderProductCard(
                         colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Blue100, contentColor = Color(0xFF1D4ED8)),
                         shape = RoundedCornerShape(10.dp)
                     ) { 
-                        BadgedBox(badge = { if (item.storeDistribution.isNotEmpty()) Badge { Text("${item.storeDistribution.size}") } }) {
+                        BadgedBox(badge = { if (item.separacaoLojas.isNotEmpty()) Badge { Text("${item.separacaoLojas.size}") } }) {
                             Icon(Icons.Default.Store, null, modifier = Modifier.size(20.dp))
                         }
                     }

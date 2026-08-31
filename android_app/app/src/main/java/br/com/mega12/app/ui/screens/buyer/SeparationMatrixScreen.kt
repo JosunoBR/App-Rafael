@@ -20,6 +20,7 @@ import br.com.mega12.app.data.model.OrderItem
 import br.com.mega12.app.domain.SeparationEngine
 import br.com.mega12.app.domain.SeparationResult
 import br.com.mega12.app.ui.theme.*
+import br.com.mega12.app.util.NumberFormatUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,9 +30,9 @@ fun SeparationMatrixScreen(
     onSave: (Map<String, Int>) -> Unit
 ) {
     // Estado local para edições na tela
-    var reserveStockBoxes by remember { mutableStateOf((item.caixas * 0.1).toInt()) }
+    var reserveStockBoxes by remember { mutableStateOf((item.qtdPacotes * 0.1).toInt()) }
     var currentResult by remember { 
-        mutableStateOf(SeparationEngine.calculateBoxesSeparation(item.caixas, item.qtdPorCaixa, reserveBoxes = reserveStockBoxes)) 
+        mutableStateOf(SeparationEngine.calculateBoxesSeparation(item.qtdPacotes, item.qtdPorPacote, reserveBoxes = reserveStockBoxes)) 
     }
     
     // Mapa mutável para edições manuais por loja (caixas)
@@ -42,17 +43,17 @@ fun SeparationMatrixScreen(
     // Recalcular resultado quando mudar a reserva ou alocações manuais
     fun refreshResult() {
         val totalAllocated = manualAllocations.values.sum()
-        val reserve = maxOf(0, item.caixas - totalAllocated)
+        val reserve = maxOf(0, item.qtdPacotes - totalAllocated)
         // Aqui simulamos um SeparationResult baseado nos inputs manuais
         currentResult = currentResult.copy(
             allocationsBoxes = manualAllocations.toMap(),
-            allocations = manualAllocations.mapValues { it.value * item.qtdPorCaixa },
+            allocations = manualAllocations.mapValues { it.value * item.qtdPorPacote },
             totalAllocatedBoxes = totalAllocated,
-            totalAllocated = totalAllocated * item.qtdPorCaixa,
+            totalAllocated = totalAllocated * item.qtdPorPacote,
             reserveStockBoxes = reserve,
-            reserveStock = reserve * item.qtdPorCaixa,
-            isBalanced = totalAllocated <= item.caixas,
-            isOverAllocated = totalAllocated > item.caixas
+            reserveStock = reserve * item.qtdPorPacote,
+            isBalanced = totalAllocated <= item.qtdPacotes,
+            isOverAllocated = totalAllocated > item.qtdPacotes
         )
     }
 
@@ -62,7 +63,7 @@ fun SeparationMatrixScreen(
                 title = { 
                     Column {
                         Text("Grade das 20 Lojas", fontWeight = FontWeight.Bold)
-                        Text("${item.descricao} • ${item.caixas} CX total", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                        Text("${item.descricao} • ${NumberFormatUtils.formatInteger(item.qtdPacotes)} CX total", style = MaterialTheme.typography.bodySmall, color = Slate500)
                     }
                 },
                 navigationIcon = {
@@ -103,8 +104,8 @@ fun SeparationMatrixScreen(
                                 FilterChip(
                                     selected = false,
                                     onClick = {
-                                        val res = (item.caixas * (pct / 100.0)).toInt()
-                                        val newResult = SeparationEngine.calculateBoxesSeparation(item.caixas, item.qtdPorCaixa, reserveBoxes = res)
+                                        val res = (item.qtdPacotes * (pct / 100.0)).toInt()
+                                        val newResult = SeparationEngine.calculateBoxesSeparation(item.qtdPacotes, item.qtdPorPacote, reserveBoxes = res)
                                         manualAllocations.clear()
                                         newResult.allocationsBoxes.forEach { (k, v) -> manualAllocations[k] = v }
                                         refreshResult()
@@ -132,8 +133,8 @@ fun SeparationMatrixScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            if (currentResult.isOverAllocated) "Alocação excedida! Remova ${currentResult.totalAllocatedBoxes - item.caixas} cx."
-                            else "Alocado: ${currentResult.totalAllocatedBoxes} cx | No CD: ${currentResult.reserveStockBoxes} cx",
+                            if (currentResult.isOverAllocated) "Alocação excedida! Remova ${NumberFormatUtils.formatInteger(currentResult.totalAllocatedBoxes - item.qtdPacotes)} cx."
+                            else "Alocado: ${NumberFormatUtils.formatInteger(currentResult.totalAllocatedBoxes)} cx | No CD: ${NumberFormatUtils.formatInteger(currentResult.reserveStockBoxes)} cx",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (currentResult.isOverAllocated) Color(0xFF9F1239) else Color(0xFF065F46)
@@ -181,7 +182,7 @@ fun SeparationMatrixScreen(
                                 ) { Icon(Icons.Default.Remove, null, modifier = Modifier.size(16.dp)) }
                                 
                                 Text(
-                                    "$boxes",
+                                    NumberFormatUtils.formatInteger(boxes),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Black,
                                     modifier = Modifier.widthIn(min = 24.dp),

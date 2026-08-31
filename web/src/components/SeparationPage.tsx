@@ -21,16 +21,22 @@ import {
   Boxes,
   Image as ImageIcon,
   Eye,
-  X
+  X,
+  Building2,
+  Calendar,
+  Package,
+  Tag
 } from 'lucide-react';
-import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection } from '../shared/types';
-import { calculateBoxesSeparation, validateSeparation } from '../shared/separationEngine';
+import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User } from '../shared/types';
+import { calculateAutomaticSeparation, validateSeparation } from '../shared/separationEngine';
 import { SeparationMatrixModal } from './SeparationMatrixModal';
+import { OrderPipelineStepper } from './OrderPipelineStepper';
 
 interface SeparationPageProps {
   order: PurchaseOrder;
   orders?: PurchaseOrder[];
   stores: StoreConfig[];
+  currentUser?: User | null;
   onExportPDF: () => void;
   onExportExcel: () => void;
   onLoadMockOrder: () => void;
@@ -39,6 +45,8 @@ interface SeparationPageProps {
   onChangeOrder?: (updatedOrder: PurchaseOrder) => void;
   onSelectOrder?: (order: PurchaseOrder) => void;
   onFinalizeOrder?: (order: PurchaseOrder) => void;
+  onReleaseToSeparation?: (order: PurchaseOrder) => void;
+  onApproveOrder?: (order: PurchaseOrder) => void;
 }
 
 // Função para converter qualquer unidade de medida em unidades reais de peças
@@ -64,6 +72,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   order,
   orders = [],
   stores,
+  currentUser,
   onExportPDF,
   onExportExcel,
   onLoadMockOrder,
@@ -71,7 +80,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   onNavigateToHistory,
   onChangeOrder,
   onSelectOrder,
-  onFinalizeOrder
+  onFinalizeOrder,
+  onReleaseToSeparation,
+  onApproveOrder
 }) => {
   const activeStores = stores.filter(s => s.active);
 
@@ -150,49 +161,33 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     }, 0);
   }, [avariasList, possuiAvarias, order.items]);
 
-  // Status de cada item: Caixas Compradas, Caixas nas Lojas, Caixas no Estoque CD e Validação
+  // Status de cada item: Unidades Compradas, Unidades nas Lojas, Unidades no Estoque CD e Validação
   const itemStatusList = useMemo(() => {
     return order.items.map(item => {
-      const pack = Math.max(1, item.qtdPorPacote || 1);
       const allocatedUnits = activeStores.reduce((acc, store) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);
       const totalCompradoUnits = Number(item.qtdTotalUnidades) || 0;
       const reserveStockUnits = Math.max(0, totalCompradoUnits - allocatedUnits);
-      
-      const totalCompradoBoxes = Number(item.qtdPacotes) || Math.ceil(totalCompradoUnits / pack);
-      const allocatedBoxes = allocatedUnits / pack;
-      const reserveStockBoxes = reserveStockUnits / pack;
 
       const isOverAllocated = allocatedUnits > totalCompradoUnits;
       const excessUnits = isOverAllocated ? allocatedUnits - totalCompradoUnits : 0;
-      const excessBoxes = isOverAllocated ? excessUnits / pack : 0;
 
       return {
         item,
-        pack,
         allocatedUnits,
-        allocatedBoxes,
         reserveStockUnits,
-        reserveStockBoxes,
         totalCompradoUnits,
-        totalCompradoBoxes,
         isOverAllocated,
         excessUnits,
-        excessBoxes,
         isBalanced: !isOverAllocated
       };
     });
   }, [order.items, activeStores]);
 
-  // Totais Gerais em Caixas e Peças
-  const totalCaixasGeral = order.items.reduce((acc, item) => acc + (item.qtdPacotes || 0), 0);
+  // Totais Gerais em Peças
   const totalPecasGeralBruto = order.items.reduce((acc, item) => acc + (item.qtdTotalUnidades || 0), 0);
-  
   const totalPecasDistribuidoLojasBruto = itemStatusList.reduce((acc, s) => acc + s.allocatedUnits, 0);
-  const totalCaixasDistribuidoLojasBruto = itemStatusList.reduce((acc, s) => acc + s.allocatedBoxes, 0);
-  
   const totalPecasDistribuidoLojasLiquido = Math.max(0, totalPecasDistribuidoLojasBruto - totalPecasAvariadasUnidades);
   const totalPecasGuardadasEstoque = itemStatusList.reduce((acc, s) => acc + s.reserveStockUnits, 0);
-  const totalCaixasGuardadasEstoque = itemStatusList.reduce((acc, s) => acc + s.reserveStockBoxes, 0);
   
   const percentualEstoque = totalPecasGeralBruto > 0 ? Math.round((totalPecasGuardadasEstoque / totalPecasGeralBruto) * 100) : 0;
   const hasAnyOverAllocation = itemStatusList.some(s => s.isOverAllocated);
@@ -236,18 +231,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     });
   }, [conferente, possuiAvarias, observacoesDoca, avariasList]);
 
-  // Handlers para Edição Direta em Caixas
-  const handleUpdateStoreAllocationBoxes = (item: OrderItem, storeId: string, rawBoxes: number) => {
+  // Handlers para Edição Direta em Unidades
+  const handleUpdateStoreAllocationUnits = (item: OrderItem, storeId: string, rawUnits: number) => {
     if (!onChangeOrder) return;
-    const pack = Math.max(1, item.qtdPorPacote || 1);
-    const boxes = Math.max(0, Math.floor(rawBoxes || 0));
-    const unitValue = boxes * pack;
+    const units = Math.max(0, Math.floor(rawUnits || 0));
 
     const updatedItems = order.items.map(it => {
       if (it.id !== item.id) return it;
 
       const currentAlloc = { ...(it.separacaoLojas || {}) };
-      currentAlloc[storeId] = unitValue;
+      currentAlloc[storeId] = units;
 
       const newSumUnits = Object.values(currentAlloc).reduce((a, b) => a + (Number(b) || 0), 0);
       const calculatedReserve = Math.max(0, it.qtdTotalUnidades - newSumUnits);
@@ -266,19 +259,18 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     });
   };
 
-  const handleUpdateItemReserveBoxes = (item: OrderItem, rawBoxes: number) => {
+  const handleUpdateItemReserveUnits = (item: OrderItem, rawReserveUnits: number) => {
     if (!onChangeOrder) return;
-    const pack = Math.max(1, item.qtdPorPacote || 1);
-    const safeBoxes = Math.max(0, Math.min(item.qtdPacotes, Math.floor(rawBoxes || 0)));
+    const safeUnits = Math.max(0, Math.min(item.qtdTotalUnidades, Math.floor(rawReserveUnits || 0)));
 
-    const boxSep = calculateBoxesSeparation(item.qtdPacotes, pack, stores, safeBoxes);
+    const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, safeUnits);
 
     const updatedItems = order.items.map(it => {
       if (it.id !== item.id) return it;
       return {
         ...it,
-        separacaoLojas: boxSep.allocations,
-        qtdReservaEstoque: boxSep.reserveStock,
+        separacaoLojas: sep.allocations,
+        qtdReservaEstoque: sep.reserveStock,
         separacaoManual: false
       };
     });
@@ -294,19 +286,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     const itemToUpdate = order.items.find(i => i.id === itemId);
     if (!itemToUpdate) return;
 
-    const pack = Math.max(1, itemToUpdate.qtdPorPacote || 1);
-    const currentReserveBoxes = itemToUpdate.qtdReservaEstoque !== undefined 
-      ? Math.floor(itemToUpdate.qtdReservaEstoque / pack)
-      : undefined;
-
-    const boxSep = calculateBoxesSeparation(itemToUpdate.qtdPacotes, pack, stores, currentReserveBoxes);
+    const sep = calculateAutomaticSeparation(itemToUpdate.qtdTotalUnidades, stores, itemToUpdate.qtdReservaEstoque);
 
     const updatedItems = order.items.map(it => {
       if (it.id !== itemId) return it;
       return {
         ...it,
-        separacaoLojas: boxSep.allocations,
-        qtdReservaEstoque: boxSep.reserveStock,
+        separacaoLojas: sep.allocations,
+        qtdReservaEstoque: sep.reserveStock,
         separacaoManual: false
       };
     });
@@ -345,13 +332,12 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     if (!onChangeOrder) return;
 
     const updatedItems = order.items.map(item => {
-      const pack = Math.max(1, item.qtdPorPacote || 1);
-      const reserveBoxes = Math.round((item.qtdPacotes * percent) / 100);
-      const boxSep = calculateBoxesSeparation(item.qtdPacotes, pack, stores, reserveBoxes);
+      const reserveUnits = Math.round((item.qtdTotalUnidades * percent) / 100);
+      const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, reserveUnits);
       return {
         ...item,
-        separacaoLojas: boxSep.allocations,
-        qtdReservaEstoque: boxSep.reserveStock,
+        separacaoLojas: sep.allocations,
+        qtdReservaEstoque: sep.reserveStock,
         separacaoManual: false
       };
     });
@@ -463,6 +449,21 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
+      {/* Esteira Operacional Visual do Pedido */}
+      <OrderPipelineStepper
+        order={order}
+        currentUser={currentUser}
+        onApproveOrder={onApproveOrder}
+        onOpenDistribution={(ord) => {
+          if (onSelectOrder) onSelectOrder(ord);
+        }}
+        onReleaseToSeparation={onReleaseToSeparation}
+        onOpenSeparation={(ord) => {
+          if (onSelectOrder) onSelectOrder(ord);
+        }}
+        onFinalizeSeparation={onFinalizeOrder}
+      />
+
       {/* Banner Informativo quando visualizando pedido já finalizado */}
       {isCurrentFinalized && (
         <div className="p-3.5 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -485,47 +486,80 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         </div>
       )}
 
-      {/* 1. Header do Romaneio */}
-      <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
-              <PackageCheck className="w-5 h-5" />
+      {/* 1. Header & Cartão de Identificação em Destaque do Pedido em Separação */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border-2 border-emerald-500/30 dark:border-emerald-500/20 p-5 sm:p-6 shadow-md shadow-emerald-500/5 relative overflow-hidden transition-all">
+        {/* Glow de fundo */}
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 -mb-10 w-48 h-48 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          
+          {/* Lado Esquerdo: Identificação Gigante e Clara do Pedido */}
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 text-white flex flex-col items-center justify-center font-mono font-black shadow-lg shadow-emerald-500/25 shrink-0">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-200">DOCA</span>
+              <span className="text-base font-black leading-none mt-0.5">#{order.header.numeroPedido.replace('PED-', '')}</span>
             </div>
+
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
-                Separação & Romaneio 20 Lojas
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-mono">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Pedido em Separação
+                </span>
+
+                {/* Número do Pedido em Destaque Gigante */}
+                <span className="text-xl sm:text-2xl font-black font-mono text-slate-900 dark:text-white tracking-tight bg-slate-100 dark:bg-slate-800 px-3.5 py-0.5 rounded-xl border border-slate-300 dark:border-slate-700 shadow-xs">
                   {order.header.numeroPedido}
                 </span>
-                
+
                 {/* Badge de Status Oficial */}
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold border shadow-xs ${
+                <span className={`text-xs px-2.5 py-1 rounded-xl font-extrabold border shadow-xs flex items-center gap-1.5 ${
                   order.header.status === 'Finalizado'
                     ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300'
                     : order.header.status === 'Em Separação'
                     ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300'
-                    : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border-amber-300'
+                    : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300'
                 }`}>
+                  <span className="w-2 h-2 rounded-full bg-current" />
                   {order.header.status || 'Em Separação'}
                 </span>
 
-                <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
-                  📦 Volumes (Caixas)
+                <span className="text-xs bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold px-2.5 py-1 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                  📦 Romaneio de 20 Lojas
                 </span>
-              </h2>
-              <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                <span>Fornecedor: <span className="font-semibold text-slate-700 dark:text-slate-300">{order.header.fornecedor}</span></span>
+              </div>
+
+              {/* Informações detalhadas do pedido */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600 dark:text-slate-300 mt-2">
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>Fornecedor: <strong className="text-slate-900 dark:text-white font-bold">{order.header.fornecedor || 'Não informado'}</strong></span>
+                </span>
+
+                {(order.header.dataPedido || order.header.dataEmissao) && (
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>Data: <strong className="text-slate-800 dark:text-slate-200">{order.header.dataPedido || order.header.dataEmissao}</strong></span>
+                  </span>
+                )}
+
+                <span className="flex items-center gap-1.5">
+                  <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>Grade: <strong className="text-slate-800 dark:text-slate-200">{order.items.length} itens</strong> ({order.items.reduce((s, it) => s + (it.qtdTotalUnidades || 0), 0).toLocaleString('pt-BR')} peças)</span>
+                </span>
+
+                {/* Dropdown de Alternar Pedido se houver múltiplos */}
                 {pendingSeparationOrders.length > 1 && onSelectOrder && (
-                  <div className="flex items-center gap-1.5 ml-2">
-                    <span className="font-bold text-purple-600 dark:text-purple-400">Alternar Pedido:</span>
+                  <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-950/60 p-1 px-2.5 rounded-xl border border-purple-200 dark:border-purple-800">
+                    <span className="font-extrabold text-[11px] text-purple-700 dark:text-purple-300">Trocar Pedido:</span>
                     <select
                       value={order.header.id || order.header.numeroPedido}
                       onChange={(e) => {
                         const found = pendingSeparationOrders.find(o => (o.header.id || o.header.numeroPedido) === e.target.value);
                         if (found) onSelectOrder(found);
                       }}
-                      className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                      className="px-2 py-0.5 bg-white dark:bg-slate-800 border border-purple-300 dark:border-purple-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white cursor-pointer"
                     >
                       {pendingSeparationOrders.map(o => (
                         <option key={o.header.id || o.header.numeroPedido} value={o.header.id || o.header.numeroPedido}>
@@ -538,36 +572,37 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Botões de Ação */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={onLoadMockOrder}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition shadow-xs"
-            title="Carregar pedido de exemplo com 20 itens de presentes"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-            <span>20 Itens Teste</span>
-          </button>
+          {/* Lado Direito: Ações Principais (PDF e Excel) */}
+          <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
+            <button
+              onClick={onLoadMockOrder}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition shadow-xs cursor-pointer"
+              title="Carregar pedido de exemplo com 20 itens de presentes"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+              <span>20 Itens Teste</span>
+            </button>
 
-          <button
-            onClick={onExportExcel}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition shadow-xs"
-            title="Exportar pasta de trabalho Excel com 3 abas incluindo caixas e peças"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Excel (.xlsx)</span>
-          </button>
+            <button
+              onClick={onExportExcel}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition shadow-xs cursor-pointer"
+              title="Exportar planilha Excel com grade das 20 lojas e volumes"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Excel (.xlsx)</span>
+            </button>
 
-          <button
-            onClick={onExportPDF}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition"
-            title="Gerar Romaneio PDF Paisagem A4 com tabela das 20 lojas e volumes"
-          >
-            <FileText className="w-4 h-4" />
-            <span>Romaneio PDF</span>
-          </button>
+            <button
+              onClick={onExportPDF}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/25 transition cursor-pointer hover:scale-102"
+              title="Gerar Romaneio PDF Paisagem A4 com tabela das 20 lojas e volumes"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Romaneio PDF</span>
+            </button>
+          </div>
+
         </div>
       </div>
 
@@ -614,11 +649,11 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           <div>
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Status dos Volumes</span>
             <div className="text-base font-extrabold text-slate-900 dark:text-white mt-1">
-              {!hasAnyOverAllocation ? '100% Válido (Caixas Fechadas)' : 'Excedente Detectado'}
+              {!hasAnyOverAllocation ? '100% Válido' : 'Excedente Detectado'}
             </div>
             <span className="text-[11px] text-slate-400 mt-0.5 block">
               {!hasAnyOverAllocation 
-                ? `${totalCaixasDistribuidoLojasBruto} cx lojas • ${totalCaixasGuardadasEstoque} cx no CD`
+                ? `${totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un lojas • ${totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un no CD`
                 : 'Alguma linha ultrapassou o total comprado'}
             </span>
           </div>
@@ -631,13 +666,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
           <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Total Enviado às Lojas</span>
           <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1 font-mono flex items-baseline gap-2">
-            <span>{totalCaixasDistribuidoLojasBruto} cx</span>
-            <span className="text-xs font-normal text-slate-400">
-              ({totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} peças)
-            </span>
+            <span>{totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un</span>
           </div>
           <span className="text-[11px] text-slate-400 mt-0.5 block">
-            {totalCaixasGeral.toLocaleString('pt-BR')} caixas compradas no pedido
+            {totalPecasGeralBruto.toLocaleString('pt-BR')} unidades compradas no pedido
           </span>
         </div>
 
@@ -645,7 +677,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
           <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Guardado no Estoque (CD)</span>
           <div className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mt-1 font-mono flex items-baseline gap-2">
-            <span>{totalCaixasGuardadasEstoque} cx</span>
+            <span>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un</span>
             <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded-full">
               {percentualEstoque}% retido
             </span>
@@ -682,11 +714,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           <div className="flex items-center gap-2.5">
             <PackageCheck className="w-5 h-5 text-emerald-400" />
             <div>
-              <h3 className="text-sm font-extrabold uppercase tracking-wide flex items-center gap-2">
-                Grade de Separação & Expedição por Caixas (20 Lojas)
+              <h3 className="text-sm font-extrabold uppercase tracking-wide flex items-center gap-2 flex-wrap">
+                <span>Grade de Distribuição e Separação por Unidades (20 Lojas)</span>
+                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 normal-case tracking-normal">
+                  {order.header.numeroPedido}
+                </span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                Digite o número de caixas inteiras para cada filial. O equivalente em peças é calculado e exibido embaixo.
+                Defina a quantidade de unidades para cada filial ou utilize a distribuição inteligente proporcional aos clusters.
               </p>
             </div>
           </div>
@@ -714,14 +749,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 <th className="py-2.5 px-3 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 sticky left-0 z-20 min-w-[230px]">
                   Dados do Produto
                 </th>
-                <th className="py-2.5 px-2 bg-emerald-100 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-300 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Total de caixas compradas ao fornecedor">
-                  Total Cx
+                <th className="py-2.5 px-2 bg-emerald-100 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-300 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Total de unidades compradas no pedido">
+                  Comprado (Un)
                 </th>
-                <th className="py-2.5 px-2 bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 border-r border-slate-200 dark:border-slate-700 min-w-[95px]" title="Caixas guardadas no Depósito Central / Matriz">
-                  Estoque CD (Cx)
+                <th className="py-2.5 px-2 bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 border-r border-slate-200 dark:border-slate-700 min-w-[95px]" title="Unidades guardadas no Depósito Central / Matriz">
+                  Estoque CD (Un)
                 </th>
-                <th className="py-2.5 px-2 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Soma de caixas enviadas para todas as lojas">
-                  Lojas (Cx)
+                <th className="py-2.5 px-2 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Soma de unidades enviadas para todas as lojas">
+                  Lojas (Un)
                 </th>
                 <th colSpan={clusterA.length} className="py-2 px-2 bg-blue-100/70 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 border-r border-slate-200 dark:border-slate-700">
                   CLUSTER A ({clusterA.length} Lojas • 51.3%)
@@ -773,7 +808,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {order.items.map((item, idx) => {
                 const status = itemStatusList[idx];
-                const pack = status.pack;
+                const pack = Math.max(1, item.qtdPorPacote || 1);
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition">
@@ -799,11 +834,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                             {item.descricao}
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
-                            <span>{item.codigo || 'S/ CÓD'}</span>
-                            <span>•</span>
-                            <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.qtdPacotes} cx</span>
-                            <span>×</span>
-                            <span>{item.qtdPorPacote} un</span>
+                            <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.codigoInterno || item.codigo || 'S/ CÓD'}</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-300">{item.qtdTotalUnidades.toLocaleString('pt-BR')} un</span>
                             {item.separacaoManual && (
                               <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-sans font-semibold text-[9px]">
                                 Manual
@@ -814,36 +846,30 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       </div>
                     </td>
 
-                    {/* 2. Total Comprado (Caixas em destaque + Peças embaixo) */}
+                    {/* 2. Total Comprado (Unidades) */}
                     <td className="py-2.5 px-2 text-center font-mono font-extrabold border-r border-slate-200 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
                       <div className="text-xs">
-                        {item.qtdPacotes} cx
-                      </div>
-                      <div className="text-[9px] font-normal text-slate-400 mt-0.5">
                         {item.qtdTotalUnidades.toLocaleString('pt-BR')} un
                       </div>
                     </td>
 
-                    {/* 3. Coluna Estoque CD (Guardado) - Editável em Caixas */}
+                    {/* 3. Coluna Estoque CD (Guardado) - Editável em Unidades */}
                     <td className="py-1.5 px-1.5 text-center border-r border-slate-200 dark:border-slate-700 bg-amber-50/40 dark:bg-amber-950/20">
                       <div className="flex flex-col items-center justify-center">
                         <div className="flex items-center gap-1">
                           <input
                             type="number"
                             min="0"
-                            max={item.qtdPacotes}
-                            value={status.reserveStockBoxes}
-                            onChange={(e) => handleUpdateItemReserveBoxes(item, parseFloat(e.target.value) || 0)}
-                            className="w-14 px-1 py-1 text-center font-mono font-extrabold text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-200 focus:ring-2 focus:ring-amber-500 outline-hidden"
-                            title="Quantidade de caixas que ficará guardada no Estoque Central"
+                            max={item.qtdTotalUnidades}
+                            value={status.reserveStockUnits}
+                            onChange={(e) => handleUpdateItemReserveUnits(item, parseFloat(e.target.value) || 0)}
+                            className="w-16 px-1 py-1 text-center font-mono font-extrabold text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-200 focus:ring-2 focus:ring-amber-500 outline-hidden"
+                            title="Quantidade de unidades que ficará guardada no Estoque Central"
                           />
                           <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                            cx
+                            un
                           </span>
                         </div>
-                        <span className="text-[9px] text-amber-700/80 dark:text-amber-400 font-mono mt-0.5">
-                          = {status.reserveStockUnits} un
-                        </span>
                       </div>
                     </td>
 
@@ -854,28 +880,23 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
                     }`}>
                       <div className="text-xs">
-                        {status.allocatedBoxes} cx
-                      </div>
-                      <div className="text-[9px] font-normal text-slate-400 mt-0.5">
                         {status.allocatedUnits.toLocaleString('pt-BR')} un
                       </div>
                       {status.isOverAllocated && (
                         <div className="text-[9px] font-bold text-rose-600 dark:text-rose-400 mt-0.5">
-                          +{status.excessBoxes} cx excedente
+                          +{status.excessUnits} un excedente
                         </div>
                       )}
                     </td>
 
-                    {/* 5. Células de Cada Loja - Editáveis em Caixas com Peças Embaixo */}
+                    {/* 5. Células de Cada Loja - Editáveis em Unidades */}
                     {activeStores.map(store => {
                       const rawAllocUnits = item.separacaoLojas?.[store.id] || 0;
-                      const rawAllocBoxes = rawAllocUnits / pack;
                       
                       const avariaInfo = avariasMap.get(`${item.id}_${store.id}`);
                       const hasAvaria = avariaInfo !== undefined && avariaInfo.totalDeductedUnits > 0;
                       const deductedUnits = hasAvaria ? avariaInfo.totalDeductedUnits : 0;
                       const effectiveUnits = Math.max(0, rawAllocUnits - deductedUnits);
-                      const effectiveBoxes = effectiveUnits / pack;
 
                       return (
                         <td 
@@ -891,28 +912,22 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                               type="number"
                               min="0"
                               step="1"
-                              value={rawAllocBoxes}
-                              onChange={(e) => handleUpdateStoreAllocationBoxes(item, store.id, parseFloat(e.target.value) || 0)}
-                              className={`w-12 px-1 py-1 text-center font-mono font-bold text-xs rounded-md border outline-hidden transition ${
-                                rawAllocBoxes > 0
+                              value={rawAllocUnits}
+                              onChange={(e) => handleUpdateStoreAllocationUnits(item, store.id, parseFloat(e.target.value) || 0)}
+                              className={`w-14 px-1 py-1 text-center font-mono font-bold text-xs rounded-md border outline-hidden transition ${
+                                rawAllocUnits > 0
                                   ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
                                   : 'border-dashed border-slate-200 dark:border-slate-700 bg-transparent text-slate-300 dark:text-slate-600 focus:bg-white dark:focus:bg-slate-900 focus:text-slate-900'
                               }`}
-                              title={`Loja: ${store.name} (${store.cluster}) • ${rawAllocBoxes} caixas (${rawAllocUnits} peças)`}
+                              title={`Loja: ${store.name} (${store.cluster}) • ${rawAllocUnits} unidades`}
                             />
-
-                            {rawAllocBoxes > 0 && (
-                              <span className="text-[8.5px] text-slate-400 font-mono mt-0.5">
-                                {rawAllocUnits} un
-                              </span>
-                            )}
 
                             {hasAvaria && (
                               <span 
                                 className="text-[9px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/90 px-1 py-0.2 rounded-sm mt-0.5 border border-rose-300 dark:border-rose-800 whitespace-nowrap"
-                                title={`Original: ${rawAllocBoxes} cx • Avaria: -${deductedUnits} un (Efetivo: ${effectiveBoxes} cx)`}
+                                title={`Original: ${rawAllocUnits} un • Avaria: -${deductedUnits} un (Efetivo: ${effectiveUnits} un)`}
                               >
-                                {effectiveBoxes} cx
+                                {effectiveUnits} un
                               </span>
                             )}
                           </div>
@@ -927,7 +942,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                           type="button"
                           onClick={() => handleAutoRateioItem(item.id)}
                           className="p-1 rounded-md text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition"
-                          title="Recalcular rateio em caixas fechadas para este produto"
+                          title="Recalcular rateio em unidades para este produto"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
                         </button>
@@ -959,25 +974,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <tfoot>
               <tr className="bg-emerald-100 dark:bg-emerald-950 border-t-2 border-emerald-500 font-extrabold text-xs text-emerald-950 dark:text-emerald-200">
                 <td className="py-3 px-3 border-r border-emerald-200 dark:border-emerald-800 sticky left-0 bg-emerald-100 dark:bg-emerald-950 z-10 uppercase">
-                  Total Geral (Volumes / Caixas)
+                  Total Geral (Unidades)
                 </td>
                 <td className="py-3 px-2 text-center border-r border-emerald-200 dark:border-emerald-800 font-mono text-sm">
-                  <div>{totalCaixasGeral} cx</div>
-                  <div className="text-[9px] font-normal text-emerald-800 dark:text-emerald-400">
-                    {totalPecasGeralBruto.toLocaleString('pt-BR')} un
-                  </div>
+                  <div>{totalPecasGeralBruto.toLocaleString('pt-BR')} un</div>
                 </td>
                 <td className="py-3 px-2 text-center border-r border-emerald-200 dark:border-emerald-800 font-mono text-xs text-amber-900 dark:text-amber-200 bg-amber-100/60 dark:bg-amber-950/60">
-                  <div>{totalCaixasGuardadasEstoque} cx</div>
-                  <div className="text-[9px] font-normal text-amber-800 dark:text-amber-300">
-                    {totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un
-                  </div>
+                  <div>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un</div>
                 </td>
                 <td className="py-3 px-2 text-center border-r border-emerald-200 dark:border-emerald-800 font-mono text-sm">
-                  <div>{totalCaixasDistribuidoLojasBruto} cx</div>
-                  <div className="text-[9px] font-normal text-emerald-800 dark:text-emerald-400">
-                    {totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un
-                  </div>
+                  <div>{totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un</div>
                 </td>
                 {activeStores.map(store => {
                   const somaLojaUnidades = order.items.reduce((acc, item) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);

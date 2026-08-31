@@ -16,10 +16,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.mega12.app.data.model.AvariaItem
+import br.com.mega12.app.data.model.OrderItem
 import br.com.mega12.app.domain.SeparationEngine
 import br.com.mega12.app.ui.components.Mega12TopBar
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
+import br.com.mega12.app.util.NumberFormatUtils
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -102,7 +104,7 @@ fun SeparationDetailScreen(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Text(
-                                text = "Total de Itens: ${order.items.size} | Total de Peças: ${order.totalPecas}",
+                                text = "Total de Itens: ${NumberFormatUtils.formatInteger(order.items.size)} | Total de Peças: ${NumberFormatUtils.formatInteger(order.effectiveTotalPecas)}",
                                 style = MaterialTheme.typography.bodyMedium.copy(color = Slate400)
                             )
                         }
@@ -128,7 +130,7 @@ fun SeparationDetailScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 avariasList.forEach { av ->
                                     Text(
-                                        text = "• ${av.storeName}: -${av.quantidade} un (${av.itemDescricao}) - ${av.motivo}",
+                                        text = "• ${av.storeName}: -${NumberFormatUtils.formatInteger(av.quantidade)} un (${av.itemDescricao}) - ${av.motivo}",
                                         style = MaterialTheme.typography.bodySmall.copy(color = Color.White)
                                     )
                                 }
@@ -149,11 +151,15 @@ fun SeparationDetailScreen(
                 }
 
                 items(SeparationEngine.DEFAULT_STORES) { store ->
-                    val totalPecasLoja = order.items.sumOf { item ->
-                        item.storeDistribution[store.id] ?: 0
-                    }
-                    val totalCaixasLoja = order.items.sumOf { item ->
-                        (item.storeDistribution[store.id] ?: 0) / item.qtdPorCaixa
+                    var totalPecasLoja = 0
+                    var totalCaixasLoja = 0
+                    
+                    order.items.forEach { item ->
+                        val qtd = item.separacaoLojas[store.id] ?: 0
+                        totalPecasLoja += qtd
+                        if (item.qtdPorPacote > 0) {
+                            totalCaixasLoja += (qtd / item.qtdPorPacote)
+                        }
                     }
 
                     Card(
@@ -200,14 +206,14 @@ fun SeparationDetailScreen(
 
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = "$totalCaixasLoja CX",
+                                    text = "${NumberFormatUtils.formatInteger(totalCaixasLoja)} CX",
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Black,
                                         color = Emerald600
                                     )
                                 )
                                 Text(
-                                    text = "$totalPecasLoja un",
+                                    text = "${NumberFormatUtils.formatInteger(totalPecasLoja)} un",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Slate500
                                 )

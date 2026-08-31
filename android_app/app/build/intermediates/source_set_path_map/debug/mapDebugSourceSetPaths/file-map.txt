@@ -1,60 +1,61 @@
-br.com.mega12.app-runtime-release-0 /home/josue/.gradle/caches/9.0.0/transforms/00f7d93d9b6bb1cd24e872bb6e44803f/transformed/runtime-release/res
-br.com.mega12.app-material-release-1 /home/josue/.gradle/caches/9.0.0/transforms/02ac0d97b48c1148b8991f4616efce74/transformed/material-release/res
-br.com.mega12.app-lifecycle-viewmodel-savedstate-2.8.7-2 /home/josue/.gradle/caches/9.0.0/transforms/05ddfadeec58ab880f5f535bdfdd23b8/transformed/lifecycle-viewmodel-savedstate-2.8.7/res
-br.com.mega12.app-lifecycle-viewmodel-ktx-2.8.7-3 /home/josue/.gradle/caches/9.0.0/transforms/0ac82281aec5cd88a22fe01f59fe6347/transformed/lifecycle-viewmodel-ktx-2.8.7/res
-br.com.mega12.app-annotation-experimental-1.4.1-4 /home/josue/.gradle/caches/9.0.0/transforms/0bc9f3c04f373af46e736d654ba42911/transformed/annotation-experimental-1.4.1/res
-br.com.mega12.app-foundation-release-5 /home/josue/.gradle/caches/9.0.0/transforms/10fb8cb5fca57d44d64be7294b56d837/transformed/foundation-release/res
-br.com.mega12.app-material3-release-6 /home/josue/.gradle/caches/9.0.0/transforms/116493193690e2ed5a81faa5af682fbf/transformed/material3-release/res
-br.com.mega12.app-ui-tooling-data-release-7 /home/josue/.gradle/caches/9.0.0/transforms/220b4108dfd546fdf63dc6bd9dad99c8/transformed/ui-tooling-data-release/res
-br.com.mega12.app-navigation-runtime-2.8.8-8 /home/josue/.gradle/caches/9.0.0/transforms/274c2776becf5b6e5e01c36b4b6e6b55/transformed/navigation-runtime-2.8.8/res
-br.com.mega12.app-navigation-runtime-ktx-2.8.8-9 /home/josue/.gradle/caches/9.0.0/transforms/3383710bb1c0ab5c92a3c6e43cb8798b/transformed/navigation-runtime-ktx-2.8.8/res
-br.com.mega12.app-coil-base-2.5.0-10 /home/josue/.gradle/caches/9.0.0/transforms/342ddf19447bd5df255045286ba2b760/transformed/coil-base-2.5.0/res
-br.com.mega12.app-ui-text-release-11 /home/josue/.gradle/caches/9.0.0/transforms/36c9bab49766fe3147a41957ad67a9ce/transformed/ui-text-release/res
-br.com.mega12.app-tracing-1.2.0-12 /home/josue/.gradle/caches/9.0.0/transforms/3742847e1fa490d5540aa8d9f8aae531/transformed/tracing-1.2.0/res
-br.com.mega12.app-profileinstaller-1.4.0-13 /home/josue/.gradle/caches/9.0.0/transforms/48004fa911914494b456fd1326b83144/transformed/profileinstaller-1.4.0/res
-br.com.mega12.app-ui-geometry-release-14 /home/josue/.gradle/caches/9.0.0/transforms/50ef18902ea2bb6b5b74575b1d6496ae/transformed/ui-geometry-release/res
-br.com.mega12.app-ui-graphics-release-15 /home/josue/.gradle/caches/9.0.0/transforms/56fa2828ee925c470df9a6155159c3c3/transformed/ui-graphics-release/res
-br.com.mega12.app-navigation-compose-2.8.8-16 /home/josue/.gradle/caches/9.0.0/transforms/5a2d7a0aedcbc8f5dc2157bb947ad905/transformed/navigation-compose-2.8.8/res
-br.com.mega12.app-lifecycle-runtime-compose-release-17 /home/josue/.gradle/caches/9.0.0/transforms/5f848925bc51bcfb36e6bb8b8211aa51/transformed/lifecycle-runtime-compose-release/res
-br.com.mega12.app-material-icons-core-release-18 /home/josue/.gradle/caches/9.0.0/transforms/6432db8b3bed5ce9ad5e8394c6b5e37a/transformed/material-icons-core-release/res
-br.com.mega12.app-material-ripple-release-19 /home/josue/.gradle/caches/9.0.0/transforms/6722978ad0cb01f836f5994adb0f0801/transformed/material-ripple-release/res
-br.com.mega12.app-foundation-layout-release-20 /home/josue/.gradle/caches/9.0.0/transforms/6b20ef8e9c61389327c7ecfe47ad3b9a/transformed/foundation-layout-release/res
-br.com.mega12.app-lifecycle-viewmodel-compose-release-21 /home/josue/.gradle/caches/9.0.0/transforms/72b0dfc40280ae94016ea3d4e4bd61a7/transformed/lifecycle-viewmodel-compose-release/res
-br.com.mega12.app-savedstate-ktx-1.2.1-22 /home/josue/.gradle/caches/9.0.0/transforms/735ff9ee1d7f2a60ec6d6a0087007e7f/transformed/savedstate-ktx-1.2.1/res
-br.com.mega12.app-navigation-common-2.8.8-23 /home/josue/.gradle/caches/9.0.0/transforms/7af24b4a1ce2a64258a2cca2bcce981e/transformed/navigation-common-2.8.8/res
-br.com.mega12.app-material-icons-extended-release-24 /home/josue/.gradle/caches/9.0.0/transforms/7d1b6ee084daafbbc1e51231b7a0b204/transformed/material-icons-extended-release/res
-br.com.mega12.app-emoji2-1.3.0-25 /home/josue/.gradle/caches/9.0.0/transforms/7df7dece2849789e478798d5a2415afa/transformed/emoji2-1.3.0/res
-br.com.mega12.app-activity-1.10.1-26 /home/josue/.gradle/caches/9.0.0/transforms/7ef13c20bcf06487636ff1160e4686f6/transformed/activity-1.10.1/res
-br.com.mega12.app-core-ktx-1.15.0-27 /home/josue/.gradle/caches/9.0.0/transforms/84b8bfbeab735b4dbec82d2e0c1e6446/transformed/core-ktx-1.15.0/res
-br.com.mega12.app-lifecycle-livedata-core-2.8.7-28 /home/josue/.gradle/caches/9.0.0/transforms/850d8ca82418b79355a690127c45848c/transformed/lifecycle-livedata-core-2.8.7/res
-br.com.mega12.app-runtime-saveable-release-29 /home/josue/.gradle/caches/9.0.0/transforms/86195964b56b255735587ca7ceb76fa8/transformed/runtime-saveable-release/res
-br.com.mega12.app-startup-runtime-1.1.1-30 /home/josue/.gradle/caches/9.0.0/transforms/8aac47c70ddce0cc93c7030e204256c8/transformed/startup-runtime-1.1.1/res
-br.com.mega12.app-appcompat-resources-1.6.1-31 /home/josue/.gradle/caches/9.0.0/transforms/8cd35bdb2dff0c3910f2eb9ab3883be5/transformed/appcompat-resources-1.6.1/res
-br.com.mega12.app-activity-compose-1.10.1-32 /home/josue/.gradle/caches/9.0.0/transforms/999f0db2883bfd77728e70296599b846/transformed/activity-compose-1.10.1/res
-br.com.mega12.app-navigation-common-ktx-2.8.8-33 /home/josue/.gradle/caches/9.0.0/transforms/9c751873f825481d5a56bb9e93b26dc4/transformed/navigation-common-ktx-2.8.8/res
-br.com.mega12.app-activity-ktx-1.10.1-34 /home/josue/.gradle/caches/9.0.0/transforms/a05098712a5e0295c395b8e83d8656c0/transformed/activity-ktx-1.10.1/res
-br.com.mega12.app-core-runtime-2.2.0-35 /home/josue/.gradle/caches/9.0.0/transforms/a8a73f35784a02f0c59dc7840fc86435/transformed/core-runtime-2.2.0/res
-br.com.mega12.app-lifecycle-runtime-ktx-release-36 /home/josue/.gradle/caches/9.0.0/transforms/b028dbf88cb380a0b720e9bb7b49557e/transformed/lifecycle-runtime-ktx-release/res
-br.com.mega12.app-ui-tooling-release-37 /home/josue/.gradle/caches/9.0.0/transforms/b03b445d558519a18d651a8a11e73ab8/transformed/ui-tooling-release/res
-br.com.mega12.app-savedstate-1.2.1-38 /home/josue/.gradle/caches/9.0.0/transforms/c37c6afa707c59ea5422aae66b445e8b/transformed/savedstate-1.2.1/res
-br.com.mega12.app-lifecycle-runtime-release-39 /home/josue/.gradle/caches/9.0.0/transforms/c722eb98d0b0782250988e14d146ae86/transformed/lifecycle-runtime-release/res
-br.com.mega12.app-animation-core-release-40 /home/josue/.gradle/caches/9.0.0/transforms/ca395ad78e66b2ce2eadbe2201abcad2/transformed/animation-core-release/res
-br.com.mega12.app-ui-unit-release-41 /home/josue/.gradle/caches/9.0.0/transforms/cf77b766a4d67210559b71d5f5af9225/transformed/ui-unit-release/res
-br.com.mega12.app-ui-release-42 /home/josue/.gradle/caches/9.0.0/transforms/d2bf1935f9f3fd6bd6438c060df7d4af/transformed/ui-release/res
-br.com.mega12.app-animation-release-43 /home/josue/.gradle/caches/9.0.0/transforms/d394ce1952136a22626e4814237b631d/transformed/animation-release/res
-br.com.mega12.app-ui-util-release-44 /home/josue/.gradle/caches/9.0.0/transforms/e077f466d0e83a2ee529fccfbd7f63e3/transformed/ui-util-release/res
-br.com.mega12.app-ui-test-manifest-1.7.8-45 /home/josue/.gradle/caches/9.0.0/transforms/e13a481ff2d58d389f8f71d0f034c964/transformed/ui-test-manifest-1.7.8/res
-br.com.mega12.app-core-viewtree-1.0.0-46 /home/josue/.gradle/caches/9.0.0/transforms/e94e16fbb4528163412894522517f246/transformed/core-viewtree-1.0.0/res
-br.com.mega12.app-lifecycle-viewmodel-release-47 /home/josue/.gradle/caches/9.0.0/transforms/eae261069207973681fcc8a2a94abc39/transformed/lifecycle-viewmodel-release/res
-br.com.mega12.app-core-1.15.0-48 /home/josue/.gradle/caches/9.0.0/transforms/edd3a04f152ce22eb468c5cfe9e201cb/transformed/core-1.15.0/res
-br.com.mega12.app-ui-tooling-preview-release-49 /home/josue/.gradle/caches/9.0.0/transforms/f126b029a92a1838fbbec2d34cdf5053/transformed/ui-tooling-preview-release/res
-br.com.mega12.app-graphics-path-1.0.1-50 /home/josue/.gradle/caches/9.0.0/transforms/f7ccc4785fc3cb74f584a0e77adefb79/transformed/graphics-path-1.0.1/res
-br.com.mega12.app-lifecycle-process-2.8.7-51 /home/josue/.gradle/caches/9.0.0/transforms/f889132543176fdf9f72cac4d093d57b/transformed/lifecycle-process-2.8.7/res
-br.com.mega12.app-customview-poolingcontainer-1.0.0-52 /home/josue/.gradle/caches/9.0.0/transforms/fdbb3622a40c0b63102e6221fd19d754/transformed/customview-poolingcontainer-1.0.0/res
+br.com.mega12.app-tracing-1.2.0-0 /home/josue/.gradle/caches/9.0.0/transforms/01816d44e818ecbdce76b81c98e7692a/transformed/tracing-1.2.0/res
+br.com.mega12.app-material-release-1 /home/josue/.gradle/caches/9.0.0/transforms/06595d36bbf9d9c4de6d443fee53d7ac/transformed/material-release/res
+br.com.mega12.app-appcompat-resources-1.6.1-2 /home/josue/.gradle/caches/9.0.0/transforms/0b47716c9f30477ea2e5a4ba05beeab1/transformed/appcompat-resources-1.6.1/res
+br.com.mega12.app-graphics-path-1.0.1-3 /home/josue/.gradle/caches/9.0.0/transforms/1f69ef3672f806a26c628ee2ab25f3c1/transformed/graphics-path-1.0.1/res
+br.com.mega12.app-savedstate-1.2.1-4 /home/josue/.gradle/caches/9.0.0/transforms/2356a911cb617cadcea78f36d6fd2e29/transformed/savedstate-1.2.1/res
+br.com.mega12.app-activity-1.10.1-5 /home/josue/.gradle/caches/9.0.0/transforms/2a9f5274773ebf08835ca9257827a75d/transformed/activity-1.10.1/res
+br.com.mega12.app-coil-base-2.5.0-6 /home/josue/.gradle/caches/9.0.0/transforms/2b6268a243ff821488b1c33c11ad22ec/transformed/coil-base-2.5.0/res
+br.com.mega12.app-foundation-release-7 /home/josue/.gradle/caches/9.0.0/transforms/3864a748ba5fc477da24bc6f16467417/transformed/foundation-release/res
+br.com.mega12.app-lifecycle-viewmodel-compose-release-8 /home/josue/.gradle/caches/9.0.0/transforms/3c3a3a2996d0dee5c1c349fb4d1f2e8e/transformed/lifecycle-viewmodel-compose-release/res
+br.com.mega12.app-ui-unit-release-9 /home/josue/.gradle/caches/9.0.0/transforms/3d6267372610944bd1bb8b936fef538c/transformed/ui-unit-release/res
+br.com.mega12.app-ui-tooling-release-10 /home/josue/.gradle/caches/9.0.0/transforms/41537cf3d62fc58c4ef51e6a533967c2/transformed/ui-tooling-release/res
+br.com.mega12.app-ui-release-11 /home/josue/.gradle/caches/9.0.0/transforms/485c8ecf07ac73d01ac354b7ceda1a7e/transformed/ui-release/res
+br.com.mega12.app-navigation-runtime-ktx-2.8.8-12 /home/josue/.gradle/caches/9.0.0/transforms/4b2707872f7c8acc6f42981ec267f0fe/transformed/navigation-runtime-ktx-2.8.8/res
+br.com.mega12.app-material-ripple-release-13 /home/josue/.gradle/caches/9.0.0/transforms/53de817e835b122e1551777086eaa184/transformed/material-ripple-release/res
+br.com.mega12.app-activity-ktx-1.10.1-14 /home/josue/.gradle/caches/9.0.0/transforms/5ed45158bc094252a31ac6ebb458eb41/transformed/activity-ktx-1.10.1/res
+br.com.mega12.app-runtime-saveable-release-15 /home/josue/.gradle/caches/9.0.0/transforms/60875f13fcd86e5d7e461099b9e0e431/transformed/runtime-saveable-release/res
+br.com.mega12.app-navigation-runtime-2.8.8-16 /home/josue/.gradle/caches/9.0.0/transforms/613e4e5ea0132167d0c54302813ed0c7/transformed/navigation-runtime-2.8.8/res
+br.com.mega12.app-lifecycle-viewmodel-release-17 /home/josue/.gradle/caches/9.0.0/transforms/625a1f2ae9709522c13f04cd61a0ac46/transformed/lifecycle-viewmodel-release/res
+br.com.mega12.app-material-icons-core-release-18 /home/josue/.gradle/caches/9.0.0/transforms/633b103a3a9d8c957f5633b18c13094f/transformed/material-icons-core-release/res
+br.com.mega12.app-lifecycle-viewmodel-savedstate-2.8.7-19 /home/josue/.gradle/caches/9.0.0/transforms/645433f511682c44867b08b0a396aab1/transformed/lifecycle-viewmodel-savedstate-2.8.7/res
+br.com.mega12.app-lifecycle-runtime-ktx-release-20 /home/josue/.gradle/caches/9.0.0/transforms/6be6144b218e302b4880a4e6a7b5085a/transformed/lifecycle-runtime-ktx-release/res
+br.com.mega12.app-navigation-common-ktx-2.8.8-21 /home/josue/.gradle/caches/9.0.0/transforms/6e12498f8ced79ffe121db8df4992ca6/transformed/navigation-common-ktx-2.8.8/res
+br.com.mega12.app-animation-core-release-22 /home/josue/.gradle/caches/9.0.0/transforms/770aba3abc636e9d5883e149726a1162/transformed/animation-core-release/res
+br.com.mega12.app-ui-graphics-release-23 /home/josue/.gradle/caches/9.0.0/transforms/78dea574d00a661154e8041aee865a71/transformed/ui-graphics-release/res
+br.com.mega12.app-lifecycle-livedata-core-2.8.7-24 /home/josue/.gradle/caches/9.0.0/transforms/7bcde3046a69432ee9f03c9dcafb06af/transformed/lifecycle-livedata-core-2.8.7/res
+br.com.mega12.app-startup-runtime-1.1.1-25 /home/josue/.gradle/caches/9.0.0/transforms/8268dd9b40685f4871cd88eb6510b852/transformed/startup-runtime-1.1.1/res
+br.com.mega12.app-core-runtime-2.2.0-26 /home/josue/.gradle/caches/9.0.0/transforms/84a42e3ba0675eae4c5c8b169be996ad/transformed/core-runtime-2.2.0/res
+br.com.mega12.app-navigation-common-2.8.8-27 /home/josue/.gradle/caches/9.0.0/transforms/8722a7608355d6807582d0bc0555418f/transformed/navigation-common-2.8.8/res
+br.com.mega12.app-lifecycle-viewmodel-ktx-2.8.7-28 /home/josue/.gradle/caches/9.0.0/transforms/875af2cba763e10128a96791eaf6209f/transformed/lifecycle-viewmodel-ktx-2.8.7/res
+br.com.mega12.app-material-icons-extended-release-29 /home/josue/.gradle/caches/9.0.0/transforms/8d68e312f9a3aa0cc3d7a5f8d3b18265/transformed/material-icons-extended-release/res
+br.com.mega12.app-activity-compose-1.10.1-30 /home/josue/.gradle/caches/9.0.0/transforms/91f42a9bde9b2c63502f21ea65083814/transformed/activity-compose-1.10.1/res
+br.com.mega12.app-ui-test-manifest-1.7.8-31 /home/josue/.gradle/caches/9.0.0/transforms/92cfed16a7bd7a23c6318e097221e87c/transformed/ui-test-manifest-1.7.8/res
+br.com.mega12.app-runtime-release-32 /home/josue/.gradle/caches/9.0.0/transforms/93a76bd6863e81e80f8876205f1211c1/transformed/runtime-release/res
+br.com.mega12.app-core-ktx-1.15.0-33 /home/josue/.gradle/caches/9.0.0/transforms/aa4e398de6a42c9ddba50490f860e922/transformed/core-ktx-1.15.0/res
+br.com.mega12.app-ui-text-release-34 /home/josue/.gradle/caches/9.0.0/transforms/ad4f8a6dec5c9da8103190cf450fd398/transformed/ui-text-release/res
+br.com.mega12.app-lifecycle-runtime-release-35 /home/josue/.gradle/caches/9.0.0/transforms/aea6965c7c5dd49a91cef336048c13c0/transformed/lifecycle-runtime-release/res
+br.com.mega12.app-ui-util-release-36 /home/josue/.gradle/caches/9.0.0/transforms/b50d98d7f896cc7d5873b451b6c51361/transformed/ui-util-release/res
+br.com.mega12.app-profileinstaller-1.4.0-37 /home/josue/.gradle/caches/9.0.0/transforms/c3f8e332f4475b254149385a9b8fc188/transformed/profileinstaller-1.4.0/res
+br.com.mega12.app-annotation-experimental-1.4.1-38 /home/josue/.gradle/caches/9.0.0/transforms/c6457fca00aa7d1a914cf68f5fb5605a/transformed/annotation-experimental-1.4.1/res
+br.com.mega12.app-animation-release-39 /home/josue/.gradle/caches/9.0.0/transforms/d408681e9b84bd3c21e17d141f94e504/transformed/animation-release/res
+br.com.mega12.app-lifecycle-process-2.8.7-40 /home/josue/.gradle/caches/9.0.0/transforms/dd10a4395482d144006a57038334428c/transformed/lifecycle-process-2.8.7/res
+br.com.mega12.app-ui-tooling-data-release-41 /home/josue/.gradle/caches/9.0.0/transforms/dd8f68b34b46ef4d6c7430bdaf9c8e97/transformed/ui-tooling-data-release/res
+br.com.mega12.app-material3-release-42 /home/josue/.gradle/caches/9.0.0/transforms/df611c1b56ba7e84f47e6e7e3cf4ee36/transformed/material3-release/res
+br.com.mega12.app-core-1.15.0-43 /home/josue/.gradle/caches/9.0.0/transforms/e2d059cb58c07022637fae6478c1da99/transformed/core-1.15.0/res
+br.com.mega12.app-lifecycle-runtime-compose-release-44 /home/josue/.gradle/caches/9.0.0/transforms/e514d099278a9f4a74c08bf9d4439007/transformed/lifecycle-runtime-compose-release/res
+br.com.mega12.app-navigation-compose-2.8.8-45 /home/josue/.gradle/caches/9.0.0/transforms/e670291074bc99f0b337eacc0423ef94/transformed/navigation-compose-2.8.8/res
+br.com.mega12.app-emoji2-1.3.0-46 /home/josue/.gradle/caches/9.0.0/transforms/e76223d2e3fe33c70b197569e798a7e6/transformed/emoji2-1.3.0/res
+br.com.mega12.app-savedstate-ktx-1.2.1-47 /home/josue/.gradle/caches/9.0.0/transforms/e9e168ce9436a478a094d4eb1de8baf5/transformed/savedstate-ktx-1.2.1/res
+br.com.mega12.app-ui-tooling-preview-release-48 /home/josue/.gradle/caches/9.0.0/transforms/ea737c7cebf86e03b46ae8859299eaf0/transformed/ui-tooling-preview-release/res
+br.com.mega12.app-ui-geometry-release-49 /home/josue/.gradle/caches/9.0.0/transforms/ec363454ad2b733b93e3f5694ee1ecb4/transformed/ui-geometry-release/res
+br.com.mega12.app-foundation-layout-release-50 /home/josue/.gradle/caches/9.0.0/transforms/ee31065cd07f6a330e818a7ad3cada2d/transformed/foundation-layout-release/res
+br.com.mega12.app-customview-poolingcontainer-1.0.0-51 /home/josue/.gradle/caches/9.0.0/transforms/f550dc62a11886381874bc96f8730fbb/transformed/customview-poolingcontainer-1.0.0/res
+br.com.mega12.app-core-viewtree-1.0.0-52 /home/josue/.gradle/caches/9.0.0/transforms/fbe00eec797179b37cc6a1aa254bbbd0/transformed/core-viewtree-1.0.0/res
 br.com.mega12.app-pngs-53 /home/josue/Documentos/App Rafael/android_app/app/build/generated/res/pngs/debug
 br.com.mega12.app-resValues-54 /home/josue/Documentos/App Rafael/android_app/app/build/generated/res/resValues/debug
-br.com.mega12.app-packageDebugResources-55 /home/josue/Documentos/App Rafael/android_app/app/build/intermediates/incremental/debug/packageDebugResources/merged.dir
-br.com.mega12.app-packageDebugResources-56 /home/josue/Documentos/App Rafael/android_app/app/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
-br.com.mega12.app-debug-57 /home/josue/Documentos/App Rafael/android_app/app/build/intermediates/merged_res/debug/mergeDebugResources
-br.com.mega12.app-debug-58 /home/josue/Documentos/App Rafael/android_app/app/src/debug/res
-br.com.mega12.app-main-59 /home/josue/Documentos/App Rafael/android_app/app/src/main/res
+br.com.mega12.app-updated_navigation_xml-55 /home/josue/Documentos/App Rafael/android_app/app/build/generated/updated_navigation_xml/debug
+br.com.mega12.app-packageDebugResources-56 /home/josue/Documentos/App Rafael/android_app/app/build/intermediates/incremental/debug/packageDebugResources/merged.dir
+br.com.mega12.app-packageDebugResources-57 /home/josue/Documentos/App Rafael/android_app/app/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
+br.com.mega12.app-debug-58 /home/josue/Documentos/App Rafael/android_app/app/build/intermediates/merged_res/debug/mergeDebugResources
+br.com.mega12.app-debug-59 /home/josue/Documentos/App Rafael/android_app/app/src/debug/res
+br.com.mega12.app-main-60 /home/josue/Documentos/App Rafael/android_app/app/src/main/res

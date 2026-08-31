@@ -194,6 +194,7 @@ class Mega12ViewModel : ViewModel() {
             val avaria = AvariaItem(
                 storeId = storeId,
                 storeName = storeName,
+                itemId = item.id,
                 itemCodigo = item.codigo,
                 itemDescricao = item.descricao,
                 quantidade = qtd,
@@ -261,33 +262,35 @@ class Mega12ViewModel : ViewModel() {
         val monthlyMap = mutableMapOf<String, Double>()
 
         orderList.forEach { order ->
-            // Agrupar por Mês/Ano
-            val dateStr = order.createdAt ?: ""
+            // Agrupar por Mês/Ano (Fallback: dataPedido -> createdAt)
+            val dateStr = order.header.dataPedido.ifEmpty { order.createdAt ?: "" }
             if (dateStr.length >= 7) {
-                val monthYear = dateStr.substring(5, 7) + "/" + dateStr.substring(2, 4)
+                val monthYear = if (dateStr.contains("-")) {
+                    // Formato YYYY-MM-DD
+                    dateStr.substring(5, 7) + "/" + dateStr.substring(2, 4)
+                } else {
+                    "??/??"
+                }
                 
-                // Cálculo de Investimento Líquido do Pedido (conforme Web)
-                val brutoPedido = order.items.sumOf { it.subtotal }
-                val desconto = (brutoPedido * (order.header.percentualDescontoOff)) / 100.0
-                val stVal = ((brutoPedido - desconto) * (order.header.aliquotaSt)) / 100.0
-                val investPedido = brutoPedido - desconto + stVal
-                
+                val investPedido = order.effectiveTotalLiquido
                 monthlyMap[monthYear] = (monthlyMap[monthYear] ?: 0.0) + investPedido
                 totalInv += investPedido
+            } else {
+                // Mesmo sem data, somar no total geral de investimento
+                totalInv += order.effectiveTotalLiquido
             }
 
             order.items.forEach { item ->
-                val fatItem = item.totalPecas * item.pdvAlvo
-                // Lucro Real considerando o Custo Efetivo (Impostos + Custos Fixos)
-                val lucroItem = fatItem - (item.totalPecas * (item.custoRealEfetivo ?: item.precoCompraUnitario))
+                val fatItem = item.qtdTotalUnidades * item.pdvAlvo
+                val lucroItem = fatItem - (item.qtdTotalUnidades * (item.custoRealEfetivo ?: item.precoUnitario))
                 
                 totalFat += fatItem
                 totalLucro += lucroItem
-                totalPcs += item.totalPecas
+                totalPcs += item.qtdTotalUnidades
             }
             
             // Abatimento da ST Global do Lucro Real do Pedido
-            val brutoTotal = order.items.sumOf { it.subtotal }
+            val brutoTotal = order.items.sumOf { it.valorTotalBruto }
             val descTotal = (brutoTotal * order.header.percentualDescontoOff) / 100.0
             val stTotal = ((brutoTotal - descTotal) * order.header.aliquotaSt) / 100.0
             totalLucro -= stTotal
@@ -321,17 +324,17 @@ class Mega12ViewModel : ViewModel() {
         var totalLucro = 0.0
 
         supplierOrders.forEach { order ->
-            val brutoPedido = order.items.sumOf { it.subtotal }
+            val brutoPedido = order.items.sumOf { it.valorTotalBruto }
             val desconto = (brutoPedido * order.header.percentualDescontoOff) / 100.0
             val stVal = ((brutoPedido - desconto) * order.header.aliquotaSt) / 100.0
             
-            totalInv += (brutoPedido - desconto + stVal)
-            totalPcs += order.totalPecas
+            totalInv += (brutoPedido - desconto + stVal + order.header.valorFreteGlobal)
+            totalPcs += order.items.sumOf { it.qtdTotalUnidades }
 
             order.items.forEach { item ->
-                val fat = item.totalPecas * item.pdvAlvo
+                val fat = item.qtdTotalUnidades * item.pdvAlvo
                 totalFat += fat
-                totalLucro += fat - (item.totalPecas * (item.custoRealEfetivo ?: item.precoCompraUnitario))
+                totalLucro += fat - (item.qtdTotalUnidades * (item.custoRealEfetivo ?: item.precoUnitario))
             }
             totalLucro -= stVal
         }
@@ -400,27 +403,22 @@ class Mega12ViewModel : ViewModel() {
             id = UUID.randomUUID().toString(),
             codigo = codigo.ifEmpty { "PRD-${System.currentTimeMillis() % 10000}" },
             descricao = descricao,
-            caixas = caixas,
-            qtdPorCaixa = qtdPorCaixa,
-            totalPecas = totalPecas,
-            precoCompraUnitario = precoCompra,
+            qtdPacotes = caixas,
+            qtdPorPacote = qtdPorCaixa,
+            qtdTotalUnidades = totalPecas,
+            precoUnitario = precoCompra,
             pdvAlvo = pdvAlvo,
-            subtotal = subtotal,
-            margemCalculada = fiscal.margemPercentual,
-            statusMargem = fiscal.statusMargem.name.lowercase(),
+            valorTotalBruto = subtotal,
+            margemPercentual = fiscal.margemPercentual,
             custoRealEfetivo = fiscal.custoRealEfetivo,
             photoUrl = photoUrl,
-            storeDistribution = sep.allocations
+            separacaoLojas = sep.allocationsBoxes
         )
 
         val updatedItems = _currentDraftOrder.value.items + newItem
-        val totalLiq = updatedItems.sumOf { it.subtotal }
-        val totalPcs = updatedItems.sumOf { it.totalPecas }
-
+        
         _currentDraftOrder.value = _currentDraftOrder.value.copy(
-            items = updatedItems,
-            totalLiquido = totalLiq,
-            totalPecas = totalPcs
+            items = updatedItems
         )
     }
 
@@ -428,7 +426,7 @@ class Mega12ViewModel : ViewModel() {
         val currentItems = _currentDraftOrder.value.items.toMutableList()
         if (index in currentItems.indices) {
             val item = currentItems[index]
-            currentItems[index] = item.copy(storeDistribution = newAllocations)
+            currentItems[index] = item.copy(separacaoLojas = newAllocations)
             _currentDraftOrder.value = _currentDraftOrder.value.copy(items = currentItems)
         }
     }
@@ -439,17 +437,15 @@ class Mega12ViewModel : ViewModel() {
             val item = currentItems[index]
             val fiscal = FiscalEngine.calculateItemFiscal(precoCompra, pdvAlvo, _fiscalConfig.value)
             currentItems[index] = item.copy(
-                precoCompraUnitario = precoCompra,
+                precoUnitario = precoCompra,
                 pdvAlvo = pdvAlvo,
-                subtotal = item.totalPecas * precoCompra,
-                margemCalculada = fiscal.margemPercentual,
-                statusMargem = fiscal.statusMargem.name.lowercase(),
+                valorTotalBruto = item.qtdTotalUnidades * precoCompra,
+                margemPercentual = fiscal.margemPercentual,
                 custoRealEfetivo = fiscal.custoRealEfetivo
             )
             val updatedItems = currentItems.toList()
             _currentDraftOrder.value = _currentDraftOrder.value.copy(
-                items = updatedItems,
-                totalLiquido = updatedItems.sumOf { it.subtotal }
+                items = updatedItems
             )
         }
     }
@@ -460,9 +456,7 @@ class Mega12ViewModel : ViewModel() {
             currentItems.removeAt(index)
             val updatedItems = currentItems.toList()
             _currentDraftOrder.value = _currentDraftOrder.value.copy(
-                items = updatedItems,
-                totalLiquido = updatedItems.sumOf { it.subtotal },
-                totalPecas = updatedItems.sumOf { it.totalPecas }
+                items = updatedItems
             )
         }
     }
@@ -484,11 +478,15 @@ class Mega12ViewModel : ViewModel() {
                     numeroPedido = orderNum,
                     fornecedor = fornecedor,
                     condicaoPagamento = condicao,
-                    dataEmissao = now
+                    dataPedido = now,
+                    createdAt = now,
+                    status = "Aprovado"
                 ),
-                status = "Confirmado",
+                status = "Aprovado",
                 separationStatus = "Pendente",
-                createdAt = now
+                createdAt = now,
+                totalLiquido = _currentDraftOrder.value.items.sumOf { it.valorTotalBruto },
+                totalPecas = _currentDraftOrder.value.items.sumOf { it.qtdTotalUnidades }
             )
 
             val res = repository.saveOrder(finalOrder)

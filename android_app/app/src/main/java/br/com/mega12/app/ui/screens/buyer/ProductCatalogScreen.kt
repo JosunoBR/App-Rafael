@@ -3,10 +3,11 @@ package br.com.mega12.app.ui.screens.buyer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -28,8 +29,8 @@ import br.com.mega12.app.data.model.Product
 import br.com.mega12.app.ui.components.Mega12Card
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
+import br.com.mega12.app.util.NumberFormatUtils
 import coil.compose.AsyncImage
-import java.text.NumberFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,18 +46,20 @@ fun ProductCatalogScreen(
     var selectedSupplier by remember { mutableStateOf("Todos") }
     var selectedProductForAdd by remember { mutableStateOf<Product?>(null) }
     
-    val categories = remember(products) { 
-        listOf("Todos") + products.map { it.categoria }.distinct().sorted() 
+    val categories: List<String> = remember(products) { 
+        val list = products.mapNotNull { it.categoria }.distinct().sorted()
+        listOf("Todos") + list
     }
-    val suppliers = remember(products) {
-        listOf("Todos") + products.mapNotNull { it.fornecedorPadraoNome }.distinct().sorted()
+    val suppliersList: List<String> = remember(products) {
+        val list = products.mapNotNull { it.nomeFornecedor }.distinct().sorted()
+        listOf("Todos") + list
     }
 
     val filteredProducts = products.filter { product ->
         val matchesSearch = product.descricao.contains(searchQuery, ignoreCase = true) || 
-                          product.codigo?.contains(searchQuery, ignoreCase = true) == true
+                          product.codigo.contains(searchQuery, ignoreCase = true)
         val matchesCategory = selectedCategory == "Todos" || product.categoria == selectedCategory
-        val matchesSupplier = selectedSupplier == "Todos" || product.fornecedorPadraoNome == selectedSupplier
+        val matchesSupplier = selectedSupplier == "Todos" || product.nomeFornecedor == selectedSupplier
         
         matchesSearch && matchesCategory && matchesSupplier
     }
@@ -85,12 +88,12 @@ fun ProductCatalogScreen(
                 )
                 
                 // Filtros Rápidos (Categorias)
-                androidx.compose.foundation.lazy.LazyRow(
+                LazyRow(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(categories) { category ->
+                    items(categories) { category: String ->
                         FilterChip(
                             selected = selectedCategory == category,
                             onClick = { selectedCategory = category },
@@ -110,12 +113,12 @@ fun ProductCatalogScreen(
                 }
 
                 // Filtros de Fornecedor
-                androidx.compose.foundation.lazy.LazyRow(
+                LazyRow(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(suppliers) { supplier ->
+                    items(suppliersList) { supplier: String ->
                         FilterChip(
                             selected = selectedSupplier == supplier,
                             onClick = { selectedSupplier = supplier },
@@ -144,7 +147,7 @@ fun ProductCatalogScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(filteredProducts) { product ->
+            gridItems(filteredProducts) { product ->
                 ProductGridItem(product = product) {
                     if (isSelectionMode) {
                         selectedProductForAdd = product
@@ -158,7 +161,7 @@ fun ProductCatalogScreen(
 
     // Modal de Quantidade (Paridade Web: 10 pacotes padrão)
     selectedProductForAdd?.let { product ->
-        var caixas by remember { mutableStateOf("10") }
+        var caixasInput by remember { mutableStateOf("10") }
         AlertDialog(
             onDismissRequest = { selectedProductForAdd = null },
             title = { Text("Adicionar ao Pedido", fontWeight = FontWeight.Black) },
@@ -167,14 +170,15 @@ fun ProductCatalogScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(product.descricao, style = MaterialTheme.typography.bodyMedium, color = Slate600)
                     OutlinedTextField(
-                        value = caixas,
-                        onValueChange = { caixas = it },
+                        value = caixasInput,
+                        onValueChange = { caixasInput = it },
                         label = { Text("Quantidade de Caixas") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                         suffix = { Text("cx") }
                     )
-                    Text("Total: ${(caixas.toIntOrNull() ?: 0) * product.qtdPorPacote} unidades", style = MaterialTheme.typography.labelSmall, color = Emerald600, fontWeight = FontWeight.Bold)
+                    val total = (caixasInput.toIntOrNull() ?: 0) * product.qtdPorPacote
+                    Text("Total: ${NumberFormatUtils.formatInteger(total)} unidades", style = MaterialTheme.typography.labelSmall, color = Emerald600, fontWeight = FontWeight.Bold)
                 }
             },
             confirmButton = {
@@ -183,7 +187,7 @@ fun ProductCatalogScreen(
                         viewModel.addItemToDraftOrder(
                             descricao = product.descricao,
                             codigo = product.codigo,
-                            caixas = caixas.toIntOrNull() ?: 1,
+                            caixas = caixasInput.toIntOrNull() ?: 1,
                             qtdPorCaixa = product.qtdPorPacote,
                             precoCompra = product.precoUnitarioPadrao,
                             pdvAlvo = product.pdvSugerido,
@@ -201,8 +205,6 @@ fun ProductCatalogScreen(
 
 @Composable
 fun ProductGridItem(product: Product, onClick: () -> Unit) {
-    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
-
     Mega12Card(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick
@@ -221,15 +223,15 @@ fun ProductGridItem(product: Product, onClick: () -> Unit) {
                     color = Slate900.copy(alpha = 0.7f),
                     contentColor = Color.White
                 ) {
-                    Text(product.categoria, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                    Text(product.categoria ?: "Geral", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
                 }
             }
 
             Column(modifier = Modifier.padding(10.dp)) {
                 Text(product.descricao, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
                 Spacer(Modifier.height(4.dp))
-                Text(currencyFormatter.format(product.precoUnitarioPadrao), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Emerald600)
-                Text("PDV: ${currencyFormatter.format(product.pdvSugerido)}", style = MaterialTheme.typography.labelSmall, color = Slate400)
+                Text(NumberFormatUtils.formatCurrency(product.precoUnitarioPadrao), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Emerald600)
+                Text("PDV: ${NumberFormatUtils.formatCurrency(product.pdvSugerido)}", style = MaterialTheme.typography.labelSmall, color = Slate400)
             }
         }
     }

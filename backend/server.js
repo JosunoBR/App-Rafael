@@ -19,13 +19,28 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+const fs = require('fs');
+const path = require('path');
+
 // 3. Montagem das Rotas da API Modular
 app.use('/api', routes);
 
-// 4. Middleware Global de Tratamento de Erros
+// 4. Servir Frontend Web (React SPA em Produção/Nuvem)
+const webDistPath = path.join(__dirname, '../web/dist');
+if (fs.existsSync(webDistPath)) {
+  app.use(express.static(webDistPath));
+  
+  // Qualquer rota GET que não seja /api entrega o index.html para o React Router
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(webDistPath, 'index.html'));
+  });
+}
+
+// 5. Middleware Global de Tratamento de Erros
 app.use(errorHandler);
 
-// 5. Inicialização do Servidor
+// 6. Inicialização do Servidor
 async function bootstrap() {
   try {
     await getDatabase(); // Inicializa SQLite e executa migrações/seed
@@ -33,6 +48,9 @@ async function bootstrap() {
       console.log(`🚀 Servidor Backend SQLite da Rede Mega 12 rodando na porta ${config.PORT}`);
       console.log(`🛡️ Segurança: Helmet, JWT e Bcrypt Ativos | Clean Architecture (SRP + DIP + RBAC)`);
       console.log(`📂 Banco de dados SQLite: ${dbPath}`);
+      if (fs.existsSync(webDistPath)) {
+        console.log(`🌐 Frontend Web Ativo e Integrado (Servindo de ${webDistPath})`);
+      }
     });
   } catch (err) {
     console.error('Falha crítica na inicialização do servidor:', err);

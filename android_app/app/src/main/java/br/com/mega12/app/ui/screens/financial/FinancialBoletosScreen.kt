@@ -20,7 +20,7 @@ import br.com.mega12.app.ui.components.Mega12Card
 import br.com.mega12.app.ui.components.Mega12TopBar
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
-import java.text.NumberFormat
+import br.com.mega12.app.util.NumberFormatUtils
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,7 +90,6 @@ fun FinancialBoletosScreen(viewModel: Mega12ViewModel, onNavigateBack: () -> Uni
 
 @Composable
 fun BoletoCard(installment: PaymentInstallment, onUpdateStatus: (String) -> Unit) {
-    val currencyFormatter = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
     val statusColor = when (installment.status) {
         "Pago" -> Emerald500
         "Atrasado" -> Rose500
@@ -111,7 +110,7 @@ fun BoletoCard(installment: PaymentInstallment, onUpdateStatus: (String) -> Unit
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        currencyFormatter.format(installment.valor),
+                        NumberFormatUtils.formatCurrency(installment.valor),
                         style = MaterialTheme.typography.titleLarge,
                         color = Color.White,
                         fontWeight = FontWeight.Black

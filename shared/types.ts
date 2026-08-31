@@ -31,6 +31,16 @@ export interface Supplier {
   descontoOffPadrao?: number;   // % de Desconto comercial habitual
   percentualNotaPadrao?: number; // % Nota fiscal padrão do fornecedor
   observacoesDescarga?: string; // Instruções de entrega / paletes
+  pedidoPadraoJson?: string;    // JSON com a grade de itens padrão deste fornecedor
+  pedidoPadrao?: {
+    items: OrderItem[];
+    condicaoPagamento?: string;
+    aliquotaSt?: number;
+    descontoOff?: number;
+    percentualNota?: number;
+    observacoes?: string;
+    savedAt?: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -46,15 +56,18 @@ export interface OrderItemFiscalOverride {
 
 export interface Product {
   id: string;
-  codigo: string;
+  codigoInterno: string;        // Código de produto interno (visível em todas as telas)
+  codigoFornecedor?: string;    // Código de produto do fornecedor (visível em compras/pedidos e catálogo)
+  codigoBarras?: string;        // Código de barras EAN-13 (visível em catálogo, estoque, separação; oculto em compras)
+  codigo?: string;              // Mantido para retrocompatibilidade (aponta para codigoInterno)
+  eanBarcode?: string;          // Mantido para retrocompatibilidade (aponta para codigoBarras)
   descricao: string;
   categoria?: string;
   fotoUrl?: string;
-  qtdPorPacote: number;
+  qtdPorPacote?: number;        // @deprecated — Mantido por retrocompatibilidade
   precoUnitarioPadrao: number;
   pdvSugerido?: number;
   ncm?: string;
-  eanBarcode?: string;
   supplierId?: string;
   nomeFornecedor?: string;
   ativo: boolean;
@@ -62,16 +75,40 @@ export interface Product {
   updatedAt: string;
 }
 
+// 4.1 Item em Estoque no Depósito Central (CD / Matriz)
+export interface CentralStockItem {
+  id: string;
+  productId?: string;
+  codigoInterno?: string;        // Código de produto interno
+  codigoFornecedor?: string;     // Código de produto do fornecedor
+  codigoBarras?: string;         // Código de barras EAN-13
+  codigo: string;                // Retrocompatibilidade
+  descricao: string;
+  categoria?: string;
+  fotoUrl?: string;
+  qtdPorPacote?: number;         // @deprecated — Mantido por retrocompatibilidade
+  saldoCaixas?: number;          // @deprecated — Mantido por retrocompatibilidade
+  saldoUnidades: number;         // Saldo disponível em unidades no depósito (campo principal)
+  precoUnitario: number;         // Custo de compra unitário
+  pdvSugerido: number;           // Preço de venda pretendido
+  localizacaoGalpao?: string;    // Endereço no CD (ex: "Rua B - Palete 14")
+  fornecedorOrigem?: string;     // Fornecedor / Fabricante
+  dataUltimaEntrada?: string;
+  updatedAt: string;
+}
+
 export interface OrderItem {
   id: string;
-  codigo?: string;
+  codigoInterno?: string;       // Código de produto interno (visível em todas as telas)
+  codigoFornecedor?: string;    // Código de produto do fornecedor (visível na página de compras)
+  codigo?: string;              // Mantido para retrocompatibilidade
   descricao: string;
   fotoUrl?: string;          // Foto/Imagem do produto (URL ou Base64)
-  qtdPorPacote: number;      // F: Peças por embalagem/pacote
-  qtdPacotes: number;        // G: Quantidade de caixas/pacotes comprados
-  qtdTotalUnidades: number;  // H = F * G
-  precoUnitario: number;     // I: Preço de compra unitário
-  valorTotalBruto: number;   // J = H * I
+  qtdPorPacote?: number;     // @deprecated — Mantido por retrocompatibilidade
+  qtdPacotes?: number;       // @deprecated — Mantido por retrocompatibilidade
+  qtdTotalUnidades: number;  // Quantidade total de unidades compradas (entrada principal)
+  precoUnitario: number;     // Preço de compra por unidade
+  valorTotalBruto: number;   // = qtdTotalUnidades × precoUnitario
   
   // Acréscimos rateados ou específicos
   freteUnitario?: number;
@@ -96,6 +133,8 @@ export interface OrderItem {
   qtdReservaEstoque?: number; // Quantidade retida no Estoque Central / Matriz / CD
 }
 
+export type OrderStatus = 'Em Cotação' | 'Aprovado' | 'Em Separação' | 'Finalizado';
+
 export interface OrderHeader {
   id: string;
   numeroPedido: string;
@@ -106,6 +145,7 @@ export interface OrderHeader {
   contatoVendedor?: string;
   condicaoPagamento: string;
   dataPedido: string;
+  dataEmissao?: string;
   dataEntregaPrevista: string;
   percentualDescontoOff: number; // % OFF negociado
   percentualNota?: number;       // % NOTA (Percentual faturado em Nota Fiscal para média histórica)
@@ -115,12 +155,25 @@ export interface OrderHeader {
   valorFreteGlobal: number;
   valorOutrasDespesasGlobal: number;
   
-  // Estrutura do Dropdown Duplo de Pagamento
+  // Estrutura do Dropdown Duplo de Pagamento & Negociação Mista (Entrada à vista + Saldo a prazo)
   parcelasCount?: number;            // Quantidade de parcelas (ex: 1, 2, 3, 4...)
-  prazoDias?: number | string;       // Intervalo ou dias (ex: 30, 28, 15, 21, 45, 60, 'vista', 'custom')
+  prazoDias?: number | string;       // Intervalo ou dias (ex: 30, 28, 15, 21, 45, 60, 'vista', 'entrada_com_parcelamento', 'custom')
   diaVencimentoPersonalizado?: string; // Data inicial ou dia base
+  
+  // Negociação com Entrada À Vista + Saldo Parcelado
+  valorEntradaAVista?: number;       // Valor em R$ pago à vista / sinal
+  saldoParcelasCount?: number;       // Quantidade de parcelas do saldo restante (ex: 1x, 2x, 3x...)
+  saldoPrazoDias?: number | string;  // Intervalo de vencimento do saldo (ex: 30, 28, 15...)
 
-  status: 'Rascunho' | 'Em Cotação' | 'Aprovado' | 'Em Separação' | 'Finalizado';
+  // Esteira Operacional & Auditoria
+  status: OrderStatus | 'Rascunho';
+  aprovadoPor?: string;
+  dataAprovacao?: string;
+  liberadoPorDeposito?: string;
+  dataLiberacaoSeparacao?: string;
+  finalizadoPor?: string;
+  dataFinalizacao?: string;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -179,8 +232,8 @@ export interface PurchaseOrder {
   installments?: PaymentInstallment[];
 }
 
-// 7. Tipos de Usuários & Níveis de Acesso (RBAC)
-export type UserRole = 'diretoria' | 'comprador' | 'conferente' | 'motorista';
+// 7. Tipos de Usuários & Níveis de Acesso (RBAC: Diretoria, Depósito, Separação)
+export type UserRole = 'diretoria' | 'deposito' | 'separacao';
 
 export interface User {
   id: string;

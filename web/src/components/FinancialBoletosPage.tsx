@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  DollarSign, 
   Calendar, 
   Building2, 
   Search, 
@@ -8,20 +7,15 @@ import {
   CheckCircle2, 
   Clock, 
   AlertTriangle, 
-  ArrowRight, 
   Edit3, 
   FileSpreadsheet, 
   ExternalLink, 
   Receipt, 
-  Sparkles, 
-  Plus, 
+  CreditCard,
   X, 
   Save, 
   RotateCcw,
-  Check,
-  TrendingUp,
-  CreditCard,
-  FileText
+  Check
 } from 'lucide-react';
 import { PurchaseOrder, PaymentInstallment, Supplier } from '../shared/types';
 import { generateOrderInstallments, calculateOrderNetTotal, getInstallmentStatus } from '../utils/installments';

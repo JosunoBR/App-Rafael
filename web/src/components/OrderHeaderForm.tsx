@@ -4,7 +4,6 @@ import {
   User, 
   Calendar, 
   CreditCard, 
-  Percent, 
   FileText, 
   ChevronDown, 
   ChevronUp, 
@@ -17,8 +16,6 @@ import {
   CheckCircle2, 
   Sparkles,
   Star,
-  BookmarkCheck,
-  PackageCheck,
   X
 } from 'lucide-react';
 import { OrderHeader, Supplier } from '../shared/types';
@@ -77,7 +74,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         aliquotaSt: currentSupplier.aliquotaStPadrao
       });
     }
-  }, [currentSupplier, header.fornecedor]);
+  }, [currentSupplier, header, onChange]);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -349,8 +346,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               />
             </div>
 
-            {/* 2. Fornecedor (Ocupa 2 colunas) */}
-            <div className="sm:col-span-2 relative" ref={dropdownRef}>
+            {/* 2. Fornecedor (Ocupa 3 colunas no desktop) */}
+            <div className="sm:col-span-2 lg:col-span-3 relative" ref={dropdownRef}>
               <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-emerald-500" />
@@ -563,25 +560,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               )}
             </div>
 
-            {/* 3. Status do Pedido */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Status do Pedido
-              </label>
-              <select
-                value={header.status}
-                onChange={(e) => handleFieldChange('status', e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer"
-              >
-                <option value="Rascunho">Rascunho</option>
-                <option value="Em Cotação">Em Cotação</option>
-                <option value="Aprovado">Aprovado</option>
-                <option value="Em Separação">Em Separação</option>
-                <option value="Finalizado">Finalizado</option>
-              </select>
-            </div>
-
-            {/* 4. Vendedor */}
+            {/* 3. Vendedor */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-slate-400" />

@@ -4,25 +4,20 @@ import {
   TrendingUp, 
   DollarSign, 
   Boxes, 
-  PieChart, 
   Calendar, 
-  Filter, 
   Building2, 
   Package, 
   Store, 
   Sparkles,
-  ArrowUpRight,
   Receipt,
   Layers,
   ChevronRight,
   ShieldAlert,
   Clock,
   Percent,
-  CheckCircle2,
   Lightbulb,
   Handshake,
-  Target,
-  ArrowDownRight
+  Target
 } from 'lucide-react';
 import { PurchaseOrder, Supplier } from '../shared/types';
 import { 
@@ -42,7 +37,7 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   orders,
   suppliers,
-  onSelectOrder,
+  onSelectOrder: _onSelectOrder,
   onNavigateToOrders
 }) => {
   // Combina com seed demo para mostrar gráficos vivos
@@ -185,7 +180,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       monthlyList,
       topSupplierItems
     };
-  }, [supplierOrders]);
+  }, [supplierOrders, selectedSupplierObj]);
 
   const maxSupplierMonthlyVal = useMemo(() => {
     return Math.max(...supplierBargainMetrics.monthlyList.map(m => m.investimentoCompra), 100);

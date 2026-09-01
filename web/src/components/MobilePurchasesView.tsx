@@ -3,31 +3,23 @@ import {
   ShoppingBag, 
   Plus, 
   Trash2, 
-  Send, 
   DollarSign, 
   Boxes, 
   TrendingUp, 
   CheckCircle2, 
-  AlertTriangle,
   FileSpreadsheet,
   Share2,
-  Building2,
+  FileText,
   ChevronDown,
   ChevronUp,
   Edit3,
   Copy,
   Search,
   Sparkles,
-  SlidersHorizontal,
-  Download,
-  FileText,
   Save,
   Store,
   X,
   Package,
-  Layers,
-  Percent,
-  Truck,
   RotateCcw
 } from 'lucide-react';
 import { PurchaseOrder, OrderItem, Supplier, Product, StoreConfig, FiscalConfig } from '../shared/types';
@@ -199,7 +191,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
       const separacao = sepRes ? sepRes.allocations : {};
 
       const itemFinal: OrderItem = {
-        id: 'item_' + Date.now(),
+        id: 'item_' + crypto.randomUUID(),
         codigo: novoItem.codigo || `PROD-${order.items.length + 1}`,
         codigoInterno: novoItem.codigoInterno || novoItem.codigo || `PROD-${order.items.length + 1}`,
         codigoFornecedor: novoItem.codigoFornecedor,
@@ -296,7 +288,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
   const handleDuplicateItem = (item: OrderItem) => {
     const duplicated: OrderItem = {
       ...item,
-      id: 'item_' + Date.now(),
+      id: 'item_' + crypto.randomUUID(),
       codigo: item.codigo ? `${item.codigo}-CÓPIA` : undefined,
       descricao: `${item.descricao} (Cópia)`
     };

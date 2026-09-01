@@ -1,4 +1,4 @@
-import { PurchaseOrder, OrderItem, Supplier } from '../shared/types';
+import { PurchaseOrder, OrderItem } from '../shared/types';
 import { DEFAULT_FISCAL_CONFIG, DEFAULT_STORES } from '../shared/constants';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';

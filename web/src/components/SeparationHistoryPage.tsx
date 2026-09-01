@@ -4,30 +4,20 @@ import {
   Search, 
   FileSpreadsheet, 
   FileText, 
-  ArrowRight, 
   UserCheck, 
   ShieldAlert, 
   CheckCircle2, 
   Clock, 
   Boxes, 
   Warehouse, 
-  Layers, 
-  AlertTriangle,
   User,
-  Sparkles,
-  TrendingUp,
-  Filter,
   Eye,
-  X,
-  Store,
-  Calendar,
-  DollarSign,
-  AlertCircle
+  X
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig, AvariaRecord } from '../shared/types';
 import { exportOrderToExcel } from '../utils/excelExporter';
 import { exportRomaneioPDF } from '../utils/pdfExporter';
-import { convertAvariaToUnits } from './SeparationPage';
+import { convertAvariaToUnits } from '../utils/avariaUtils';
 
 interface SeparationHistoryPageProps {
   orders: PurchaseOrder[];

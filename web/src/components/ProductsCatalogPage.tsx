@@ -10,20 +10,15 @@ import {
   X, 
   Check, 
   Tag, 
-  Boxes, 
-  DollarSign, 
-  Barcode, 
   Filter, 
   Eye, 
-  Sparkles,
-  RotateCcw,
   LayoutGrid,
   List,
   Building2,
-  Package
+  Package,
+  Barcode
 } from 'lucide-react';
 import { Product, Supplier } from '../shared/types';
-import { INITIAL_PRODUCTS } from '../utils/storage';
 
 interface ProductsCatalogPageProps {
   products: Product[];

@@ -36,8 +36,6 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   onDeleteSupplier,
   onSelectSupplierForOrder
 }) => {
-  if (!isOpen) return null;
-
   const [searchTerm, setSearchTerm] = useState('');
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(initialEditSupplier || null);
   const [isFormOpen, setIsFormOpen] = useState(!!initialEditSupplier);
@@ -53,6 +51,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   const [aliquotaIpiPadrao, setAliquotaIpiPadrao] = useState<number>(initialEditSupplier?.aliquotaIpiPadrao || 0);
   const [descontoOffPadrao, setDescontoOffPadrao] = useState<number>(initialEditSupplier?.descontoOffPadrao || 0);
   const [observacoesDescarga, setObservacoesDescarga] = useState(initialEditSupplier?.observacoesDescarga || 'Entregar com paletização padrão no Depósito Central.');
+
+  if (!isOpen) return null;
 
   const handleOpenNewForm = () => {
     setEditingSupplier(null);

@@ -29,20 +29,20 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
   onClose,
   onApplyChanges
 }) => {
-  if (!isOpen || !item) return null;
-
-  const [precoCompra, setPrecoCompra] = useState(item.precoUnitario);
-  const [pdvAlvo, setPdvAlvo] = useState(item.pdvAlvo);
-  const [useCustom, setUseCustom] = useState(item.fiscalOverride?.useCustomFiscal || false);
+  const [precoCompra, setPrecoCompra] = useState(item?.precoUnitario || 0);
+  const [pdvAlvo, setPdvAlvo] = useState(item?.pdvAlvo || 12);
+  const [useCustom, setUseCustom] = useState(item?.fiscalOverride?.useCustomFiscal || false);
   
-  const [icms, setIcms] = useState((item.fiscalOverride?.icmsAliquota ?? globalFiscal.icmsAliquota) * 100);
-  const [ipi, setIpi] = useState((item.fiscalOverride?.ipiAliquota ?? globalFiscal.ipiAliquota) * 100);
-  const [pisCofins, setPisCofins] = useState((item.fiscalOverride?.pisCofinsAliquota ?? globalFiscal.pisCofinsAliquota) * 100);
-  const [custosFixos, setCustosFixos] = useState((item.fiscalOverride?.custosFixos ?? globalFiscal.custosFixos) * 100);
-  const [creditoEntrada, setCreditoEntrada] = useState((item.fiscalOverride?.creditoEntradaICMS ?? globalFiscal.creditoEntradaICMS) * 100);
+  const [icms, setIcms] = useState((item?.fiscalOverride?.icmsAliquota ?? globalFiscal.icmsAliquota) * 100);
+  const [ipi, setIpi] = useState((item?.fiscalOverride?.ipiAliquota ?? globalFiscal.ipiAliquota) * 100);
+  const [pisCofins, setPisCofins] = useState((item?.fiscalOverride?.pisCofinsAliquota ?? globalFiscal.pisCofinsAliquota) * 100);
+  const [custosFixos, setCustosFixos] = useState((item?.fiscalOverride?.custosFixos ?? globalFiscal.custosFixos) * 100);
+  const [creditoEntrada, setCreditoEntrada] = useState((item?.fiscalOverride?.creditoEntradaICMS ?? globalFiscal.creditoEntradaICMS) * 100);
 
   // Meta de margem simulada (ex: 20% ou 25%)
   const [margemMeta, setMargemMeta] = useState(20);
+
+  if (!isOpen || !item) return null;
 
   // Recalcular em tempo real
   const currentFiscalOverride = useCustom ? {

@@ -31,14 +31,14 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   onClose,
   onSaveSeparation
 }) => {
-  if (!isOpen || !item) return null;
+  const [allocations, setAllocations] = useState<Record<string, number>>({});
+  const [isManual, setIsManual] = useState<boolean>(false);
+  const [reserveStock, setReserveStock] = useState<number>(0);
 
-  const [allocations, setAllocations] = useState<Record<string, number>>(item.separacaoLojas || {});
-  const [isManual, setIsManual] = useState<boolean>(item.separacaoManual || false);
-  const [reserveStock, setReserveStock] = useState<number>(item.qtdReservaEstoque || 0);
-
-  // Inicializar caso vazio
+  // Inicializar quando item/stores mudam (hooks sempre chamados)
   useEffect(() => {
+    if (!item) return;
+    
     if (!item.separacaoLojas || Object.keys(item.separacaoLojas).length === 0) {
       const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, item.qtdReservaEstoque || 0);
       setAllocations(sep.allocations);
@@ -51,6 +51,8 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
       setIsManual(item.separacaoManual || false);
     }
   }, [item, stores]);
+
+  if (!isOpen || !item) return null;
 
   const validation = validateSeparation(allocations, item.qtdTotalUnidades, stores);
 

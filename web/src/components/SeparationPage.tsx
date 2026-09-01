@@ -20,15 +20,14 @@ import {
   Maximize2,
   Boxes,
   Image as ImageIcon,
-  Eye,
   X,
   Building2,
   Calendar,
-  Package,
-  Tag
+  Package
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User } from '../shared/types';
-import { calculateAutomaticSeparation, validateSeparation } from '../shared/separationEngine';
+import { calculateAutomaticSeparation } from '../shared/separationEngine';
+import { convertAvariaToUnits } from '../utils/avariaUtils';
 import { SeparationMatrixModal } from './SeparationMatrixModal';
 import { OrderPipelineStepper } from './OrderPipelineStepper';
 
@@ -47,25 +46,6 @@ interface SeparationPageProps {
   onFinalizeOrder?: (order: PurchaseOrder) => void;
   onReleaseToSeparation?: (order: PurchaseOrder) => void;
   onApproveOrder?: (order: PurchaseOrder) => void;
-}
-
-// Função para converter qualquer unidade de medida em unidades reais de peças
-export function convertAvariaToUnits(quantidade: number, unidadeMedida: string = 'UN', qtdPorPacote: number = 1): number {
-  const q = Number(quantidade) || 0;
-  const pack = Number(qtdPorPacote) || 1;
-
-  switch (unidadeMedida) {
-    case 'CX':
-    case 'PCT':
-      return q * pack; // 1 CX / PCT = X peças da embalagem
-    case 'PAR':
-      return q * 2;    // 1 PAR = 2 peças
-    case 'JG':
-      return q * pack; // 1 JG = conjunto completo
-    case 'UN':
-    default:
-      return q;        // 1 UN = 1 peça
-  }
 }
 
 export const SeparationPage: React.FC<SeparationPageProps> = ({
@@ -90,14 +70,13 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   const pendingSeparationOrders = orders.filter(o => o.header.status === 'Em Separação' || o.header.status === 'Aprovado');
 
   const isCurrentFinalized = order.header.status === 'Finalizado';
-  const [viewArchivedReadOnly, setViewArchivedReadOnly] = useState(false);
 
   // Se o pedido atual for finalizado mas existirem outros pendentes, seleciona automaticamente o primeiro pendente
   useEffect(() => {
-    if (isCurrentFinalized && pendingSeparationOrders.length > 0 && onSelectOrder && !viewArchivedReadOnly) {
+    if (isCurrentFinalized && pendingSeparationOrders.length > 0 && onSelectOrder) {
       onSelectOrder(pendingSeparationOrders[0]);
     }
-  }, [isCurrentFinalized, pendingSeparationOrders, onSelectOrder, viewArchivedReadOnly]);
+  }, [isCurrentFinalized, pendingSeparationOrders, onSelectOrder]);
 
   // Estados do Apontamento de Doca
   const [conferente, setConferente] = useState(order.inspection?.conferente || '');
@@ -229,7 +208,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
       ...order,
       inspection: updatedInspection
     });
-  }, [conferente, possuiAvarias, observacoesDoca, avariasList]);
+  }, [conferente, possuiAvarias, observacoesDoca, avariasList, order.items, activeStores, onChangeOrder, order]);
 
   // Handlers para Edição Direta em Unidades
   const handleUpdateStoreAllocationUnits = (item: OrderItem, storeId: string, rawUnits: number) => {
@@ -808,7 +787,6 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {order.items.map((item, idx) => {
                 const status = itemStatusList[idx];
-                const pack = Math.max(1, item.qtdPorPacote || 1);
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition">

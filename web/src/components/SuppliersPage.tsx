@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { 
   Building2, 
   Plus, 
@@ -6,15 +6,8 @@ import {
   Edit3, 
   Trash2, 
   Phone, 
-  User, 
-  CreditCard, 
-  Percent, 
-  Truck, 
-  CheckCircle2, 
   Sparkles, 
   ShoppingBag, 
-  ArrowRight, 
-  ShieldAlert,
   Package,
   Image as ImageIcon,
   Upload,

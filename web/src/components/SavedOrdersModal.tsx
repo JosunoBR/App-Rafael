@@ -2,12 +2,8 @@ import React from 'react';
 import { 
   X, 
   FolderOpen, 
-  Trash2, 
-  Copy, 
-  ArrowRight, 
-  Calendar, 
-  Building2, 
-  Package 
+  Package, 
+  ArrowRight
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { loadSavedOrdersList } from '../utils/storage';

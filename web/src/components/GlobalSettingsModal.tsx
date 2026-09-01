@@ -27,8 +27,6 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   onClose,
   onSave
 }) => {
-  if (!isOpen) return null;
-
   const [activeTab, setActiveTab] = useState<'fiscal' | 'stores'>('fiscal');
 
   // Fiscal state
@@ -40,6 +38,8 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
 
   // Stores state
   const [stores, setStores] = useState<StoreConfig[]>([...storeConfigs]);
+
+  if (!isOpen) return null;
 
   const handleSave = () => {
     const updatedFiscal: FiscalConfig = {

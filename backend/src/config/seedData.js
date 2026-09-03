@@ -522,7 +522,7 @@ function runFullDatabaseSeed(db) {
     const defaultUsers = [
       {
         id: 'usr_diretoria',
-        nome: 'Rafael (Diretoria)',
+        nome: 'Rafael',
         email: 'diretoria@mega12.com.br',
         senha: defaultPasswordHash,
         role: 'diretoria',
@@ -531,7 +531,7 @@ function runFullDatabaseSeed(db) {
       },
       {
         id: 'usr_deposito',
-        nome: 'Marcos (Depósito & CD)',
+        nome: 'Marcos',
         email: 'deposito@mega12.com.br',
         senha: defaultPasswordHash,
         role: 'deposito',
@@ -540,7 +540,7 @@ function runFullDatabaseSeed(db) {
       },
       {
         id: 'usr_separacao',
-        nome: 'Jorge (Separação & Doca)',
+        nome: 'Jorge',
         email: 'separacao@mega12.com.br',
         senha: defaultPasswordHash,
         role: 'separacao',
@@ -557,10 +557,10 @@ function runFullDatabaseSeed(db) {
           VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
         `, [u.id, u.nome, u.email, u.senha, u.role, u.cargo, u.telefone, now, now]);
       } else {
-        // Atualizar papel e cargo
+        // Atualizar nome, papel e cargo
         db.run(`
-          UPDATE users SET role = ?, cargo = ?, updatedAt = ? WHERE id = ?
-        `, [u.role, u.cargo, now, u.id]);
+          UPDATE users SET nome = ?, role = ?, cargo = ?, updatedAt = ? WHERE id = ?
+        `, [u.nome, u.role, u.cargo, now, u.id]);
       }
     });
   } catch (err) {

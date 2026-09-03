@@ -312,9 +312,9 @@ async function getDatabase() {
     dbInstance.run(`
       INSERT INTO users (id, nome, email, senha, role, cargo, telefone, ativo, createdAt, updatedAt)
       VALUES 
-        ('usr_rafael', 'Rafael (Diretoria)', 'diretoria@mega12.com.br', '123456', 'diretoria', 'Diretor Geral', '(42) 99999-0001', 1, '${now}', '${now}'),
+        ('usr_rafael', 'Rafael', 'diretoria@mega12.com.br', '123456', 'diretoria', 'Diretor Geral', '(42) 99999-0001', 1, '${now}', '${now}'),
         ('usr_comprador', 'Mariana Compras', 'compras@mega12.com.br', '123456', 'comprador', 'Compradora Pleno', '(42) 99999-0002', 1, '${now}', '${now}'),
-        ('usr_conferente', 'Jorge Doca (Separação)', 'separacao@mega12.com.br', '123456', 'conferente', 'Conferente Líder Doca', '(42) 99999-0003', 1, '${now}', '${now}')
+        ('usr_conferente', 'Jorge', 'separacao@mega12.com.br', '123456', 'conferente', 'Conferente Líder Doca', '(42) 99999-0003', 1, '${now}', '${now}')
     `);
   }
 

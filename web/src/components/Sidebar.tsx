@@ -374,7 +374,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="overflow-hidden">
                 <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                  {currentUser.nome}
+                  {currentUser.nome?.replace(/\s*\([^)]*\)/g, '').trim()}
                 </div>
                 <div className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-md border inline-block ${getRoleBadgeStyle(currentUser.role)}`}>
                   {getRoleLabel(currentUser.role)}

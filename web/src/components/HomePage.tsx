@@ -115,7 +115,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             </div>
             
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              {getGreeting()}, <span className="text-emerald-400">{currentUser.nome}</span>!
+              {getGreeting()}, <span className="text-emerald-400">{currentUser.nome ? currentUser.nome.replace(/\s*\([^)]*\)/g, '').trim() : ''}</span>!
             </h1>
             <p className="text-sm text-slate-300 mt-1 max-w-xl">
               {currentUser.role === 'deposito' 

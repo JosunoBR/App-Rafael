@@ -84,7 +84,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
               </span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Alíquotas tributárias, crédito ICMS de entrada, custos operacionais e matriz de rateio percentual das 20 lojas
+              Alíquotas tributárias, crédito ICMS de entrada, custos operacionais e matriz de rateio percentual das lojas
             </p>
           </div>
         </div>
@@ -299,7 +299,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
               <Store className="w-5 h-5 text-emerald-500" />
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Matriz de 20 Lojas & Porcentagens de Rateio
+                  Matriz de Lojas & Porcentagens de Rateio
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Total de 100% distribuídos por porte de loja (Cluster A, B e C)

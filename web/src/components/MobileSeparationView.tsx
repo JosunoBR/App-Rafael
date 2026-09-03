@@ -352,7 +352,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
                 Finalizar Separação do Pedido?
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                O pedido <b>{activeOrder.header.numeroPedido}</b> será marcado como <b>Finalizado</b> e arquivado com a conferência das 20 lojas.
+                O pedido <b>{activeOrder.header.numeroPedido}</b> será marcado como <b>Finalizado</b> e arquivado com a conferência das lojas.
               </p>
             </div>
 

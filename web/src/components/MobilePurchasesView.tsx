@@ -909,7 +909,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
                     className="px-2.5 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 font-bold text-[11px] flex items-center gap-1.5 transition cursor-pointer"
                   >
                     <Store className="w-3.5 h-3.5" />
-                    <span>Rateio 20 Lojas</span>
+                    <span>Rateio de Lojas</span>
                   </button>
                 )}
 

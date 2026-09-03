@@ -230,7 +230,7 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                Rede de 20 Lojas • Total Percentual Ativo: <strong className="text-emerald-600">{totalPontosAtivos.toFixed(1)}%</strong>
+                Rede de Lojas • Total Percentual Ativo: <strong className="text-emerald-600">{totalPontosAtivos.toFixed(1)}%</strong>
               </span>
               <button
                 onClick={handleResetStoresDefaults}

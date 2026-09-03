@@ -65,29 +65,29 @@ export const Header: React.FC<HeaderProps> = ({
   const getNavMeta = (tab: ActiveNavTab) => {
     switch (tab) {
       case 'home':
-        return { title: 'Visão Geral & Hub', group: 'Operação de Compras', icon: Home, color: 'text-emerald-500' };
+        return { title: 'Visão Geral & Hub', group: 'Operação', icon: Home, color: 'text-emerald-500' };
       case 'orders':
-        return { title: 'Cotação & Digitação de Pedidos', group: 'Operação de Compras', icon: ShoppingCart, color: 'text-emerald-500' };
-      case 'history':
-        return { title: 'Histórico & Arquivo de Pedidos', group: 'Operação de Compras', icon: FolderOpen, color: 'text-amber-500' };
+        return { title: 'Cotação & Pedidos de Compras', group: 'Operação', icon: ShoppingCart, color: 'text-emerald-500' };
       case 'stock':
-        return { title: 'Estoque do Depósito Central (CD Matriz)', group: 'Logística & Doca', icon: Warehouse, color: 'text-emerald-500' };
+        return { title: 'Estoque do Depósito Central (CD Matriz)', group: 'Operação', icon: Warehouse, color: 'text-emerald-500' };
       case 'separation':
-        return { title: 'Separação & Matriz de 20 Lojas', group: 'Logística & Doca', icon: PackageCheck, color: 'text-teal-500' };
-      case 'separationHistory':
-        return { title: 'Histórico de Doca & Avarias', group: 'Logística & Doca', icon: Boxes, color: 'text-teal-500' };
+        return { title: 'Separação & Distribuição', group: 'Operação', icon: PackageCheck, color: 'text-emerald-500' };
       case 'financial':
-        return { title: 'Gestão Financeira & Boletos', group: 'Financeiro & Inteligência', icon: CreditCard, color: 'text-amber-500' };
+        return { title: 'Gestão Financeira & Boletos', group: 'Gestão', icon: CreditCard, color: 'text-amber-500' };
       case 'dashboard':
-        return { title: 'Dashboard Executivo & Barganha BI', group: 'Financeiro & Inteligência', icon: BarChart3, color: 'text-teal-500' };
+        return { title: 'Dashboard Executivo & Barganha BI', group: 'Gestão', icon: BarChart3, color: 'text-teal-500' };
+      case 'history':
+        return { title: 'Histórico & Arquivo de Pedidos', group: 'Gestão', icon: FolderOpen, color: 'text-amber-500' };
+      case 'separationHistory':
+        return { title: 'Histórico de Separações & Doca', group: 'Gestão', icon: Boxes, color: 'text-teal-500' };
       case 'products':
-        return { title: 'Catálogo de Produtos & Imagens', group: 'Cadastros & Gestão', icon: ShoppingBag, color: 'text-purple-500' };
+        return { title: 'Catálogo de Produtos & Imagens', group: 'Cadastros', icon: ShoppingBag, color: 'text-purple-500' };
       case 'suppliers':
-        return { title: 'Cadastro de Fornecedores & ST', group: 'Cadastros & Gestão', icon: Building2, color: 'text-emerald-500' };
+        return { title: 'Cadastro de Fornecedores & ST', group: 'Cadastros', icon: Building2, color: 'text-emerald-500' };
       case 'fiscal':
-        return { title: 'Configurações Fiscais & Parâmetros', group: 'Cadastros & Gestão', icon: Settings, color: 'text-indigo-500' };
+        return { title: 'Configurações Fiscais & Parâmetros', group: 'Cadastros', icon: Settings, color: 'text-indigo-500' };
       case 'users':
-        return { title: 'Gestão de Usuários & Acessos (RBAC)', group: 'Cadastros & Gestão', icon: UsersIcon, color: 'text-pink-500' };
+        return { title: 'Gestão de Usuários & Acessos (RBAC)', group: 'Sistema', icon: UsersIcon, color: 'text-pink-500' };
       default:
         return { title: 'Sistema Mega 12', group: 'Matriz', icon: ShoppingBag, color: 'text-emerald-500' };
     }

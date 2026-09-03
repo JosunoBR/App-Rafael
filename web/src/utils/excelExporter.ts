@@ -98,7 +98,7 @@ export function exportOrderToExcel(order: PurchaseOrder, fallbackStores?: StoreC
         allocatedSum <= (item.qtdTotalUnidades || 0) ? 'OK' : 'EXCEDENTE'
       ];
     });
-    const wsSeparacao = XLSX.utils.aoa_to_sheet([['GRADE DE SEPARAÇÃO & ESTOQUE CENTRAL (20 LOJAS)'], [], separacaoHeaders, ...separacaoRows]);
+    const wsSeparacao = XLSX.utils.aoa_to_sheet([['GRADE DE SEPARAÇÃO & ESTOQUE CENTRAL'], [], separacaoHeaders, ...separacaoRows]);
     XLSX.utils.book_append_sheet(wb, wsSeparacao, 'SEPARACAO');
 
     XLSX.writeFile(wb, filename);

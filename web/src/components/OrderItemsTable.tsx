@@ -395,21 +395,21 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const validItemsCount = useMemo(() => items.filter(it => !isOrderItemBlank(it)).length, [items]);
 
   return (
-    <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-visible">
+    <div className="glass-panel-pro rounded-2xl mb-8 overflow-visible">
       
       {/* Header bar com ações e busca inteligente rápida */}
-      <div className="px-5 py-4 bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-200/70 dark:border-slate-700/70 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="px-4 py-2.5 bg-slate-50/80 dark:bg-[#0E121A]/95 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 text-xs">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-              Grade de Produtos & Pedido ao Fornecedor
+            <h2 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+              Grade de Produtos & Pedido
             </h2>
-            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+            <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
               {validItemsCount} {validItemsCount === 1 ? 'item' : 'itens'}
             </span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Digitação contínua com auto-inclusão de linhas, códigos, custos e rateio de 20 lojas
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Digitação contínua com auto-inclusão de linhas, códigos, custos e rateio de lojas
           </p>
         </div>
 
@@ -417,8 +417,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           
           {/* Campo de Busca Rápida no Topo com Autocomplete */}
-          <div className="relative min-w-[260px] sm:min-w-[320px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div className="relative min-w-[240px] sm:min-w-[280px]">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               ref={quickSearchInputRef}
               type="text"
@@ -430,8 +430,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               onFocus={() => {
                 if (quickSearchText.trim().length > 0) setIsQuickSearchOpen(true);
               }}
-              placeholder="🔍 Buscar produto no catálogo..."
-              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-hidden shadow-2xs font-medium"
+              placeholder="Buscar no catálogo..."
+              className="w-full h-8 pl-8 pr-7 text-xs rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#121620] text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 outline-hidden font-medium"
             />
             {quickSearchText && (
               <button
@@ -521,28 +521,28 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       <div className="overflow-x-auto overflow-y-visible">
         <table className="w-full text-left border-collapse min-w-[1060px]">
           <thead>
-            <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100/50 dark:bg-slate-900/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              <th className="py-3 px-2 w-8 text-center">#</th>
-              <th className="py-3 px-2 w-14 text-center">Foto</th>
-              <th className="py-3 px-2 w-28">Cód. Interno</th>
-              <th className="py-3 px-2 w-28">Cód. Fornecedor</th>
-              <th className="py-3 px-3 min-w-[240px]">Descrição do Item (Filtro Inteligente)</th>
-              <th className="py-3 px-3 w-24 text-center" title="Quantidade Total de Unidades">Qtd (un)</th>
-              <th className="py-3 px-3 w-28 text-right" title="Preço Unitário Compra">Compra (R$)</th>
-              <th className="py-3 px-3 w-28 text-right" title="Total Compra (J = H * I)">Total (R$)</th>
-              <th className="py-3 px-3 w-28 text-center" title="Preço de Venda Único Rede Mega 12 (Travado em R$ 12,00)">PDV (R$ 12 Fixo)</th>
-              <th className="py-3 px-3 w-28 text-right" title="Custo Real Efetivo (Compra + 40% PDV - 19.5% ICMS)">Custo Real</th>
-              <th className="py-3 px-3 w-32 text-center" title="Margem de Lucro Real">Margem</th>
-              <th className="py-3 px-3 w-28 text-center">Ações</th>
+            <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-slate-50/80 dark:bg-[#0E121A]/95 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <th className="py-2.5 px-2 w-8 text-center">#</th>
+              <th className="py-2.5 px-2 w-14 text-center">Foto</th>
+              <th className="py-2.5 px-2 w-28">Cód. Interno</th>
+              <th className="py-2.5 px-2 w-28">Cód. Fornecedor</th>
+              <th className="py-2.5 px-3 min-w-[240px]">Descrição do Item</th>
+              <th className="py-2.5 px-3 w-20 text-center" title="Quantidade Total de Unidades">Qtd</th>
+              <th className="py-2.5 px-3 w-28 text-right" title="Preço Unitário Compra">Compra (R$)</th>
+              <th className="py-2.5 px-3 w-28 text-right" title="Total Compra">Total (R$)</th>
+              <th className="py-2.5 px-3 w-24 text-center" title="Preço de Venda Único Rede Mega 12 (R$ 12,00)">PDV (R$ 12)</th>
+              <th className="py-2.5 px-3 w-24 text-right" title="Custo Real Efetivo">Custo Real</th>
+              <th className="py-2.5 px-3 w-28 text-center" title="Margem de Lucro Real">Margem</th>
+              <th className="py-2.5 px-3 w-24 text-center">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200/70 dark:divide-slate-700/60 text-xs">
+          <tbody className="divide-y divide-slate-200/70 dark:divide-slate-800/60 text-xs">
             {items.map((item, index) => {
               const fiscal = calculateItemFiscal(item.precoUnitario, item.pdvAlvo, globalFiscal, item.fiscalOverride);
               return (
                 <tr 
                   key={item.id}
-                  className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
+                  className="hover:bg-slate-50/70 dark:hover:bg-[#121622]/70 transition-colors group"
                 >
                   {/* Index */}
                   <td className="py-2.5 px-2 text-center text-slate-400 font-mono text-[11px]">
@@ -598,7 +598,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         setAutocompleteQuery(e.target.value);
                       }}
                       placeholder="CÓD INT"
-                      className="w-full px-2 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 font-mono font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                      className="w-full px-2 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-900/60 bg-white dark:bg-[#121620] text-indigo-700 dark:text-indigo-400 font-mono font-bold text-xs focus:ring-2 focus:ring-indigo-500/50 outline-hidden"
                       title="Código Interno Mega12"
                     />
                   </td>
@@ -624,7 +624,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         setAutocompleteQuery(e.target.value);
                       }}
                       placeholder="REF FORN"
-                      className="w-full px-2 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800/80 bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 font-mono text-xs focus:ring-2 focus:ring-amber-500 outline-hidden"
+                      className="w-full px-2 py-1.5 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-white dark:bg-[#121620] text-amber-700 dark:text-amber-400 font-mono text-xs focus:ring-2 focus:ring-amber-500/50 outline-hidden"
                       title="Código de Referência do Fornecedor"
                     />
                   </td>
@@ -650,7 +650,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         setAutocompleteQuery(e.target.value);
                       }}
                       placeholder="Digite o nome ou código do produto..."
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#121620] text-slate-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 outline-hidden"
                     />
                   </td>
 
@@ -662,7 +662,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       value={item.qtdTotalUnidades === 0 ? '' : item.qtdTotalUnidades}
                       placeholder="0"
                       onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
-                      className="w-full text-center px-1 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      className="w-full text-center px-1 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#121620] text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 outline-hidden font-mono"
                     />
                   </td>
 
@@ -676,7 +676,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         value={item.precoUnitario === 0 ? '' : item.precoUnitario}
                         placeholder="0.00"
                         onChange={(e) => handleFieldChange(item, 'precoUnitario', e.target.value)}
-                        className="w-full text-right px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                        className="w-full text-right px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#121620] text-slate-900 dark:text-white font-bold text-xs focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 outline-hidden font-mono"
                       />
                     </div>
                   </td>
@@ -743,11 +743,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         </button>
                       )}
 
-                      {/* Rateio 20 Lojas */}
+                      {/* Rateio de Lojas */}
                       <button
                         onClick={() => onOpenSeparationModal(item)}
                         className="p-1.5 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition cursor-pointer"
-                        title="Ver / Ajustar Rateio das 20 Lojas"
+                        title="Ver / Ajustar Rateio das Lojas"
                       >
                         <Store className="w-4 h-4" />
                       </button>

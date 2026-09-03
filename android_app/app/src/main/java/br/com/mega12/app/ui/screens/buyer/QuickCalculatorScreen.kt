@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,7 +30,8 @@ import br.com.mega12.app.util.NumberFormatUtils
 @Composable
 fun QuickCalculatorScreen(
     viewModel: Mega12ViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToOrder: (() -> Unit)? = null
 ) {
     val precoCompra by viewModel.calcPrecoCompra.collectAsState()
     val pdvAlvo by viewModel.calcPdvAlvo.collectAsState()
@@ -39,6 +41,9 @@ fun QuickCalculatorScreen(
     val fiscalResult by viewModel.fiscalResult.collectAsState()
     val separationResult by viewModel.separationResult.collectAsState()
 
+    var showNameDialog by remember { mutableStateOf(false) }
+    var prodNameInput by remember { mutableStateOf("Item da Negociação") }
+
     Scaffold(
         topBar = {
             Mega12TopBar(
@@ -46,6 +51,47 @@ fun QuickCalculatorScreen(
                 subtitle = "Calculadora Rápida em Viagens",
                 onBackClick = onNavigateBack
             )
+        },
+        bottomBar = {
+            if (fiscalResult != null) {
+                Surface(
+                    color = Slate800,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "MARGEM OBTIDA",
+                                style = MaterialTheme.typography.labelSmall.copy(color = Slate400, fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "%.1f%%".format(fiscalResult!!.margemPercentual),
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (fiscalResult!!.isLucrativo) Emerald400 else Rose500
+                                )
+                            )
+                        }
+
+                        Button(
+                            onClick = { showNameDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Emerald500),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.AddShoppingCart, contentDescription = null, tint = Slate900)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("LANÇAR NO PEDIDO", fontWeight = FontWeight.Bold, color = Slate900)
+                        }
+                    }
+                }
+            }
         },
         containerColor = Slate900
     ) { padding ->
@@ -296,6 +342,56 @@ fun QuickCalculatorScreen(
                     }
                 }
             }
+        }
+
+        if (showNameDialog) {
+            AlertDialog(
+                onDismissRequest = { showNameDialog = false },
+                title = { Text("Nome do Produto para o Pedido", color = Color.White, fontWeight = FontWeight.Bold) },
+                containerColor = Slate800,
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Identifique o produto para incluí-lo na lista de compras:", color = Slate400, fontSize = 12.sp)
+                        OutlinedTextField(
+                            value = prodNameInput,
+                            onValueChange = { prodNameInput = it },
+                            label = { Text("Descrição do Produto", color = Slate400) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Emerald500,
+                                unfocusedBorderColor = Slate700,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val success = viewModel.addCurrentCalcToDraftOrder(descricao = prodNameInput.ifBlank { "Item Calculado" })
+                            showNameDialog = false
+                            if (success) {
+                                if (onNavigateToOrder != null) {
+                                    onNavigateToOrder()
+                                } else {
+                                    onNavigateBack()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Emerald500)
+                    ) {
+                        Text("Confirmar Inclusão", color = Slate900, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNameDialog = false }) {
+                        Text("Cancelar", color = Slate400)
+                    }
+                }
+            )
         }
     }
 }

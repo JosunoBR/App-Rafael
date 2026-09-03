@@ -1,4 +1,4 @@
-import { PurchaseOrder, FiscalConfig, StoreConfig, Supplier, Product, CentralStockItem, OrderItem } from '../shared/types';
+import { PurchaseOrder, FiscalConfig, StoreConfig, Supplier, Product, CentralStockItem, OrderItem, SeparationPreset } from '../shared/types';
 import { DEFAULT_FISCAL_CONFIG, DEFAULT_STORES } from '../shared/constants';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   PRODUCTS: 'mega12_products_v1',
   CENTRAL_STOCK: 'mega12_central_stock_v1',
   ORDER_SEQUENCE: 'mega12_order_sequence_v1',
+  SEPARATION_PRESETS: 'mega12_separation_presets_v1',
   THEME: 'mega12_theme_v1'
 };
 
@@ -1247,6 +1248,32 @@ export function getInitialStoresConfig(): StoreConfig[] {
 
 export function saveStoresConfig(stores: StoreConfig[]): void {
   localStorage.setItem(STORAGE_KEYS.GLOBAL_STORES, JSON.stringify(stores));
+}
+
+export const DEFAULT_SEPARATION_PRESETS: SeparationPreset[] = [
+  {
+    id: 'preset_default_clusters',
+    name: 'Padrão Rede (Clusters A, B e C)',
+    description: 'Distribuição oficial da Rede Mega 12 (10% CD • Cluster A 51.3% • Cluster B 33.3% • Cluster C 15.4%)',
+    storeWeights: DEFAULT_STORES.reduce((acc, s) => { acc[s.id] = s.defaultWeight; return acc; }, {} as Record<string, number>),
+    reserveStockPercent: 10,
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z'
+  }
+];
+
+export function getInitialSeparationPresets(): SeparationPreset[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.SEPARATION_PRESETS);
+    return saved ? JSON.parse(saved) : DEFAULT_SEPARATION_PRESETS;
+  } catch {
+    return DEFAULT_SEPARATION_PRESETS;
+  }
+}
+
+export function saveSeparationPresetsList(presets: SeparationPreset[]): void {
+  localStorage.setItem(STORAGE_KEYS.SEPARATION_PRESETS, JSON.stringify(presets));
 }
 
 export function createNewOrder(

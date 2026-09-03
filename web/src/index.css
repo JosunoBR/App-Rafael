@@ -20,9 +20,9 @@
     --primary-hover: #34D399;
     --primary-light: #064E3B;
     --primary-dark: #059669;
-    --bg-main: #0B0F17;
-    --card-bg: #131B2A;
-    --card-border: #1E293B;
+    --bg-main: #0A0C10;
+    --card-bg: #0E121A;
+    --card-border: #1B2230;
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
   }
@@ -80,5 +80,26 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield !important;
   appearance: textfield !important;
+}
+
+/* Opção 3: High-Density Pro Dark Glassmorphism */
+.glass-panel-pro {
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+.dark .glass-panel-pro {
+  background-color: rgba(14, 18, 26, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(27, 34, 48, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35);
+}
+
+.kpi-glow-strip {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+.dark .kpi-glow-strip {
+  border: 1px solid rgba(27, 34, 48, 0.9);
+  box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.08), 0 0 15px -3px rgba(16, 185, 129, 0.06);
 }
 

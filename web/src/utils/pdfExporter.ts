@@ -81,45 +81,73 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     // Box 1: Dados do Comprador / Faturamento (Esquerda)
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(12, 26, 90, 38, 2, 2, 'FD');
+    doc.roundedRect(12, 23, 90, 32, 2, 2, 'FD');
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('DADOS DA EMPRESA COMPRADORA:', 15, 31);
+    doc.text('DADOS DA EMPRESA COMPRADORA:', 15, 27.5);
 
-    doc.setFontSize(7.5);
+    doc.setFontSize(7.2);
     doc.setFont('helvetica', 'bold');
-    doc.text('ALS 10 Bazar e Brinquedos Ltda', 15, 36);
+    doc.text('ALS 10 Bazar e Brinquedos Ltda', 15, 32);
     doc.setFont('helvetica', 'normal');
-    doc.text('CNPJ: 37.144.240/0001-70 | IE: 90847822-35', 15, 40.5);
-    doc.text('Av. José Galiciolli, 152 – BR153 – Centro', 15, 45);
-    doc.text('CEP: 84500-009 – Irati – PR', 15, 49.5);
-    doc.text('E-mail: als.conecta@gmail.com', 15, 54);
-    doc.text('Compras: (55) 9 9659-6315 (Rafael)', 15, 58.5);
+    doc.text('CNPJ: 37.144.240/0001-70 | IE: 90847822-35', 15, 36);
+    doc.text('Av. José Galiciolli, 152 – BR153 – Centro – Irati – PR (84500-009)', 15, 40);
+    doc.text('E-mail: als.conecta@gmail.com', 15, 44);
+    doc.text('Compras: (55) 9 9659-6315 (Rafael)', 15, 48);
 
     // Box 2: Dados do Pedido e Fornecedor (Direita)
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(108, 26, 90, 38, 2, 2, 'FD');
+    doc.roundedRect(108, 23, 90, 32, 2, 2, 'FD');
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    doc.text('DADOS DO PEDIDO & FORNECEDOR:', 111, 31);
+    doc.text('DADOS DO PEDIDO & FORNECEDOR:', 111, 27.5);
 
-    doc.setFontSize(7.5);
+    doc.setFontSize(7.2);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Nº Pedido: ${order.header?.numeroPedido || 'PED-0001'}`, 111, 36);
+    doc.text(`Nº Pedido: ${order.header?.numeroPedido || 'PED-0001'}`, 111, 32);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Status: ${order.header?.status || 'Aprovado'}`, 160, 36);
-    doc.text(`Fornecedor: ${order.header?.fornecedor || 'Fornecedor'}`, 111, 40.5);
-    doc.text(`Vendedor / Contato: ${order.header?.vendedor || 'N/A'} (${order.header?.contatoVendedor || 'S/ Contato'})`, 111, 45);
-    doc.text(`Condição de Pagto: ${order.header?.condicaoPagamento || '30/60/90 Dias'}`, 111, 49.5);
-    doc.text(`Entrega Prevista: ${order.header?.dataEntregaPrevista || 'A combinar'}`, 111, 54);
+    doc.text(`Status: ${order.header?.status || 'Aprovado'}`, 160, 32);
+    doc.text(`Fornecedor: ${(order.header?.fornecedor || 'Fornecedor').substring(0, 42)}`, 111, 36);
+    doc.text(`Vendedor / Contato: ${order.header?.vendedor || 'N/A'} (${order.header?.contatoVendedor || 'S/ Contato'})`, 111, 40);
+    doc.text(`Condição de Pagto: ${order.header?.condicaoPagamento || '30/60/90 Dias'}`, 111, 44);
+    doc.text(`Entrega Prevista: ${order.header?.dataEntregaPrevista || 'A combinar'}`, 111, 48);
 
     const descOff = Number(order.header?.percentualDescontoOff || 0);
     const aliqSt = Number(order.header?.aliquotaSt || 0);
-    doc.text(`Desconto: ${descOff > 0 ? `${descOff}% OFF` : 'Sem desconto'} | ST: ${aliqSt > 0 ? `${aliqSt}%` : '0%'}`, 111, 58.5);
+    doc.text(`Desconto: ${descOff > 0 ? `${descOff}% OFF` : 'Sem desconto'} | ST: ${aliqSt > 0 ? `${aliqSt}%` : '0%'}`, 150, 48);
+
+    // Box 3: INSTRUÇÕES IMPORTANTES DE FATURAMENTO & ENTREGA (LOGO APÓS O CABEÇALHO)
+    doc.setFillColor(254, 242, 242);
+    doc.setDrawColor(239, 68, 68);
+    doc.roundedRect(12, 57, 186, 21, 2, 2, 'FD');
+
+    doc.setTextColor(185, 28, 28);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INSTRUÇÕES IMPORTANTES DE FATURAMENTO & ENTREGA:', 15, 61.5);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(6.7);
+    doc.setFont('helvetica', 'normal');
+
+    // Coluna Esquerda
+    doc.text('1. Endereço de Entrega: AV. JOSÉ GALICIOLLI, 152 – BR153 – Centro, Irati – PR (CEP: 84500-009).', 15, 66);
+    doc.text('2. Descarregamento por conta do fornecedor / transportadora contratada.', 15, 70.2);
+    const obsText = (order.header as any)?.observacoes || order.header?.observacoesDescarga || '';
+    if (obsText) {
+      doc.text(`3. Observações: ${obsText.substring(0, 68)}`, 15, 74.5);
+    } else {
+      doc.text('3. Entregar mercadoria estritamente conforme proposta comercial aprovada.', 15, 74.5);
+    }
+
+    // Coluna Direita
+    doc.text('4. AGENDAMENTO OBRIGATÓRIO DE ENTREGA: Roberta pelo WhatsApp/Telefone: (42) 9 9136-5009.', 108, 66);
+    doc.text('5. Boletos NÃO devem exceder R$ 9.999,00 por título (teto operacional de pagamento).', 108, 70.2);
+    doc.text('6. Envio obrigatório de Boletos e XML da NF para: als.conecta@gmail.com', 108, 74.5);
 
     // Tabela de Itens Comercial
     const headCols = [
@@ -127,72 +155,81 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       'Cód. Interno',
       'Ref. Fornec.',
       'Descrição do Produto',
-      'Qtd (Unidades)',
+      'Emb. (Pç/Cx)',
+      'Qtd Cx',
+      'Total Peças',
       'Preço Unit.',
-      'Total Item',
-      'PDV Alvo'
+      'Preço Cx.',
+      'Total Item'
     ];
 
-    let totalPecasGeral = 0;
     let totalVolumesGeral = 0;
+    let totalPecasGeral = 0;
     let subtotalBrutoGeral = 0;
+    let subtotalLiquidoGeral = 0;
 
     const bodyRows = (order.items || []).map((item, idx) => {
       const codInterno = item.codigoInterno || item.codigo || `PRD-${idx + 1}`;
       const codFornecedor = item.codigoFornecedor || '-';
-      const pecas = Number(item.qtdTotalUnidades) || 0;
-      const pacotes = Number(item.qtdPacotes) || 0;
+      const pack = Number(item.qtdPorPacote) || 1;
+      const caixas = Number(item.qtdPacotes) || 0;
+      const pecas = Number(item.qtdTotalUnidades) || (caixas * pack);
       const precoUnit = Number(item.precoUnitario) || 0;
-      const valorTotal = Number(item.valorTotalBruto) || (pecas * precoUnit);
-      const pdv = Number(item.pdvAlvo) || 12.00;
+      const precoCx = Number((item as any).precoPacote) || (precoUnit * pack);
+      const valorTotal = Number((item as any).custoLiquidoTotalComDesconto || (item as any).custoLiquidoTotal || item.valorTotalBruto || (pecas * precoUnit));
 
+      totalVolumesGeral += caixas;
       totalPecasGeral += pecas;
-      totalVolumesGeral += pacotes;
-      subtotalBrutoGeral += valorTotal;
+      subtotalBrutoGeral += (pecas * precoUnit);
+      subtotalLiquidoGeral += valorTotal;
 
       return [
         String(idx + 1),
         codInterno,
         codFornecedor,
         item.descricao || 'Produto sem descrição',
-        pecas.toLocaleString('pt-BR') + ' un',
+        String(pack),
+        caixas.toLocaleString('pt-BR'),
+        pecas.toLocaleString('pt-BR'),
         `R$ ${precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        `R$ ${pdv.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        `R$ ${precoCx.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       ];
     });
-
-    const valorDescontoTotal = descOff > 0 ? subtotalBrutoGeral * (descOff / 100) : 0;
-    const valorStTotal = aliqSt > 0 ? subtotalBrutoGeral * (aliqSt / 100) : 0;
-    const subtotalLiquidoGeral = Math.max(0, subtotalBrutoGeral - valorDescontoTotal + valorStTotal);
 
     const footerRow = [
       '',
       'TOTAL DO PEDIDO',
       '',
       `${(order.items || []).length} itens`,
+      '',
+      totalVolumesGeral.toLocaleString('pt-BR') + ' cx',
       totalPecasGeral.toLocaleString('pt-BR') + ' un',
       '',
-      `R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      ''
+      '',
+      `R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     ];
 
     autoTable(doc, {
-      startY: 68,
+      startY: 80.5,
+      showHead: 'everyPage',
       head: [headCols],
       body: [...bodyRows, footerRow],
       theme: 'grid',
-      styles: { fontSize: 7.5, cellPadding: 1.5, halign: 'center', valign: 'middle' },
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+      styles: { fontSize: 7, cellPadding: 1.2, halign: 'center', valign: 'middle' },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.2 },
+      margin: { left: 12, right: 12, top: 12, bottom: 12 },
       columnStyles: {
-        0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 24, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
-        2: { cellWidth: 24, halign: 'center', textColor: [100, 116, 139] },
-        3: { cellWidth: 80, halign: 'left', fontStyle: 'bold' },
-        4: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
-        5: { cellWidth: 24, halign: 'right' },
-        6: { cellWidth: 28, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] },
-        7: { cellWidth: 22, halign: 'right', textColor: [5, 150, 105] }
+        0: { cellWidth: 7, halign: 'center' },
+        1: { cellWidth: 19, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
+        2: { cellWidth: 19, halign: 'center', textColor: [100, 116, 139] },
+        3: { cellWidth: 47, halign: 'left', fontStyle: 'bold' },
+        4: { cellWidth: 13, halign: 'center' },
+        5: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+        6: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+        7: { cellWidth: 16, halign: 'right' },
+        8: { cellWidth: 16, halign: 'right' },
+        9: { cellWidth: 19, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }
       },
       didParseCell: (data) => {
         if (data.row.index === bodyRows.length) {
@@ -204,77 +241,57 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     });
 
     const pageHeight = doc.internal.pageSize.height || 297;
-    let finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 5 : 185;
+    let finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 4 : 185;
 
-    if (finalY + 70 > pageHeight) {
+    if (finalY + 44 > pageHeight) {
       doc.addPage();
       finalY = 15;
     }
 
-    // Box de Resumo Financeiro & Condições
+    // Box de Resumo Financeiro & Condições (Logo após a tabela)
     doc.setFillColor(241, 245, 249);
     doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(12, finalY, 186, 24, 2, 2, 'FD');
+    doc.roundedRect(12, finalY, 186, 21, 2, 2, 'FD');
 
     doc.setFontSize(8);
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.text('RESUMO FINANCEIRO DO PEDIDO:', 16, finalY + 5.5);
+    doc.text('RESUMO FINANCEIRO DO PEDIDO:', 16, finalY + 4.8);
 
-    doc.setFontSize(7.5);
+    doc.setFontSize(7.2);
     doc.setFont('helvetica', 'normal');
-    doc.text(`• Total de Itens: ${(order.items || []).length}`, 16, finalY + 11);
-    doc.text(`• Volumes (Caixas): ${totalVolumesGeral.toLocaleString('pt-BR')}`, 16, finalY + 16);
-    doc.text(`• Total de Peças: ${totalPecasGeral.toLocaleString('pt-BR')} unidades`, 16, finalY + 21);
+    doc.text(`• Total de Itens: ${(order.items || []).length}`, 16, finalY + 10);
+    doc.text(`• Volumes (Caixas): ${totalVolumesGeral.toLocaleString('pt-BR')}`, 16, finalY + 14.5);
+    doc.text(`• Total de Peças: ${totalPecasGeral.toLocaleString('pt-BR')} unidades`, 16, finalY + 19);
 
-    doc.text(`• Subtotal Bruto: R$ ${subtotalBrutoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 75, finalY + 11);
-    doc.text(`• Desconto Comercial: ${descOff > 0 ? `${descOff}% (- R$ ${valorDescontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : 'R$ 0,00'}`, 75, finalY + 16);
-    doc.text(`• Impostos / ST: ${valorStTotal > 0 ? `+ R$ ${valorStTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Incluso / Isento'}`, 75, finalY + 21);
+    doc.text(`• Subtotal Bruto: R$ ${subtotalBrutoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 72, finalY + 10);
+    const descValor = descOff > 0 ? (subtotalBrutoGeral * descOff) / 100 : 0;
+    doc.text(`• Desconto Comercial: ${descOff > 0 ? `${descOff}% (- R$ ${descValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : 'R$ 0,00'}`, 72, finalY + 14.5);
+    const stValor = aliqSt > 0 ? (subtotalBrutoGeral * aliqSt) / 100 : 0;
+    doc.text(`• Impostos / ST: ${stValor > 0 ? `+ R$ ${stValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Incluso / Isento'}`, 72, finalY + 19);
 
     // Destaque do Total Líquido
     doc.setFillColor(5, 150, 105);
-    doc.roundedRect(138, finalY + 3, 56, 18, 2, 2, 'F');
+    doc.roundedRect(138, finalY + 2.5, 56, 16, 2, 2, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7.5);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text('VALOR TOTAL LÍQUIDO:', 142, finalY + 8.5);
-    doc.setFontSize(10.5);
+    doc.text('VALOR TOTAL LÍQUIDO:', 142, finalY + 6.8);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(`R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 142, finalY + 16);
-
-    // Box de Instruções de Entrega e Faturamento
-    const noticeY = finalY + 27;
-    doc.setFillColor(254, 242, 242);
-    doc.setDrawColor(239, 68, 68);
-    doc.roundedRect(12, noticeY, 186, 28, 2, 2, 'FD');
-
-    doc.setTextColor(185, 28, 28);
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('INSTRUÇÕES IMPORTANTES DE FATURAMENTO & ENTREGA:', 16, noticeY + 5.5);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(6.8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('1. Endereço de Entrega: AV. JOSÉ GALICIOLLI, 152 – BR153 – Centro, Irati – PR (CEP: 84500-009).', 16, noticeY + 10.5);
-    doc.text('2. Descarregamento por conta do fornecedor / transportadora.', 16, noticeY + 14.5);
-    doc.text('3. AGENDAMENTO OBRIGATÓRIO DE ENTREGA com Roberta pelo WhatsApp/Telefone: (42) 9 9136-5009.', 16, noticeY + 18.5);
-    doc.text('4. Boletos NÃO devem exceder R$ 9.999,00 por título e devem ser enviados com o XML para als.conecta@gmail.com.', 16, noticeY + 22.5);
-    if (order.header?.observacoesDescarga) {
-      doc.text(`5. Obs: ${order.header.observacoesDescarga}`, 16, noticeY + 26.5);
-    }
+    doc.text(`R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 142, finalY + 14.5);
 
     // Assinaturas
-    const sigY = noticeY + 34;
+    const sigY = finalY + 24;
     doc.setDrawColor(148, 163, 184);
-    doc.line(20, sigY + 8, 90, sigY + 8);
-    doc.line(120, sigY + 8, 190, sigY + 8);
+    doc.line(20, sigY + 6, 90, sigY + 6);
+    doc.line(120, sigY + 6, 190, sigY + 6);
 
     doc.setFontSize(7);
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'bold');
-    doc.text('ALS 10 / REDE MEGA 12 (COMPRADOR)', 30, sigY + 12);
-    doc.text('ACEITE DO FORNECEDOR / REPRESENTANTE', 126, sigY + 12);
+    doc.text('ALS 10 / REDE MEGA 12 (COMPRADOR)', 30, sigY + 10);
+    doc.text('ACEITE DO FORNECEDOR / REPRESENTANTE', 126, sigY + 10);
 
     doc.save(filename);
     return true;
@@ -359,7 +376,7 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     doc.setFontSize(13);
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.text('MEGA 12 - ROMANEIO DE SEPARAÇÃO E EXPEDIÇÃO (20 LOJAS)', 14, 12);
+    doc.text('MEGA 12 - ROMANEIO DE SEPARAÇÃO E EXPEDIÇÃO', 14, 12);
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');

@@ -10,6 +10,18 @@ export interface StoreConfig {
   active: boolean;
 }
 
+export interface SeparationPreset {
+  id: string;
+  name: string;
+  description?: string;
+  storeWeights: Record<string, number>; // { [storeId]: pesoOuPercentual }
+  storeWeightsJson?: string;
+  reserveStockPercent: number; // % retido no Estoque Central / CD (ex: 10)
+  isDefault?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface FiscalConfig {
   icmsAliquota: number;      // Padrão: 11%
   ipiAliquota: number;       // Padrão: 0%

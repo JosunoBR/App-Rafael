@@ -120,7 +120,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             <p className="text-sm text-slate-300 mt-1 max-w-xl">
               {currentUser.role === 'deposito' 
                 ? 'Gestão de estoque central CD, controle de saldos, transferências para as lojas e rateio dos pedidos aprovados.'
-                : 'Central de compras, simulação fiscal, rateio para 20 lojas e controle de separação da matriz.'}
+                : 'Central de compras, simulação fiscal, rateio para as lojas e controle de separação da matriz.'}
             </p>
           </div>
 
@@ -315,7 +315,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
           <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
             <span className="text-[11px] text-slate-500 dark:text-slate-400">
-              Conferência 20 Lojas
+              Separação & Distribuição
             </span>
             <button
               onClick={() => onNavigate('separation')}
@@ -430,7 +430,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-1 transition" />
             </div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition">
-              Conferência & Romaneio (20 Lojas)
+              Separação & Romaneio
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Painel de doca com conferência em tempo real, peças por loja e impressão em PDF.
@@ -515,7 +515,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               Histórico de Romaneios & Cargas
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Consulte romaneios finalizados e cargas expedidas para as 20 lojas.
+              Consulte romaneios finalizados e cargas expedidas para as lojas.
             </p>
           </div>
 

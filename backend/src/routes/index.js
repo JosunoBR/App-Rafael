@@ -10,6 +10,7 @@ const auditRoutes = require('./audit.routes');
 const exportRoutes = require('./export.routes');
 const configRoutes = require('./config.routes');
 const stockRoutes = require('./stock.routes');
+const separationPresetRoutes = require('./separationPreset.routes');
 
 const router = Router();
 
@@ -32,6 +33,7 @@ router.use('/suppliers', supplierRoutes);
 router.use('/products', productRoutes);
 router.use('/stock', stockRoutes);
 router.use('/config', configRoutes);
+router.use('/separation-presets', separationPresetRoutes);
 router.use('/audit', auditRoutes);
 router.use('/export', exportRoutes);
 

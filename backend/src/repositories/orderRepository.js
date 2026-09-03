@@ -37,75 +37,154 @@ class OrderRepository {
       totalPecas += (Number(item.qtdTotalUnidades || 0));
     });
 
+    const tableInfo = await query("PRAGMA table_info(purchase_orders)");
+    const colNames = (tableInfo || []).map(r => r.name);
+    const hasDataPedido = colNames.includes('dataPedido');
+    const dateVal = order.header.dataPedido || order.header.dataEmissao || new Date().toISOString().split('T')[0];
+
     if (existing) {
       const targetId = existing.id;
-      const sql = `
-        UPDATE purchase_orders SET
-          numeroPedido = ?, fornecedor = ?, supplierId = ?, aliquotaSt = ?,
-          vendedor = ?, contatoVendedor = ?, condicaoPagamento = ?, dataEmissao = ?,
-          dataEntregaPrevista = ?, percentualDescontoOff = ?, percentualNota = ?,
-          observacoes = ?, status = ?, separationStatus = ?, totalLiquido = ?,
-          totalPecas = ?, installmentsJson = ?, itemsJson = ?,
-          separationDistributionJson = ?, updatedAt = ?
-        WHERE id = ?
-      `;
-      await execute(sql, [
-        order.header.numeroPedido,
-        order.header.fornecedor,
-        order.header.supplierId || null,
-        Number(order.header.aliquotaSt) || 0,
-        order.header.vendedor || '',
-        order.header.contatoVendedor || '',
-        order.header.condicaoPagamento || '30/60/90 Dias',
-        order.header.dataPedido || order.header.dataEmissao || '',
-        order.header.dataEntregaPrevista || '',
-        Number(order.header.percentualDescontoOff) || 0,
-        order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
-        order.header.observacoes || '',
-        order.header.status || 'Em Cotação',
-        order.header.separationStatus || 'Pendente',
-        totalLiquido,
-        totalPecas,
-        installmentsJson,
-        itemsJson,
-        separationJson,
-        now,
-        targetId
-      ]);
+      if (hasDataPedido) {
+        const sql = `
+          UPDATE purchase_orders SET
+            numeroPedido = ?, fornecedor = ?, supplierId = ?, aliquotaSt = ?,
+            vendedor = ?, contatoVendedor = ?, condicaoPagamento = ?, dataEmissao = ?,
+            dataPedido = ?, dataEntregaPrevista = ?, percentualDescontoOff = ?, percentualNota = ?,
+            observacoes = ?, status = ?, separationStatus = ?, totalLiquido = ?,
+            totalPecas = ?, installmentsJson = ?, itemsJson = ?,
+            separationDistributionJson = ?, updatedAt = ?
+          WHERE id = ?
+        `;
+        await execute(sql, [
+          order.header.numeroPedido,
+          order.header.fornecedor,
+          order.header.supplierId || null,
+          Number(order.header.aliquotaSt) || 0,
+          order.header.vendedor || '',
+          order.header.contatoVendedor || '',
+          order.header.condicaoPagamento || '30/60/90 Dias',
+          dateVal,
+          dateVal,
+          order.header.dataEntregaPrevista || '',
+          Number(order.header.percentualDescontoOff) || 0,
+          order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
+          order.header.observacoes || '',
+          order.header.status || 'Em Cotação',
+          order.header.separationStatus || 'Pendente',
+          totalLiquido,
+          totalPecas,
+          installmentsJson,
+          itemsJson,
+          separationJson,
+          now,
+          targetId
+        ]);
+      } else {
+        const sql = `
+          UPDATE purchase_orders SET
+            numeroPedido = ?, fornecedor = ?, supplierId = ?, aliquotaSt = ?,
+            vendedor = ?, contatoVendedor = ?, condicaoPagamento = ?, dataEmissao = ?,
+            dataEntregaPrevista = ?, percentualDescontoOff = ?, percentualNota = ?,
+            observacoes = ?, status = ?, separationStatus = ?, totalLiquido = ?,
+            totalPecas = ?, installmentsJson = ?, itemsJson = ?,
+            separationDistributionJson = ?, updatedAt = ?
+          WHERE id = ?
+        `;
+        await execute(sql, [
+          order.header.numeroPedido,
+          order.header.fornecedor,
+          order.header.supplierId || null,
+          Number(order.header.aliquotaSt) || 0,
+          order.header.vendedor || '',
+          order.header.contatoVendedor || '',
+          order.header.condicaoPagamento || '30/60/90 Dias',
+          dateVal,
+          order.header.dataEntregaPrevista || '',
+          Number(order.header.percentualDescontoOff) || 0,
+          order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
+          order.header.observacoes || '',
+          order.header.status || 'Em Cotação',
+          order.header.separationStatus || 'Pendente',
+          totalLiquido,
+          totalPecas,
+          installmentsJson,
+          itemsJson,
+          separationJson,
+          now,
+          targetId
+        ]);
+      }
     } else {
-      const sql = `
-        INSERT INTO purchase_orders (
-          id, numeroPedido, fornecedor, supplierId, aliquotaSt, vendedor,
-          contatoVendedor, condicaoPagamento, dataEmissao, dataEntregaPrevista,
-          percentualDescontoOff, percentualNota, observacoes, status,
-          separationStatus, totalLiquido, totalPecas, installmentsJson,
-          itemsJson, separationDistributionJson, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      await execute(sql, [
-        order.header.id,
-        order.header.numeroPedido,
-        order.header.fornecedor,
-        order.header.supplierId || null,
-        Number(order.header.aliquotaSt) || 0,
-        order.header.vendedor || '',
-        order.header.contatoVendedor || '',
-        order.header.condicaoPagamento || '30/60/90 Dias',
-        order.header.dataPedido || order.header.dataEmissao || '',
-        order.header.dataEntregaPrevista || '',
-        Number(order.header.percentualDescontoOff) || 0,
-        order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
-        order.header.observacoes || '',
-        order.header.status || 'Em Cotação',
-        order.header.separationStatus || 'Pendente',
-        totalLiquido,
-        totalPecas,
-        installmentsJson,
-        itemsJson,
-        separationJson,
-        order.header.createdAt || now,
-        now
-      ]);
+      if (hasDataPedido) {
+        const sql = `
+          INSERT INTO purchase_orders (
+            id, numeroPedido, fornecedor, supplierId, aliquotaSt, vendedor,
+            contatoVendedor, condicaoPagamento, dataEmissao, dataPedido, dataEntregaPrevista,
+            percentualDescontoOff, percentualNota, observacoes, status,
+            separationStatus, totalLiquido, totalPecas, installmentsJson,
+            itemsJson, separationDistributionJson, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        await execute(sql, [
+          order.header.id,
+          order.header.numeroPedido,
+          order.header.fornecedor,
+          order.header.supplierId || null,
+          Number(order.header.aliquotaSt) || 0,
+          order.header.vendedor || '',
+          order.header.contatoVendedor || '',
+          order.header.condicaoPagamento || '30/60/90 Dias',
+          dateVal,
+          dateVal,
+          order.header.dataEntregaPrevista || '',
+          Number(order.header.percentualDescontoOff) || 0,
+          order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
+          order.header.observacoes || '',
+          order.header.status || 'Em Cotação',
+          order.header.separationStatus || 'Pendente',
+          totalLiquido,
+          totalPecas,
+          installmentsJson,
+          itemsJson,
+          separationJson,
+          order.header.createdAt || now,
+          now
+        ]);
+      } else {
+        const sql = `
+          INSERT INTO purchase_orders (
+            id, numeroPedido, fornecedor, supplierId, aliquotaSt, vendedor,
+            contatoVendedor, condicaoPagamento, dataEmissao, dataEntregaPrevista,
+            percentualDescontoOff, percentualNota, observacoes, status,
+            separationStatus, totalLiquido, totalPecas, installmentsJson,
+            itemsJson, separationDistributionJson, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        await execute(sql, [
+          order.header.id,
+          order.header.numeroPedido,
+          order.header.fornecedor,
+          order.header.supplierId || null,
+          Number(order.header.aliquotaSt) || 0,
+          order.header.vendedor || '',
+          order.header.contatoVendedor || '',
+          order.header.condicaoPagamento || '30/60/90 Dias',
+          dateVal,
+          order.header.dataEntregaPrevista || '',
+          Number(order.header.percentualDescontoOff) || 0,
+          order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
+          order.header.observacoes || '',
+          order.header.status || 'Em Cotação',
+          order.header.separationStatus || 'Pendente',
+          totalLiquido,
+          totalPecas,
+          installmentsJson,
+          itemsJson,
+          separationJson,
+          order.header.createdAt || now,
+          now
+        ]);
+      }
     }
 
     // Persistência relacional normalizada nas tabelas order_items e order_installments

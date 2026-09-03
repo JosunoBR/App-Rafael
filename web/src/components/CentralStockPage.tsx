@@ -211,7 +211,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Gerencie saldos em peças/unidades no galpão, endereçamento e crie ordens de separação para distribuição às 20 lojas
+              Gerencie saldos em peças/unidades no galpão, endereçamento e crie ordens de separação para distribuição às lojas
             </p>
           </div>
         </div>
@@ -219,103 +219,105 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => setIsNewItemModalOpen(true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
+            className="h-8 px-3 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
           >
-            <PlusCircle className="w-4 h-4 text-emerald-500" />
+            <PlusCircle className="w-3.5 h-3.5 text-emerald-500" />
             <span>Dar Entrada / Novo Item</span>
           </button>
 
           {selectedCount > 0 ? (
             <button
               onClick={() => setIsTransferModalOpen(true)}
-              className="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer animate-pulse hover:scale-102"
+              className="h-8 px-3.5 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer animate-pulse"
             >
-              <Send className="w-4 h-4" />
-              <span>Gerar Romaneio ({selectedCount} itens • {totalUnidadesTransferencia.toLocaleString('pt-BR')} un)</span>
+              <Send className="w-3.5 h-3.5" />
+              <span>Gerar Romaneio ({selectedCount} itens • {totalUnidadesTransferencia.toLocaleString('pt-BR')} peças)</span>
             </button>
           ) : (
             <button
               onClick={onNavigateToSeparation}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition flex items-center gap-1.5 cursor-pointer"
+              className="h-8 px-3 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition flex items-center gap-1.5 cursor-pointer"
             >
-              <PackageCheck className="w-4 h-4" />
+              <PackageCheck className="w-3.5 h-3.5" />
               <span>Ver Fila de Separação Doca</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. Cards de Métricas de Patrimônio e Volume */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 2. Barra Unificada de Métricas de Patrimônio e Volume */}
+      <div className="bg-white dark:bg-slate-900 py-2.5 px-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-wrap lg:flex-nowrap items-center justify-between gap-3 text-xs">
         
         {/* Total Unidades */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Saldo em Unidades</span>
-            <Boxes className="w-4 h-4 text-emerald-500" />
+        <div className="flex items-center gap-2.5 min-w-0" title="Saldo Total em Unidades">
+          <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+            <Boxes className="w-3.5 h-3.5" />
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-            {metrics.totalUnidades.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
+          <div className="min-w-0">
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Saldo Unidades</span>
+            <div className="font-mono font-black text-slate-900 dark:text-white text-xs truncate">
+              {metrics.totalUnidades.toLocaleString('pt-BR')}
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            Prontas para distribuição
-          </span>
         </div>
 
-        {/* Total Peças */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Total de Peças / Itens</span>
-            <Layers className="w-4 h-4 text-teal-500" />
+        <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-800 shrink-0" />
+
+        {/* Total Peças / Itens */}
+        <div className="flex items-center gap-2.5 min-w-0" title="Total de Peças Fracionáveis">
+          <div className="p-1 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 shrink-0">
+            <Layers className="w-3.5 h-3.5" />
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-            {metrics.totalPecas.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
+          <div className="min-w-0">
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Total de Peças</span>
+            <div className="font-mono font-black text-slate-900 dark:text-white text-xs truncate">
+              {metrics.totalPecas.toLocaleString('pt-BR')}
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            Volume físico fracionável
-          </span>
         </div>
+
+        <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-800 shrink-0" />
 
         {/* Valor Patrimonial */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Valor Patrimonial (Custo)</span>
-            <TrendingUp className="w-4 h-4 text-amber-500" />
+        <div className="flex items-center gap-2.5 min-w-0" title="Valor Patrimonial Total em Estoque">
+          <div className="p-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+            <TrendingUp className="w-3.5 h-3.5" />
           </div>
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-            R$ {metrics.valorPatrimonial.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="min-w-0">
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Patrimônio (Custo)</span>
+            <div className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-xs truncate">
+              R$ {metrics.valorPatrimonial.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            Capital estocado no depósito
-          </span>
         </div>
 
-        {/* Alerta de Estoque Baixo */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Atenção / Saldo Baixo</span>
-            <AlertCircle className="w-4 h-4 text-rose-500" />
+        <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-800 shrink-0" />
+
+        {/* Saldo Baixo */}
+        <div className="flex items-center gap-2.5 min-w-0" title="Itens com estoque baixo (≤ 60 un)">
+          <div className="p-1 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0">
+            <AlertCircle className="w-3.5 h-3.5" />
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-            {metrics.itensComSaldoBaixo} <span className="text-xs font-normal text-slate-400">itens</span>
+          <div className="min-w-0">
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Atenção / Saldo Baixo</span>
+            <div className="font-mono font-black text-xs truncate text-slate-900 dark:text-white">
+              {metrics.itensComSaldoBaixo} <span className="text-[10px] font-normal text-slate-400 font-sans">itens</span>
+            </div>
           </div>
-          <span className="text-[11px] text-rose-500 font-semibold mt-0.5 block">
-            Saldo ≤ 60 unidades no galpão
-          </span>
         </div>
 
       </div>
 
       {/* 3. Barra de Busca & Filtros */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por descrição, código interno, EAN, fornecedor ou posição no galpão..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
+            className="w-full h-8 pl-8 pr-3 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500"
           />
         </div>
 
@@ -528,7 +530,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                     Gerar Romaneio de Transferência do Depósito
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Defina quantas unidades de cada item serão distribuídas proporcionalmente entre as 20 lojas
+                    Defina quantas unidades de cada item serão distribuídas proporcionalmente entre as lojas
                   </p>
                 </div>
               </div>
@@ -621,7 +623,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               <div>
                 <span className="text-xs text-slate-500 dark:text-slate-400 block">Resumo do Romaneio:</span>
                 <span className="text-sm font-extrabold text-slate-900 dark:text-white font-mono">
-                  {totalUnidadesTransferencia.toLocaleString('pt-BR')} unidades totais para rateio entre 20 lojas
+                  {totalUnidadesTransferencia.toLocaleString('pt-BR')} unidades totais para rateio entre as lojas
                 </span>
               </div>
 

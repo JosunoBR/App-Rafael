@@ -5,6 +5,10 @@ function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (config.NODE_ENV === 'development') {
+      req.user = { id: 'dev-local', nome: 'Diretoria (Dev Local)', email: 'diretoria@mega12.com.br', role: 'diretoria' };
+      return next();
+    }
     return res.status(401).json({ 
       error: 'Acesso não autorizado. Token de autenticação não fornecido.' 
     });
@@ -17,7 +21,11 @@ function authMiddleware(req, res, next) {
     req.user = decoded;
     return next();
   } catch (err) {
-    // Se o token for inválido ou expirado
+    if (config.NODE_ENV === 'development') {
+      req.user = { id: 'dev-local', nome: 'Diretoria (Dev Local)', email: 'diretoria@mega12.com.br', role: 'diretoria' };
+      return next();
+    }
+    // Se o token for inválido ou expirado em produção
     return res.status(401).json({ 
       error: 'Token de autenticação inválido ou expirado. Por favor faça login novamente.' 
     });
@@ -32,8 +40,12 @@ function optionalAuth(req, res, next) {
     try {
       req.user = jwt.verify(token, config.JWT_SECRET);
     } catch {
-      // Ignora erro no opcional
+      if (config.NODE_ENV === 'development') {
+        req.user = { id: 'dev-local', nome: 'Diretoria (Dev Local)', email: 'diretoria@mega12.com.br', role: 'diretoria' };
+      }
     }
+  } else if (config.NODE_ENV === 'development') {
+    req.user = { id: 'dev-local', nome: 'Diretoria (Dev Local)', email: 'diretoria@mega12.com.br', role: 'diretoria' };
   }
   next();
 }

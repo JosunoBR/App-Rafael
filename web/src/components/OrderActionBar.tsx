@@ -153,7 +153,7 @@ export const OrderActionBar: React.FC<OrderActionBarProps> = ({
           type="button"
           onClick={onExportExcel}
           className="px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition flex items-center gap-1.5 cursor-pointer"
-          title="Exportar planilha Excel do pedido e grade das 20 lojas"
+          title="Exportar planilha Excel do pedido e grade de distribuição"
         >
           <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
           <span className="hidden sm:inline">Excel</span>

@@ -8,5 +8,6 @@ const router = Router();
 router.get('/fiscal', optionalAuth, (req, res, next) => configController.getFiscal(req, res, next));
 router.post('/fiscal', authMiddleware, requireRole('diretoria'), (req, res, next) => configController.saveFiscal(req, res, next));
 router.get('/stores', optionalAuth, (req, res, next) => configController.getStores(req, res, next));
+router.post('/stores', authMiddleware, requireRole('diretoria', 'deposito'), (req, res, next) => configController.saveStores(req, res, next));
 
 module.exports = router;

@@ -1,4 +1,4 @@
-import { PurchaseOrder, Supplier, FiscalConfig, StoreConfig, Product, User, CentralStockItem } from '../shared/types';
+import { PurchaseOrder, Supplier, FiscalConfig, StoreConfig, Product, User, CentralStockItem, SeparationPreset } from '../shared/types';
 import { API_BASE_URL } from './config';
 
 function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
@@ -122,6 +122,43 @@ export async function fetchStoresFromDb(): Promise<StoreConfig[]> {
   return res.json();
 }
 
+export async function saveStoresToDb(stores: StoreConfig[]): Promise<StoreConfig[]> {
+  const res = await fetch(`${API_BASE_URL}/config/stores`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(stores)
+  });
+  if (!res.ok) throw new Error('Erro ao salvar lojas no SQLite');
+  return res.json();
+}
+
+// MODELOS / PRESETS DE SEPARAÇÃO DE LOJAS (SAVES)
+export async function fetchSeparationPresetsFromDb(): Promise<SeparationPreset[]> {
+  const res = await fetch(`${API_BASE_URL}/separation-presets`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Erro ao buscar modelos de separação do SQLite');
+  return res.json();
+}
+
+export async function saveSeparationPresetToDb(preset: SeparationPreset): Promise<SeparationPreset> {
+  const res = await fetch(`${API_BASE_URL}/separation-presets`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(preset)
+  });
+  if (!res.ok) throw new Error('Erro ao salvar modelo de separação no SQLite');
+  return res.json();
+}
+
+export async function deleteSeparationPresetFromDb(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/separation-presets/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error('Erro ao excluir modelo de separação do SQLite');
+}
+
 // ESTOQUE DO DEPÓSITO CENTRAL (CD MATRIZ)
 export async function fetchStockFromDb(): Promise<CentralStockItem[]> {
   const res = await fetch(`${API_BASE_URL}/stock`, {
@@ -242,5 +279,3 @@ export async function deleteUserFromDb(id: string): Promise<void> {
   });
   if (!res.ok) throw new Error('Erro ao excluir usuário do SQLite');
 }
-
-

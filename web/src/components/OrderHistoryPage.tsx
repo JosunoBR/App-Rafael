@@ -325,7 +325,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                           <button
                             onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
                             className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 mx-auto"
-                            title="Abrir a matriz de distribuição do Depósito para ratear nas 20 lojas e liberar para a doca"
+                            title="Abrir a matriz de distribuição do Depósito para ratear nas lojas e liberar para a doca"
                           >
                             <Boxes className="w-3.5 h-3.5" />
                             <span>Distribuir CD</span>

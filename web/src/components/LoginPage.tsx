@@ -100,7 +100,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
             Rede Mega 12
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-400 font-bold">
-              20 Lojas
+              Matriz & Filiais
             </span>
           </h1>
           <p className="text-xs text-slate-400 max-w-xs mx-auto">

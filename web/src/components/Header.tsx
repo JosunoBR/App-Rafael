@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'stock':
         return { title: 'Estoque do Depósito Central (CD Matriz)', group: 'Operação', icon: Warehouse, color: 'text-emerald-500' };
       case 'separation':
-        return { title: 'Separação & Matriz de 20 Lojas', group: 'Operação', icon: PackageCheck, color: 'text-emerald-500' };
+        return { title: 'Separação & Distribuição', group: 'Operação', icon: PackageCheck, color: 'text-emerald-500' };
       case 'financial':
         return { title: 'Gestão Financeira & Boletos', group: 'Gestão', icon: CreditCard, color: 'text-amber-500' };
       case 'dashboard':
@@ -102,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({
         
         {/* Lado Esquerdo: Breadcrumb & Título da Página */}
         <div className="flex items-center gap-3">
-          <div className={`w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center ${navMeta.color} shadow-xs border border-slate-200/60 dark:border-slate-700/60 shrink-0`}>
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-xs border border-emerald-200/60 dark:border-emerald-800/60 shrink-0">
             <IconComp className="w-5 h-5" />
           </div>
 
@@ -117,9 +117,17 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </div>
-            <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-tight">
-              {navMeta.title}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-tight">
+                {navMeta.title}
+              </h1>
+              {(activeNav === 'orders' || activeNav === 'separation') && order?.header?.numeroPedido && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-600 text-white flex items-center gap-1.5 shadow-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                  {order.header.numeroPedido}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -177,7 +185,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Criar novo pedido em branco"
               >
                 <Plus className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="hidden sm:inline">Novo</span>
+                <span className="hidden sm:inline">+ Novo</span>
               </button>
 
               <button

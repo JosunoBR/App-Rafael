@@ -615,156 +615,111 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         </div>
       )}
 
-      {/* 1. Header do Romaneio */}
-      <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+      {/* 1. Header & Resumo da Separação */}
+      <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-4 sm:p-5 shadow-xs flex flex-col gap-4">
+        {/* Top Row: Title, Order selector & Romaneio PDF */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
               <PackageCheck className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2.5 flex-wrap">
-                <span>Separação & Romaneio</span>
+            <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+              Separação & Romaneio
+            </h2>
 
-                {/* Dropdown Seletor de Pedidos Disponíveis para o Depósito */}
-                <div className="relative inline-flex items-center">
-                  <select
-                    value={order.header.id || order.header.numeroPedido}
-                    onChange={(e) => {
-                      const found = availableDepositOrders.find(o => (o.header.id || o.header.numeroPedido) === e.target.value);
-                      if (found && onSelectOrder) onSelectOrder(found);
-                    }}
-                    className="appearance-none bg-emerald-100 hover:bg-emerald-200/90 dark:bg-emerald-950 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 font-mono font-black text-xs px-2.5 py-1 pr-6 rounded-xl shadow-xs cursor-pointer outline-hidden transition focus:ring-2 focus:ring-emerald-500"
-                    title="Alternar entre pedidos disponíveis para o depósito"
+            {/* Dropdown Seletor de Pedidos */}
+            <div className="relative inline-flex items-center">
+              <select
+                value={order.header.id || order.header.numeroPedido}
+                onChange={(e) => {
+                  const found = availableDepositOrders.find(o => (o.header.id || o.header.numeroPedido) === e.target.value);
+                  if (found && onSelectOrder) onSelectOrder(found);
+                }}
+                className="appearance-none bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold text-xs px-3 py-1.5 pr-7 rounded-full shadow-xs cursor-pointer outline-hidden transition focus:ring-2 focus:ring-emerald-500"
+                title="Alternar entre pedidos disponíveis para o depósito"
+              >
+                {availableDepositOrders.map(o => (
+                  <option 
+                    key={o.header.id || o.header.numeroPedido} 
+                    value={o.header.id || o.header.numeroPedido}
+                    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-sans font-bold"
                   >
-                    {availableDepositOrders.map(o => (
-                      <option 
-                        key={o.header.id || o.header.numeroPedido} 
-                        value={o.header.id || o.header.numeroPedido}
-                        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-sans font-bold"
-                      >
-                        {o.header.numeroPedido} {o.header.fornecedor ? `• ${o.header.fornecedor}` : ''} ({o.header.status})
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 text-emerald-800 dark:text-emerald-300 pointer-events-none absolute right-1.5" />
-                </div>
-              </h2>
+                    {o.header.numeroPedido} {o.header.fornecedor ? `• ${o.header.fornecedor}` : ''} ({o.header.status})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 pointer-events-none absolute right-2.5" />
             </div>
           </div>
-        </div>
 
-        {/* Botões de Ação */}
-        <div className="flex flex-wrap items-center gap-2">
+          {/* Botão Romaneio PDF */}
           <button
             onClick={onExportPDF}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition cursor-pointer"
             title="Gerar Romaneio PDF Paisagem A4 com tabela das 20 lojas e volumes"
           >
             <FileText className="w-4 h-4" />
             <span>Romaneio PDF</span>
           </button>
         </div>
-      </div>
 
-      {/* 2. Barra de Controle Global de Estoque (CD / Matriz) */}
-      <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/60 dark:border-amber-700/50 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-amber-500 text-white shadow-xs">
-            <Warehouse className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 block">
-              Controle Global de Estoque Central / CD Matriz:
-            </span>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">
-              Padrão: 10% retido no CD em unidades • 90% rateado nas lojas
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Reter em Estoque:</span>
-          {[0, 10, 20, 30].map(pct => (
-            <button
-              key={pct}
-              onClick={() => handleApplyGlobalReservePercent(pct)}
-              className={`px-2.5 py-1 text-xs font-extrabold rounded-lg transition shadow-xs flex items-center gap-1 ${
-                pct === 10
-                  ? 'bg-amber-500 hover:bg-amber-600 text-white border border-amber-600 ring-2 ring-amber-400/30'
-                  : 'bg-white dark:bg-slate-800 border border-amber-300/80 dark:border-amber-700/80 hover:bg-amber-100 dark:hover:bg-amber-950/80 text-amber-900 dark:text-amber-200'
-              }`}
-              title={`Aplicar ${pct}% de retenção em estoque para todos os produtos`}
-            >
-              {pct === 0 ? '0% (Tudo Lojas)' : pct === 10 ? '⭐ 10% (Padrão)' : `${pct}% no CD`}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 3. Cards de Resumo Operacional (Caixas em Destaque com Peças Embaixo) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Status da Grade */}
-        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Status dos Volumes</span>
-            <div className="text-base font-extrabold text-slate-900 dark:text-white mt-1">
-              {!hasAnyOverAllocation ? '100% Válido' : 'Excedente Detectado'}
+        {/* Bottom Row: Metrics Pills & Action */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/60">
+          <div className="flex flex-wrap items-center gap-6">
+            {/* Status */}
+            <div className="flex items-center gap-2">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center ${!hasAnyOverAllocation ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400' : 'bg-rose-100 text-rose-600'}`}>
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">STATUS</span>
+                <span className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400">
+                  {!hasAnyOverAllocation ? '100% Válido' : 'Excedente Detectado'}
+                </span>
+              </div>
             </div>
-            <span className="text-[11px] text-slate-400 mt-0.5 block">
-              {!hasAnyOverAllocation 
-                ? `${totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un lojas • ${totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un no CD`
-                : 'Alguma linha ultrapassou o total comprado'}
-            </span>
-          </div>
-          <div className={`p-2.5 rounded-xl ${!hasAnyOverAllocation ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600' : 'bg-rose-100 dark:bg-rose-950 text-rose-600'}`}>
-            {!hasAnyOverAllocation ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-          </div>
-        </div>
 
-        {/* Total Distribuído para as Lojas */}
-        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
-          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Total Enviado às Lojas</span>
-          <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1 font-mono flex items-baseline gap-2">
-            <span>{totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un</span>
-          </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            {totalPecasGeralBruto.toLocaleString('pt-BR')} unidades compradas no pedido
-          </span>
-        </div>
+            {/* Enviado às Lojas */}
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400 flex items-center justify-center">
+                <Store className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">ENVIADO ÀS LOJAS</span>
+                <span className="text-xs font-extrabold text-slate-800 dark:text-slate-100">
+                  {totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un <span className="font-normal text-slate-400">de {totalPecasGeralBruto.toLocaleString('pt-BR')} un</span>
+                </span>
+              </div>
+            </div>
 
-        {/* Total Guardado em Estoque CD */}
-        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
-          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Guardado no Estoque (CD)</span>
-          <div className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mt-1 font-mono flex items-baseline gap-2">
-            <span>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un</span>
-            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded-full">
-              {percentualEstoque}% retido
-            </span>
-          </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            {totalPecasGuardadasEstoque.toLocaleString('pt-BR')} peças em estoque central
-          </span>
-        </div>
-
-        {/* Atalho Voltar */}
-        <div 
-          onClick={onNavigateToOrders}
-          className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs cursor-pointer hover:border-emerald-500 transition group flex items-center justify-between"
-        >
-          <div>
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Voltar para Edição</span>
-            <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
-              <span>Editar Pedido & Cotação</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
+            {/* Estoque CD */}
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400 flex items-center justify-center">
+                <Warehouse className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">ESTOQUE CD</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400">
+                    {totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un
+                  </span>
+                  <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950 px-1.5 py-0.2 rounded-full">
+                    {percentualEstoque}%
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600">
-            <Store className="w-5 h-5" />
-          </div>
-        </div>
 
+          {/* Editar Pedido */}
+          <button
+            onClick={onNavigateToOrders}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition cursor-pointer"
+          >
+            <span>Editar Pedido</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Barra de Feedback / Notificação */}
@@ -786,91 +741,119 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         </div>
       )}
 
-      {/* 3.5. Modelos de Rateio & Separação (Saves Independentes do Fornecedor) */}
-      <div className="bg-white dark:bg-slate-800/90 p-4 sm:p-5 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/50 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-linear-to-r from-indigo-50/40 via-white to-transparent dark:from-indigo-950/20 dark:via-slate-800/90 dark:to-slate-800/90">
-        <div className="flex items-start sm:items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-600/20 shrink-0">
-            <Bookmark className="w-5 h-5" />
+      {/* 2. MODELOS & CD */}
+      <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-3 sm:p-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        {/* Left: Icon, Title and Pill */}
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-indigo-600 text-white shadow-xs">
+            <Bookmark className="w-4 h-4" />
           </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">
-                Modelos de Rateio & Separação (Saves)
-              </h3>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
-                {presets.length} {presets.length === 1 ? 'modelo' : 'modelos'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Escolha um modelo proporcional (ex: Alimentos, Bazar) para aplicar a proporção em todas as 20 lojas ou salve a separação atual.
-            </p>
-          </div>
+          <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+            MODELOS & CD
+          </h3>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+            {presets.length} {presets.length === 1 ? 'modelo' : 'modelos'}
+          </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-            Padrão:
-          </label>
-
-          {/* Dropdown Editável (Combobox de Modelos) */}
-          <div className="relative min-w-[260px] sm:w-72">
-            <div className="flex items-center rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 shadow-xs focus-within:ring-2 focus-within:ring-indigo-500">
-              <input
-                type="text"
-                value={presetInputValue}
-                onChange={(e) => {
-                  setPresetInputValue(e.target.value);
-                  setIsPresetDropdownOpen(true);
-                }}
-                onFocus={() => setIsPresetDropdownOpen(true)}
-                placeholder="Nome do padrão (ex: Alimentos)..."
-                className="w-full text-xs font-bold px-3 py-2 bg-transparent text-slate-900 dark:text-white outline-hidden"
-              />
-              <button
-                type="button"
-                onClick={() => setIsPresetDropdownOpen(!isPresetDropdownOpen)}
-                className="p-2 text-slate-400 hover:text-indigo-600 transition cursor-pointer shrink-0"
-                title="Ver lista de modelos salvos"
-              >
-                <ChevronDown className={`w-4 h-4 transition-transform ${isPresetDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
-
-            {/* Menu Suspenso com os Modelos Salvos */}
-            {isPresetDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setIsPresetDropdownOpen(false)} />
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl z-30 max-h-60 overflow-y-auto py-1">
-                  {presets.map(p => (
-                    <div
-                      key={p.id}
-                      onClick={() => handleSelectPreset(p)}
-                      className={`px-3 py-2 text-xs font-bold flex items-center justify-between cursor-pointer transition ${
-                        selectedPresetId === p.id 
-                          ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300' 
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className="truncate">{p.name}</span>
-                      {p.isDefault && (
-                        <span className="text-[10px] text-amber-500 font-extrabold ml-2 shrink-0">
-                          ⭐ Padrão Rede
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+        {/* Right controls: Reter no CD pill, Model Selector, Aplicar & Salvar */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Reter no CD pill box */}
+          <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 rounded-xl px-2.5 py-1 text-xs">
+            <Warehouse className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span className="font-bold text-slate-700 dark:text-slate-300 mr-1 text-[11px]">Reter no CD:</span>
+            {[0, 10, 20, 30].map(pct => {
+              const isActive = percentualEstoque === pct;
+              return (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => handleApplyGlobalReservePercent(pct)}
+                  className={`px-2 py-0.5 text-[11px] font-bold rounded-lg transition cursor-pointer ${
+                    isActive
+                      ? 'bg-amber-400/30 text-amber-900 dark:text-amber-100 border border-amber-400 font-extrabold'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-amber-200/50 dark:hover:bg-amber-900/40'
+                  }`}
+                  title={`Aplicar ${pct}% no CD`}
+                >
+                  {pct === 10 ? `★ ${pct}%` : `${pct}%`}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Botão Salvar (Usa a 1ª linha de produtos como referência) */}
+          {/* Modelo label & Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Modelo:</span>
+            <div className="relative min-w-[200px] sm:w-56">
+              <div className="flex items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs focus-within:ring-2 focus-within:ring-indigo-500">
+                <input
+                  type="text"
+                  value={presetInputValue}
+                  onChange={(e) => {
+                    setPresetInputValue(e.target.value);
+                    setIsPresetDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsPresetDropdownOpen(true)}
+                  placeholder="Selecione ou digite..."
+                  className="w-full text-xs font-bold px-2.5 py-1.5 bg-transparent text-slate-900 dark:text-white outline-hidden truncate"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsPresetDropdownOpen(!isPresetDropdownOpen)}
+                  className="p-1.5 text-slate-400 hover:text-indigo-600 transition cursor-pointer shrink-0"
+                >
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isPresetDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+
+              {/* Menu Suspenso */}
+              {isPresetDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setIsPresetDropdownOpen(false)} />
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl z-30 max-h-60 overflow-y-auto py-1">
+                    {presets.map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => handleSelectPreset(p)}
+                        className={`px-3 py-2 text-xs font-bold flex items-center justify-between cursor-pointer transition ${
+                          selectedPresetId === p.id 
+                            ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300' 
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span className="truncate">{p.name}</span>
+                        {p.isDefault && (
+                          <span className="text-[10px] text-amber-500 font-extrabold ml-2 shrink-0">
+                            ⭐ Padrão Rede
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Botão Aplicar */}
+          <button
+            type="button"
+            onClick={() => handleApplyPresetToAll(selectedPresetId)}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 transition cursor-pointer"
+            title="Aplicar modelo selecionado a todos os produtos"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Aplicar</span>
+          </button>
+
+          {/* Botão Salvar */}
           {onSavePreset && (
             <button
               type="button"
               onClick={handleDirectSavePreset}
               disabled={!presetInputValue.trim()}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-600/30 transition cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer disabled:opacity-50"
               title="Salvar modelo com as proporções da 1ª linha de produtos"
             >
               <Bookmark className="w-3.5 h-3.5" />
@@ -883,41 +866,38 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <button
               type="button"
               onClick={handleDeleteSelectedPreset}
-              className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
               title="Excluir este modelo customizado"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
-      {/* 4. Tabela Interativa da Matriz de Separação (20 Lojas) */}
+      {/* 3. Tabela Interativa da Matriz de Separação (20 Lojas) */}
       <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
         
         {/* Cabeçalho da Tabela */}
-        <div className="p-4 border-b border-slate-200/80 dark:border-slate-700/80 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <PackageCheck className="w-5 h-5 text-emerald-400" />
-            <div>
-              <h3 className="text-sm font-extrabold uppercase tracking-wide flex items-center gap-2">
-                Grade de Distribuição e Separação por Unidades (20 Lojas)
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                Defina a quantidade de unidades para cada filial ou utilize a distribuição inteligente proporcional aos clusters.
-              </p>
+        <div className="p-3.5 sm:p-4 border-b border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+              <Boxes className="w-4 h-4" />
             </div>
+            <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-800 dark:text-white">
+              GRADE DE DISTRIBUIÇÃO
+            </h3>
           </div>
 
-          <div className="flex items-center gap-3 text-xs">
-            {possuiAvarias === 'sim' && (
-              <div className="flex items-center gap-1.5 bg-amber-400/20 px-2.5 py-1 rounded-lg border border-amber-300/40 text-amber-200 font-semibold">
-                <span className="w-2.5 h-2.5 rounded-sm bg-amber-400" />
-                <span>Amarelo = Avaria Descontada</span>
-              </div>
-            )}
-            <span className="text-slate-400 font-mono font-medium">
-              Rede Mega 12 • Matriz
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+              Cluster A: 51.3%
+            </span>
+            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+              Cluster B: 35.9%
+            </span>
+            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+              Cluster C: 12.8%
             </span>
           </div>
         </div>
@@ -929,61 +909,46 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             {/* Linha 1 de Cabeçalho: Clusters */}
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-700 text-center font-extrabold text-[11px]">
-                <th className="py-2.5 px-3 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 sticky left-0 z-20 min-w-[230px]">
-                  Dados do Produto
+                <th rowSpan={2} className="py-2.5 px-3 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 sticky left-0 z-20 min-w-[220px] uppercase">
+                  DADOS DO PRODUTO
                 </th>
-                <th className="py-2.5 px-2 bg-emerald-100 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-300 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Total de unidades compradas no pedido">
-                  Comprado (Un)
+                <th colSpan={3} className="py-2 px-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                  BALANÇO GERAL
                 </th>
-                <th className="py-2.5 px-2 bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 border-r border-slate-200 dark:border-slate-700 min-w-[95px]" title="Unidades guardadas no Depósito Central / Matriz">
-                  Estoque CD (Un)
+                <th colSpan={clusterA.length} className="py-2 px-2 bg-blue-50/70 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                  CLUSTER A ({clusterA.length} LOJAS • 51.3%)
                 </th>
-                <th className="py-2.5 px-2 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Soma de unidades enviadas para todas as lojas">
-                  Lojas (Un)
+                <th colSpan={clusterB.length} className="py-2 px-2 bg-slate-100 dark:bg-slate-900/70 text-slate-900 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                  CLUSTER B ({clusterB.length} LOJAS • 35.9%)
                 </th>
-                <th colSpan={clusterA.length} className="py-2 px-2 bg-blue-100/70 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 border-r border-slate-200 dark:border-slate-700">
-                  CLUSTER A ({clusterA.length} Lojas • 51.3%)
-                </th>
-                <th colSpan={clusterB.length} className="py-2 px-2 bg-slate-100 dark:bg-slate-900/70 text-slate-900 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700">
-                  CLUSTER B ({clusterB.length} Lojas • 35.9%)
-                </th>
-                <th colSpan={clusterC.length} className="py-2 px-2 bg-teal-100/70 dark:bg-teal-950/60 text-teal-900 dark:text-teal-300 border-r border-slate-200 dark:border-slate-700">
-                  CLUSTER C ({clusterC.length} Lojas / CD • 12.8%)
-                </th>
-                <th className="py-2.5 px-2 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-center min-w-[80px]">
-                  Ações
+                <th colSpan={clusterC.length} className="py-2 px-2 bg-teal-50/70 dark:bg-teal-950/60 text-teal-900 dark:text-teal-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                  CLUSTER C ({clusterC.length} LOJAS • 12.8%)
                 </th>
               </tr>
 
-              {/* Linha 2 de Cabeçalho: Nomes das Lojas */}
-              <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                <th className="py-2 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">
-                  Descrição / Código
-                </th>
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-emerald-50 dark:bg-emerald-950/50">
+              {/* Linha 2 de Cabeçalho: Subcolunas e Nomes das Lojas */}
+              <tr className="bg-slate-50/60 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 min-w-[75px]">
                   Comprado
                 </th>
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">
-                  CD Central
+                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 min-w-[85px]">
+                  Estoque CD
                 </th>
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80">
-                  Distribuído
+                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 min-w-[70px]">
+                  Lojas
                 </th>
                 {activeStores.map(store => (
                   <th 
                     key={store.id} 
-                    className={`py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 min-w-[65px] whitespace-nowrap ${
-                      store.cluster === 'A' ? 'bg-blue-50/50 dark:bg-blue-950/20' : 
-                      store.cluster === 'B' ? 'bg-slate-50 dark:bg-slate-900/30' : 
-                      'bg-teal-50/50 dark:bg-teal-950/20'
+                    className={`py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 min-w-[60px] whitespace-nowrap font-bold text-[11px] ${
+                      store.cluster === 'A' ? 'bg-blue-50/30 dark:bg-blue-950/20 text-slate-700 dark:text-slate-300' : 
+                      store.cluster === 'B' ? 'bg-slate-50/50 dark:bg-slate-900/30 text-slate-700 dark:text-slate-300' : 
+                      'bg-teal-50/30 dark:bg-teal-950/20 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     {store.name.replace('Ponta Grossa ', 'PG ').replace('Depósito Central', 'CD Central')}
                   </th>
                 ))}
-                <th className="py-2 px-2 text-center bg-slate-50 dark:bg-slate-900">
-                  Opções
-                </th>
               </tr>
             </thead>
 
@@ -991,17 +956,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {order.items.map((item, idx) => {
                 const status = itemStatusList[idx];
-                const pack = Math.max(1, item.qtdPorPacote || 1);
 
                 return (
-                  <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition">
+                  <tr key={item.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition">
                     
                     {/* 1. Descrição e Código com Foto */}
                     <td className="py-2 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-800 z-10">
                       <div className="flex items-center gap-2.5">
                         {/* Foto Miniatura */}
                         <div 
-                          className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center cursor-pointer shadow-xs"
+                          className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center cursor-pointer shadow-xs"
                           onClick={() => item.fotoUrl && setZoomedImage({ url: item.fotoUrl, title: item.descricao })}
                           title={item.fotoUrl ? "Clique para ver a foto ampliada" : "Sem foto"}
                         >
@@ -1013,12 +977,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                         </div>
 
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-900 dark:text-white truncate max-w-[200px]" title={item.descricao}>
-                            {item.descricao}
+                          <div className="font-bold text-slate-900 dark:text-white truncate max-w-[190px] text-xs" title={item.descricao}>
+                            {item.descricao || 'Item sem descrição'}
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
-                            <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.codigoInterno || item.codigo || 'S/ CÓD'}</span>
-                            <span className="font-bold text-slate-700 dark:text-slate-300">{item.qtdTotalUnidades.toLocaleString('pt-BR')} un</span>
+                            <span className="px-1.5 py-0.2 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800">
+                              {item.codigoInterno || item.codigo || 'S/ CÓD'}
+                            </span>
+                            <span className="font-semibold text-slate-600 dark:text-slate-400">
+                              {item.qtdTotalUnidades.toLocaleString('pt-BR')}
+                            </span>
                             {item.separacaoManual && (
                               <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-sans font-semibold text-[9px]">
                                 Manual
@@ -1029,52 +997,41 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       </div>
                     </td>
 
-                    {/* 2. Total Comprado (Unidades) */}
-                    <td className="py-2.5 px-2 text-center font-mono font-extrabold border-r border-slate-200 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
-                      <div className="text-xs">
-                        {item.qtdTotalUnidades.toLocaleString('pt-BR')} un
-                      </div>
+                    {/* 2. Total Comprado */}
+                    <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-emerald-600 dark:text-emerald-400 text-xs">
+                      {item.qtdTotalUnidades.toLocaleString('pt-BR')}
                     </td>
 
-                    {/* 3. Coluna Estoque CD (Guardado) - Editável em Unidades */}
-                    <td className="py-1.5 px-1.5 text-center border-r border-slate-200 dark:border-slate-700 bg-amber-50/40 dark:bg-amber-950/20">
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min="0"
-                            max={item.qtdTotalUnidades}
-                            value={status.reserveStockUnits === 0 ? '' : status.reserveStockUnits}
-                            placeholder="0"
-                            onFocus={(e) => e.target.select()}
-                            onChange={(e) => handleUpdateItemReserveUnits(item, parseFloat(e.target.value) || 0)}
-                            className="w-16 px-1 py-1 text-center font-mono font-extrabold text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-200 focus:ring-2 focus:ring-amber-500 outline-hidden"
-                            title="Quantidade de unidades que ficará guardada no Estoque Central"
-                          />
-                          <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                            un
-                          </span>
-                        </div>
-                      </div>
+                    {/* 3. Estoque CD */}
+                    <td className="py-2 px-2 text-center border-r border-slate-100 dark:border-slate-800">
+                      <input
+                        type="number"
+                        min="0"
+                        max={item.qtdTotalUnidades}
+                        value={status.reserveStockUnits === 0 ? '' : status.reserveStockUnits}
+                        placeholder="0"
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => handleUpdateItemReserveUnits(item, parseFloat(e.target.value) || 0)}
+                        className="w-12 h-7 px-1 text-center font-mono font-bold text-xs rounded-lg border border-amber-300 bg-amber-50/50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700 outline-hidden focus:ring-2 focus:ring-amber-500"
+                        title="Quantidade de unidades guardadas no Estoque Central"
+                      />
                     </td>
 
-                    {/* 4. Total Distribuído para Lojas */}
-                    <td className={`py-2.5 px-2 text-center font-mono font-extrabold border-r border-slate-200 dark:border-slate-700 ${
+                    {/* 4. Lojas */}
+                    <td className={`py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-xs ${
                       status.isOverAllocated 
-                        ? 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 ring-1 ring-rose-400' 
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                        ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/50' 
+                        : 'text-slate-700 dark:text-slate-300'
                     }`}>
-                      <div className="text-xs">
-                        {status.allocatedUnits.toLocaleString('pt-BR')} un
-                      </div>
+                      {status.allocatedUnits.toLocaleString('pt-BR')}
                       {status.isOverAllocated && (
-                        <div className="text-[9px] font-bold text-rose-600 dark:text-rose-400 mt-0.5">
-                          +{status.excessUnits} un excedente
+                        <div className="text-[9px] font-bold text-rose-600 mt-0.5">
+                          +{status.excessUnits}
                         </div>
                       )}
                     </td>
 
-                    {/* 5. Células de Cada Loja - Editáveis em Unidades */}
+                    {/* 5. Células de Cada Loja */}
                     {activeStores.map(store => {
                       const rawAllocUnits = item.separacaoLojas?.[store.id] || 0;
                       
@@ -1088,8 +1045,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                           key={store.id} 
                           className={`py-1.5 px-1 text-center font-mono border-r transition ${
                             hasAvaria
-                              ? 'bg-amber-100/90 dark:bg-amber-950/80 border-amber-300 dark:border-amber-700 ring-1 ring-amber-400/60'
-                              : 'border-slate-100 dark:border-slate-700/50'
+                              ? 'bg-amber-100/90 dark:bg-amber-950/80 border-amber-300 dark:border-amber-700'
+                              : 'border-slate-100 dark:border-slate-800/60'
                           }`}
                         >
                           <div className="flex flex-col items-center justify-center">
@@ -1101,14 +1058,13 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                               placeholder="0"
                               onFocus={(e) => e.target.select()}
                               onChange={(e) => handleUpdateStoreAllocationUnits(item, store.id, parseFloat(e.target.value) || 0)}
-                              className={`w-14 px-1 py-1 text-center font-mono font-bold text-xs rounded-md border outline-hidden transition ${
+                              className={`w-11 h-7 text-center font-mono font-bold text-xs rounded-lg border outline-hidden transition ${
                                 rawAllocUnits > 0
-                                  ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
-                                  : 'border-dashed border-slate-200 dark:border-slate-700 bg-transparent text-slate-300 dark:text-slate-600 focus:bg-white dark:focus:bg-slate-900 focus:text-slate-900'
+                                  ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                                  : 'border-slate-200/60 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 text-slate-300 dark:text-slate-600 focus:bg-white dark:focus:bg-slate-900 focus:text-slate-900 focus:border-emerald-500'
                               }`}
                               title={`Loja: ${store.name} (${store.cluster}) • ${rawAllocUnits} unidades`}
                             />
-
                             {hasAvaria && (
                               <span 
                                 className="text-[9px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/90 px-1 py-0.2 rounded-sm mt-0.5 border border-rose-300 dark:border-rose-800 whitespace-nowrap"
@@ -1122,70 +1078,38 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       );
                     })}
 
-                    {/* 6. Ações por Linha */}
-                    <td className="py-1.5 px-2 text-center bg-slate-50/50 dark:bg-slate-900/40">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleAutoRateioItem(item.id)}
-                          className="p-1 rounded-md text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition"
-                          title="Recalcular rateio em unidades para este produto"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleZeroAllStoresForItem(item.id)}
-                          className="p-1 rounded-md text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition"
-                          title="Zerar envio para todas as lojas (guardar 100% no estoque)"
-                        >
-                          <Ban className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setModalItem(item)}
-                          className="p-1 rounded-md text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition"
-                          title="Abrir grade de clusters em tela cheia"
-                        >
-                          <Maximize2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-
                   </tr>
                 );
               })}
             </tbody>
 
-            {/* Linha de Totais Gerais por Loja */}
+            {/* Linha de Totais Gerais */}
             <tfoot>
-              <tr className="bg-emerald-100 dark:bg-emerald-950 border-t-2 border-emerald-500 font-extrabold text-xs text-emerald-950 dark:text-emerald-200">
-                <td className="py-3 px-3 border-r border-emerald-200 dark:border-emerald-800 sticky left-0 bg-emerald-100 dark:bg-emerald-950 z-10 uppercase">
-                  Total Geral (Unidades)
+              <tr className="bg-slate-50 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-700 font-extrabold text-xs text-slate-700 dark:text-slate-300">
+                <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 uppercase text-xs">
+                  TOTAL GERAL
                 </td>
-                <td className="py-3 px-2 text-center border-r border-emerald-200 dark:border-emerald-800 font-mono text-sm">
-                  <div>{totalPecasGeralBruto.toLocaleString('pt-BR')} un</div>
+                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                  {totalPecasGeralBruto.toLocaleString('pt-BR')}
                 </td>
-                <td className="py-3 px-2 text-center border-r border-emerald-200 dark:border-emerald-800 font-mono text-xs text-amber-900 dark:text-amber-200 bg-amber-100/60 dark:bg-amber-950/60">
-                  <div>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} un</div>
+                <td className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700">
+                  <div className="inline-block w-12 h-7 leading-7 text-center font-mono font-bold text-xs rounded-lg border border-amber-300 bg-amber-50/50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700">
+                    {totalPecasGuardadasEstoque.toLocaleString('pt-BR')}
+                  </div>
                 </td>
-                <td className="py-3 px-2 text-center border-r border-emerald-200 dark:border-emerald-800 font-mono text-sm">
-                  <div>{totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un</div>
+                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')}
                 </td>
                 {activeStores.map(store => {
                   const somaLojaUnidades = order.items.reduce((acc, item) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);
-
                   return (
-                    <td key={store.id} className="py-3 px-2 text-center font-mono border-r border-emerald-200 dark:border-emerald-800">
-                      <div className="text-xs font-black text-emerald-950 dark:text-emerald-100">
-                        {somaLojaUnidades.toLocaleString('pt-BR')} un
+                    <td key={store.id} className="py-2.5 px-2 text-center font-mono border-r border-slate-200 dark:border-slate-700">
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {somaLojaUnidades.toLocaleString('pt-BR')}
                       </div>
                     </td>
                   );
                 })}
-                <td className="py-3 px-2 text-center font-mono text-emerald-800 dark:text-emerald-300 text-[10px]">
-                  OK
-                </td>
               </tr>
             </tfoot>
 

@@ -88,148 +88,84 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
   const currentIndex = getStepIndex(currentStatus);
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-4 mb-5 transition-all">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs px-4 py-3 mb-5 transition-all">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         
-        {/* Lado Esquerdo: Barra Visual da Esteira de Etapas */}
-        <div className="flex-1">
-          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {steps.map((step, idx) => {
-              const isPast = idx < currentIndex;
-              const isCurrent = idx === currentIndex;
-              const isFuture = idx > currentIndex;
-              const StepIcon = step.icon;
+        {/* Lado Esquerdo: Barra Visual da Esteira de Etapas Conforme Imagem 3 */}
+        <div className="flex items-center gap-3 overflow-x-auto scrollbar-none py-1">
+          <div className="flex items-center gap-1.5 shrink-0 text-xs font-bold text-slate-400 dark:text-slate-500">
+            <span>ESTEIRA:</span>
+            <span className="px-2 py-0.5 rounded-lg font-mono font-extrabold text-[11px] bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+              {order?.header?.numeroPedido || 'PED-0001'}
+            </span>
+          </div>
 
-              return (
-                <React.Fragment key={step.id}>
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                      isPast 
-                        ? 'bg-emerald-500 text-white shadow-xs' 
-                        : isCurrent 
-                          ? 'bg-emerald-600 text-white ring-4 ring-emerald-100 dark:ring-emerald-950/80 shadow-md font-bold' 
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                    }`}>
-                      {isPast ? <CheckCircle2 className="w-4 h-4" /> : <StepIcon className="w-4 h-4" />}
-                    </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* 1. Cotação */}
+            <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex > 0 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex >= 0 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                {currentIndex > 0 ? '✓' : '1'}
+              </span>
+              <span>1. Cotação</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+            </div>
 
-                    <div>
-                      <div className={`text-xs font-bold ${
-                        isCurrent 
-                          ? 'text-slate-900 dark:text-white' 
-                          : isPast 
-                            ? 'text-slate-700 dark:text-slate-300' 
-                            : 'text-slate-400 dark:text-slate-500'
-                      }`}>
-                        {step.label}
-                      </div>
-                      <div className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:block">
-                        {isCurrent ? (
-                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Etapa Atual
-                          </span>
-                        ) : step.description}
-                      </div>
-                    </div>
-                  </div>
+            {/* 2. Aprovado */}
+            <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex > 1 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 1 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex >= 1 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                {currentIndex > 1 ? '✓' : '2'}
+              </span>
+              <span>2. Aprovado</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+            </div>
 
-                  {idx < steps.length - 1 && (
-                    <div className={`flex-1 min-w-[24px] max-w-[60px] h-0.5 rounded-full hidden md:block ${
-                      idx < currentIndex 
-                        ? 'bg-emerald-500' 
-                        : 'bg-slate-200 dark:bg-slate-800'
-                    }`} />
-                  )}
-                </React.Fragment>
-              );
-            })}
+            {/* 3. Separação */}
+            <div className={`flex items-center gap-1.5 text-xs font-black ${currentIndex === 2 ? 'text-emerald-900 dark:text-white' : currentIndex > 2 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+              <span className={`w-5 h-5 rounded-sm flex items-center justify-center text-[10px] font-bold ${currentIndex === 2 ? 'bg-emerald-700 text-white shadow-xs' : currentIndex > 2 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                {currentIndex > 2 ? '✓' : '3'}
+              </span>
+              <span>3. Separação</span>
+              {currentIndex === 2 && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+              <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+            </div>
+
+            {/* 4. Finalizado */}
+            <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex >= 3 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex >= 3 ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                {currentIndex >= 3 ? '✓' : '4'}
+              </span>
+              <span>4. Finalizado</span>
+            </div>
           </div>
         </div>
 
-        {/* Lado Direito: Botão de Ação Contextual da Próxima Etapa */}
-        <div className="flex items-center gap-2 shrink-0 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100 dark:border-slate-800">
-          
-          {/* AÇÃO 1: Comprador / Diretoria Aprovando Cotação */}
-          {currentIndex === 0 && (role === 'diretoria' || role === 'deposito') && onApproveOrder && (
+        {/* Lado Direito: Botões de Ação Contextual Conforme Imagem 3 */}
+        <div className="flex items-center gap-2 shrink-0">
+          {onOpenSeparation && (
             <button
               type="button"
-              onClick={() => onApproveOrder(order)}
-              className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/20 transition flex items-center gap-2 cursor-pointer"
-              title="Aprovar este pedido e encaminhar para a distribuição do Depósito Central"
+              onClick={() => onOpenSeparation(order)}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition flex items-center gap-1.5 cursor-pointer"
+              title="Abrir tela de conferência física na doca"
             >
-              <ShieldCheck className="w-4 h-4" />
-              <span>Aprovar Pedido (Encaminhar ao Depósito)</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <PackageCheck className="w-3.5 h-3.5 text-purple-500" />
+              <span>Conferência Doca</span>
             </button>
           )}
 
-          {/* AÇÃO 2: Depósito / CD Distribuindo e Liberando para Doca */}
-          {currentIndex === 1 && (
-            <div className="flex items-center gap-2">
-              {onOpenDistribution && (
-                <button
-                  type="button"
-                  onClick={() => onOpenDistribution(order)}
-                  className="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
-                  title="Abrir a matriz de distribuição das 20 lojas para ajustar rateio ou reserva"
-                >
-                  <Boxes className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Revisar Rateio</span>
-                </button>
-              )}
-              {onReleaseToSeparation && (
-                <button
-                  type="button"
-                  onClick={() => onReleaseToSeparation(order)}
-                  className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-purple-500/20 transition flex items-center gap-2 cursor-pointer"
-                  title="Confirmar distribuição e liberar para os conferentes da doca separarem fisicamente"
-                >
-                  <PackageCheck className="w-4 h-4" />
-                  <span>Liberar para Separação da Doca</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+          {onFinalizeSeparation && (
+            <button
+              type="button"
+              onClick={() => onFinalizeSeparation(order)}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-700 hover:bg-emerald-800 shadow-sm shadow-emerald-700/30 transition flex items-center gap-1.5 cursor-pointer"
+              title="Concluir a separação e despachar para as lojas"
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              <span>Concluir Separação</span>
+            </button>
           )}
-
-          {/* AÇÃO 3: Separação / Doca Conferindo e Finalizando */}
-          {currentIndex === 2 && (
-            <div className="flex items-center gap-2">
-              {onOpenSeparation && (
-                <button
-                  type="button"
-                  onClick={() => onOpenSeparation(order)}
-                  className="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
-                  title="Abrir tela de conferência física na doca"
-                >
-                  <PackageCheck className="w-3.5 h-3.5 text-purple-500" />
-                  <span>Conferência na Doca</span>
-                </button>
-              )}
-              {onFinalizeSeparation && (
-                <button
-                  type="button"
-                  onClick={() => onFinalizeSeparation(order)}
-                  className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/20 transition flex items-center gap-2 cursor-pointer"
-                  title="Concluir a separação física, despachar para as lojas e arquivar pedido"
-                >
-                  <CheckCheck className="w-4 h-4" />
-                  <span>Concluir Separação & Despachar</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* AÇÃO 4: Pedido Concluído / Finalizado */}
-          {currentIndex === 3 && (
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-3.5 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <span>Pedido Finalizado & Despachado</span>
-            </div>
-          )}
-
         </div>
+
       </div>
     </div>
   );

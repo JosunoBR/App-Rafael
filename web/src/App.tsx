@@ -125,7 +125,7 @@ import { calculateOrderNetTotal, generateOrderInstallments } from './utils/insta
 import { calculateItemFiscal } from './shared/fiscalEngine';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem } from './utils/orderItemUtils';
-import { CheckCircle2, AlertCircle, Monitor, Smartphone, PackageCheck, AlertTriangle, Save, Trash2, Plus } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Plus } from 'lucide-react';
 
 export function App() {
   // 1. Estado de Autenticação (RBAC) - Inicia nulo para exigir login obrigatório
@@ -1187,25 +1187,6 @@ export function App() {
               {/* PÁGINA 1: COTAÇÃO E PEDIDOS */}
               {activeNav === 'orders' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
-                  <OrderSummaryCards order={order} />
-
-                  {/* Esteira Operacional Visual do Pedido (Compras ➔ Depósito ➔ Separação ➔ Finalizado) */}
-                  <OrderPipelineStepper
-                    order={order}
-                    currentUser={currentUser}
-                    onApproveOrder={handleApproveOrder}
-                    onOpenDistribution={(ord) => {
-                      setOrder(ord);
-                      setActiveNav('separation');
-                    }}
-                    onReleaseToSeparation={handleReleaseToSeparation}
-                    onOpenSeparation={(ord) => {
-                      setOrder(ord);
-                      setActiveNav('separation');
-                    }}
-                    onFinalizeSeparation={handleFinalizeSeparation}
-                  />
-
                   <OrderHeaderForm 
                     header={order.header} 
                     suppliers={suppliers}
@@ -1227,56 +1208,25 @@ export function App() {
                     supplierTemplateItemsCount={activeSupplierTemplate?.items?.length || 0}
                   />
 
-                  {/* Banner de Rascunho / Pedido em Aberto acima da Lista de Compras */}
-                  {hasActiveDraft && !isCurrentOrderSaved && (
-                    <div className="p-3.5 px-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                        <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                          Rascunho de Pedido em Andamento ({order.header.numeroPedido}) — não salvo no SQLite
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
-                        <button
-                          onClick={handleDiscardDraft}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Descartar / Zerar</span>
-                        </button>
-                        <button
-                          onClick={handleSaveOrder}
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Save className="w-3.5 h-3.5" />
-                          <span>Salvar Pedido</span>
-                        </button>
-                      </div>
+                  {/* Banner de Pedido Gravado / Status (Conforme Imagem 1) */}
+                  <div className="p-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Visualizando Pedido Gravado no Sistema ({order.header.numeroPedido}) • Status: <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold">{order.header.status || 'Em Separação'}</strong>
+                      </span>
                     </div>
-                  )}
 
-                  {/* Banner quando visualizando pedido já salvo / finalizado do histórico */}
-                  {isCurrentOrderSaved && (
-                    <div className="p-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                          Visualizando Pedido Gravado no Sistema ({order.header.numeroPedido}) • Status: <strong className="text-emerald-600 dark:text-emerald-400">{order.header.status}</strong>
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
-                        <button
-                          onClick={handleNewOrder}
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Novo Pedido em Branco</span>
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                      <button
+                        onClick={handleNewOrder}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Novo Pedido em Branco</span>
+                      </button>
                     </div>
-                  )}
+                  </div>
 
                   <OrderItemsTable
                     items={order.items}

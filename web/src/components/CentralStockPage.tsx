@@ -218,7 +218,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Gerencie saldos em peças/unidades no galpão, endereçamento e crie ordens de separação para distribuição às 20 lojas
+              Gerencie saldos em peças/unidades no galpão, endereçamento e crie ordens de separação para distribuição às lojas
             </p>
           </div>
         </div>
@@ -229,7 +229,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
           >
             <PlusCircle className="w-4 h-4 text-emerald-500" />
-            <span>Dar Entrada / Novo Item</span>
+            <span>+ Dar Entrada / Novo Item</span>
           </button>
 
           {selectedCount > 0 ? (
@@ -252,108 +252,109 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
         </div>
       </div>
 
-      {/* 2. Cards de Métricas de Patrimônio e Volume */}
+      {/* 2. Cards de Métricas de Patrimônio e Volume (Formato Horizontal Limpo Conforme Imagem 2) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Total Unidades */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Saldo em Unidades</span>
-            <Boxes className="w-4 h-4 text-emerald-500" />
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-emerald-600 flex items-center justify-center shrink-0">
+            <Boxes className="w-5 h-5 text-emerald-500" />
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-            {metrics.totalUnidades.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">SALDO UNIDADES</span>
+            <div className="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">
+              {metrics.totalUnidades.toLocaleString('pt-BR')}
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            Prontas para distribuição
-          </span>
         </div>
 
         {/* Total Peças */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Total de Peças / Itens</span>
-            <Layers className="w-4 h-4 text-teal-500" />
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/80 text-teal-600 flex items-center justify-center shrink-0">
+            <Layers className="w-5 h-5 text-teal-500" />
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-            {metrics.totalPecas.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">un</span>
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">TOTAL DE PEÇAS</span>
+            <div className="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">
+              {metrics.totalPecas.toLocaleString('pt-BR')}
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            Volume físico fracionável
-          </span>
         </div>
 
         {/* Valor Patrimonial */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Valor Patrimonial (Custo)</span>
-            <TrendingUp className="w-4 h-4 text-amber-500" />
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/80 text-amber-600 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5 text-amber-500" />
           </div>
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-            R$ {metrics.valorPatrimonial.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">PATRIMÔNIO (CUSTO)</span>
+            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+              R$ {metrics.valorPatrimonial.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            Capital estocado no depósito
-          </span>
         </div>
 
         {/* Alerta de Estoque Baixo */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Atenção / Saldo Baixo</span>
-            <AlertCircle className="w-4 h-4 text-rose-500" />
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/80 text-rose-600 flex items-center justify-center shrink-0">
+            <AlertCircle className="w-5 h-5 text-rose-500" />
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-            {metrics.itensComSaldoBaixo} <span className="text-xs font-normal text-slate-400">itens</span>
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">ATENÇÃO / SALDO BAIXO</span>
+            <div className="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">
+              {metrics.itensComSaldoBaixo} itens
+            </div>
           </div>
-          <span className="text-[11px] text-rose-500 font-semibold mt-0.5 block">
-            Saldo ≤ 60 unidades no galpão
-          </span>
         </div>
 
       </div>
 
       {/* 3. Barra de Busca & Filtros */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative flex-1">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="relative min-w-[260px] sm:min-w-[280px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por descrição, código interno, EAN, fornecedor ou posição no galpão..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
+            placeholder="Buscar por descrição..."
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden font-medium"
           />
         </div>
 
-        {/* Filtro de Categoria */}
-        {categories.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+        {/* Filtro de Categoria em Pills Arredondadas */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full scrollbar-none">
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+              selectedCategory === 'all'
+                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+            }`}
+          >
+            Todas as Categorias
+          </button>
+          {(categories.length > 0 ? categories : [
+            'Utilidades Térmicas',
+            'Vidros & Cristais',
+            'Aromaterapia & Casa',
+            'Decoração & Iluminação',
+            'Organizadores',
+            'Panelas & Assadeiras'
+          ]).map(cat => (
             <button
-              onClick={() => setSelectedCategory('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-                selectedCategory === 'all'
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                selectedCategory === cat
                   ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
               }`}
             >
-              Todas as Categorias
+              {cat}
             </button>
-            {categories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-                  selectedCategory === cat
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
       {/* 4. Tabela de Estoque Físico do Depósito Central */}
@@ -365,17 +366,17 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 <th className="py-3 px-3.5 text-center w-12">
                   <span className="sr-only">Seleção</span>
                 </th>
-                <th className="py-3 px-2 w-14 text-center">Foto</th>
-                <th className="py-3 px-3 min-w-[120px] whitespace-nowrap">Cód. Interno</th>
-                <th className="py-3 px-3 min-w-[130px] whitespace-nowrap">Cód. Barras (EAN)</th>
-                <th className="py-3 px-3 min-w-[220px]">Descrição do Produto</th>
-                <th className="py-3 px-3 min-w-[140px]">Endereço / Galpão</th>
-                <th className="py-3 px-3 text-right min-w-[110px] whitespace-nowrap bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-extrabold">
-                  Saldo Unidades
+                <th className="py-3 px-2 w-14 text-center">FOTO</th>
+                <th className="py-3 px-3 min-w-[120px] whitespace-nowrap">CÓD. INTERNO</th>
+                <th className="py-3 px-3 min-w-[130px] whitespace-nowrap">CÓD. BARRAS (EAN)</th>
+                <th className="py-3 px-3 min-w-[220px]">DESCRIÇÃO DO PRODUTO</th>
+                <th className="py-3 px-3 min-w-[140px]">ENDEREÇO / GALPÃO</th>
+                <th className="py-3 px-3 text-right min-w-[120px] whitespace-nowrap bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-extrabold">
+                  SALDO UNIDADES
                 </th>
-                <th className="py-3 px-3 text-right min-w-[110px] whitespace-nowrap">Custo Unit.</th>
-                <th className="py-3 px-3 text-right min-w-[130px] whitespace-nowrap font-bold">Valor Total</th>
-                <th className="py-3 px-3 text-center min-w-[110px] whitespace-nowrap">Ações</th>
+                <th className="py-3 px-3 text-right min-w-[110px] whitespace-nowrap">CUSTO UNIT.</th>
+                <th className="py-3 px-3 text-right min-w-[130px] whitespace-nowrap font-bold">VALOR TOTAL</th>
+                <th className="py-3 px-3 text-center min-w-[130px] whitespace-nowrap">AÇÕES</th>
               </tr>
             </thead>
 

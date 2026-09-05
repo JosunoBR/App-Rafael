@@ -297,8 +297,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               </span>
 
               {/* Badge de ST único no cabeçalho */}
-              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shadow-xs">
-                ST: {aliquotaStCadastrada > 0 ? `+${aliquotaStCadastrada}%` : '0% (Isento)'}
+              <span className="text-xs px-2.5 py-0.5 rounded-md font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                ST: {aliquotaStCadastrada > 0 ? `+${aliquotaStCadastrada}%` : '0%'}
               </span>
 
               {/* Badge de Pedido Padrão se existir */}
@@ -319,10 +319,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-          <span className="text-xs font-medium hidden sm:inline">
-            {isExpanded ? 'Recolher Cabeçalho' : 'Editar Cabeçalho'}
-          </span>
+        <div className="flex items-center gap-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-medium">
+          <span>{isExpanded ? 'Recolher' : 'Expandir'}</span>
           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </div>
       </div>
@@ -358,19 +356,6 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 </label>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {/* Botão Carregar Pedido Padrão se o fornecedor possuir template */}
-                  {hasSupplierTemplate && onLoadSupplierTemplate && (
-                    <button
-                      type="button"
-                      onClick={() => onLoadSupplierTemplate(currentSupplier?.id)}
-                      className="text-[11px] font-extrabold text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800 transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                      title="Carregar todos os itens e condições de compra padrão deste fornecedor"
-                    >
-                      <Sparkles className="w-3 h-3 text-indigo-500" />
-                      Carregar Padrão ({supplierTemplateItemsCount})
-                    </button>
-                  )}
-
                   {/* Botão Salvar como Pedido Padrão */}
                   {onSaveAsSupplierTemplate && currentSupplier && (
                     <button
@@ -381,27 +366,6 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     >
                       <Star className="w-3 h-3 text-amber-500 fill-amber-400" />
                       Salvar como Padrão
-                    </button>
-                  )}
-
-                  {currentSupplier ? (
-                    <button
-                      type="button"
-                      onClick={() => onOpenSupplierModal(currentSupplier)}
-                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
-                      title="Editar dados cadastrais deste fornecedor (ST, Vendedor, Condições)"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                      Editar Fornecedor
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onOpenSupplierModal(null)}
-                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Cadastrar Fornecedor
                     </button>
                   )}
                 </div>
@@ -455,95 +419,31 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-72 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2 duration-150 divide-y divide-slate-100 dark:divide-slate-700/60">
                   <div className="px-3.5 py-2 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
                     <span>Fornecedores Cadastrados ({filteredSuppliers.length})</span>
-                    {supplierSearchQuery && (
-                      <span className="text-[10px] lowercase text-emerald-600 dark:text-emerald-400 font-normal">
-                        filtrado por "{supplierSearchQuery}"
-                      </span>
-                    )}
                   </div>
 
-                  {filteredSuppliers.length === 0 ? (
-                    <div className="p-4 text-center">
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                        Nenhum fornecedor encontrado para "<strong>{header.fornecedor}</strong>"
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          onOpenSupplierModal(null);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Cadastrar "{header.fornecedor}" Agora</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                      {filteredSuppliers.map(sup => {
-                        const hasTemplate = Boolean(sup.pedidoPadrao || sup.pedidoPadraoJson);
-                        const isSelected = currentSupplier?.id === sup.id;
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                    {filteredSuppliers.map(sup => {
+                      const isSelected = currentSupplier?.id === sup.id;
 
-                        return (
-                          <div
-                            key={sup.id}
-                            onClick={() => handleSelectSupplier(sup)}
-                            className={`px-3.5 py-2.5 hover:bg-emerald-50/80 dark:hover:bg-slate-700/70 cursor-pointer transition flex items-center justify-between gap-3 ${
-                              isSelected ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-l-4 border-emerald-500' : ''
-                            }`}
-                          >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                  {sup.razaoSocial}
-                                </span>
-                                {sup.nomeFantasia && (
-                                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">
-                                    {sup.nomeFantasia}
-                                  </span>
-                                )}
-                                {hasTemplate && (
-                                  <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 px-1.5 py-0.2 rounded-full border border-amber-200 dark:border-amber-800 flex items-center gap-0.5">
-                                    <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-500" />
-                                    Compra Padrão
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
-                                {sup.vendedorPadrao && (
-                                  <span>Rep: <strong className="text-slate-700 dark:text-slate-300">{sup.vendedorPadrao}</strong></span>
-                                )}
-                                {sup.contatoVendedor && (
-                                  <span className="font-mono text-[10px]">({sup.contatoVendedor})</span>
-                                )}
-                                {sup.condicaoPagamentoPadrao && (
-                                  <span>• Pagto: {sup.condicaoPagamentoPadrao}</span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {sup.aliquotaStPadrao !== undefined && sup.aliquotaStPadrao > 0 ? (
-                                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                                  ST +{sup.aliquotaStPadrao}%
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                                  ST 0%
-                                </span>
-                              )}
-                              {sup.descontoOffPadrao && sup.descontoOffPadrao > 0 ? (
-                                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300">
-                                  -{sup.descontoOffPadrao}% OFF
-                                </span>
-                              ) : null}
+                      return (
+                        <div
+                          key={sup.id}
+                          onClick={() => handleSelectSupplier(sup)}
+                          className={`px-3.5 py-2.5 hover:bg-emerald-50/80 dark:hover:bg-slate-700/70 cursor-pointer transition flex items-center justify-between gap-3 ${
+                            isSelected ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-l-4 border-emerald-500' : ''
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                {sup.razaoSocial}
+                              </span>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                        </div>
+                      );
+                    })}
+                  </div>
 
                   <div className="p-2 bg-slate-50 dark:bg-slate-900/80 flex items-center justify-between border-t border-slate-100 dark:border-slate-700/60 sticky bottom-0">
                     <button
@@ -563,22 +463,27 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               )}
             </div>
 
-            {/* 3. Status do Pedido */}
+            {/* 3. Desconto OFF % (4ª coluna da linha 1 conforme Imagem 1) */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Status do Pedido
+                Desconto OFF %
               </label>
-              <select
-                value={header.status}
-                onChange={(e) => handleFieldChange('status', e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer"
-              >
-                <option value="Rascunho">Rascunho</option>
-                <option value="Em Cotação">Em Cotação</option>
-                <option value="Aprovado">Aprovado</option>
-                <option value="Em Separação">Em Separação</option>
-                <option value="Finalizado">Finalizado</option>
-              </select>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => handleFieldChange('percentualDescontoOff', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold pr-8 font-mono"
+                  placeholder="0"
+                />
+                <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
+                  %
+                </span>
+              </div>
             </div>
 
             {/* 4. Vendedor */}
@@ -592,7 +497,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 value={header.vendedor}
                 onChange={(e) => handleFieldChange('vendedor', e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                placeholder="Ex: Carlos Andrade"
+                placeholder="Roberto Lima"
               />
             </div>
 
@@ -606,7 +511,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 value={header.contatoVendedor || ''}
                 onChange={(e) => handleFieldChange('contatoVendedor', e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                placeholder="(42) 99999-9999"
+                placeholder="(42) 99988-7766"
               />
             </div>
 
@@ -644,22 +549,16 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           {(() => {
             const LIMITE_MAXIMO_BOLETO = 9999;
             const valorMaximoBoletoCalculado = isEntradaMista ? valorPorParcelaSaldo : (valorTotalPedido > 0 && currentParcelas > 0 ? (valorTotalPedido / currentParcelas) : 0);
-            const isParcelaExcedente = valorMaximoBoletoCalculado > LIMITE_MAXIMO_BOLETO;
-            const parcelasMinimasSugeridas = (valorTotalPedido > 0) ? Math.min(12, Math.max(1, Math.ceil(valorTotalPedido / LIMITE_MAXIMO_BOLETO))) : 1;
-
+            
             return (
               <div className={`p-4 rounded-2xl border transition-all ${
-                isParcelaExcedente 
+                (valorMaximoBoletoCalculado > LIMITE_MAXIMO_BOLETO) 
                   ? 'bg-rose-50/60 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800/80 shadow-xs' 
                   : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/90 dark:border-slate-700'
               }`}>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5">
                   <div className="flex items-center gap-2">
-                    <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                      isParcelaExcedente 
-                        ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' 
-                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    }`}>
+                    <div className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                       <CreditCard className="w-3.5 h-3.5" />
                     </div>
                     <span className="text-xs font-bold text-slate-900 dark:text-white">
@@ -670,35 +569,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   {/* Indicador de Limite de Boleto (R$ 9.999,00) */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {valorTotalPedido > 0 && (
-                      isParcelaExcedente ? (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1.5 animate-pulse">
-                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-                            <span>Boleto: R$ {valorMaximoBoletoCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Excede teto de R$ 9.999)</span>
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (isEntradaMista) {
-                                handleSaldoParcelasChange(Math.min(12, Math.ceil(saldoRestante / LIMITE_MAXIMO_BOLETO)));
-                              } else {
-                                handlePaymentParcelasChange(parcelasMinimasSugeridas);
-                              }
-                            }}
-                            className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-amber-600 hover:bg-amber-500 text-white shadow-xs transition flex items-center gap-1 cursor-pointer"
-                            title="Auto-ajustar número de parcelas para manter boletos abaixo de R$ 9.999,00"
-                          >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span>Sugerir {isEntradaMista ? `${Math.min(12, Math.ceil(saldoRestante / LIMITE_MAXIMO_BOLETO))}x no Saldo` : `${parcelasMinimasSugeridas}x`}</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-emerald-100/80 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                          <span>Boleto: R$ {valorMaximoBoletoCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (≤ R$ 9.999)</span>
-                        </span>
-                      )
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100/80 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span>Boleto: R$ {valorMaximoBoletoCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (≤ R$ 9.999)</span>
+                      </span>
                     )}
                   </div>
                 </div>
@@ -723,24 +597,19 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </select>
                   </div>
 
-                  {/* Dropdown 2: Quantidade de Parcelas (Oculto/Fixo em À Vista ou Entrada Mista) */}
+                  {/* Dropdown 2: Quantidade de Parcelas */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
                       <span>2. Quantidade de Parcelas</span>
-                      {isParcelaExcedente && !isEntradaMista && (
-                        <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">Teto excedido</span>
-                      )}
                     </label>
                     <select
                       value={isVistaIntegral ? 1 : isEntradaMista ? (1 + saldoParcelas) : currentParcelas}
                       disabled={isVistaIntegral || isEntradaMista}
                       onChange={(e) => handlePaymentParcelasChange(Number(e.target.value))}
-                      className={`w-full px-3 py-2 text-xs rounded-xl border bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed ${
-                        isParcelaExcedente && !isEntradaMista ? 'border-rose-400 dark:border-rose-700 text-rose-700 dark:text-rose-300' : 'border-slate-200 dark:border-slate-700'
-                      }`}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {isVistaIntegral ? (
-                        <option value="1">1x (100% À Vista)</option>
+                        <option value="1">1x (À Vista ou 1 Parcela)</option>
                       ) : isEntradaMista ? (
                         <option value={1 + saldoParcelas}>1x Entrada + {saldoParcelas}x Saldo ({1 + saldoParcelas}x Total)</option>
                       ) : (
@@ -753,24 +622,31 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </select>
                   </div>
 
-                  {/* Desconto nos Produtos */}
+                  {/* 3. Desconto (% OFF) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>3. Desconto Comercial</span>
-                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">Por Item</span>
+                      <span>3. Desconto (% OFF)</span>
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">Ativo</span>
                     </label>
-                    <div 
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 font-medium flex items-center justify-between shadow-2xs"
-                      title="Os descontos comerciais são aplicados individualmente em cada produto na tabela de itens abaixo"
-                    >
-                      <span className="text-[11px] text-slate-600 dark:text-slate-400">Aplicado por produto</span>
-                      <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-900/50 px-1.5 py-0.5 rounded">
-                        Tabela ↓
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => handleFieldChange('percentualDescontoOff', parseFloat(e.target.value) || 0)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold pr-8 font-mono shadow-2xs"
+                        placeholder="0"
+                      />
+                      <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
+                        %
                       </span>
                     </div>
                   </div>
 
-                  {/* NOTA (%) */}
+                  {/* 4. NOTA (%) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
                       <span>4. NOTA (%)</span>

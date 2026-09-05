@@ -119,7 +119,6 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
 
     const descOff = Number(order.header?.percentualDescontoOff || 0);
     const aliqSt = Number(order.header?.aliquotaSt || 0);
-    doc.text(`Desconto: ${descOff > 0 ? `${descOff}% OFF` : 'Sem desconto'} | ST: ${aliqSt > 0 ? `${aliqSt}%` : '0%'}`, 111, 58.5);
 
     // Tabela de Itens Comercial
     const headCols = [
@@ -129,13 +128,15 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       'Descrição do Produto',
       'Qtd (Unidades)',
       'Preço Unit.',
-      'Total Item',
+      'Desc. (%)',
+      'Total Líq.',
       'PDV Alvo'
     ];
 
     let totalPecasGeral = 0;
     let totalVolumesGeral = 0;
     let subtotalBrutoGeral = 0;
+    let totalDescontoItens = 0;
 
     const bodyRows = (order.items || []).map((item, idx) => {
       const codInterno = item.codigoInterno || item.codigo || `PRD-${idx + 1}`;
@@ -143,12 +144,16 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       const pecas = Number(item.qtdTotalUnidades) || 0;
       const pacotes = Number(item.qtdPacotes) || 0;
       const precoUnit = Number(item.precoUnitario) || 0;
-      const valorTotal = Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const descPct = Number(item.percentualDesconto) || 0;
+      const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const valorDesc = item.valorDescontoItem !== undefined ? item.valorDescontoItem : (valorBruto * (descPct / 100));
+      const valorLiquido = item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (valorBruto - valorDesc);
       const pdv = Number(item.pdvAlvo) || 12.00;
 
       totalPecasGeral += pecas;
       totalVolumesGeral += pacotes;
-      subtotalBrutoGeral += valorTotal;
+      subtotalBrutoGeral += valorBruto;
+      totalDescontoItens += valorDesc;
 
       return [
         String(idx + 1),
@@ -157,14 +162,18 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
         item.descricao || 'Produto sem descrição',
         pecas.toLocaleString('pt-BR') + ' un',
         `R$ ${precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        descPct > 0 ? `${descPct}%` : '-',
+        `R$ ${valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         `R$ ${pdv.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       ];
     });
 
-    const valorDescontoTotal = descOff > 0 ? subtotalBrutoGeral * (descOff / 100) : 0;
-    const valorStTotal = aliqSt > 0 ? subtotalBrutoGeral * (aliqSt / 100) : 0;
-    const subtotalLiquidoGeral = Math.max(0, subtotalBrutoGeral - valorDescontoTotal + valorStTotal);
+    const valorDescontoTotal = totalDescontoItens > 0 ? totalDescontoItens : (descOff > 0 ? subtotalBrutoGeral * (descOff / 100) : 0);
+    const subtotalAposDesconto = Math.max(0, subtotalBrutoGeral - valorDescontoTotal);
+    const valorStTotal = aliqSt > 0 ? subtotalAposDesconto * (aliqSt / 100) : 0;
+    const subtotalLiquidoGeral = subtotalAposDesconto + valorStTotal;
+
+    doc.text(`Desconto Itens: ${valorDescontoTotal > 0 ? `- R$ ${valorDescontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Sem desconto'} | ST: ${aliqSt > 0 ? `${aliqSt}%` : '0%'}`, 111, 58.5);
 
     const footerRow = [
       '',
@@ -173,6 +182,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       `${(order.items || []).length} itens`,
       totalPecasGeral.toLocaleString('pt-BR') + ' un',
       '',
+      valorDescontoTotal > 0 ? `-R$ ${valorDescontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '',
       `R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       ''
     ];
@@ -228,7 +238,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.text(`• Total de Peças: ${totalPecasGeral.toLocaleString('pt-BR')} unidades`, 16, finalY + 21);
 
     doc.text(`• Subtotal Bruto: R$ ${subtotalBrutoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 75, finalY + 11);
-    doc.text(`• Desconto Comercial: ${descOff > 0 ? `${descOff}% (- R$ ${valorDescontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : 'R$ 0,00'}`, 75, finalY + 16);
+    doc.text(`• Desconto Comercial (Itens): ${valorDescontoTotal > 0 ? `- R$ ${valorDescontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}`, 75, finalY + 16);
     doc.text(`• Impostos / ST: ${valorStTotal > 0 ? `+ R$ ${valorStTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Incluso / Isento'}`, 75, finalY + 21);
 
     // Destaque do Total Líquido

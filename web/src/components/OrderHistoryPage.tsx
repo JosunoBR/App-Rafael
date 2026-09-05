@@ -4,7 +4,6 @@ import {
   Search, 
   Trash2, 
   FileSpreadsheet, 
-  FileText, 
   ArrowRight, 
   Calendar, 
   DollarSign, 
@@ -18,7 +17,6 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { exportOrderToExcel } from '../utils/excelExporter';
-import { exportCommercialOrderPDF, exportRomaneioPDF } from '../utils/pdfExporter';
 
 interface OrderHistoryPageProps {
   orders: PurchaseOrder[];
@@ -368,22 +366,6 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             title="Exportar Planilha Excel (.xlsx)"
                           >
                             <FileSpreadsheet className="w-4 h-4" />
-                          </button>
-
-                          <button
-                            onClick={() => exportCommercialOrderPDF(ord)}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
-                            title="Gerar Pedido Comercial PDF (Proposta para Fornecedor)"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </button>
-
-                          <button
-                            onClick={() => exportRomaneioPDF(ord, ord.storeConfigs || [])}
-                            className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/60 transition cursor-pointer"
-                            title="Gerar Romaneio de Separação PDF (20 Lojas)"
-                          >
-                            <PackageCheck className="w-4 h-4" />
                           </button>
 
                           {onDeleteOrder && (

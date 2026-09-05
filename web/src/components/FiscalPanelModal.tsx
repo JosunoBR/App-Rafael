@@ -54,14 +54,23 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
     creditoEntradaICMS: creditoEntrada / 100
   } : undefined;
 
-  const fiscalResult = calculateItemFiscal(precoCompra, pdvAlvo, globalFiscal, currentFiscalOverride);
+  const descPct = item.percentualDesconto || 0;
+  const precoCompraEfetivo = precoCompra * (1 - descPct / 100);
+  const fiscalResult = calculateItemFiscal(precoCompraEfetivo, pdvAlvo, globalFiscal, currentFiscalOverride);
   const precoMaxSugerido = calculateMaxPurchasePrice(pdvAlvo, margemMeta, globalFiscal, currentFiscalOverride);
 
   const handleSave = () => {
+    const valorBruto = precoCompra * item.qtdTotalUnidades;
+    const valorDesc = valorBruto * (descPct / 100);
+    const valorLiquido = valorBruto - valorDesc;
+
     onApplyChanges(item.id, {
       precoUnitario: precoCompra,
       pdvAlvo: pdvAlvo,
-      valorTotalBruto: precoCompra * item.qtdTotalUnidades,
+      valorTotalBruto: valorBruto,
+      percentualDesconto: descPct,
+      valorDescontoItem: valorDesc,
+      valorTotalLiquido: valorLiquido,
       fiscalOverride: useCustom ? currentFiscalOverride : undefined,
       despesasPdvUnit: fiscalResult.despesasPdvUnit,
       creditoIcmsUnit: fiscalResult.creditoIcmsUnit,

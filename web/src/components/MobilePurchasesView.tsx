@@ -76,15 +76,21 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     descricao: '',
     qtdTotalUnidades: 120,
     precoUnitario: 5.0,
+    percentualDesconto: 0,
     pdvAlvo: 12.0,
     fotoUrl: ''
   });
 
   // Cálculos fiscais instantâneos do formulário
   const totalUnidadesNovo = Number(novoItem.qtdTotalUnidades) || 0;
-  const totalBrutoNovo = totalUnidadesNovo * (Number(novoItem.precoUnitario) || 0);
+  const precoNovo = Number(novoItem.precoUnitario) || 0;
+  const descPctNovo = Number(novoItem.percentualDesconto) || 0;
+  const totalBrutoNovo = totalUnidadesNovo * precoNovo;
+  const totalDescNovo = totalBrutoNovo * (descPctNovo / 100);
+  const totalLiquidoNovo = totalBrutoNovo - totalDescNovo;
+  const precoEfetivoNovo = precoNovo * (1 - descPctNovo / 100);
   const fiscalNovo = calculateItemFiscal(
-    Number(novoItem.precoUnitario) || 0, 
+    precoEfetivoNovo, 
     Number(novoItem.pdvAlvo) || 12.0, 
     order.fiscalConfig
   );
@@ -92,9 +98,26 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
   // Resumo financeiro executivo da carga completa
   const totalCaixas = order.items.reduce((acc, i) => acc + (i.qtdPacotes || 0), 0);
   const totalUnidades = order.items.reduce((acc, i) => acc + (i.qtdTotalUnidades || 0), 0);
-  const totalBrutoCompra = order.items.reduce((acc, i) => acc + (i.valorTotalBruto || 0), 0);
-  const valorDesconto = (totalBrutoCompra * (order.header.percentualDescontoOff || 0)) / 100;
-  const subtotalAposDesconto = totalBrutoCompra - valorDesconto;
+  const totalBrutoCompra = order.items.reduce((acc, i) => acc + (i.valorTotalBruto || (i.qtdTotalUnidades * i.precoUnitario) || 0), 0);
+  
+  const hasItemDiscounts = order.items.some(it => (it.percentualDesconto && it.percentualDesconto > 0) || (it.valorTotalLiquido !== undefined && it.valorTotalLiquido < (it.valorTotalBruto || 0)));
+  let valorDesconto = 0;
+  let subtotalAposDesconto = 0;
+
+  if (hasItemDiscounts) {
+    valorDesconto = order.items.reduce((acc, it) => {
+      const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
+      const d = it.valorDescontoItem !== undefined ? it.valorDescontoItem : (b * ((it.percentualDesconto || 0) / 100));
+      return acc + d;
+    }, 0);
+    subtotalAposDesconto = Math.max(0, totalBrutoCompra - valorDesconto);
+  } else if ((order.header?.percentualDescontoOff || 0) > 0) {
+    valorDesconto = (totalBrutoCompra * (order.header.percentualDescontoOff || 0)) / 100;
+    subtotalAposDesconto = Math.max(0, totalBrutoCompra - valorDesconto);
+  } else {
+    subtotalAposDesconto = totalBrutoCompra;
+  }
+
   const valorSt = (subtotalAposDesconto * (order.header.aliquotaSt || 0)) / 100;
   const totalCompraLiquido = subtotalAposDesconto + valorSt + (order.header.valorFreteGlobal || 0);
 
@@ -157,12 +180,17 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
 
     const qtdTotal = Number(novoItem.qtdTotalUnidades) || 100;
     const preco = Number(novoItem.precoUnitario) || 0;
+    const descPct = Number(novoItem.percentualDesconto) || 0;
+    const valorBruto = qtdTotal * preco;
+    const valorDesc = valorBruto * (descPct / 100);
+    const valorLiquido = valorBruto - valorDesc;
+    const precoEfetivo = preco * (1 - descPct / 100);
 
     if (editingItemId) {
       // Atualizar item existente
       const updatedItems = order.items.map(item => {
         if (item.id !== editingItemId) return item;
-        const fiscal = calculateItemFiscal(preco, 12.00, order.fiscalConfig);
+        const fiscal = calculateItemFiscal(precoEfetivo, 12.00, order.fiscalConfig);
         
         // Recalcular separação se não for manual
         let separacao = item.separacaoLojas;
@@ -180,7 +208,10 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
           fotoUrl: novoItem.fotoUrl || item.fotoUrl,
           qtdTotalUnidades: qtdTotal,
           precoUnitario: preco,
-          valorTotalBruto: qtdTotal * preco,
+          valorTotalBruto: valorBruto,
+          percentualDesconto: descPct,
+          valorDescontoItem: valorDesc,
+          valorTotalLiquido: valorLiquido,
           pdvAlvo: 12.00,
           despesasPdvUnit: fiscal.despesasPdvUnit,
           creditoIcmsUnit: fiscal.creditoIcmsUnit,
@@ -207,7 +238,10 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
         fotoUrl: novoItem.fotoUrl,
         qtdTotalUnidades: qtdTotal,
         precoUnitario: preco,
-        valorTotalBruto: qtdTotal * preco,
+        valorTotalBruto: valorBruto,
+        percentualDesconto: descPct,
+        valorDescontoItem: valorDesc,
+        valorTotalLiquido: valorLiquido,
         pdvAlvo: 12.00,
         despesasPdvUnit: fiscalNovo.despesasPdvUnit,
         creditoIcmsUnit: fiscalNovo.creditoIcmsUnit,
@@ -229,6 +263,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
       descricao: '',
       qtdTotalUnidades: 120,
       precoUnitario: 5.0,
+      percentualDesconto: 0,
       pdvAlvo: 12.0,
       fotoUrl: ''
     });
@@ -239,10 +274,12 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     setEditingItemId(item.id);
     setNovoItem({
       codigo: item.codigo,
+      codigoInterno: item.codigoInterno,
+      codigoFornecedor: item.codigoFornecedor,
       descricao: item.descricao,
-      qtdPorPacote: item.qtdPorPacote,
-      qtdPacotes: item.qtdPacotes,
+      qtdTotalUnidades: item.qtdTotalUnidades,
       precoUnitario: item.precoUnitario,
+      percentualDesconto: item.percentualDesconto || 0,
       pdvAlvo: item.pdvAlvo,
       fotoUrl: item.fotoUrl
     });
@@ -254,9 +291,9 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     setNovoItem({
       codigo: '',
       descricao: '',
-      qtdPorPacote: 12,
-      qtdPacotes: 10,
+      qtdTotalUnidades: 120,
       precoUnitario: 5.0,
+      percentualDesconto: 0,
       pdvAlvo: 12.0,
       fotoUrl: ''
     });
@@ -482,16 +519,11 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
                 />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-emerald-200">Desconto OFF (%)</label>
-                <input
-                  type="number"
-                  value={order.header.percentualDescontoOff || ''}
-                  onChange={(e) => onUpdateOrder({
-                    ...order,
-                    header: { ...order.header, percentualDescontoOff: Number(e.target.value) || 0 }
-                  })}
-                  className="w-full mt-1 p-2 bg-black/30 border border-white/20 rounded-xl text-white font-bold font-mono text-xs"
-                />
+                <label className="text-[10px] font-bold text-emerald-200">Desconto Comercial</label>
+                <div className="w-full mt-1 p-2 bg-black/30 border border-white/20 rounded-xl text-emerald-300 font-bold text-xs flex items-center justify-between">
+                  <span>Por Item</span>
+                  <span className="text-[10px] text-emerald-400">Ver itens ↓</span>
+                </div>
               </div>
             </div>
 
@@ -729,24 +761,34 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="font-bold text-slate-700 dark:text-slate-300">Preço Compra (R$)</label>
+              <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Compra (R$)</label>
               <input
                 type="number"
                 step="0.01"
                 value={novoItem.precoUnitario || ''}
                 onChange={(e) => setNovoItem(prev => ({ ...prev, precoUnitario: Number(e.target.value) }))}
-                className="w-full mt-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold text-emerald-600 dark:text-emerald-400"
+                className="w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400"
               />
             </div>
             <div>
-              <label className="font-bold text-slate-700 dark:text-slate-300">PDV Alvo (Fixo Mega 12)</label>
-              <div className="w-full mt-1 p-2.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 rounded-xl text-emerald-800 dark:text-emerald-300 font-mono font-black flex items-center justify-between shadow-2xs">
+              <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Desc. (%)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                placeholder="0"
+                value={novoItem.percentualDesconto || ''}
+                onChange={(e) => setNovoItem(prev => ({ ...prev, percentualDesconto: Number(e.target.value) || 0 }))}
+                className="w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded-xl text-emerald-700 dark:text-emerald-300 font-mono font-bold text-xs"
+              />
+            </div>
+            <div>
+              <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">PDV Alvo</label>
+              <div className="w-full mt-1 p-2 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 rounded-xl text-emerald-800 dark:text-emerald-300 font-mono font-black text-xs flex items-center justify-center shadow-2xs">
                 <span>R$ 12,00</span>
-                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200">
-                  Fixo
-                </span>
               </div>
             </div>
           </div>
@@ -865,7 +907,12 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
                 </div>
                 <div>
                   <div className="text-[9px] text-slate-400 uppercase font-sans">Preço Compra</div>
-                  <div className="font-bold text-emerald-600 dark:text-emerald-400">R$ {item.precoUnitario.toFixed(2)}</div>
+                  <div className="font-bold text-emerald-600 dark:text-emerald-400">
+                    R$ {item.precoUnitario.toFixed(2)}
+                    {(item.percentualDesconto || 0) > 0 && (
+                      <span className="text-[9px] block text-emerald-700 font-normal">(-{item.percentualDesconto}%)</span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <div className="text-[9px] text-slate-400 uppercase font-sans">PDV Alvo</div>
@@ -900,10 +947,15 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
                 </div>
 
                 <div className="text-right">
-                  <div className="text-[9px] text-slate-400 uppercase">Subtotal</div>
+                  <div className="text-[9px] text-slate-400 uppercase">Subtotal Líquido</div>
                   <div className="text-xs font-black font-mono text-slate-900 dark:text-white">
-                    R$ {item.valorTotalBruto.toFixed(2)}
+                    R$ {(item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto * (1 - (item.percentualDesconto || 0) / 100))).toFixed(2)}
                   </div>
+                  {(item.percentualDesconto || 0) > 0 && (
+                    <div className="text-[9px] line-through text-slate-400 font-mono">
+                      R$ {item.valorTotalBruto.toFixed(2)}
+                    </div>
+                  )}
                 </div>
               </div>
 

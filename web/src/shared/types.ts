@@ -10,6 +10,18 @@ export interface StoreConfig {
   active: boolean;
 }
 
+export interface SeparationPreset {
+  id: string;
+  name: string;
+  description?: string;
+  storeWeights: Record<string, number>; // { [storeId]: pesoOuPercentual }
+  storeWeightsJson?: string;
+  reserveStockPercent: number; // % retido no Estoque Central / CD (ex: 10)
+  isDefault?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface FiscalConfig {
   icmsAliquota: number;      // Padrão: 11%
   ipiAliquota: number;       // Padrão: 0%
@@ -107,9 +119,13 @@ export interface OrderItem {
   qtdPorPacote?: number;     // @deprecated — Mantido por retrocompatibilidade
   qtdPacotes?: number;       // @deprecated — Mantido por retrocompatibilidade
   qtdTotalUnidades: number;  // Quantidade total de unidades compradas (entrada principal)
-  precoUnitario: number;     // Preço de compra por unidade
+  precoUnitario: number;     // Preço de compra por unidade (tabela / bruto)
   valorTotalBruto: number;   // = qtdTotalUnidades × precoUnitario
   
+  // Desconto comercial por produto
+  percentualDesconto?: number; // % OFF negociado para este item (ex: 5%)
+  valorDescontoItem?: number;  // Valor em R$ do desconto total do item
+  valorTotalLiquido?: number;  // = valorTotalBruto - valorDescontoItem
   // Acréscimos rateados ou específicos
   freteUnitario?: number;
   stUnitario?: number;

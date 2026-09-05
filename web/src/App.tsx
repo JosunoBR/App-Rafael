@@ -68,7 +68,7 @@ import {
   OrderPipelineStepper 
 } from './components/OrderPipelineStepper';
 
-import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem } from './shared/types';
+import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem, SeparationPreset } from './shared/types';
 import { 
   getInitialFiscalConfig, 
   getInitialStoresConfig, 
@@ -92,6 +92,8 @@ import {
   saveCentralStock,
   updateStockBalance,
   createStockTransferOrder,
+  getInitialSeparationPresets,
+  saveSeparationPresetsList,
   saveSavedOrdersList
 } from './utils/storage';
 import { 
@@ -109,10 +111,14 @@ import {
   saveFiscalConfigToDb,
   fetchNextOrderNumberFromDb,
   fetchStoresFromDb,
+  saveStoresToDb,
   fetchStockFromDb,
   saveStockItemToDb,
   updateStockBalanceInDb,
-  deleteStockItemFromDb
+  deleteStockItemFromDb,
+  fetchSeparationPresetsFromDb,
+  saveSeparationPresetToDb,
+  deleteSeparationPresetFromDb
 } from './utils/api';
 import { exportOrderToExcel } from './utils/excelExporter';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
@@ -156,6 +162,7 @@ export function App() {
   const [products, setProducts] = useState<Product[]>(getProductsList);
   const [centralStock, setCentralStock] = useState<CentralStockItem[]>(() => loadCentralStock());
   const [savedOrders, setSavedOrders] = useState<PurchaseOrder[]>(loadSavedOrdersList);
+  const [separationPresets, setSeparationPresets] = useState<SeparationPreset[]>(getInitialSeparationPresets);
 
   // Active Purchase Order: carrega rascunho se existir ou inicia limpo
   const [order, setOrder] = useState<PurchaseOrder>(() => {
@@ -216,13 +223,14 @@ export function App() {
   useEffect(() => {
     async function loadFromSqlite() {
       try {
-        const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock] = await Promise.all([
+        const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock, dbPresets] = await Promise.all([
           fetchSuppliersFromDb().catch(() => null),
           fetchProductsFromDb().catch(() => null),
           fetchOrdersFromDb().catch(() => null),
           fetchFiscalConfigFromDb().catch(() => null),
           fetchStoresFromDb().catch(() => null),
-          fetchStockFromDb().catch(() => null)
+          fetchStockFromDb().catch(() => null),
+          fetchSeparationPresetsFromDb().catch(() => null)
         ]);
 
         if (dbSuppliers && dbSuppliers.length > 0) setSuppliers(dbSuppliers);
@@ -230,6 +238,10 @@ export function App() {
         if (dbStores && dbStores.length > 0) setStoreConfigs(dbStores);
         if (dbFiscal) setFiscalConfig(dbFiscal);
         if (dbStock && dbStock.length > 0) setCentralStock(dbStock);
+        if (dbPresets && dbPresets.length > 0) {
+          setSeparationPresets(dbPresets);
+          saveSeparationPresetsList(dbPresets);
+        }
 
         if (dbOrders && dbOrders.length > 0) {
           const currentFiscal = dbFiscal || getInitialFiscalConfig();
@@ -940,7 +952,10 @@ export function App() {
   // Global Settings Handlers
   const handleSaveGlobalSettings = async (newFiscal: FiscalConfig, newStores: StoreConfig[]) => {
     try {
-      await saveFiscalConfigToDb(newFiscal);
+      await Promise.all([
+        saveFiscalConfigToDb(newFiscal).catch(err => console.warn('Aviso fiscal DB:', err)),
+        saveStoresToDb(newStores).catch(err => console.warn('Aviso stores DB:', err))
+      ]);
       saveFiscalConfig(newFiscal);
       saveStoresConfig(newStores);
       setFiscalConfig(newFiscal);
@@ -949,7 +964,8 @@ export function App() {
       // Recalcular itens do pedido ativo com as novas taxas
       setOrder(prev => {
         const recalculatedItems = prev.items.map(item => {
-          const fiscalRes = calculateItemFiscal(item.precoUnitario, item.pdvAlvo, newFiscal, item.fiscalOverride);
+          const precoCompraEfetivo = item.precoUnitario * (1 - (item.percentualDesconto || 0) / 100);
+          const fiscalRes = calculateItemFiscal(precoCompraEfetivo, item.pdvAlvo, newFiscal, item.fiscalOverride);
           const sepRes = item.separacaoManual 
             ? { allocations: item.separacaoLojas || {} } 
             : calculateAutomaticSeparation(item.qtdTotalUnidades, newStores);
@@ -973,9 +989,52 @@ export function App() {
         };
       });
 
-      showToast('Configurações fiscais e lojas gravadas no SQLite!', 'success');
+      showToast('Configurações fiscais e matriz de lojas gravadas no SQLite!', 'success');
     } catch (err: any) {
       showToast(`Erro ao salvar: ${err.message}`, 'error');
+    }
+  };
+
+  // Handlers para Modelos / Saves de Separação
+  const handleSaveSeparationPreset = async (preset: SeparationPreset) => {
+    try {
+      const saved = await saveSeparationPresetToDb(preset);
+      setSeparationPresets(prev => {
+        const existingIdx = prev.findIndex(p => p.id === saved.id);
+        const updated = existingIdx >= 0
+          ? prev.map(p => p.id === saved.id ? saved : p)
+          : [...prev, saved];
+        saveSeparationPresetsList(updated);
+        return updated;
+      });
+      showToast(`⭐ Modelo "${saved.name}" salvo no SQLite!`, 'success');
+      return saved;
+    } catch (err: any) {
+      console.warn('Persistindo preset localmente:', err);
+      setSeparationPresets(prev => {
+        const existingIdx = prev.findIndex(p => p.id === preset.id);
+        const updated = existingIdx >= 0
+          ? prev.map(p => p.id === preset.id ? preset : p)
+          : [...prev, preset];
+        saveSeparationPresetsList(updated);
+        return updated;
+      });
+      showToast(`Modelo "${preset.name}" salvo localmente.`, 'info');
+      return preset;
+    }
+  };
+
+  const handleDeleteSeparationPreset = async (presetId: string) => {
+    try {
+      await deleteSeparationPresetFromDb(presetId);
+      setSeparationPresets(prev => {
+        const updated = prev.filter(p => p.id !== presetId);
+        saveSeparationPresetsList(updated);
+        return updated;
+      });
+      showToast('Modelo de separação removido com sucesso.', 'info');
+    } catch (err: any) {
+      showToast(`Erro ao remover modelo: ${err.message}`, 'error');
     }
   };
 
@@ -1266,6 +1325,7 @@ export function App() {
                   order={order}
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
                   stores={storeConfigs}
+                  presets={separationPresets}
                   currentUser={currentUser}
                   onExportPDF={handleExportSeparationPDF}
                   onExportExcel={handleExportExcel}
@@ -1277,6 +1337,8 @@ export function App() {
                   onFinalizeOrder={handleFinalizeSeparation}
                   onReleaseToSeparation={handleReleaseToSeparation}
                   onApproveOrder={handleApproveOrder}
+                  onSavePreset={handleSaveSeparationPreset}
+                  onDeletePreset={handleDeleteSeparationPreset}
                 />
               )}
 
@@ -1414,6 +1476,7 @@ export function App() {
       <SeparationMatrixModal
         item={selectedSeparationItem}
         stores={storeConfigs}
+        presets={separationPresets}
         isOpen={!!selectedSeparationItem}
         onClose={() => setSelectedSeparationItem(null)}
         onSaveSeparation={(itemId, allocations, isManual, qtdReservaEstoque) => {
@@ -1424,6 +1487,7 @@ export function App() {
           });
           showToast('Grade de separação e estoque central salvos!');
         }}
+        onSavePreset={handleSaveSeparationPreset}
       />
 
     </div>

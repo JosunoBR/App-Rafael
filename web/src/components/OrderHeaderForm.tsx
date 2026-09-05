@@ -753,27 +753,19 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </select>
                   </div>
 
-                  {/* Desconto OFF (%) */}
+                  {/* Desconto nos Produtos */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>3. Desconto (% OFF)</span>
-                      {header.percentualDescontoOff > 0 && (
-                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Ativo</span>
-                      )}
+                      <span>3. Desconto Comercial</span>
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">Por Item</span>
                     </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
-                        value={header.percentualDescontoOff}
-                        onChange={(e) => handleFieldChange('percentualDescontoOff', parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs pr-8"
-                        placeholder="0"
-                      />
-                      <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
-                        %
+                    <div 
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 font-medium flex items-center justify-between shadow-2xs"
+                      title="Os descontos comerciais são aplicados individualmente em cada produto na tabela de itens abaixo"
+                    >
+                      <span className="text-[11px] text-slate-600 dark:text-slate-400">Aplicado por produto</span>
+                      <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-900/50 px-1.5 py-0.5 rounded">
+                        Tabela ↓
                       </span>
                     </div>
                   </div>

@@ -29,6 +29,9 @@ export function createBlankOrderItem(fiscalConfig?: FiscalConfig, storeConfigs?:
     qtdTotalUnidades: 0,
     precoUnitario: 0,
     valorTotalBruto: 0,
+    percentualDesconto: 0,
+    valorDescontoItem: 0,
+    valorTotalLiquido: 0,
     pdvAlvo: 12.0
   };
 

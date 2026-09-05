@@ -33,7 +33,7 @@ class OrderRepository {
     let totalLiquido = 0;
     let totalPecas = 0;
     items.forEach(item => {
-      totalLiquido += (Number(item.valorTotalBruto || item.custoLiquidoTotalComDesconto || item.custoLiquidoTotal || 0));
+      totalLiquido += (Number(item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto || item.custoLiquidoTotalComDesconto || item.custoLiquidoTotal || 0)));
       totalPecas += (Number(item.qtdTotalUnidades || 0));
     });
 
@@ -116,10 +116,10 @@ class OrderRepository {
         await execute(`
           INSERT INTO order_items (
             id, orderId, codigoInterno, codigoFornecedor, codigo, descricao, fotoUrl,
-            qtdTotalUnidades, precoUnitario, valorTotalBruto, pdvAlvo, despesasPdvUnit,
-            creditoIcmsUnit, custoRealEfetivo, margemRealUnit, margemPercentual,
+            qtdTotalUnidades, precoUnitario, valorTotalBruto, percentualDesconto, valorDescontoItem, valorTotalLiquido,
+            pdvAlvo, despesasPdvUnit, creditoIcmsUnit, custoRealEfetivo, margemRealUnit, margemPercentual,
             qtdReservaEstoque, separacaoManual, separacaoLojasJson, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           itemId,
           order.header.id,
@@ -131,6 +131,9 @@ class OrderRepository {
           Number(item.qtdTotalUnidades) || 0,
           Number(item.precoUnitario) || 0,
           Number(item.valorTotalBruto) || 0,
+          Number(item.percentualDesconto) || 0,
+          Number(item.valorDescontoItem) || 0,
+          Number(item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : item.valorTotalBruto) || 0,
           Number(item.pdvAlvo) || 12.0,
           Number(item.despesasPdvUnit) || 0,
           Number(item.creditoIcmsUnit) || 0,
@@ -272,6 +275,9 @@ class OrderRepository {
           qtdTotalUnidades: it.qtdTotalUnidades,
           precoUnitario: it.precoUnitario,
           valorTotalBruto: it.valorTotalBruto,
+          percentualDesconto: it.percentualDesconto || 0,
+          valorDescontoItem: it.valorDescontoItem || 0,
+          valorTotalLiquido: it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : it.valorTotalBruto,
           pdvAlvo: it.pdvAlvo,
           despesasPdvUnit: it.despesasPdvUnit,
           creditoIcmsUnit: it.creditoIcmsUnit,

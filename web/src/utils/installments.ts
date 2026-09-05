@@ -31,9 +31,27 @@ export const PRAZO_OPTIONS = [
  */
 export function calculateOrderNetTotal(order: PurchaseOrder): number {
   if (!order) return 0;
-  const itemsBruto = (order.items || []).reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0);
-  const discountOff = (order.header?.percentualDescontoOff || 0) / 100;
-  const itemsComDesconto = itemsBruto * (1 - Math.max(0, Math.min(1, discountOff)));
+
+  // Verifica se há descontos aplicados por produto
+  const items = order.items || [];
+  const hasItemDiscounts = items.some(it => (it.percentualDesconto && it.percentualDesconto > 0) || (it.valorTotalLiquido !== undefined && it.valorTotalLiquido < (it.valorTotalBruto || 0)));
+
+  let itemsComDesconto = 0;
+  if (hasItemDiscounts) {
+    // Soma o valor líquido real de cada produto
+    itemsComDesconto = items.reduce((sum, it) => {
+      const liq = it.valorTotalLiquido !== undefined 
+        ? it.valorTotalLiquido 
+        : (it.valorTotalBruto || 0) * (1 - Math.max(0, Math.min(1, (it.percentualDesconto || 0) / 100)));
+      return sum + liq;
+    }, 0);
+  } else {
+    // Fallback para pedidos antigos com desconto global no cabeçalho
+    const itemsBruto = items.reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0);
+    const discountOff = (order.header?.percentualDescontoOff || 0) / 100;
+    itemsComDesconto = itemsBruto * (1 - Math.max(0, Math.min(1, discountOff)));
+  }
+
   const frete = Number(order.header?.valorFreteGlobal) || 0;
   const outras = Number(order.header?.valorOutrasDespesasGlobal) || 0;
   return Math.max(0, itemsComDesconto + frete + outras);

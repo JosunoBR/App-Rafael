@@ -36,5 +36,6 @@ local.properties
 .vscode/
 .idea/
 .DS_Store
-Thumbs.db
 .agents/
+App-Rafael/
+.artifacts/

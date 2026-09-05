@@ -47,14 +47,14 @@ class ExportService {
       item.precoUnitario || 0,
       item.valorTotalBruto || (item.qtdTotalUnidades * item.precoUnitario) || 0,
       item.valorStTotal || 0,
-      item.valorDescontoTotal || 0,
-      item.custoLiquidoTotalComDesconto || item.valorTotalBruto || 0,
+      item.valorDescontoItem || item.valorDescontoTotal || 0,
+      item.valorTotalLiquido || item.custoLiquidoTotalComDesconto || item.valorTotalBruto || 0,
       item.pdvAlvo || 12.0,
       `${Number(item.margemPercentual || 0).toFixed(1)}%`
     ]);
 
     const totalUnidades = (order.items || []).reduce((acc, i) => acc + (Number(i.qtdTotalUnidades) || 0), 0);
-    const totalLiquido = (order.items || []).reduce((acc, i) => acc + (Number(i.custoLiquidoTotalComDesconto || i.custoLiquidoTotal) || 0), 0);
+    const totalLiquido = (order.items || []).reduce((acc, i) => acc + (Number(i.valorTotalLiquido || i.custoLiquidoTotalComDesconto || i.custoLiquidoTotal || i.valorTotalBruto) || 0), 0);
 
     const footerSummary = [
       [],

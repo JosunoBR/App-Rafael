@@ -61,21 +61,38 @@ export function exportOrderToExcel(order: PurchaseOrder, fallbackStores?: StoreC
 
     const itemHeaders = [
       'Código', 'Descrição do Item', 'Quantidade (Unidades)',
-      'Preço Compra Unit (R$)', 'Valor Total Bruto (R$)', 'PDV Alvo (R$)'
+      'Preço Compra Bruto (R$)', 'Desc. (%)', 'Valor Total Líquido (R$)', 'PDV Alvo (R$)'
     ];
 
-    const itemRows = (order.items || []).map(item => [
-      item.codigo || '',
-      item.descricao || 'Produto',
-      Number(item.qtdTotalUnidades) || 0,
-      Number(item.precoUnitario) || 0,
-      Number(item.valorTotalBruto) || 0,
-      Number(item.pdvAlvo) || 0
-    ]);
+    const itemRows = (order.items || []).map(item => {
+      const pecas = Number(item.qtdTotalUnidades) || 0;
+      const preco = Number(item.precoUnitario) || 0;
+      const desc = Number(item.percentualDesconto) || 0;
+      const bruto = Number(item.valorTotalBruto) || (pecas * preco);
+      const descVal = item.valorDescontoItem !== undefined ? item.valorDescontoItem : (bruto * (desc / 100));
+      const liquido = item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (bruto - descVal);
 
-    const totalBruto = (order.items || []).reduce((acc, i) => acc + (Number(i.valorTotalBruto) || 0), 0);
+      return [
+        item.codigoInterno || item.codigo || '',
+        item.descricao || 'Produto',
+        pecas,
+        preco,
+        desc > 0 ? `${desc}%` : '0%',
+        liquido,
+        Number(item.pdvAlvo) || 12.0
+      ];
+    });
+
+    const totalLiquido = (order.items || []).reduce((acc, i) => {
+      const pecas = Number(i.qtdTotalUnidades) || 0;
+      const preco = Number(i.precoUnitario) || 0;
+      const bruto = Number(i.valorTotalBruto) || (pecas * preco);
+      const desc = Number(i.percentualDesconto) || 0;
+      const descVal = i.valorDescontoItem !== undefined ? i.valorDescontoItem : (bruto * (desc / 100));
+      return acc + (i.valorTotalLiquido !== undefined ? i.valorTotalLiquido : (bruto - descVal));
+    }, 0);
     const totalUnidades = (order.items || []).reduce((acc, i) => acc + (Number(i.qtdTotalUnidades) || 0), 0);
-    const totalRow = ['TOTAL GERAL', '', totalUnidades, '', totalBruto, ''];
+    const totalRow = ['TOTAL GERAL', '', totalUnidades, '', '', totalLiquido, ''];
 
     const wsBazar = XLSX.utils.aoa_to_sheet([...headerInfo, itemHeaders, ...itemRows, [], totalRow]);
     XLSX.utils.book_append_sheet(wb, wsBazar, 'MEGA 12 BAZAR');

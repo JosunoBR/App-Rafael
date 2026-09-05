@@ -11,31 +11,42 @@ import {
   Ban,
   Boxes,
   Plus,
-  Minus
+  Minus,
+  Bookmark,
+  BookmarkPlus
 } from 'lucide-react';
-import { OrderItem, StoreConfig } from '../shared/types';
-import { calculateAutomaticSeparation, validateSeparation } from '../shared/separationEngine';
+import { OrderItem, StoreConfig, SeparationPreset } from '../shared/types';
+import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations } from '../shared/separationEngine';
 
 interface SeparationMatrixModalProps {
   item: OrderItem | null;
   stores: StoreConfig[];
+  presets?: SeparationPreset[];
   isOpen: boolean;
   onClose: () => void;
   onSaveSeparation: (itemId: string, allocations: Record<string, number>, isManual: boolean, qtdReservaEstoque?: number) => void;
+  onSavePreset?: (preset: SeparationPreset) => Promise<any> | void;
 }
 
 export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   item,
   stores,
+  presets = [],
   isOpen,
   onClose,
-  onSaveSeparation
+  onSaveSeparation,
+  onSavePreset
 }) => {
   if (!isOpen || !item) return null;
 
   const [allocations, setAllocations] = useState<Record<string, number>>(item.separacaoLojas || {});
   const [isManual, setIsManual] = useState<boolean>(item.separacaoManual || false);
   const [reserveStock, setReserveStock] = useState<number>(item.qtdReservaEstoque || 0);
+
+  // Estados de Modelos/Presets de Separação
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+  const [isSavingPresetModal, setIsSavingPresetModal] = useState<boolean>(false);
+  const [newPresetName, setNewPresetName] = useState<string>('');
 
   // Inicializar caso vazio
   useEffect(() => {
@@ -97,6 +108,42 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
     setAllocations(emptyAllocations);
     setReserveStock(item.qtdTotalUnidades);
     setIsManual(true);
+  };
+
+  const handleSelectPreset = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    if (!presetId) return;
+    const targetPreset = presets.find(p => p.id === presetId);
+    if (targetPreset) {
+      const res = applySeparationPreset(item.qtdTotalUnidades, targetPreset, stores);
+      setAllocations(res.allocations);
+      setReserveStock(res.reserveStock);
+      setIsManual(true);
+    }
+  };
+
+  const handleSaveCurrentAsPreset = async () => {
+    if (!newPresetName.trim() || !onSavePreset) return;
+    const { storeWeights, reserveStockPercent } = extractPresetFromAllocations(
+      allocations,
+      item.qtdTotalUnidades,
+      reserveStock,
+      stores
+    );
+    const newPreset: SeparationPreset = {
+      id: 'preset_' + Date.now(),
+      name: newPresetName.trim(),
+      description: `Criado a partir de ${item.descricao}`,
+      storeWeights,
+      reserveStockPercent,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    await onSavePreset(newPreset);
+    setIsSavingPresetModal(false);
+    setNewPresetName('');
+    setSelectedPresetId(newPreset.id);
   };
 
   const handleSave = () => {
@@ -161,7 +208,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                 Guardar no Estoque Central (CD / Matriz)
               </span>
               <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                Padrão 10% retido no CD em caixas fechadas
+                Padrão 10% retido no Estoque Central (CD) em unidades
               </span>
             </div>
           </div>
@@ -198,6 +245,43 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Bloco de Modelos de Separação (Saves) */}
+        <div className="px-6 py-2.5 bg-indigo-50/70 dark:bg-indigo-950/40 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Bookmark className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              Modelo de Separação (Save):
+            </span>
+            <select
+              value={selectedPresetId}
+              onChange={(e) => handleSelectPreset(e.target.value)}
+              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 outline-hidden focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">-- Escolher Modelo Salvo --</option>
+              {presets.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} {p.isDefault ? '(Padrão Rede)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {onSavePreset && (
+            <button
+              type="button"
+              onClick={() => {
+                setNewPresetName(`Modelo ${item.descricao.split(' ')[0]}`);
+                setIsSavingPresetModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/60 dark:hover:bg-indigo-900 transition cursor-pointer"
+              title="Salvar esta distribuição atual como um novo padrão reutilizável"
+            >
+              <BookmarkPlus className="w-3.5 h-3.5" />
+              <span>Salvar Distribuição como Novo Modelo...</span>
+            </button>
+          )}
         </div>
 
         {/* Live Validation Bar */}
@@ -517,6 +601,64 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
         </div>
 
       </div>
+
+      {/* Submodal: Salvar Distribuição como Novo Modelo */}
+      {isSavingPresetModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BookmarkPlus className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Salvar como Novo Modelo de Separação
+                </h4>
+              </div>
+              <button
+                onClick={() => setIsSavingPresetModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              As proporções de rateio das lojas e o percentual de retenção no Estoque Central (CD) deste produto serão guardados no banco SQLite para aplicação rápida em qualquer produto.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Nome do Modelo (ex: Alimentos, Bazar, Bebidas)
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={newPresetName}
+                onChange={(e) => setNewPresetName(e.target.value)}
+                placeholder="Ex: Alimentos"
+                className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsSavingPresetModal(false)}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCurrentAsPreset}
+                disabled={!newPresetName.trim()}
+                className="px-4 py-1.5 text-xs font-bold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition"
+              >
+                Salvar Modelo no Banco
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

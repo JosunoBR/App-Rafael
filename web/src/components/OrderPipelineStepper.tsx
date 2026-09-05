@@ -175,7 +175,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
                   title="Abrir a matriz de distribuição das 20 lojas para ajustar rateio ou reserva"
                 >
                   <Boxes className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Revisar Rateio (20 Lojas)</span>
+                  <span>Revisar Rateio</span>
                 </button>
               )}
               {onReleaseToSeparation && (

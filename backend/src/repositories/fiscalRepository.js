@@ -35,6 +35,24 @@ class FiscalRepository {
   async getStores() {
     return await queryAll("SELECT * FROM stores WHERE active = 1 ORDER BY cluster ASC, name ASC");
   }
+
+  async updateStores(stores) {
+    const now = new Date().toISOString();
+    for (const store of stores) {
+      await execute(`
+        UPDATE stores SET
+          name = ?, cluster = ?, defaultWeight = ?, active = ?
+        WHERE id = ?
+      `, [
+        store.name,
+        store.cluster,
+        Number(store.defaultWeight) || 0,
+        store.active ? 1 : 0,
+        store.id
+      ]);
+    }
+    return await this.getStores();
+  }
 }
 
 module.exports = new FiscalRepository();

@@ -26,7 +26,8 @@ import {
   Link as LinkIcon,
   UploadCloud,
   CheckCircle2,
-  Trash
+  Trash,
+  Percent
 } from 'lucide-react';
 import { OrderItem, FiscalConfig, StoreConfig, Product } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
@@ -109,6 +110,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
   const quickSearchInputRef = useRef<HTMLInputElement>(null);
 
+  // Estado do modal/popover de aplicação de desconto em lote
+  const [isBatchDiscountModalOpen, setIsBatchDiscountModalOpen] = useState(false);
+  const [batchDiscountValue, setBatchDiscountValue] = useState<number>(0);
+
   const fileInputRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const activeInputRef = useRef<HTMLInputElement | null>(null);
   const autocompletePortalRef = useRef<HTMLDivElement | null>(null);
@@ -187,6 +192,12 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const handleSelectProductForNewItem = (prod: Product) => {
     const codInterno = prod.codigoInterno || prod.codigo || '';
     const codFornecedor = prod.codigoFornecedor || '';
+    const preco = prod.precoUnitarioPadrao || 0;
+    const qtdTotal = 100;
+    const totalBruto = qtdTotal * preco;
+    const descPct = 0;
+    const valorDesc = 0;
+    const valorLiquido = totalBruto;
 
     const defaultItem: OrderItem = {
       id: 'item_' + Date.now(),
@@ -195,13 +206,16 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       codigo: codInterno,
       descricao: prod.descricao,
       fotoUrl: prod.fotoUrl || '',
-      qtdTotalUnidades: 100,
-      precoUnitario: prod.precoUnitarioPadrao || 0,
-      valorTotalBruto: 100 * (prod.precoUnitarioPadrao || 0),
+      qtdTotalUnidades: qtdTotal,
+      precoUnitario: preco,
+      valorTotalBruto: totalBruto,
+      percentualDesconto: descPct,
+      valorDescontoItem: valorDesc,
+      valorTotalLiquido: valorLiquido,
       pdvAlvo: 12.00
     };
 
-    const fiscal = calculateItemFiscal(defaultItem.precoUnitario, 12.00, globalFiscal);
+    const fiscal = calculateItemFiscal(preco, 12.00, globalFiscal);
     const separation = calculateAutomaticSeparation(defaultItem.qtdTotalUnidades, stores);
 
     const fullItem: OrderItem = {
@@ -228,9 +242,13 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const preco = prod.precoUnitarioPadrao || item.precoUnitario || 0;
     const pdv = 12.00;
     const qtdTotal = item.qtdTotalUnidades || 100;
+    const descPct = item.percentualDesconto || 0;
     const totalBruto = qtdTotal * preco;
+    const valorDesc = totalBruto * (descPct / 100);
+    const totalLiquido = totalBruto - valorDesc;
+    const precoEfetivo = preco * (1 - descPct / 100);
 
-    const fiscal = calculateItemFiscal(preco, pdv, globalFiscal, item.fiscalOverride);
+    const fiscal = calculateItemFiscal(precoEfetivo, pdv, globalFiscal, item.fiscalOverride);
     const separation = !item.separacaoManual 
       ? calculateAutomaticSeparation(qtdTotal, stores, item.qtdReservaEstoque || 0)
       : null;
@@ -245,6 +263,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       qtdTotalUnidades: qtdTotal,
       precoUnitario: preco,
       valorTotalBruto: totalBruto,
+      percentualDesconto: descPct,
+      valorDescontoItem: valorDesc,
+      valorTotalLiquido: totalLiquido,
       pdvAlvo: pdv,
       despesasPdvUnit: fiscal.despesasPdvUnit,
       creditoIcmsUnit: fiscal.creditoIcmsUnit,
@@ -391,33 +412,38 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
   const handleFieldChange = (item: OrderItem, field: keyof OrderItem, rawValue: any) => {
     let value = rawValue;
-    if (['qtdTotalUnidades', 'precoUnitario', 'pdvAlvo'].includes(field as string)) {
+    if (['qtdTotalUnidades', 'precoUnitario', 'percentualDesconto', 'pdvAlvo'].includes(field as string)) {
       value = parseFloat(rawValue) || 0;
-    }
-
-    const updatedItem = { ...item, [field]: value };
-
-    // Auto-cálculo do valor total bruto
-    if (field === 'qtdTotalUnidades') {
-      updatedItem.valorTotalBruto = Number(value) * item.precoUnitario;
-
-      // Se a separação não for manual, recalcula o rateio automático das 20 lojas
-      if (!updatedItem.separacaoManual) {
-        const autoSep = calculateAutomaticSeparation(Number(value), stores, updatedItem.qtdReservaEstoque || 0);
-        updatedItem.separacaoLojas = autoSep.allocations;
-        updatedItem.qtdReservaEstoque = autoSep.reserveStock;
+      if (field === 'percentualDesconto') {
+        value = Math.max(0, Math.min(100, value));
       }
     }
 
-    // Auto-cálculo de preço e valor total: J = H * I
-    if (field === 'precoUnitario') {
-      updatedItem.valorTotalBruto = updatedItem.qtdTotalUnidades * Number(value);
+    const updatedItem = { ...item, [field]: value };
+    const qtd = field === 'qtdTotalUnidades' ? Number(value) : (updatedItem.qtdTotalUnidades || 0);
+    const precoBruto = field === 'precoUnitario' ? Number(value) : (updatedItem.precoUnitario || 0);
+    const descPct = field === 'percentualDesconto' ? Number(value) : (updatedItem.percentualDesconto || 0);
+
+    const valorBruto = qtd * precoBruto;
+    const valorDesc = valorBruto * (descPct / 100);
+    const valorLiquido = valorBruto - valorDesc;
+
+    updatedItem.valorTotalBruto = valorBruto;
+    updatedItem.percentualDesconto = descPct;
+    updatedItem.valorDescontoItem = valorDesc;
+    updatedItem.valorTotalLiquido = valorLiquido;
+
+    // Se a separação não for manual, recalcula o rateio automático das 20 lojas
+    if (field === 'qtdTotalUnidades' && !updatedItem.separacaoManual) {
+      const autoSep = calculateAutomaticSeparation(Number(value), stores, updatedItem.qtdReservaEstoque || 0);
+      updatedItem.separacaoLojas = autoSep.allocations;
+      updatedItem.qtdReservaEstoque = autoSep.reserveStock;
     }
 
-    // Auto-cálculo do limite de preço e custo real efetivo com PDV travado em R$ 12,00
-    const preco = field === 'precoUnitario' ? Number(value) : updatedItem.precoUnitario;
+    // Auto-cálculo do limite de preço e custo real efetivo com preço efetivo com desconto
+    const precoCompraEfetivo = precoBruto * (1 - descPct / 100);
     const pdv = 12.00;
-    const fiscal = calculateItemFiscal(preco, pdv, globalFiscal, updatedItem.fiscalOverride);
+    const fiscal = calculateItemFiscal(precoCompraEfetivo, pdv, globalFiscal, updatedItem.fiscalOverride);
 
     updatedItem.pdvAlvo = 12.00;
     updatedItem.despesasPdvUnit = fiscal.despesasPdvUnit;
@@ -439,7 +465,53 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     onUpdateItem(item.id, updatedItem);
   };
 
+  // Aplicação rápida de desconto em massa a todos os produtos do pedido
+  const handleApplyDiscountToAll = (percent: number) => {
+    const cleanPct = Math.max(0, Math.min(100, percent));
+    items.forEach(it => {
+      if (isOrderItemBlank(it)) return;
+      const qtd = it.qtdTotalUnidades || 0;
+      const preco = it.precoUnitario || 0;
+      const valorBruto = qtd * preco;
+      const valorDesc = valorBruto * (cleanPct / 100);
+      const valorLiquido = valorBruto - valorDesc;
+      const precoEfetivo = preco * (1 - cleanPct / 100);
+      const fiscal = calculateItemFiscal(precoEfetivo, 12.00, globalFiscal, it.fiscalOverride);
+
+      onUpdateItem(it.id, {
+        ...it,
+        percentualDesconto: cleanPct,
+        valorDescontoItem: valorDesc,
+        valorTotalLiquido: valorLiquido,
+        despesasPdvUnit: fiscal.despesasPdvUnit,
+        creditoIcmsUnit: fiscal.creditoIcmsUnit,
+        custoRealEfetivo: fiscal.custoRealEfetivo,
+        margemRealUnit: fiscal.margemRealUnit,
+        margemPercentual: fiscal.margemPercentual
+      });
+    });
+    setIsBatchDiscountModalOpen(false);
+  };
+
   const validItemsCount = useMemo(() => items.filter(it => !isOrderItemBlank(it)).length, [items]);
+
+  const totals = useMemo(() => {
+    let bruto = 0;
+    let desconto = 0;
+    let liquido = 0;
+    let pecas = 0;
+    items.forEach(it => {
+      if (isOrderItemBlank(it)) return;
+      const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
+      const d = it.valorDescontoItem !== undefined ? it.valorDescontoItem : (b * ((it.percentualDesconto || 0) / 100));
+      const l = it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : (b - d);
+      bruto += b;
+      desconto += d;
+      liquido += l;
+      pecas += (it.qtdTotalUnidades || 0);
+    });
+    return { bruto, desconto, liquido, pecas };
+  }, [items]);
 
   return (
     <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-visible">
@@ -545,6 +617,21 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             </button>
           )}
 
+          {validItemsCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setBatchDiscountValue(0);
+                setIsBatchDiscountModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition cursor-pointer shadow-2xs"
+              title="Aplicar um percentual de desconto a todos os produtos deste pedido"
+            >
+              <Percent className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Desconto em Massa</span>
+            </button>
+          )}
+
           {onLoadMockOrder && (
             <button
               onClick={onLoadMockOrder}
@@ -560,26 +647,28 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       {/* Table responsive container */}
       <div className="overflow-x-auto overflow-y-visible">
-        <table className="w-full text-left border-collapse min-w-[1060px]">
+        <table className="w-full text-left border-collapse min-w-[1080px]">
           <thead>
             <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100/50 dark:bg-slate-900/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               <th className="py-3 px-2 w-8 text-center">#</th>
               <th className="py-3 px-2 w-14 text-center">Foto</th>
               <th className="py-3 px-2 w-28">Cód. Interno</th>
               <th className="py-3 px-2 w-28">Cód. Fornecedor</th>
-              <th className="py-3 px-3 min-w-[240px]">Descrição do Item (Filtro Inteligente)</th>
+              <th className="py-3 px-3 min-w-[220px]">Descrição do Item (Filtro Inteligente)</th>
               <th className="py-3 px-3 w-24 text-center" title="Quantidade Total de Unidades">Qtd (un)</th>
-              <th className="py-3 px-3 w-28 text-right" title="Preço Unitário Compra">Compra (R$)</th>
-              <th className="py-3 px-3 w-28 text-right" title="Total Compra (J = H * I)">Total (R$)</th>
+              <th className="py-3 px-3 w-28 text-right" title="Preço Unitário de Tabela / Compra Bruta">Compra Bruta</th>
+              <th className="py-3 px-2 w-20 text-center" title="Desconto Comercial Negociado neste Produto (% OFF)">Desc. (%)</th>
+              <th className="py-3 px-3 w-32 text-right" title="Valor Total Líquido do Item com Desconto">Total Líquido</th>
               <th className="py-3 px-3 w-28 text-center" title="Preço de Venda Único Rede Mega 12 (Travado em R$ 12,00)">PDV (R$ 12 Fixo)</th>
-              <th className="py-3 px-3 w-28 text-right" title="Custo Real Efetivo (Compra + 40% PDV - 19.5% ICMS)">Custo Real</th>
-              <th className="py-3 px-3 w-32 text-center" title="Margem de Lucro Real">Margem</th>
+              <th className="py-3 px-3 w-28 text-right" title="Custo Real Efetivo (Compra Efetiva + 40% PDV - 19.5% ICMS)">Custo Real</th>
+              <th className="py-3 px-3 w-32 text-center" title="Margem de Lucro Real com Desconto">Margem</th>
               <th className="py-3 px-3 w-28 text-center">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200/70 dark:divide-slate-700/60 text-xs">
             {items.map((item, index) => {
-              const fiscal = calculateItemFiscal(item.precoUnitario, item.pdvAlvo, globalFiscal, item.fiscalOverride);
+              const precoCompraEfetivo = item.precoUnitario * (1 - (item.percentualDesconto || 0) / 100);
+              const fiscal = calculateItemFiscal(precoCompraEfetivo, item.pdvAlvo, globalFiscal, item.fiscalOverride);
               const isLucrativo = fiscal.isLucrativo;
               const isItemRowActive = activeAutocompleteItemId === item.id;
 
@@ -710,7 +799,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     />
                   </td>
 
-                  {/* Preço Unitário Compra (I) */}
+                  {/* Preço Unitário Compra Bruta */}
                   <td className="py-2 px-2 text-right">
                     <div className="relative">
                       <input
@@ -725,9 +814,53 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Total Compra (J = H * I) */}
-                  <td className="py-2.5 px-3 text-right font-bold text-slate-900 dark:text-white font-mono">
-                    R$ {item.valorTotalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {/* Desconto Comercial (% OFF) por Produto */}
+                  <td className="py-2 px-1.5 text-center">
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        value={(item.percentualDesconto === 0 || item.percentualDesconto === undefined) ? '' : item.percentualDesconto}
+                        placeholder="0"
+                        onChange={(e) => handleFieldChange(item, 'percentualDesconto', e.target.value)}
+                        className={`w-full text-center pr-4 pl-1 py-1.5 rounded-lg border font-mono font-bold text-xs outline-hidden focus:ring-2 focus:ring-emerald-500 transition-colors ${
+                          (item.percentualDesconto || 0) > 0
+                            ? 'border-emerald-500 bg-emerald-50/90 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
+                        }`}
+                        title={
+                          (item.percentualDesconto || 0) > 0
+                            ? `Desconto de ${item.percentualDesconto}% aplicado neste produto (-R$ ${((item.valorTotalBruto || 0) * ((item.percentualDesconto || 0) / 100)).toFixed(2)})`
+                            : 'Informe o % de desconto deste produto'
+                        }
+                      />
+                      <span className="absolute right-1 text-[10px] font-bold text-slate-400 pointer-events-none">
+                        %
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Total Compra Líquido do Produto */}
+                  <td className="py-2.5 px-3 text-right font-mono">
+                    <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                      R$ {(item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto * (1 - (item.percentualDesconto || 0) / 100))).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    {(item.percentualDesconto || 0) > 0 ? (
+                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center justify-end gap-1">
+                        <span className="line-through text-slate-400 text-[9px]">
+                          R$ {item.valorTotalBruto.toFixed(2)}
+                        </span>
+                        <span>
+                          (R$ {(item.precoUnitario * (1 - (item.percentualDesconto || 0) / 100)).toFixed(2)} un)
+                        </span>
+                      </div>
+                    ) : item.precoUnitario > 0 && item.qtdTotalUnidades > 0 ? (
+                      <div className="text-[10px] text-slate-400">
+                        R$ {item.precoUnitario.toFixed(2)} un
+                      </div>
+                    ) : null}
                   </td>
 
                   {/* PDV Alvo - Fixo R$ 12,00 */}
@@ -819,16 +952,29 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         </table>
       </div>
 
-      {/* Footer bar com atalhos */}
+      {/* Footer bar com atalhos e totais dos produtos */}
       <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200/70 dark:border-slate-700/70 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-            💡 Digite na linha em branco para incluir produtos continuamente
+            💡 Digite na linha em branco para incluir produtos continuamente • Descontos aplicados individualmente por item
           </span>
         </div>
 
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          Total de Itens: <strong className="text-slate-900 dark:text-white font-mono">{validItemsCount}</strong>
+        <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+          <div className="text-slate-500 dark:text-slate-400">
+            Itens: <strong className="text-slate-900 dark:text-white font-bold">{validItemsCount}</strong> ({totals.pecas.toLocaleString('pt-BR')} un)
+          </div>
+          <div className="text-slate-500 dark:text-slate-400">
+            Bruto: <strong className="text-slate-700 dark:text-slate-300 font-bold">R$ {totals.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          </div>
+          {totals.desconto > 0 && (
+            <div className="text-emerald-600 dark:text-emerald-400 font-bold">
+              Desc. Itens: -R$ {totals.desconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          )}
+          <div className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+            Total Líquido: R$ {totals.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
         </div>
       </div>
 
@@ -1248,6 +1394,108 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Modal de Desconto em Massa para todos os produtos */}
+      {isBatchDiscountModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+                  <Percent className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Aplicar Desconto em Massa
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Definir desconto comercial em todos os {validItemsCount} produtos
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBatchDiscountModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Percentual de Desconto (% OFF)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={batchDiscountValue === 0 ? '' : batchDiscountValue}
+                    placeholder="0.0"
+                    autoFocus
+                    onChange={(e) => setBatchDiscountValue(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold text-lg focus:ring-2 focus:ring-emerald-500 outline-hidden pr-8 text-center"
+                  />
+                  <span className="absolute right-3 top-3 text-sm font-bold text-slate-400 pointer-events-none">
+                    %
+                  </span>
+                </div>
+              </div>
+
+              {/* Atalhos rápidos de percentuais comuns */}
+              <div className="flex items-center gap-1.5 justify-center flex-wrap">
+                {[3, 5, 7, 10, 15].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setBatchDiscountValue(pct)}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
+                      batchDiscountValue === pct
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setBatchDiscountValue(0)}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition cursor-pointer"
+                  title="Zerar desconto de todos os produtos"
+                >
+                  Zerar (0%)
+                </button>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                💡 Este percentual será aplicado individualmente na coluna <strong>Desc. (%)</strong> de cada produto do pedido. Você poderá ajustar itens específicos depois, se necessário.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBatchDiscountModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyDiscountToAll(batchDiscountValue)}
+                  className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Aplicar aos Produtos</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

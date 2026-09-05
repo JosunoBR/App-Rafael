@@ -27,6 +27,15 @@ class ConfigController {
       next(err);
     }
   }
+
+  async saveStores(req, res, next) {
+    try {
+      const saved = await fiscalRepository.updateStores(req.body);
+      return res.json(saved);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new ConfigController();

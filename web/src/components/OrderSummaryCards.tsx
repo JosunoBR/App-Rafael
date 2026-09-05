@@ -16,11 +16,27 @@ interface OrderSummaryCardsProps {
 
 export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) => {
   const totalUnidades = order.items.reduce((acc, i) => acc + (i.qtdTotalUnidades || 0), 0);
-  const totalBrutoCompra = order.items.reduce((acc, i) => acc + (i.valorTotalBruto || 0), 0);
+  const totalBrutoCompra = order.items.reduce((acc, i) => acc + (i.valorTotalBruto || (i.qtdTotalUnidades * i.precoUnitario) || 0), 0);
   
-  // Desconto negociado %
-  const valorDesconto = (totalBrutoCompra * (order.header.percentualDescontoOff || 0)) / 100;
-  const subtotalAposDesconto = totalBrutoCompra - valorDesconto;
+  // Desconto calculado por cada produto individualmente
+  const hasItemDiscounts = order.items.some(it => (it.percentualDesconto && it.percentualDesconto > 0) || (it.valorTotalLiquido !== undefined && it.valorTotalLiquido < (it.valorTotalBruto || 0)));
+
+  let valorDesconto = 0;
+  let subtotalAposDesconto = 0;
+
+  if (hasItemDiscounts) {
+    valorDesconto = order.items.reduce((acc, it) => {
+      const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
+      const d = it.valorDescontoItem !== undefined ? it.valorDescontoItem : (b * ((it.percentualDesconto || 0) / 100));
+      return acc + d;
+    }, 0);
+    subtotalAposDesconto = Math.max(0, totalBrutoCompra - valorDesconto);
+  } else if ((order.header?.percentualDescontoOff || 0) > 0) {
+    valorDesconto = (totalBrutoCompra * (order.header.percentualDescontoOff || 0)) / 100;
+    subtotalAposDesconto = Math.max(0, totalBrutoCompra - valorDesconto);
+  } else {
+    subtotalAposDesconto = totalBrutoCompra;
+  }
 
   // ST do Fornecedor
   const aliquotaSt = order.header.aliquotaSt || 0;
@@ -62,9 +78,9 @@ export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) =
           {totalCompraLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
         <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium flex flex-col gap-0.5 mt-0.5 truncate">
-          {order.header.percentualDescontoOff > 0 && (
-            <span className="text-emerald-600 dark:text-emerald-400">
-              -{order.header.percentualDescontoOff}% OFF (-R$ {valorDesconto.toFixed(2)})
+          {valorDesconto > 0 && (
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+              -R$ {valorDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Itens)
             </span>
           )}
           {aliquotaSt > 0 && (

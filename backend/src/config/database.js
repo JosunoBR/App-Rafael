@@ -123,6 +123,9 @@ async function getDatabase() {
       qtdTotalUnidades INTEGER NOT NULL DEFAULT 0,
       precoUnitario REAL NOT NULL DEFAULT 0,
       valorTotalBruto REAL NOT NULL DEFAULT 0,
+      percentualDesconto REAL DEFAULT 0,
+      valorDescontoItem REAL DEFAULT 0,
+      valorTotalLiquido REAL DEFAULT 0,
       pdvAlvo REAL NOT NULL DEFAULT 12.0,
       despesasPdvUnit REAL DEFAULT 0,
       creditoIcmsUnit REAL DEFAULT 0,
@@ -222,6 +225,17 @@ async function getDatabase() {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS separation_presets (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      storeWeightsJson TEXT NOT NULL,
+      reserveStockPercent REAL NOT NULL DEFAULT 10,
+      isDefault INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
   `);
 
   // Migrações automáticas de colunas
@@ -289,6 +303,22 @@ async function getDatabase() {
         }
       });
     }
+
+    const orderItemsTableInfo = dbInstance.exec("PRAGMA table_info(order_items)");
+    if (orderItemsTableInfo[0]) {
+      const colNames = orderItemsTableInfo[0].values.map(v => v[1]);
+      const requiredItemCols = {
+        percentualDesconto: "REAL DEFAULT 0",
+        valorDescontoItem: "REAL DEFAULT 0",
+        valorTotalLiquido: "REAL DEFAULT 0"
+      };
+
+      Object.entries(requiredItemCols).forEach(([col, def]) => {
+        if (!colNames.includes(col)) {
+          try { dbInstance.run(`ALTER TABLE order_items ADD COLUMN ${col} ${def}`); } catch (e) {}
+        }
+      });
+    }
   } catch (err) {
     console.error('Aviso na verificação de migrações:', err.message);
   }
@@ -320,6 +350,34 @@ async function getDatabase() {
     dbInstance.run("UPDATE products SET pdvSugerido = 12.0;");
   } catch (e) {
     console.error('Aviso na sincronização de PDV para R$ 12,00:', e.message);
+  }
+
+  // Seed do modelo de separação padrão da Rede Mega 12 se a tabela estiver vazia
+  try {
+    const presetCheck = dbInstance.exec("SELECT COUNT(*) as count FROM separation_presets");
+    if (presetCheck[0] && presetCheck[0].values[0][0] === 0) {
+      const { DEFAULT_STORES } = require('./seedData');
+      const storeWeights = {};
+      DEFAULT_STORES.forEach(s => {
+        storeWeights[s.id] = s.defaultWeight;
+      });
+      const now = new Date().toISOString();
+      dbInstance.run(`
+        INSERT INTO separation_presets (id, name, description, storeWeightsJson, reserveStockPercent, isDefault, createdAt, updatedAt)
+        VALUES (
+          'preset_default_clusters',
+          'Padrão Rede (Clusters A, B e C)',
+          'Distribuição oficial da Rede Mega 12 (10% CD • Cluster A 51.3% • Cluster B 33.3% • Cluster C 15.4%)',
+          ?,
+          10,
+          1,
+          '${now}',
+          '${now}'
+        )
+      `, [JSON.stringify(storeWeights)]);
+    }
+  } catch (presetErr) {
+    console.warn('Aviso no seeding de separation_presets:', presetErr.message);
   }
 
   saveDatabaseToDisk();

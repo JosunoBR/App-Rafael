@@ -57,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canAccessSeparationHistory = true; // Todos podem ver romaneios
   const canAccessProducts = userRole === 'diretoria' || userRole === 'deposito';
   const canAccessSuppliers = userRole === 'diretoria';
-  const canAccessFiscal = userRole === 'diretoria';
+  const canAccessFiscal = userRole === 'diretoria' || userRole === 'deposito';
   const canAccessUsers = userRole === 'diretoria';
 
   const getRoleLabel = (role: UserRole) => {

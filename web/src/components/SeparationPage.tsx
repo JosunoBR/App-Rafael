@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, 
-  FileSpreadsheet, 
   CheckCircle2, 
   AlertTriangle, 
   Sparkles, 
@@ -21,10 +20,14 @@ import {
   Boxes,
   Image as ImageIcon,
   Eye,
-  X
+  X,
+  Bookmark,
+  BookmarkPlus,
+  Layers,
+  ChevronDown
 } from 'lucide-react';
-import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User } from '../shared/types';
-import { calculateAutomaticSeparation, validateSeparation } from '../shared/separationEngine';
+import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User, SeparationPreset } from '../shared/types';
+import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations } from '../shared/separationEngine';
 import { SeparationMatrixModal } from './SeparationMatrixModal';
 import { OrderPipelineStepper } from './OrderPipelineStepper';
 
@@ -32,10 +35,11 @@ interface SeparationPageProps {
   order: PurchaseOrder;
   orders?: PurchaseOrder[];
   stores: StoreConfig[];
+  presets?: SeparationPreset[];
   currentUser?: User | null;
   onExportPDF: () => void;
-  onExportExcel: () => void;
-  onLoadMockOrder: () => void;
+  onExportExcel?: () => void;
+  onLoadMockOrder?: () => void;
   onNavigateToOrders: () => void;
   onNavigateToHistory?: () => void;
   onChangeOrder?: (updatedOrder: PurchaseOrder) => void;
@@ -43,6 +47,8 @@ interface SeparationPageProps {
   onFinalizeOrder?: (order: PurchaseOrder) => void;
   onReleaseToSeparation?: (order: PurchaseOrder) => void;
   onApproveOrder?: (order: PurchaseOrder) => void;
+  onSavePreset?: (preset: SeparationPreset) => Promise<any> | void;
+  onDeletePreset?: (id: string) => Promise<any> | void;
 }
 
 // Função para converter qualquer unidade de medida em unidades reais de peças
@@ -78,12 +84,144 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   onSelectOrder,
   onFinalizeOrder,
   onReleaseToSeparation,
-  onApproveOrder
+  onApproveOrder,
+  presets = [],
+  onSavePreset,
+  onDeletePreset
 }) => {
   const activeStores = stores.filter(s => s.active);
 
-  // Filtrar pedidos que estão com status Em Separação ou Aprovados para conferência
-  const pendingSeparationOrders = orders.filter(o => o.header.status === 'Em Separação' || o.header.status === 'Aprovado');
+  // Estados de Modelos / Presets de Separação (Saves)
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(() => presets[0]?.id || 'preset_default_clusters');
+  const [presetInputValue, setPresetInputValue] = useState<string>(() => presets[0]?.name || 'Padrão Rede (Clusters A, B e C)');
+  const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState<boolean>(false);
+  const [actionFeedback, setActionFeedback] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  const showFeedback = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setActionFeedback({ text, type });
+    setTimeout(() => setActionFeedback(null), 4000);
+  };
+
+  // Sincronizar preset selecionado se lista mudar
+  useEffect(() => {
+    if (presets.length > 0) {
+      const current = presets.find(p => p.id === selectedPresetId);
+      if (current) {
+        setPresetInputValue(current.name);
+      } else {
+        setSelectedPresetId(presets[0].id);
+        setPresetInputValue(presets[0].name);
+      }
+    }
+  }, [presets]);
+
+  // Aplicar Preset em Todos os Itens do Pedido
+  const handleApplyPresetToAll = (presetId?: string) => {
+    const pId = presetId || selectedPresetId;
+    const targetPreset = presets.find(p => p.id === pId) || presets[0];
+    if (!targetPreset || !onChangeOrder) return;
+
+    const updatedItems = order.items.map(it => {
+      const res = applySeparationPreset(it.qtdTotalUnidades, targetPreset, stores);
+      return {
+        ...it,
+        separacaoLojas: res.allocations,
+        qtdReservaEstoque: res.reserveStock,
+        separacaoManual: true
+      };
+    });
+
+    onChangeOrder({
+      ...order,
+      items: updatedItems
+    });
+
+    showFeedback(`Padrão "${targetPreset.name}" aplicado a todos os ${updatedItems.length} produtos!`, 'success');
+  };
+
+  // Selecionar um preset existente a partir da lista
+  const handleSelectPreset = (preset: SeparationPreset) => {
+    setSelectedPresetId(preset.id);
+    setPresetInputValue(preset.name);
+    setIsPresetDropdownOpen(false);
+    handleApplyPresetToAll(preset.id);
+  };
+
+  // Salvar as proporções da 1ª linha de produtos diretamente no banco
+  const handleDirectSavePreset = async () => {
+    const name = presetInputValue.trim();
+    if (!name) {
+      showFeedback('Por favor, digite o nome do modelo para salvar.', 'error');
+      return;
+    }
+    if (!onSavePreset) return;
+
+    // A primeira linha de produtos como referência
+    const firstItem = order.items[0];
+    if (!firstItem) {
+      showFeedback('Nenhum produto encontrado no pedido para servir de referência.', 'error');
+      return;
+    }
+
+    const { storeWeights, reserveStockPercent } = extractPresetFromAllocations(
+      firstItem.separacaoLojas || {},
+      firstItem.qtdTotalUnidades,
+      firstItem.qtdReservaEstoque || 0,
+      stores
+    );
+
+    const existingPreset = presets.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+
+    const newPreset: SeparationPreset = {
+      id: existingPreset ? existingPreset.id : ('preset_' + Date.now()),
+      name: name,
+      description: `Referência: 1ª linha (${firstItem.descricao})`,
+      storeWeights,
+      reserveStockPercent,
+      isDefault: existingPreset ? existingPreset.isDefault : false,
+      createdAt: existingPreset ? existingPreset.createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await onSavePreset(newPreset);
+      setSelectedPresetId(newPreset.id);
+      setPresetInputValue(newPreset.name);
+      setIsPresetDropdownOpen(false);
+      showFeedback(`⭐ Modelo "${newPreset.name}" salvo no banco com base na 1ª linha!`, 'success');
+    } catch (err: any) {
+      showFeedback(`Erro ao salvar modelo: ${err.message}`, 'error');
+    }
+  };
+
+  // Excluir preset customizado
+  const handleDeleteSelectedPreset = async () => {
+    const targetPreset = presets.find(p => p.id === selectedPresetId);
+    if (!targetPreset || targetPreset.isDefault || !onDeletePreset) return;
+    if (!window.confirm(`Tem certeza que deseja remover o modelo "${targetPreset.name}"?`)) return;
+
+    try {
+      await onDeletePreset(targetPreset.id);
+      const remaining = presets.filter(p => p.id !== targetPreset.id);
+      const fallback = remaining[0] || { id: 'preset_default_clusters', name: 'Padrão Rede (Clusters A, B e C)' };
+      setSelectedPresetId(fallback.id);
+      setPresetInputValue(fallback.name);
+      showFeedback(`Modelo "${targetPreset.name}" excluído.`, 'info');
+    } catch (err: any) {
+      showFeedback(`Erro ao remover: ${err.message}`, 'error');
+    }
+  };
+
+  // Filtrar pedidos que estão com status Aprovados ou Em Separação para o depósito
+  const availableDepositOrders = useMemo(() => {
+    const list = orders.filter(o => o.header.status === 'Aprovado' || o.header.status === 'Em Separação');
+    const currentId = order.header.id || order.header.numeroPedido;
+    if (currentId && !list.some(o => (o.header.id || o.header.numeroPedido) === currentId)) {
+      return [order, ...list];
+    }
+    return list;
+  }, [orders, order]);
+  const pendingSeparationOrders = availableDepositOrders;
 
   const isCurrentFinalized = order.header.status === 'Finalizado';
   const [viewArchivedReadOnly, setViewArchivedReadOnly] = useState(false);
@@ -115,8 +253,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         itemId: order.items[0]?.id || '',
         storeId: activeStores[0]?.id || 'pg_centro',
         quantidade: 1,
-        unidadeMedida: 'CX',
-        motivo: '1 caixa danificada na descarga'
+        unidadeMedida: 'UN',
+        motivo: '1 unidade avariada na conferência'
       }
     ];
   });
@@ -227,18 +365,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     });
   }, [conferente, possuiAvarias, observacoesDoca, avariasList]);
 
-  // Handlers para Edição Direta em Caixas
-  const handleUpdateStoreAllocationBoxes = (item: OrderItem, storeId: string, rawBoxes: number) => {
+  // Handlers para Edição Direta em Unidades
+  const handleUpdateStoreAllocationUnits = (item: OrderItem, storeId: string, rawUnits: number) => {
     if (!onChangeOrder) return;
-    const pack = Math.max(1, item.qtdPorPacote || 1);
-    const boxes = Math.max(0, Math.floor(rawBoxes || 0));
-    const unitValue = boxes * pack;
+    const units = Math.max(0, Math.floor(rawUnits || 0));
 
     const updatedItems = order.items.map(it => {
       if (it.id !== item.id) return it;
 
       const currentAlloc = { ...(it.separacaoLojas || {}) };
-      currentAlloc[storeId] = unitValue;
+      currentAlloc[storeId] = units;
 
       const newSumUnits = Object.values(currentAlloc).reduce((a, b) => a + (Number(b) || 0), 0);
       const calculatedReserve = Math.max(0, it.qtdTotalUnidades - newSumUnits);
@@ -452,9 +588,6 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         order={order}
         currentUser={currentUser}
         onApproveOrder={onApproveOrder}
-        onOpenDistribution={(ord) => {
-          if (onSelectOrder) onSelectOrder(ord);
-        }}
         onReleaseToSeparation={onReleaseToSeparation}
         onOpenSeparation={(ord) => {
           if (onSelectOrder) onSelectOrder(ord);
@@ -492,49 +625,33 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               <PackageCheck className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
-                Separação & Romaneio 20 Lojas
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-mono">
-                  {order.header.numeroPedido}
-                </span>
-                
-                {/* Badge de Status Oficial */}
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold border shadow-xs ${
-                  order.header.status === 'Finalizado'
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300'
-                    : order.header.status === 'Em Separação'
-                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300'
-                    : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border-amber-300'
-                }`}>
-                  {order.header.status || 'Em Separação'}
-                </span>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2.5 flex-wrap">
+                <span>Separação & Romaneio</span>
 
-                <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
-                  📦 Volumes (Caixas)
-                </span>
+                {/* Dropdown Seletor de Pedidos Disponíveis para o Depósito */}
+                <div className="relative inline-flex items-center">
+                  <select
+                    value={order.header.id || order.header.numeroPedido}
+                    onChange={(e) => {
+                      const found = availableDepositOrders.find(o => (o.header.id || o.header.numeroPedido) === e.target.value);
+                      if (found && onSelectOrder) onSelectOrder(found);
+                    }}
+                    className="appearance-none bg-emerald-100 hover:bg-emerald-200/90 dark:bg-emerald-950 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 font-mono font-black text-xs px-2.5 py-1 pr-6 rounded-xl shadow-xs cursor-pointer outline-hidden transition focus:ring-2 focus:ring-emerald-500"
+                    title="Alternar entre pedidos disponíveis para o depósito"
+                  >
+                    {availableDepositOrders.map(o => (
+                      <option 
+                        key={o.header.id || o.header.numeroPedido} 
+                        value={o.header.id || o.header.numeroPedido}
+                        className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-sans font-bold"
+                      >
+                        {o.header.numeroPedido} {o.header.fornecedor ? `• ${o.header.fornecedor}` : ''} ({o.header.status})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-emerald-800 dark:text-emerald-300 pointer-events-none absolute right-1.5" />
+                </div>
               </h2>
-              <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                <span>Fornecedor: <span className="font-semibold text-slate-700 dark:text-slate-300">{order.header.fornecedor}</span></span>
-                {pendingSeparationOrders.length > 1 && onSelectOrder && (
-                  <div className="flex items-center gap-1.5 ml-2">
-                    <span className="font-bold text-purple-600 dark:text-purple-400">Alternar Pedido:</span>
-                    <select
-                      value={order.header.id || order.header.numeroPedido}
-                      onChange={(e) => {
-                        const found = pendingSeparationOrders.find(o => (o.header.id || o.header.numeroPedido) === e.target.value);
-                        if (found) onSelectOrder(found);
-                      }}
-                      className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
-                    >
-                      {pendingSeparationOrders.map(o => (
-                        <option key={o.header.id || o.header.numeroPedido} value={o.header.id || o.header.numeroPedido}>
-                          {o.header.numeroPedido} - {o.header.fornecedor}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>
@@ -542,26 +659,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         {/* Botões de Ação */}
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={onLoadMockOrder}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition shadow-xs"
-            title="Carregar pedido de exemplo com 20 itens de presentes"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-            <span>20 Itens Teste</span>
-          </button>
-
-          <button
-            onClick={onExportExcel}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition shadow-xs"
-            title="Exportar pasta de trabalho Excel com 3 abas incluindo caixas e peças"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Excel (.xlsx)</span>
-          </button>
-
-          <button
             onClick={onExportPDF}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition cursor-pointer"
             title="Gerar Romaneio PDF Paisagem A4 com tabela das 20 lojas e volumes"
           >
             <FileText className="w-4 h-4" />
@@ -581,7 +680,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               Controle Global de Estoque Central / CD Matriz:
             </span>
             <span className="text-[11px] text-slate-500 dark:text-slate-400">
-              Padrão: 10% retido no CD em caixas fechadas • 90% rateado nas lojas
+              Padrão: 10% retido no CD em unidades • 90% rateado nas lojas
             </span>
           </div>
         </div>
@@ -670,6 +769,131 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
       </div>
 
+      {/* Barra de Feedback / Notificação */}
+      {actionFeedback && (
+        <div className={`p-3.5 px-4 rounded-2xl border flex items-center justify-between text-xs font-bold shadow-xs animate-in fade-in duration-200 ${
+          actionFeedback.type === 'success' 
+            ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-950/60 dark:border-emerald-800 dark:text-emerald-200' 
+            : actionFeedback.type === 'error'
+            ? 'bg-rose-50 border-rose-300 text-rose-900 dark:bg-rose-950/60 dark:border-rose-800 dark:text-rose-200'
+            : 'bg-indigo-50 border-indigo-300 text-indigo-900 dark:bg-indigo-950/60 dark:border-indigo-800 dark:text-indigo-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span>{actionFeedback.text}</span>
+          </div>
+          <button onClick={() => setActionFeedback(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* 3.5. Modelos de Rateio & Separação (Saves Independentes do Fornecedor) */}
+      <div className="bg-white dark:bg-slate-800/90 p-4 sm:p-5 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/50 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-linear-to-r from-indigo-50/40 via-white to-transparent dark:from-indigo-950/20 dark:via-slate-800/90 dark:to-slate-800/90">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-600/20 shrink-0">
+            <Bookmark className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">
+                Modelos de Rateio & Separação (Saves)
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                {presets.length} {presets.length === 1 ? 'modelo' : 'modelos'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Escolha um modelo proporcional (ex: Alimentos, Bazar) para aplicar a proporção em todas as 20 lojas ou salve a separação atual.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            Padrão:
+          </label>
+
+          {/* Dropdown Editável (Combobox de Modelos) */}
+          <div className="relative min-w-[260px] sm:w-72">
+            <div className="flex items-center rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 shadow-xs focus-within:ring-2 focus-within:ring-indigo-500">
+              <input
+                type="text"
+                value={presetInputValue}
+                onChange={(e) => {
+                  setPresetInputValue(e.target.value);
+                  setIsPresetDropdownOpen(true);
+                }}
+                onFocus={() => setIsPresetDropdownOpen(true)}
+                placeholder="Nome do padrão (ex: Alimentos)..."
+                className="w-full text-xs font-bold px-3 py-2 bg-transparent text-slate-900 dark:text-white outline-hidden"
+              />
+              <button
+                type="button"
+                onClick={() => setIsPresetDropdownOpen(!isPresetDropdownOpen)}
+                className="p-2 text-slate-400 hover:text-indigo-600 transition cursor-pointer shrink-0"
+                title="Ver lista de modelos salvos"
+              >
+                <ChevronDown className={`w-4 h-4 transition-transform ${isPresetDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+
+            {/* Menu Suspenso com os Modelos Salvos */}
+            {isPresetDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setIsPresetDropdownOpen(false)} />
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl z-30 max-h-60 overflow-y-auto py-1">
+                  {presets.map(p => (
+                    <div
+                      key={p.id}
+                      onClick={() => handleSelectPreset(p)}
+                      className={`px-3 py-2 text-xs font-bold flex items-center justify-between cursor-pointer transition ${
+                        selectedPresetId === p.id 
+                          ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300' 
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <span className="truncate">{p.name}</span>
+                      {p.isDefault && (
+                        <span className="text-[10px] text-amber-500 font-extrabold ml-2 shrink-0">
+                          ⭐ Padrão Rede
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Botão Salvar (Usa a 1ª linha de produtos como referência) */}
+          {onSavePreset && (
+            <button
+              type="button"
+              onClick={handleDirectSavePreset}
+              disabled={!presetInputValue.trim()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-600/30 transition cursor-pointer disabled:opacity-50"
+              title="Salvar modelo com as proporções da 1ª linha de produtos"
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>Salvar</span>
+            </button>
+          )}
+
+          {/* Botão Excluir Modelo Customizado */}
+          {onDeletePreset && presets.find(p => p.id === selectedPresetId && !p.isDefault) && (
+            <button
+              type="button"
+              onClick={handleDeleteSelectedPreset}
+              className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+              title="Excluir este modelo customizado"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* 4. Tabela Interativa da Matriz de Separação (20 Lojas) */}
       <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
         
@@ -679,10 +903,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <PackageCheck className="w-5 h-5 text-emerald-400" />
             <div>
               <h3 className="text-sm font-extrabold uppercase tracking-wide flex items-center gap-2">
-                Grade de Separação & Expedição por Caixas (20 Lojas)
+                Grade de Distribuição e Separação por Unidades (20 Lojas)
               </h3>
               <p className="text-[11px] text-slate-400">
-                Digite o número de caixas inteiras para cada filial. O equivalente em peças é calculado e exibido embaixo.
+                Defina a quantidade de unidades para cada filial ou utilize a distribuição inteligente proporcional aos clusters.
               </p>
             </div>
           </div>
@@ -710,14 +934,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 <th className="py-2.5 px-3 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 sticky left-0 z-20 min-w-[230px]">
                   Dados do Produto
                 </th>
-                <th className="py-2.5 px-2 bg-emerald-100 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-300 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Total de caixas compradas ao fornecedor">
-                  Total Cx
+                <th className="py-2.5 px-2 bg-emerald-100 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-300 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Total de unidades compradas no pedido">
+                  Comprado (Un)
                 </th>
-                <th className="py-2.5 px-2 bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 border-r border-slate-200 dark:border-slate-700 min-w-[95px]" title="Caixas guardadas no Depósito Central / Matriz">
-                  Estoque CD (Cx)
+                <th className="py-2.5 px-2 bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 border-r border-slate-200 dark:border-slate-700 min-w-[95px]" title="Unidades guardadas no Depósito Central / Matriz">
+                  Estoque CD (Un)
                 </th>
-                <th className="py-2.5 px-2 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Soma de caixas enviadas para todas as lojas">
-                  Lojas (Cx)
+                <th className="py-2.5 px-2 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 min-w-[80px]" title="Soma de unidades enviadas para todas as lojas">
+                  Lojas (Un)
                 </th>
                 <th colSpan={clusterA.length} className="py-2 px-2 bg-blue-100/70 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 border-r border-slate-200 dark:border-slate-700">
                   CLUSTER A ({clusterA.length} Lojas • 51.3%)
@@ -874,7 +1098,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                               min="0"
                               step="1"
                               value={rawAllocUnits}
-                              onChange={(e) => handleUpdateStoreAllocationBoxes(item, store.id, parseFloat(e.target.value) || 0)}
+                              onChange={(e) => handleUpdateStoreAllocationUnits(item, store.id, parseFloat(e.target.value) || 0)}
                               className={`w-14 px-1 py-1 text-center font-mono font-bold text-xs rounded-md border outline-hidden transition ${
                                 rawAllocUnits > 0
                                   ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
@@ -948,18 +1172,11 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 </td>
                 {activeStores.map(store => {
                   const somaLojaUnidades = order.items.reduce((acc, item) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);
-                  const somaLojaCaixas = order.items.reduce((acc, item) => {
-                    const pack = Math.max(1, item.qtdPorPacote || 1);
-                    return acc + ((Number(item.separacaoLojas?.[store.id]) || 0) / pack);
-                  }, 0);
 
                   return (
                     <td key={store.id} className="py-3 px-2 text-center font-mono border-r border-emerald-200 dark:border-emerald-800">
-                      <div>
-                        {somaLojaCaixas} cx
-                      </div>
-                      <div className="text-[9px] font-normal text-emerald-800/80 dark:text-emerald-400">
-                        {somaLojaUnidades} un
+                      <div className="text-xs font-black text-emerald-950 dark:text-emerald-100">
+                        {somaLojaUnidades.toLocaleString('pt-BR')} un
                       </div>
                     </td>
                   );
@@ -985,7 +1202,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 Apontamento de Doca & Conferência Física de Galpão
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Registro operacional de avarias com dedução automática por unidade de medida (CX, PCT, UN, JG, PAR)
+                Registro operacional de avarias com dedução automática por unidade de medida (UN, PCT, JG, PAR, CX)
               </p>
             </div>
           </div>
@@ -1154,13 +1371,13 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                           Unidade de Medida
                         </label>
                         <select
-                          value={av.unidadeMedida || 'CX'}
+                          value={av.unidadeMedida || 'UN'}
                           onChange={(e) => handleUpdateAvaria(av.id, 'unidadeMedida', e.target.value)}
                           className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-bold outline-hidden cursor-pointer text-emerald-700 dark:text-emerald-400"
                         >
-                          <option value="CX">CX (Caixa Fechada • {packSize} un)</option>
-                          <option value="PCT">PCT (Pacote • {packSize} un)</option>
                           <option value="UN">UN (Unidade Individual)</option>
+                          <option value="PCT">PCT (Pacote • {packSize} un)</option>
+                          <option value="CX">CX (Caixa • {packSize} un)</option>
                           <option value="JG">JG (Jogo / Kit • {packSize} un)</option>
                           <option value="PAR">PAR (Par • 2 un)</option>
                         </select>
@@ -1250,9 +1467,11 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         <SeparationMatrixModal
           item={modalItem}
           stores={stores}
+          presets={presets}
           isOpen={!!modalItem}
           onClose={() => setModalItem(null)}
           onSaveSeparation={handleSaveModalSeparation}
+          onSavePreset={onSavePreset}
         />
       )}
 

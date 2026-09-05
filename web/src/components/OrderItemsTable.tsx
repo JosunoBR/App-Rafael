@@ -47,7 +47,6 @@ interface OrderItemsTableProps {
   onDeleteItem: (itemId: string) => void;
   onOpenFiscalModal: (item: OrderItem) => void;
   onOpenSeparationModal: (item: OrderItem) => void;
-  onLoadMockOrder?: () => void;
   onSaveProduct?: (product: Product) => void;
 }
 
@@ -85,7 +84,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   onDeleteItem,
   onOpenFiscalModal,
   onOpenSeparationModal,
-  onLoadMockOrder,
   onSaveProduct
 }) => {
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
@@ -629,17 +627,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             >
               <Percent className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Desconto em Massa</span>
-            </button>
-          )}
-
-          {onLoadMockOrder && (
-            <button
-              onClick={onLoadMockOrder}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition cursor-pointer shadow-2xs"
-              title="Carregar 20 itens fictícios de loja de presentes para testes completos"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              <span>Exemplo Presentes</span>
             </button>
           )}
         </div>

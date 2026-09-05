@@ -39,7 +39,6 @@ interface SeparationPageProps {
   currentUser?: User | null;
   onExportPDF: () => void;
   onExportExcel?: () => void;
-  onLoadMockOrder?: () => void;
   onNavigateToOrders: () => void;
   onNavigateToHistory?: () => void;
   onChangeOrder?: (updatedOrder: PurchaseOrder) => void;
@@ -77,7 +76,6 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   currentUser,
   onExportPDF,
   onExportExcel,
-  onLoadMockOrder,
   onNavigateToOrders,
   onNavigateToHistory,
   onChangeOrder,

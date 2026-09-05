@@ -87,7 +87,6 @@ import {
   saveProduct,
   deleteProduct,
   getNextOrderNumber,
-  createRealisticMockOrder,
   loadCentralStock,
   saveCentralStock,
   updateStockBalance,
@@ -839,12 +838,6 @@ export function App() {
     }
   };
 
-  const handleLoadMockOrder = () => {
-    const mock = createRealisticMockOrder(fiscalConfig, storeConfigs);
-    setOrder(mock);
-    showToast('Exemplo realista carregado com 8 produtos do Bazar!');
-  };
-
   const handleExportExcel = () => {
     exportOrderToExcel(order, storeConfigs, fiscalConfig);
     showToast('Planilha Excel (.xlsx) gerada!', 'success');
@@ -1298,7 +1291,6 @@ export function App() {
                     onDeleteItem={handleDeleteItem}
                     onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
                     onOpenSeparationModal={(item) => setSelectedSeparationItem(item)}
-                    onLoadMockOrder={handleLoadMockOrder}
                     onSaveProduct={handleSaveProduct}
                   />
                 </div>
@@ -1329,7 +1321,6 @@ export function App() {
                   currentUser={currentUser}
                   onExportPDF={handleExportSeparationPDF}
                   onExportExcel={handleExportExcel}
-                  onLoadMockOrder={handleLoadMockOrder}
                   onNavigateToOrders={() => setActiveNav('orders')}
                   onNavigateToHistory={() => setActiveNav('separationHistory')}
                   onChangeOrder={setOrder}

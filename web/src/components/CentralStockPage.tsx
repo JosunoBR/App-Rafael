@@ -598,8 +598,10 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                           type="number"
                           min="1"
                           max={item.saldoUnidades}
-                          value={unidades}
-                          onChange={(e) => handleTransferUnitsChange(stockId, parseInt(e.target.value, 10) || 1, item.saldoUnidades)}
+                          value={unidades === 0 ? '' : unidades}
+                          placeholder="0"
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => handleTransferUnitsChange(stockId, parseInt(e.target.value, 10) || 0, item.saldoUnidades)}
                           className="w-16 text-center font-mono font-bold text-xs bg-transparent text-slate-900 dark:text-white outline-hidden"
                         />
                         <button
@@ -695,6 +697,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               <input
                 type="number"
                 value={adjustUnidadesDelta}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => setAdjustUnidadesDelta(e.target.value)}
                 placeholder="Ex: +50 para entrada ou -20 para baixa"
                 className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
@@ -787,6 +790,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 type="number"
                 min="1"
                 value={newSaldoUnidades}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => setNewSaldoUnidades(e.target.value)}
                 className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
               />

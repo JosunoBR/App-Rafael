@@ -243,7 +243,9 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                 <input
                   type="number"
                   step="0.1"
-                  value={simulCompra}
+                  value={simulCompra === 0 ? '' : simulCompra}
+                  placeholder="0.00"
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setSimulCompra(parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-1.5 text-xs font-bold font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-hidden"
                 />
@@ -256,7 +258,9 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                 <input
                   type="number"
                   step="0.1"
-                  value={simulPdv}
+                  value={simulPdv === 0 ? '' : simulPdv}
+                  placeholder="0.00"
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setSimulPdv(parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-1.5 text-xs font-bold font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-hidden"
                 />
@@ -365,6 +369,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                         min="0.1"
                         max="100"
                         value={store.defaultWeight}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleStoreWeightChange(store.id, parseFloat(e.target.value) || 0.1)}
                         className="w-16 px-1.5 py-0.5 text-center text-xs font-bold font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-hidden"
                       />
@@ -409,6 +414,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                         min="0.1"
                         max="100"
                         value={store.defaultWeight}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleStoreWeightChange(store.id, parseFloat(e.target.value) || 0.1)}
                         className="w-16 px-1.5 py-0.5 text-center text-xs font-bold font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-hidden"
                       />
@@ -453,6 +459,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                         min="0.1"
                         max="100"
                         value={store.defaultWeight}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleStoreWeightChange(store.id, parseFloat(e.target.value) || 0.1)}
                         className="w-16 px-1.5 py-0.5 text-center text-xs font-bold font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-hidden"
                       />

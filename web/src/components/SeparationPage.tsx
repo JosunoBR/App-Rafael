@@ -1046,7 +1046,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                             type="number"
                             min="0"
                             max={item.qtdTotalUnidades}
-                            value={status.reserveStockUnits}
+                            value={status.reserveStockUnits === 0 ? '' : status.reserveStockUnits}
+                            placeholder="0"
+                            onFocus={(e) => e.target.select()}
                             onChange={(e) => handleUpdateItemReserveUnits(item, parseFloat(e.target.value) || 0)}
                             className="w-16 px-1 py-1 text-center font-mono font-extrabold text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-200 focus:ring-2 focus:ring-amber-500 outline-hidden"
                             title="Quantidade de unidades que ficará guardada no Estoque Central"
@@ -1097,7 +1099,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                               type="number"
                               min="0"
                               step="1"
-                              value={rawAllocUnits}
+                              value={rawAllocUnits === 0 ? '' : rawAllocUnits}
+                              placeholder="0"
+                              onFocus={(e) => e.target.select()}
                               onChange={(e) => handleUpdateStoreAllocationUnits(item, store.id, parseFloat(e.target.value) || 0)}
                               className={`w-14 px-1 py-1 text-center font-mono font-bold text-xs rounded-md border outline-hidden transition ${
                                 rawAllocUnits > 0
@@ -1350,6 +1354,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                             type="number"
                             min="1"
                             value={av.quantidade}
+                            onFocus={(e) => e.target.select()}
                             onChange={(e) => handleUpdateAvaria(av.id, 'quantidade', Math.max(1, parseInt(e.target.value) || 1))}
                             className="w-full px-1.5 py-1 text-center font-mono font-extrabold rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />

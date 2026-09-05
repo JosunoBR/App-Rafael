@@ -794,6 +794,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       min="0"
                       value={item.qtdTotalUnidades === 0 ? '' : item.qtdTotalUnidades}
                       placeholder="0"
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
                       className="w-full text-center px-1 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
@@ -808,6 +809,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         min="0"
                         value={item.precoUnitario === 0 ? '' : item.precoUnitario}
                         placeholder="0.00"
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleFieldChange(item, 'precoUnitario', e.target.value)}
                         className="w-full text-right px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
                       />
@@ -824,6 +826,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         max="100"
                         value={(item.percentualDesconto === 0 || item.percentualDesconto === undefined) ? '' : item.percentualDesconto}
                         placeholder="0"
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleFieldChange(item, 'percentualDesconto', e.target.value)}
                         className={`w-full text-center pr-4 pl-1 py-1.5 rounded-lg border font-mono font-bold text-xs outline-hidden focus:ring-2 focus:ring-emerald-500 transition-colors ${
                           (item.percentualDesconto || 0) > 0
@@ -1437,6 +1440,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     value={batchDiscountValue === 0 ? '' : batchDiscountValue}
                     placeholder="0.0"
                     autoFocus
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setBatchDiscountValue(parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold text-lg focus:ring-2 focus:ring-emerald-500 outline-hidden pr-8 text-center"
                   />

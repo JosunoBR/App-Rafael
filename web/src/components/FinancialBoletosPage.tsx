@@ -766,10 +766,11 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                   type="number"
                   step="0.01"
                   min="0"
-                  value={modalForm.valor}
+                  value={modalForm.valor === 0 ? '' : modalForm.valor}
+                  placeholder="0.00"
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setModalForm(prev => ({ ...prev, valor: parseFloat(e.target.value) || 0 }))}
                   className="w-full px-3.5 py-2.5 text-sm font-mono font-black rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                  placeholder="0.00"
                 />
               </div>
 

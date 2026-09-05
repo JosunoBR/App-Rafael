@@ -154,7 +154,9 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                   <input
                     type="number"
                     step="0.1"
-                    value={icms}
+                    value={icms === 0 ? '' : icms}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setIcms(parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
                   />
@@ -167,7 +169,9 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                   <input
                     type="number"
                     step="0.1"
-                    value={pisCofins}
+                    value={pisCofins === 0 ? '' : pisCofins}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setPisCofins(parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
                   />
@@ -180,7 +184,9 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                   <input
                     type="number"
                     step="0.1"
-                    value={custosFixos}
+                    value={custosFixos === 0 ? '' : custosFixos}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setCustosFixos(parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
                   />
@@ -193,7 +199,9 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                   <input
                     type="number"
                     step="0.1"
-                    value={ipi}
+                    value={ipi === 0 ? '' : ipi}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setIpi(parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
                   />
@@ -212,7 +220,9 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                   <input
                     type="number"
                     step="0.1"
-                    value={creditoEntrada}
+                    value={creditoEntrada === 0 ? '' : creditoEntrada}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setCreditoEntrada(parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 text-base rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 font-extrabold"
                   />
@@ -276,6 +286,7 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                       min="0.1"
                       max="100"
                       value={store.defaultWeight}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => handleStoreWeightChange(store.id, parseFloat(e.target.value) || 1)}
                       className="w-16 px-2 py-1 text-xs text-center font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
                     />

@@ -132,7 +132,9 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                   type="number"
                   step="0.01"
                   min="0"
-                  value={precoCompra}
+                  value={precoCompra === 0 ? '' : precoCompra}
+                  placeholder="0.00"
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setPrecoCompra(parseFloat(e.target.value) || 0)}
                   className="w-full pl-9 pr-3 py-2 text-base font-bold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
                 />
@@ -149,7 +151,9 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                   type="number"
                   step="0.01"
                   min="0"
-                  value={pdvAlvo}
+                  value={pdvAlvo === 0 ? '' : pdvAlvo}
+                  placeholder="0.00"
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setPdvAlvo(parseFloat(e.target.value) || 0)}
                   className="w-full pl-9 pr-3 py-2 text-base font-bold rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 outline-hidden"
                 />
@@ -277,7 +281,9 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                   <input
                     type="number"
                     step="0.5"
-                    value={icms}
+                    value={icms === 0 ? '' : icms}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setIcms(parseFloat(e.target.value) || 0)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
@@ -287,7 +293,9 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                   <input
                     type="number"
                     step="0.5"
-                    value={pisCofins}
+                    value={pisCofins === 0 ? '' : pisCofins}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setPisCofins(parseFloat(e.target.value) || 0)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
@@ -297,7 +305,9 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                   <input
                     type="number"
                     step="0.5"
-                    value={custosFixos}
+                    value={custosFixos === 0 ? '' : custosFixos}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setCustosFixos(parseFloat(e.target.value) || 0)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
@@ -307,7 +317,9 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                   <input
                     type="number"
                     step="0.5"
-                    value={ipi}
+                    value={ipi === 0 ? '' : ipi}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setIpi(parseFloat(e.target.value) || 0)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
@@ -319,7 +331,9 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                   <input
                     type="number"
                     step="0.5"
-                    value={creditoEntrada}
+                    value={creditoEntrada === 0 ? '' : creditoEntrada}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setCreditoEntrada(parseFloat(e.target.value) || 0)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-300 font-bold"
                   />

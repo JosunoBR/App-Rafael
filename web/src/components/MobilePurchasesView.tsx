@@ -753,7 +753,8 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
             <label className="font-bold text-slate-700 dark:text-slate-300">Quantidade Total (Unidades)</label>
             <input
               type="number"
-              value={novoItem.qtdTotalUnidades || ''}
+              value={novoItem.qtdTotalUnidades === 0 ? '' : (novoItem.qtdTotalUnidades || '')}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => setNovoItem(prev => ({ ...prev, qtdTotalUnidades: Number(e.target.value) }))}
               placeholder="ex: 120"
               className="w-full mt-1 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
@@ -767,7 +768,9 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
               <input
                 type="number"
                 step="0.01"
-                value={novoItem.precoUnitario || ''}
+                value={novoItem.precoUnitario === 0 ? '' : (novoItem.precoUnitario || '')}
+                placeholder="0.00"
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => setNovoItem(prev => ({ ...prev, precoUnitario: Number(e.target.value) }))}
                 className="w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400"
               />
@@ -780,7 +783,8 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
                 min="0"
                 max="100"
                 placeholder="0"
-                value={novoItem.percentualDesconto || ''}
+                value={novoItem.percentualDesconto === 0 ? '' : (novoItem.percentualDesconto || '')}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => setNovoItem(prev => ({ ...prev, percentualDesconto: Number(e.target.value) || 0 }))}
                 className="w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded-xl text-emerald-700 dark:text-emerald-300 font-mono font-bold text-xs"
               />

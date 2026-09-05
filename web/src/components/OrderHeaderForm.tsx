@@ -782,7 +782,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         step="0.1"
                         min="0"
                         max="100"
-                        value={header.percentualNota !== undefined ? header.percentualNota : 100}
+                        value={header.percentualNota === 0 ? '' : (header.percentualNota !== undefined ? header.percentualNota : 100)}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleFieldChange('percentualNota', parseFloat(e.target.value) || 0)}
                         className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-blue-600 dark:text-blue-400 font-mono shadow-2xs pr-8"
                         placeholder="100"
@@ -822,10 +823,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                             step="0.01"
                             min="0"
                             max={valorTotalPedido}
-                            value={valorEntrada}
+                            value={valorEntrada === 0 ? '' : valorEntrada}
+                            placeholder="0,00"
+                            onFocus={(e) => e.target.select()}
                             onChange={(e) => handleEntradaChange(parseFloat(e.target.value) || 0)}
                             className="w-full px-3 py-1.5 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold font-mono focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                            placeholder="0,00"
                           />
                         </div>
                         {/* Botões de porcentagem rápida */}

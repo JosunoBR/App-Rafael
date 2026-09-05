@@ -236,7 +236,9 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                 type="number"
                 min="0"
                 max={item.qtdTotalUnidades}
-                value={reserveStock}
+                value={reserveStock === 0 ? '' : reserveStock}
+                placeholder="0"
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => setReserveStock(Math.max(0, parseInt(e.target.value, 10) || 0))}
                 className="w-20 px-2 py-1 text-xs font-mono font-extrabold text-center rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 outline-hidden"
               />
@@ -381,7 +383,9 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                       <input
                         type="number"
                         min="0"
-                        value={units}
+                        value={units === 0 ? '' : units}
+                        placeholder="0"
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleStoreUnitsChange(store.id, parseFloat(e.target.value) || 0)}
                         className={`w-full text-center py-1 text-xs font-bold rounded-lg border outline-hidden transition ${
                           units > 0
@@ -460,7 +464,9 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                       <input
                         type="number"
                         min="0"
-                        value={units}
+                        value={units === 0 ? '' : units}
+                        placeholder="0"
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleStoreUnitsChange(store.id, parseFloat(e.target.value) || 0)}
                         className={`w-full text-center py-1 text-xs font-bold rounded-lg border outline-hidden transition ${
                           units > 0
@@ -539,7 +545,9 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
                       <input
                         type="number"
                         min="0"
-                        value={units}
+                        value={units === 0 ? '' : units}
+                        placeholder="0"
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleStoreUnitsChange(store.id, parseFloat(e.target.value) || 0)}
                         className={`w-full text-center py-1 text-xs font-bold rounded-lg border outline-hidden transition ${
                           units > 0

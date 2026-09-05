@@ -284,7 +284,9 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                     step="0.1"
                     min="0"
                     max="100"
-                    value={aliquotaStPadrao}
+                    value={aliquotaStPadrao === 0 ? '' : aliquotaStPadrao}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setAliquotaStPadrao(parseFloat(e.target.value) || 0)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-300 font-bold"
                   />
@@ -304,7 +306,9 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                     step="0.1"
                     min="0"
                     max="100"
-                    value={descontoOffPadrao}
+                    value={descontoOffPadrao === 0 ? '' : descontoOffPadrao}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setDescontoOffPadrao(parseFloat(e.target.value) || 0)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-emerald-900 dark:text-emerald-300 font-bold"
                   />

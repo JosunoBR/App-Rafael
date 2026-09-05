@@ -385,7 +385,9 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                   type="number"
                   step="0.1"
                   min="0"
-                  value={formData.aliquotaStPadrao}
+                  value={formData.aliquotaStPadrao === 0 ? '' : formData.aliquotaStPadrao}
+                  placeholder="0"
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setFormData(prev => ({ ...prev, aliquotaStPadrao: parseFloat(e.target.value) || 0 }))}
                   className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono font-bold"
                 />
@@ -403,7 +405,9 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                   type="number"
                   step="0.1"
                   min="0"
-                  value={formData.descontoOffPadrao}
+                  value={formData.descontoOffPadrao === 0 ? '' : formData.descontoOffPadrao}
+                  placeholder="0"
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setFormData(prev => ({ ...prev, descontoOffPadrao: parseFloat(e.target.value) || 0 }))}
                   className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono font-bold"
                 />
@@ -796,7 +800,9 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                     type="number"
                     step="0.01"
                     min="0"
-                    value={newProductData.precoUnitarioPadrao || 0}
+                    value={newProductData.precoUnitarioPadrao === 0 ? '' : (newProductData.precoUnitarioPadrao || '')}
+                    placeholder="0.00"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setNewProductData(prev => ({ ...prev, precoUnitarioPadrao: parseFloat(e.target.value) || 0 }))}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                   />
@@ -810,7 +816,9 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                     type="number"
                     step="0.01"
                     min="0"
-                    value={newProductData.pdvSugerido || 0}
+                    value={newProductData.pdvSugerido === 0 ? '' : (newProductData.pdvSugerido || '')}
+                    placeholder="0.00"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setNewProductData(prev => ({ ...prev, pdvSugerido: parseFloat(e.target.value) || 0 }))}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 outline-hidden"
                   />

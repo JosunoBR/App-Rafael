@@ -93,7 +93,8 @@ import {
   createStockTransferOrder,
   getInitialSeparationPresets,
   saveSeparationPresetsList,
-  saveSavedOrdersList
+  saveSavedOrdersList,
+  saveBatchProductsToStorage
 } from './utils/storage';
 import { 
   fetchSuppliersFromDb, 
@@ -101,6 +102,7 @@ import {
   deleteSupplierFromDb, 
   fetchProductsFromDb,
   saveProductToDb,
+  saveProductsBatchToDb,
   deleteProductFromDb,
   fetchOrdersFromDb, 
   saveOrderToDb, 
@@ -124,7 +126,7 @@ import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter
 import { calculateOrderNetTotal, generateOrderInstallments } from './utils/installments';
 import { calculateItemFiscal } from './shared/fiscalEngine';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
-import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem } from './utils/orderItemUtils';
+import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem, generateNextProductCode } from './utils/orderItemUtils';
 import { CheckCircle2, AlertCircle, Plus } from 'lucide-react';
 
 export function App() {
@@ -134,7 +136,12 @@ export function App() {
     if (saved) {
       try { 
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.email) return parsed;
+        if (parsed && parsed.email) {
+          if (parsed.nome) {
+            parsed.nome = parsed.nome.replace(/\s*\([^)]*\)/g, '').trim();
+          }
+          return parsed;
+        }
       } catch {}
     }
     // Sem sessão salva: exige login
@@ -287,8 +294,13 @@ export function App() {
   };
 
   const handleLoginSuccess = (user: User) => {
-    setCurrentUser(user);
-    if (user.role === 'separacao') {
+    const cleanUser = {
+      ...user,
+      nome: (user.nome || '').replace(/\s*\([^)]*\)/g, '').trim()
+    };
+    setCurrentUser(cleanUser);
+    localStorage.setItem('mega12_user', JSON.stringify(cleanUser));
+    if (cleanUser.role === 'separacao') {
       setActiveNav('separation');
     } else {
       setActiveNav('home');
@@ -553,6 +565,61 @@ export function App() {
       return;
     }
 
+    // Salva automaticamente no catálogo todos os produtos digitados que ainda não foram salvos anteriormente
+    const itemsToAutoRegister = validItems.filter(it => it.descricao && it.descricao.trim().length > 0);
+    if (itemsToAutoRegister.length > 0) {
+      const newProdsToRegister: Product[] = [];
+      let currentProds = [...products];
+
+      for (const it of itemsToAutoRegister) {
+        const existing = currentProds.find(p => {
+          const pDesc = (p.descricao || '').trim().toLowerCase();
+          const pCodInt = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
+          const itCodInt = (it.codigoInterno || it.codigo || '').trim().toLowerCase();
+          const itDesc = (it.descricao || '').trim().toLowerCase();
+          return (itCodInt && pCodInt && itCodInt === pCodInt) || (itDesc && pDesc && itDesc === pDesc);
+        });
+
+        if (!existing) {
+          const codInterno = it.codigoInterno || it.codigo || generateNextProductCode(currentProds);
+          const newProd: Product = {
+            id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+            codigoInterno: codInterno,
+            codigo: codInterno,
+            codigoFornecedor: it.codigoFornecedor || '',
+            codigoBarras: '',
+            eanBarcode: '',
+            descricao: it.descricao.trim(),
+            categoria: 'Geral',
+            fotoUrl: it.fotoUrl || '',
+            precoUnitarioPadrao: it.precoUnitario || 0,
+            pdvSugerido: it.pdvAlvo || 12.00,
+            ncm: '',
+            supplierId: order.header.supplierId || '',
+            nomeFornecedor: order.header.fornecedor || '',
+            ativo: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          newProdsToRegister.push(newProd);
+          currentProds.push(newProd);
+        }
+      }
+
+      if (newProdsToRegister.length > 0) {
+        try {
+          await saveProductsBatchToDb(newProdsToRegister);
+        } catch {
+          for (const p of newProdsToRegister) {
+            await saveProductToDb(p).catch(() => {});
+          }
+        }
+        saveBatchProductsToStorage(newProdsToRegister);
+        const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
+        setProducts(refreshed);
+      }
+    }
+
     const orderToSave: PurchaseOrder = {
       ...order,
       items: validItems
@@ -686,8 +753,63 @@ export function App() {
     }
   };
 
-  // Salvar pedido atualizado diretamente (ex: pelo módulo financeiro)
+  // Salvar pedido atualizado diretamente (ex: pelo módulo financeiro ou romaneio)
   const handleSaveOrderDirect = async (updatedOrder: PurchaseOrder) => {
+    // Salva automaticamente no catálogo produtos deste pedido que ainda não existam
+    const validItems = (updatedOrder.items || []).filter(it => !isOrderItemBlank(it) && it.descricao && it.descricao.trim().length > 0);
+    if (validItems.length > 0) {
+      const newProdsToRegister: Product[] = [];
+      let currentProds = [...products];
+
+      for (const it of validItems) {
+        const existing = currentProds.find(p => {
+          const pDesc = (p.descricao || '').trim().toLowerCase();
+          const pCodInt = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
+          const itCodInt = (it.codigoInterno || it.codigo || '').trim().toLowerCase();
+          const itDesc = (it.descricao || '').trim().toLowerCase();
+          return (itCodInt && pCodInt && itCodInt === pCodInt) || (itDesc && pDesc && itDesc === pDesc);
+        });
+
+        if (!existing) {
+          const codInterno = it.codigoInterno || it.codigo || generateNextProductCode(currentProds);
+          const newProd: Product = {
+            id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+            codigoInterno: codInterno,
+            codigo: codInterno,
+            codigoFornecedor: it.codigoFornecedor || '',
+            codigoBarras: '',
+            eanBarcode: '',
+            descricao: it.descricao.trim(),
+            categoria: 'Geral',
+            fotoUrl: it.fotoUrl || '',
+            precoUnitarioPadrao: it.precoUnitario || 0,
+            pdvSugerido: it.pdvAlvo || 12.00,
+            ncm: '',
+            supplierId: updatedOrder.header.supplierId || '',
+            nomeFornecedor: updatedOrder.header.fornecedor || '',
+            ativo: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          newProdsToRegister.push(newProd);
+          currentProds.push(newProd);
+        }
+      }
+
+      if (newProdsToRegister.length > 0) {
+        try {
+          await saveProductsBatchToDb(newProdsToRegister);
+        } catch {
+          for (const p of newProdsToRegister) {
+            await saveProductToDb(p).catch(() => {});
+          }
+        }
+        saveBatchProductsToStorage(newProdsToRegister);
+        const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
+        setProducts(refreshed);
+      }
+    }
+
     setSavedOrders(prev => {
       const idx = prev.findIndex(o => o.header.id === updatedOrder.header.id);
       if (idx >= 0) {
@@ -881,17 +1003,21 @@ export function App() {
   };
 
   // Product Catalog Handlers
-  const handleSaveProduct = async (productToSave: Product) => {
+  const handleSaveProduct = async (productToSave: Product, silent: boolean = false) => {
     try {
       await saveProductToDb(productToSave);
       const updated = await fetchProductsFromDb();
       setProducts(updated);
       saveProduct(productToSave);
-      showToast(`Produto "${productToSave.descricao}" salvo com foto no SQLite!`);
+      if (!silent) {
+        showToast(`Produto "${productToSave.descricao}" salvo no catálogo!`, 'success');
+      }
     } catch (err) {
       const updated = saveProduct(productToSave);
       setProducts(updated);
-      showToast(`Produto "${productToSave.descricao}" salvo no catálogo!`);
+      if (!silent) {
+        showToast(`Produto "${productToSave.descricao}" salvo no catálogo!`);
+      }
     }
   };
 
@@ -1239,8 +1365,6 @@ export function App() {
                     onAddItem={handleAddItem}
                     onDuplicateItem={handleDuplicateItem}
                     onDeleteItem={handleDeleteItem}
-                    onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
-                    onOpenSeparationModal={(item) => setSelectedSeparationItem(item)}
                     onSaveProduct={handleSaveProduct}
                   />
                 </div>

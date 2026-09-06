@@ -42,6 +42,15 @@ export async function saveProductToDb(product: Product): Promise<void> {
   if (!res.ok) throw new Error('Erro ao salvar produto no SQLite');
 }
 
+export async function saveProductsBatchToDb(products: Product[]): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/products/batch`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(products)
+  });
+  if (!res.ok) throw new Error('Erro ao salvar lote de produtos no SQLite');
+}
+
 export async function deleteProductFromDb(id: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/products/${id}`, {
     method: 'DELETE',

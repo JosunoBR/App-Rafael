@@ -37,6 +37,15 @@ class ProductController {
     }
   }
 
+  async saveBatch(req, res, next) {
+    try {
+      const result = await productService.saveBatchProducts(req.body);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async syncCatalog(req, res, next) {
     try {
       const products = await productService.syncCatalog();

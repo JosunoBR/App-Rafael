@@ -522,7 +522,7 @@ function runFullDatabaseSeed(db) {
     const defaultUsers = [
       {
         id: 'usr_diretoria',
-        nome: 'Rafael (Diretoria)',
+        nome: 'Rafael',
         email: 'diretoria@mega12.com.br',
         senha: defaultPasswordHash,
         role: 'diretoria',
@@ -531,7 +531,7 @@ function runFullDatabaseSeed(db) {
       },
       {
         id: 'usr_deposito',
-        nome: 'Marcos (Depósito & CD)',
+        nome: 'Marcos',
         email: 'deposito@mega12.com.br',
         senha: defaultPasswordHash,
         role: 'deposito',
@@ -540,7 +540,7 @@ function runFullDatabaseSeed(db) {
       },
       {
         id: 'usr_separacao',
-        nome: 'Jorge (Separação & Doca)',
+        nome: 'Jorge',
         email: 'separacao@mega12.com.br',
         senha: defaultPasswordHash,
         role: 'separacao',

@@ -43,6 +43,33 @@ class ProductService {
     return { success: true, message: 'Produto removido com sucesso.' };
   }
 
+  async saveBatchProducts(productsList) {
+    if (!Array.isArray(productsList) || productsList.length === 0) {
+      return { success: true, count: 0, products: [] };
+    }
+    const savedList = [];
+    for (const prod of productsList) {
+      if (!prod || !prod.descricao || prod.descricao.trim().length === 0) continue;
+      const cod = (prod.codigoInterno || prod.codigo || '').trim().toUpperCase();
+      if (!cod) continue;
+
+      const payload = {
+        ...prod,
+        id: prod.id || ('prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+        codigo: cod,
+        codigoInterno: cod,
+        descricao: prod.descricao.trim()
+      };
+      try {
+        const saved = await productRepository.upsert(payload);
+        if (saved) savedList.push(saved);
+      } catch (err) {
+        console.error('Erro ao salvar produto em lote:', err.message);
+      }
+    }
+    return { success: true, count: savedList.length, products: savedList };
+  }
+
   async syncCatalog() {
     const { getDatabase, saveDatabaseToDisk } = require('../config/database');
     const { runFullDatabaseSeed } = require('../config/seedData');

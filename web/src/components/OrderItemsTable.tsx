@@ -4,8 +4,7 @@ import {
   Plus, 
   Trash2, 
   Copy, 
-  Calculator, 
-  Store, 
+  Save, 
   Sparkles, 
   FileSpreadsheet, 
   HelpCircle,
@@ -45,9 +44,7 @@ interface OrderItemsTableProps {
   onAddItem: (customItem?: OrderItem) => void;
   onDuplicateItem: (item: OrderItem) => void;
   onDeleteItem: (itemId: string) => void;
-  onOpenFiscalModal: (item: OrderItem) => void;
-  onOpenSeparationModal: (item: OrderItem) => void;
-  onSaveProduct?: (product: Product) => void;
+  onSaveProduct?: (product: Product, silent?: boolean) => void;
 }
 
 // Helper para destacar os caracteres digitados no texto
@@ -82,8 +79,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   onAddItem,
   onDuplicateItem,
   onDeleteItem,
-  onOpenFiscalModal,
-  onOpenSeparationModal,
   onSaveProduct
 }) => {
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
@@ -299,7 +294,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   };
 
   // Cadastro rápido do produto no catálogo direto da linha do pedido
-  const handleQuickRegisterProduct = (item: OrderItem) => {
+  const handleQuickRegisterProduct = (item: OrderItem, silent: boolean = false) => {
     if (!item.descricao || item.descricao.trim().length === 0) {
       return;
     }
@@ -309,7 +304,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const codInterno = item.codigoInterno || item.codigo || existing?.codigoInterno || generateNextProductCode(products, items);
 
     const prodToSave: Product = {
-      id: existing?.id || ('prod_' + Date.now()),
+      id: existing?.id || ('prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
       codigoInterno: codInterno,
       codigo: codInterno,
       codigoFornecedor: item.codigoFornecedor || existing?.codigoFornecedor || '',
@@ -328,7 +323,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       updatedAt: new Date().toISOString()
     };
 
-    onSaveProduct(prodToSave);
+    onSaveProduct(prodToSave, silent);
 
     // Se o item não tinha código interno, atualiza o item com o código gerado
     if (!item.codigoInterno || !item.codigo) {
@@ -511,6 +506,39 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     return { bruto, desconto, liquido, pecas };
   }, [items]);
 
+  // Navegação por teclado estilo planilha Excel (Enter para descer de linha, Setas Cima/Baixo)
+  const handleExcelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, field: string) => {
+    if (activeAutocompleteItemId) {
+      if (e.key === 'Escape') {
+        setActiveAutocompleteItemId(null);
+        return;
+      }
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const nextInput = document.querySelector<HTMLInputElement>(`input[data-excel-row="${rowIndex + 1}"][data-excel-field="${field}"]`);
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select();
+      }
+    } else if (e.key === 'ArrowDown' && !e.altKey && !activeAutocompleteItemId) {
+      const nextInput = document.querySelector<HTMLInputElement>(`input[data-excel-row="${rowIndex + 1}"][data-excel-field="${field}"]`);
+      if (nextInput) {
+        e.preventDefault();
+        nextInput.focus();
+        nextInput.select();
+      }
+    } else if (e.key === 'ArrowUp' && !e.altKey && !activeAutocompleteItemId && rowIndex > 0) {
+      const prevInput = document.querySelector<HTMLInputElement>(`input[data-excel-row="${rowIndex - 1}"][data-excel-field="${field}"]`);
+      if (prevInput) {
+        e.preventDefault();
+        prevInput.focus();
+        prevInput.select();
+      }
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-visible">
       
@@ -525,12 +553,12 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               {validItemsCount} {validItemsCount === 1 ? 'item' : 'itens'}
             </span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Digitação contínua com auto-inclusão de linhas, códigos, custos e rateio de lojas
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Digitação contínua em formato planilha com auto-inclusão de linhas, códigos, custos e rateio de lojas
           </p>
         </div>
 
-        {/* Barra de Filtro Inteligente Rápido + Botões */}
+        {/* Barra de Ações Rápidas Superior */}
         <div className="flex flex-wrap items-center gap-2">
           
           {/* Campo de Busca Rápida no Topo com Autocomplete */}
@@ -563,9 +591,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               </button>
             )}
 
-            {/* Dropdown de Resultados da Busca Rápida */}
+            {/* Menu Suspenso de Resultados da Busca Rápida Superior */}
             {isQuickSearchOpen && quickSearchText.trim().length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto p-1.5 space-y-1">
+              <div
+                className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-40 max-h-72 overflow-y-auto p-1.5 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150"
+              >
                 {products
                   .filter(p => {
                     const q = quickSearchText.toLowerCase();
@@ -629,26 +659,26 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         </div>
       </div>
 
-      {/* Table responsive container */}
+      {/* Table responsive container com visual e comportamento de planilha do Excel */}
       <div className="overflow-x-auto overflow-y-visible">
-        <table className="w-full text-left border-collapse min-w-[1080px]">
+        <table className="w-full text-left border-collapse border-t border-slate-200 dark:border-slate-700 font-sans text-xs">
           <thead>
-            <tr className="border-b border-slate-200 dark:border-slate-700/80 bg-slate-100/50 dark:bg-slate-900/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              <th className="py-3 px-2 w-8 text-center">#</th>
-              <th className="py-3 px-2 w-14 text-center">FOTO</th>
-              <th className="py-3 px-2 w-28">CÓD. INTERNO</th>
-              <th className="py-3 px-2 w-28">CÓD. FORNECEDOR</th>
-              <th className="py-3 px-3 min-w-[240px]">DESCRIÇÃO DO ITEM</th>
-              <th className="py-3 px-2 w-20 text-center">QTD</th>
-              <th className="py-3 px-2 w-24 text-right">COMPRA (R$)</th>
-              <th className="py-3 px-3 w-28 text-right">TOTAL (R$)</th>
-              <th className="py-3 px-3 w-24 text-center">PDV (R$ 12)</th>
-              <th className="py-3 px-3 w-24 text-right">CUSTO REAL</th>
-              <th className="py-3 px-3 w-28 text-center">MARGEM</th>
-              <th className="py-3 px-3 w-36 text-center">AÇÕES</th>
+            <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-100/90 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider select-none whitespace-nowrap">
+              <th className="py-2.5 px-2 w-10 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-200/50 dark:bg-slate-800/90 whitespace-nowrap">#</th>
+              <th className="py-2.5 px-2 w-12 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">FOTO</th>
+              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CÓD. INTERNO</th>
+              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CÓD. FORNECEDOR</th>
+              <th className="py-2.5 px-3.5 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-full min-w-[280px]">DESCRIÇÃO DO ITEM</th>
+              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">QTD</th>
+              <th className="py-2.5 px-3.5 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">COMPRA (R$)</th>
+              <th className="py-2.5 px-3.5 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">TOTAL (R$)</th>
+              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">PDV (R$ 12)</th>
+              <th className="py-2.5 px-3.5 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CUSTO REAL</th>
+              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">MARGEM</th>
+              <th className="py-2.5 px-3 text-center whitespace-nowrap">AÇÕES</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200/70 dark:divide-slate-700/60 text-xs">
+          <tbody className="divide-y divide-slate-200 dark:divide-slate-700/80 text-xs">
             {items.map((item, index) => {
               const precoCompraEfetivo = item.precoUnitario * (1 - (item.percentualDesconto || 0) / 100);
               const fiscal = calculateItemFiscal(precoCompraEfetivo, item.pdvAlvo, globalFiscal, item.fiscalOverride);
@@ -658,45 +688,48 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               return (
                 <tr 
                   key={item.id}
-                  className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
+                  className="hover:bg-emerald-50/20 dark:hover:bg-slate-800/40 transition-colors group whitespace-nowrap"
                 >
-                  {/* Index */}
-                  <td className="py-2.5 px-2 text-center text-slate-400 font-mono text-[11px]">
+                  {/* Index / Linha Excel */}
+                  <td className="py-2 px-2 text-center bg-slate-50 dark:bg-slate-900/40 text-slate-400 font-mono text-[11px] font-semibold border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap select-none">
                     {index + 1}
                   </td>
 
                   {/* Foto do Produto */}
-                  <td className="py-1.5 px-1.5 text-center">
+                  <td className="py-1 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/20 whitespace-nowrap">
                     <div className="flex items-center justify-center">
                       {item.fotoUrl ? (
                         <div 
-                          className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer relative group/photo shadow-xs"
+                          className="w-8 h-8 rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer relative group/photo shadow-2xs"
                           onClick={() => handleOpenPhotoModal(item)}
                           title="Clique para trocar, ver ampliado ou remover foto"
                         >
                           <img src={item.fotoUrl} alt="" className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition">
-                            <Upload className="w-3.5 h-3.5" />
+                            <Upload className="w-3 h-3" />
                           </div>
                         </div>
                       ) : (
                         <button
                           type="button"
                           onClick={() => handleOpenPhotoModal(item)}
-                          className="w-10 h-10 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition cursor-pointer"
-                          title="Anexar foto do produto (Upload ou URL)"
+                          className="w-8 h-8 rounded-md border border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-center text-slate-400 hover:text-emerald-600 transition cursor-pointer"
+                          title="Anexar foto do produto"
                         >
-                          <ImageIcon className="w-4 h-4" />
+                          <ImageIcon className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
                   </td>
 
                   {/* Código Interno */}
-                  <td className="py-2 px-1.5">
+                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
                     <input
                       type="text"
+                      data-excel-row={index}
+                      data-excel-field="codigoInterno"
                       value={item.codigoInterno || item.codigo || ''}
+                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'codigoInterno')}
                       onChange={(e) => {
                         handleFieldChange(item, 'codigoInterno', e.target.value);
                         handleFieldChange(item, 'codigo', e.target.value);
@@ -714,16 +747,19 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         setAutocompleteQuery(e.target.value);
                       }}
                       placeholder="CÓD INT"
-                      className="w-full px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 font-mono font-bold text-xs text-center focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                      className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-center font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
                       title="Código Interno Mega12"
                     />
                   </td>
 
                   {/* Código do Fornecedor */}
-                  <td className="py-2 px-1.5">
+                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
                     <input
                       type="text"
+                      data-excel-row={index}
+                      data-excel-field="codigoFornecedor"
                       value={item.codigoFornecedor || ''}
+                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'codigoFornecedor')}
                       onChange={(e) => {
                         handleFieldChange(item, 'codigoFornecedor', e.target.value);
                         activeInputRef.current = e.currentTarget;
@@ -740,16 +776,19 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         setAutocompleteQuery(e.target.value);
                       }}
                       placeholder="REF FORN"
-                      className="w-full px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-mono text-xs text-center focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-center font-mono text-slate-700 dark:text-slate-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
                       title="Código de Referência do Fornecedor"
                     />
                   </td>
 
                   {/* Descrição com FILTRO INTELIGENTE / AUTOCOMPLETE */}
-                  <td className="py-2 px-2">
+                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 relative w-full min-w-[280px]">
                     <input
                       type="text"
+                      data-excel-row={index}
+                      data-excel-field="descricao"
                       value={item.descricao}
+                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'descricao')}
                       onChange={(e) => {
                         handleFieldChange(item, 'descricao', e.target.value);
                         activeInputRef.current = e.currentTarget;
@@ -766,115 +805,102 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         setAutocompleteQuery(e.target.value);
                       }}
                       placeholder="Digite o nome ou código do produto..."
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      className="w-full h-full min-h-[38px] px-3.5 py-1.5 text-xs text-slate-900 dark:text-white font-medium bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors"
                     />
                   </td>
 
                   {/* Quantidade Total de Unidades (editável) */}
-                  <td className="py-2 px-1.5 text-center">
+                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
                     <input
                       type="number"
                       min="0"
+                      data-excel-row={index}
+                      data-excel-field="qtdTotalUnidades"
                       value={item.qtdTotalUnidades === 0 ? '' : item.qtdTotalUnidades}
                       placeholder="0"
+                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdTotalUnidades')}
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
-                      className="w-full text-center px-1 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      className="w-full h-full min-h-[38px] px-3 py-1.5 text-center text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
                     />
                   </td>
 
                   {/* Preço Unitário Compra Bruta */}
-                  <td className="py-2 px-2 text-right">
+                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
                     <input
                       type="number"
                       step="0.01"
                       min="0"
+                      data-excel-row={index}
+                      data-excel-field="precoUnitario"
                       value={item.precoUnitario === 0 ? '' : item.precoUnitario}
-                      placeholder="0.00"
+                      placeholder="0,00"
+                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'precoUnitario')}
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => handleFieldChange(item, 'precoUnitario', e.target.value)}
-                      className="w-full text-right px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      className="w-full h-full min-h-[38px] px-3.5 py-1.5 text-right text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
                     />
                   </td>
 
                   {/* Total Compra do Produto */}
-                  <td className="py-2.5 px-3 text-right font-mono">
-                    <div className="flex flex-col items-end leading-tight">
-                      <span className="text-[10px] text-slate-400 font-bold">RS</span>
-                      <span className="font-extrabold text-slate-900 dark:text-white text-xs">
-                        {((item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto * (1 - (item.percentualDesconto || 0) / 100)))).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
+                  <td className="py-2 px-3.5 text-right font-mono border-r border-slate-200 dark:border-slate-700/80 bg-slate-50/30 dark:bg-slate-900/20 whitespace-nowrap">
+                    <span className="font-extrabold text-slate-900 dark:text-white text-xs whitespace-nowrap">
+                      R$ {((item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto * (1 - (item.percentualDesconto || 0) / 100)))).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                   </td>
 
                   {/* PDV Alvo - Fixo R$ 12,00 */}
-                  <td className="py-2 px-2 text-center">
-                    <div 
-                      className="inline-flex flex-col items-center justify-center px-2 py-1 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs font-mono shadow-2xs leading-tight"
+                  <td className="py-2 px-3 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
+                    <span 
+                      className="inline-block px-2.5 py-0.5 rounded text-xs font-bold font-mono text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 whitespace-nowrap"
                       title="Preço de Venda Único Rede Mega 12 (Travado em R$ 12,00)"
                     >
-                      <span className="text-[9px] font-normal text-emerald-600 dark:text-emerald-400">R$</span>
-                      <span>12,00</span>
-                    </div>
+                      R$ 12,00
+                    </span>
                   </td>
 
                   {/* Custo Real Efetivo */}
-                  <td className="py-2.5 px-3 text-right">
-                    <div className="font-extrabold text-amber-600 dark:text-amber-500 font-mono text-xs whitespace-nowrap">
+                  <td className="py-2 px-3.5 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
+                    <div className="font-extrabold text-amber-700 dark:text-amber-400 font-mono text-xs whitespace-nowrap">
                       R$ {fiscal.custoRealEfetivo.toFixed(2)}
                     </div>
                   </td>
 
                   {/* Margem Real (R$ / %) */}
-                  <td className="py-2.5 px-2 text-center">
-                    <div className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800 whitespace-nowrap shadow-2xs">
-                      <span>R$ {fiscal.margemRealUnit.toFixed(2)}</span>
-                      <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">({fiscal.margemPercentual.toFixed(0)}%)</span>
-                    </div>
+                  <td className="py-2 px-3 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
+                    <span className="inline-block px-2.5 py-0.5 rounded text-xs font-bold font-mono bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                      R$ {fiscal.margemRealUnit.toFixed(2)} <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">({fiscal.margemPercentual.toFixed(0)}%)</span>
+                    </span>
                   </td>
 
                   {/* Botões de Ação */}
-                  <td className="py-2 px-2 text-center">
+                  <td className="py-1 px-2 text-center whitespace-nowrap">
                     <div className="flex items-center justify-center gap-1 text-slate-400">
-                      
-                      {/* Romaneio / Separação */}
-                      <button
-                        type="button"
-                        onClick={() => onOpenSeparationModal(item)}
-                        className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition cursor-pointer"
-                        title="Romaneio & Separação por Loja"
-                      >
-                        <Package className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                      </button>
-
-                      {/* Rateio por Loja */}
-                      <button
-                        type="button"
-                        onClick={() => onOpenSeparationModal(item)}
-                        className="p-1.5 rounded-lg text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/60 transition cursor-pointer"
-                        title="Rateio por Loja"
-                      >
-                        <Store className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                      </button>
+                      {/* Salvar Produto no Catálogo (quando necessário) */}
+                      {!isOrderItemBlank(item) && item.descricao && item.descricao.trim().length > 0 && !findCatalogProduct(item) && onSaveProduct && (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickRegisterProduct(item)}
+                          className="p-1 rounded-md text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition cursor-pointer"
+                          title="Salvar produto no Catálogo"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                        </button>
+                      )}
 
                       {/* Duplicar */}
                       <button
                         type="button"
                         onClick={() => onDuplicateItem(item)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                        disabled={isOrderItemBlank(item)}
+                        className={`p-1 rounded-md transition ${
+                          isOrderItemBlank(item)
+                            ? 'text-slate-300 dark:text-slate-700 opacity-30 cursor-not-allowed'
+                            : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer'
+                        }`}
                         title="Duplicar Linha"
                       >
                         <Copy className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Abrir Modal Fiscal */}
-                      <button
-                        type="button"
-                        onClick={() => onOpenFiscalModal(item)}
-                        className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition cursor-pointer"
-                        title="Simulador Fiscal & Limite de Preço"
-                      >
-                        <Calculator className="w-3.5 h-3.5" />
                       </button>
 
                       {/* Excluir */}
@@ -882,7 +908,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         type="button"
                         onClick={() => onDeleteItem(item.id)}
                         disabled={isOrderItemBlank(item) && index === items.length - 1}
-                        className={`p-1.5 rounded-lg transition ${
+                        className={`p-1 rounded-md transition ${
                           isOrderItemBlank(item) && index === items.length - 1
                             ? 'text-slate-300 dark:text-slate-700 opacity-30 cursor-not-allowed'
                             : 'text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/60 cursor-pointer'
@@ -891,7 +917,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       >
                         <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                       </button>
-
                     </div>
                   </td>
                 </tr>
@@ -905,7 +930,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200/70 dark:border-slate-700/70 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-            💡 Digite na linha em branco para incluir produtos continuamente • Descontos aplicados individualmente por item
+            💡 Planilha Excel: Pressione <strong>Enter</strong> ou <strong>Setas (↑ ↓)</strong> para navegar rapidamente entre as células • Digite na última linha para auto-inclusão
           </span>
         </div>
 

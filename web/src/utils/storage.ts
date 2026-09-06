@@ -1188,34 +1188,101 @@ export function saveProductsList(products: Product[]): void {
 
 export function saveProduct(product: Product): Product[] {
   const list = getProductsList();
-  const index = list.findIndex(p => p.id === product.id);
+  const codInterno = (product.codigoInterno || product.codigo || '').trim().toLowerCase();
+  const desc = (product.descricao || '').trim().toLowerCase();
+  
+  const index = list.findIndex(p => {
+    if (p.id === product.id) return true;
+    const pCod = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
+    const pDesc = (p.descricao || '').trim().toLowerCase();
+    if (codInterno && pCod && codInterno === pCod) return true;
+    if (desc && pDesc && desc === pDesc) return true;
+    return false;
+  });
+
+  const existing = index >= 0 ? list[index] : null;
+  const targetId = existing ? existing.id : (product.id || 'prod_' + Date.now());
+
   const normalized: Product = {
     ...product,
-    codigoInterno: product.codigoInterno || product.codigo || `PRD-${Date.now()}`,
-    codigo: product.codigoInterno || product.codigo || `PRD-${Date.now()}`,
-    codigoFornecedor: product.codigoFornecedor || '',
-    codigoBarras: product.codigoBarras || product.eanBarcode || '',
-    eanBarcode: product.codigoBarras || product.eanBarcode || '',
-    pdvSugerido: 12.00,
+    id: targetId,
+    codigoInterno: product.codigoInterno || product.codigo || existing?.codigoInterno || `PRD-${Date.now()}`,
+    codigo: product.codigoInterno || product.codigo || existing?.codigo || `PRD-${Date.now()}`,
+    codigoFornecedor: product.codigoFornecedor || existing?.codigoFornecedor || '',
+    codigoBarras: product.codigoBarras || product.eanBarcode || existing?.codigoBarras || '',
+    eanBarcode: product.codigoBarras || product.eanBarcode || existing?.eanBarcode || '',
+    descricao: (product.descricao || '').trim(),
+    categoria: product.categoria || existing?.categoria || 'Geral',
+    fotoUrl: product.fotoUrl || existing?.fotoUrl || '',
+    precoUnitarioPadrao: product.precoUnitarioPadrao > 0 ? product.precoUnitarioPadrao : (existing?.precoUnitarioPadrao || 0),
+    pdvSugerido: product.pdvSugerido || existing?.pdvSugerido || 12.00,
+    ncm: product.ncm || existing?.ncm || '',
+    supplierId: product.supplierId || existing?.supplierId || '',
+    nomeFornecedor: product.nomeFornecedor || existing?.nomeFornecedor || '',
+    ativo: true,
+    createdAt: existing?.createdAt || product.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
-  let updatedList: Product[];
 
+  let updatedList: Product[];
   if (index >= 0) {
     updatedList = [...list];
     updatedList[index] = normalized;
   } else {
-    updatedList = [
-      {
-        ...normalized,
-        id: product.id || 'prod_' + Date.now(),
-        createdAt: new Date().toISOString()
-      },
-      ...list
-    ];
+    updatedList = [normalized, ...list];
   }
   saveProductsList(updatedList);
   return updatedList;
+}
+
+export function saveBatchProductsToStorage(productsToSave: Product[]): Product[] {
+  let currentList = getProductsList();
+  for (const prod of productsToSave) {
+    if (!prod || !prod.descricao || prod.descricao.trim().length === 0) continue;
+    const codInterno = (prod.codigoInterno || prod.codigo || '').trim().toLowerCase();
+    const desc = (prod.descricao || '').trim().toLowerCase();
+
+    const idx = currentList.findIndex(p => {
+      if (p.id === prod.id) return true;
+      const pCod = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
+      const pDesc = (p.descricao || '').trim().toLowerCase();
+      if (codInterno && pCod && codInterno === pCod) return true;
+      if (desc && pDesc && desc === pDesc) return true;
+      return false;
+    });
+
+    const existing = idx >= 0 ? currentList[idx] : null;
+    const targetId = existing ? existing.id : (prod.id || 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6));
+
+    const normalized: Product = {
+      ...prod,
+      id: targetId,
+      codigoInterno: prod.codigoInterno || prod.codigo || existing?.codigoInterno || `PRD-${Date.now()}`,
+      codigo: prod.codigoInterno || prod.codigo || existing?.codigo || `PRD-${Date.now()}`,
+      codigoFornecedor: prod.codigoFornecedor || existing?.codigoFornecedor || '',
+      codigoBarras: prod.codigoBarras || prod.eanBarcode || existing?.codigoBarras || '',
+      eanBarcode: prod.codigoBarras || prod.eanBarcode || existing?.eanBarcode || '',
+      descricao: (prod.descricao || '').trim(),
+      categoria: prod.categoria || existing?.categoria || 'Geral',
+      fotoUrl: prod.fotoUrl || existing?.fotoUrl || '',
+      precoUnitarioPadrao: prod.precoUnitarioPadrao > 0 ? prod.precoUnitarioPadrao : (existing?.precoUnitarioPadrao || 0),
+      pdvSugerido: prod.pdvSugerido || existing?.pdvSugerido || 12.00,
+      ncm: prod.ncm || existing?.ncm || '',
+      supplierId: prod.supplierId || existing?.supplierId || '',
+      nomeFornecedor: prod.nomeFornecedor || existing?.nomeFornecedor || '',
+      ativo: true,
+      createdAt: existing?.createdAt || prod.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (idx >= 0) {
+      currentList[idx] = normalized;
+    } else {
+      currentList = [normalized, ...currentList];
+    }
+  }
+  saveProductsList(currentList);
+  return currentList;
 }
 
 export function deleteProduct(productId: string): Product[] {

@@ -14,13 +14,19 @@ class ProductRepository {
   }
 
   async upsert(product) {
-    const existing = await this.findById(product.id);
     const now = new Date().toISOString();
-    const codInterno = product.codigoInterno || product.codigo;
-    const codForn = product.codigoFornecedor || '';
-    const codBarras = product.codigoBarras || product.eanBarcode || '';
+    const codInterno = (product.codigoInterno || product.codigo || '').trim();
+    const codForn = (product.codigoFornecedor || '').trim();
+    const codBarras = (product.codigoBarras || product.eanBarcode || '').trim();
     const supplierId = product.supplierId || product.fornecedorPadraoId || '';
     const nomeFornecedor = product.nomeFornecedor || product.fornecedorPadraoNome || '';
+
+    let existing = await this.findById(product.id);
+    if (!existing && codInterno) {
+      existing = await this.findByCodigo(codInterno);
+    }
+
+    const targetId = existing ? existing.id : (product.id || ('prod_' + Date.now()));
 
     if (existing) {
       const sql = `
@@ -38,19 +44,19 @@ class ProductRepository {
         codForn,
         codBarras,
         product.descricao,
-        product.categoria || 'Utilidades',
-        product.subcategoria || '',
-        supplierId,
-        nomeFornecedor,
-        Number(product.precoUnitarioPadrao) || 0,
-        Number(product.pdvSugerido) || 12.0,
-        Number(product.qtdPorPacote) || 12,
-        product.fotoUrl || '',
-        product.ncm || '',
-        codBarras,
+        product.categoria || existing.categoria || 'Utilidades',
+        product.subcategoria || existing.subcategoria || '',
+        supplierId || existing.supplierId || '',
+        nomeFornecedor || existing.nomeFornecedor || '',
+        Number(product.precoUnitarioPadrao) || Number(existing.precoUnitarioPadrao) || 0,
+        Number(product.pdvSugerido) || Number(existing.pdvSugerido) || 12.0,
+        Number(product.qtdPorPacote) || Number(existing.qtdPorPacote) || 12,
+        product.fotoUrl || existing.fotoUrl || '',
+        product.ncm || existing.ncm || '',
+        codBarras || existing.codigoBarras || '',
         product.ativo !== undefined ? (product.ativo ? 1 : 0) : 1,
         now,
-        product.id
+        targetId
       ]);
     } else {
       const sql = `
@@ -62,7 +68,7 @@ class ProductRepository {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await execute(sql, [
-        product.id,
+        targetId,
         codInterno,
         codInterno,
         codForn,
@@ -84,7 +90,7 @@ class ProductRepository {
       ]);
     }
 
-    return await this.findById(product.id);
+    return await this.findById(targetId);
   }
 
   async delete(id) {

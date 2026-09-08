@@ -30,6 +30,20 @@ import {
   addDaysToDate
 } from '../utils/installments';
 
+export const FORMA_PAGAMENTO_OPTIONS = [
+  { value: 'Boleto', label: '📄 Boleto' },
+  { value: 'Depósito', label: '🏦 Depósito / PIX' },
+  { value: 'Cheque', label: '📜 Cheque' },
+  { value: 'Boleto / Depósito', label: '📄/🏦 Boleto / Depósito' },
+  { value: 'Boleto / Cheque', label: '📄/📜 Boleto / Cheque' }
+];
+
+export const TIPO_FRETE_OPTIONS = [
+  { value: 'CIF', label: '🚚 CIF (Por Conta do Fornecedor)' },
+  { value: 'FOB', label: '🚛 FOB (Por Conta da Mega 12)' },
+  { value: 'Retira', label: '🏬 Retira (Retirada no Fornecedor)' }
+];
+
 interface OrderHeaderFormProps {
   header: OrderHeader;
   suppliers: Supplier[];
@@ -577,12 +591,30 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
                 </div>
 
-                {/* LINHA 1: CONFIGURAÇÃO GERAL DE PAGAMENTO & DESCONTOS */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                  {/* Dropdown 1: Forma de Pagamento / Intervalo de Prazo */}
+                {/* LINHA 1: CONFIGURAÇÃO DE FORMA DE PAGAMENTO & PRAZOS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-3.5">
+                  {/* 1. Forma de Pagamento */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      1. Modalidade de Pagamento / Prazo
+                      1. Forma de Pagamento
+                    </label>
+                    <select
+                      value={header.formaPagamento || 'Boleto'}
+                      onChange={(e) => handleFieldChange('formaPagamento', e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
+                    >
+                      {FORMA_PAGAMENTO_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 2. Modalidade de Prazo */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      2. Prazo / Intervalo
                     </label>
                     <select
                       value={currentPrazo}
@@ -597,10 +629,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </select>
                   </div>
 
-                  {/* Dropdown 2: Quantidade de Parcelas */}
+                  {/* 3. Quantidade de Parcelas */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>2. Quantidade de Parcelas</span>
+                      <span>3. Qtd Parcelas</span>
                     </label>
                     <select
                       value={isVistaIntegral ? 1 : isEntradaMista ? (1 + saldoParcelas) : currentParcelas}
@@ -622,11 +654,63 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </select>
                   </div>
 
-                  {/* 3. Desconto (% OFF) */}
+                  {/* 4. Previsão de Pagamento */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      4. Previsão de Pagamento
+                    </label>
+                    <input
+                      type="text"
+                      value={header.previsaoPagamento || ''}
+                      onChange={(e) => handleFieldChange('previsaoPagamento', e.target.value)}
+                      placeholder="Ex: 30 dias após entrega"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden shadow-2xs font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* LINHA 2: FRETE, DESCONTO GERAL E FATURAMENTO */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  {/* 5. Tipo de Frete */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      5. Modalidade Frete
+                    </label>
+                    <select
+                      value={header.tipoFrete || 'CIF'}
+                      onChange={(e) => handleFieldChange('tipoFrete', e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
+                    >
+                      {TIPO_FRETE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 6. Valor do Frete */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      6. Valor Frete (R$)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={header.valorFrete === 0 || header.valorFrete === undefined ? '' : header.valorFrete}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => handleFieldChange('valorFrete', parseFloat(e.target.value) || 0)}
+                      placeholder="0,00"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-bold shadow-2xs"
+                    />
+                  </div>
+
+                  {/* 7. Desconto Geral (% OFF) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>3. Desconto (% OFF)</span>
-                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">Ativo</span>
+                      <span>7. Desconto Comercial</span>
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">Total</span>
                     </label>
                     <div className="relative">
                       <input
@@ -646,11 +730,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </div>
                   </div>
 
-                  {/* 4. NOTA (%) */}
+                  {/* 8. NOTA (%) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>4. NOTA (%)</span>
-                      <span className="text-[10px] font-mono text-slate-400" title="Percentual faturado em Nota Fiscal gravado no BD para média histórica">Média BD</span>
+                      <span>8. Faturamento Nota (%)</span>
+                      <span className="text-[10px] font-mono text-slate-400">Histórico BD</span>
                     </label>
                     <div className="relative">
                       <input

@@ -107,11 +107,11 @@ class ExportService {
     doc.setFontSize(14);
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.text('REDE MEGA 12 - PEDIDO DE COMPRA OFICIAL', 12, 11);
+    doc.text('MEGA 12 - PEDIDO DE COMPRA', 12, 11);
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text('PROPOSTA COMERCIAL & AUTORIZAÇÃO DE FORNECIMENTO', 12, 17);
+    doc.text('AUTORIZAÇÃO DE FORNECIMENTO & COMPRA OFICIAL', 12, 17);
 
     const now = new Date();
     doc.text(`Emissão: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 148, 17);
@@ -152,25 +152,31 @@ class ExportService {
     doc.text(`Status: ${order.header?.status || 'Aprovado'}`, 160, 36);
     doc.text(`Fornecedor: ${order.header?.fornecedor || 'Fornecedor'}`, 111, 40.5);
     doc.text(`Vendedor / Contato: ${order.header?.vendedor || 'N/A'} (${order.header?.contatoVendedor || 'S/ Contato'})`, 111, 45);
-    doc.text(`Condição de Pagto: ${order.header?.condicaoPagamento || '30/60/90 Dias'}`, 111, 49.5);
-    doc.text(`Entrega Prevista: ${order.header?.dataEntregaPrevista || 'A combinar'}`, 111, 54);
+    
+    const formaPg = order.header?.formaPagamento ? ` (${order.header.formaPagamento})` : '';
+    const condPg = order.header?.condicaoPagamento || 'A Combinar';
+    doc.text(`Pagamento: ${condPg}${formaPg}`, 111, 49.5);
 
-    const descOff = Number(order.header?.percentualDescontoOff || 0);
+    const freteTipo = order.header?.tipoFrete || 'CIF';
+    const freteVal = Number(order.header?.valorFrete) > 0 ? ` (R$ ${Number(order.header?.valorFrete).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : '';
+    doc.text(`Frete: ${freteTipo}${freteVal} | Entrega: ${order.header?.dataEntregaPrevista || 'A combinar'}`, 111, 54);
+
+    const descOff = Number(order.header?.percentualDescontoOff || order.header?.descontoComercialTotal || 0);
     const aliqSt = Number(order.header?.aliquotaSt || 0);
     doc.text(`Desconto: ${descOff > 0 ? `${descOff}% OFF` : 'Sem desconto'} | ST: ${aliqSt > 0 ? `${aliqSt}%` : '0%'}`, 111, 58.5);
 
-    // Tabela de Itens Comercial
+    // Tabela de Itens Comercial (SEM PDV ALVO OU MARGENS - PARA FORNECEDOR)
     const headCols = [
       '#',
       'Cód. Interno',
       'Ref. Fornec.',
       'Descrição do Produto',
-      'Emb. (Pç/Cx)',
-      'Qtd Cx',
+      'Qtd/Pac',
+      'Qtd Pac',
       'Total Peças',
       'Preço Unit.',
-      'Preço Cx.',
-      'Total Item'
+      'Desc. (%)',
+      'Total Líq.'
     ];
 
     let totalVolumesGeral = 0;
@@ -181,17 +187,19 @@ class ExportService {
     const bodyRows = (order.items || []).map((item, idx) => {
       const codInterno = item.codigoInterno || item.codigo || `PRD-${idx + 1}`;
       const codFornecedor = item.codigoFornecedor || '-';
-      const pack = Number(item.qtdPorPacote) || 1;
-      const caixas = Number(item.qtdPacotes) || 0;
-      const pecas = Number(item.qtdTotalUnidades) || (caixas * pack);
+      const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
+      const pacotes = Number(item.qtdPacotes) || 0;
+      const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
       const precoUnit = Number(item.precoUnitario) || 0;
-      const precoCx = Number(item.precoPacote) || (precoUnit * pack);
-      const valorTotal = Number(item.custoLiquidoTotalComDesconto || item.custoLiquidoTotal || item.valorTotalBruto || (pecas * precoUnit));
+      const descPct = Number(item.percentualDesconto) || 0;
+      const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const valorDesc = item.valorDescontoItem !== undefined ? item.valorDescontoItem : (valorBruto * (descPct / 100));
+      const valorLiquido = item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (valorBruto - valorDesc);
 
-      totalVolumesGeral += caixas;
+      totalVolumesGeral += pacotes;
       totalPecasGeral += pecas;
-      subtotalBrutoGeral += (pecas * precoUnit);
-      subtotalLiquidoGeral += valorTotal;
+      subtotalBrutoGeral += valorBruto;
+      subtotalLiquidoGeral += valorLiquido;
 
       return [
         String(idx + 1),
@@ -199,11 +207,11 @@ class ExportService {
         codFornecedor,
         item.descricao || 'Produto sem descrição',
         String(pack),
-        caixas.toLocaleString('pt-BR'),
-        pecas.toLocaleString('pt-BR'),
+        pacotes.toLocaleString('pt-BR'),
+        pecas.toLocaleString('pt-BR') + ' un',
         `R$ ${precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        `R$ ${precoCx.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        descPct > 0 ? `${descPct}%` : '-',
+        `R$ ${valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       ];
     });
 
@@ -213,7 +221,7 @@ class ExportService {
       '',
       `${(order.items || []).length} itens`,
       '',
-      totalVolumesGeral.toLocaleString('pt-BR') + ' cx',
+      totalVolumesGeral.toLocaleString('pt-BR') + ' pac',
       totalPecasGeral.toLocaleString('pt-BR') + ' un',
       '',
       '',
@@ -229,15 +237,15 @@ class ExportService {
       headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.2 },
       columnStyles: {
         0: { cellWidth: 8, halign: 'center' },
-        1: { cellWidth: 20, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
-        2: { cellWidth: 20, halign: 'center', textColor: [100, 116, 139] },
-        3: { cellWidth: 52, halign: 'left', fontStyle: 'bold' },
+        1: { cellWidth: 18, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
+        2: { cellWidth: 18, halign: 'center', textColor: [100, 116, 139] },
+        3: { cellWidth: 48, halign: 'left', fontStyle: 'bold' },
         4: { cellWidth: 14, halign: 'center' },
         5: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
         6: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
         7: { cellWidth: 18, halign: 'right' },
-        8: { cellWidth: 18, halign: 'right' },
-        9: { cellWidth: 22, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }
+        8: { cellWidth: 14, halign: 'center' },
+        9: { cellWidth: 20, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }
       },
       didParseCell: (data) => {
         if (data.row.index === bodyRows.length) {
@@ -320,7 +328,7 @@ class ExportService {
     doc.setFontSize(7);
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'bold');
-    doc.text('ALS 10 / REDE MEGA 12 (COMPRADOR)', 30, sigY + 12);
+    doc.text('ALS 10 / MEGA 12 (COMPRADOR)', 30, sigY + 12);
     doc.text('ACEITE DO FORNECEDOR / REPRESENTANTE', 126, sigY + 12);
 
     const buffer = Buffer.from(doc.output('arraybuffer'));

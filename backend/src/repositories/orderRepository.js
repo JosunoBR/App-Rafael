@@ -42,11 +42,12 @@ class OrderRepository {
       const sql = `
         UPDATE purchase_orders SET
           numeroPedido = ?, fornecedor = ?, supplierId = ?, aliquotaSt = ?,
-          vendedor = ?, contatoVendedor = ?, condicaoPagamento = ?, dataEmissao = ?,
-          dataEntregaPrevista = ?, percentualDescontoOff = ?, percentualNota = ?,
-          observacoes = ?, status = ?, separationStatus = ?, totalLiquido = ?,
-          totalPecas = ?, installmentsJson = ?, itemsJson = ?,
-          separationDistributionJson = ?, updatedAt = ?
+          vendedor = ?, contatoVendedor = ?, condicaoPagamento = ?, formaPagamento = ?,
+          previsaoPagamento = ?, tipoFrete = ?, valorFrete = ?, descontoComercialTotal = ?,
+          descontoComercialTipo = ?, isDraft = ?, dataEmissao = ?, dataEntregaPrevista = ?,
+          percentualDescontoOff = ?, percentualNota = ?, observacoes = ?, status = ?,
+          separationStatus = ?, totalLiquido = ?, totalPecas = ?, installmentsJson = ?,
+          itemsJson = ?, separationDistributionJson = ?, updatedAt = ?
         WHERE id = ?
       `;
       await execute(sql, [
@@ -57,6 +58,13 @@ class OrderRepository {
         order.header.vendedor || '',
         order.header.contatoVendedor || '',
         order.header.condicaoPagamento || '30/60/90 Dias',
+        order.header.formaPagamento || 'Boleto',
+        order.header.previsaoPagamento || '',
+        order.header.tipoFrete || 'CIF',
+        Number(order.header.valorFrete) || 0,
+        Number(order.header.descontoComercialTotal) || 0,
+        order.header.descontoComercialTipo || '%',
+        order.header.isDraft ? 1 : 0,
         order.header.dataEmissao || '',
         order.header.dataEntregaPrevista || '',
         Number(order.header.percentualDescontoOff) || 0,
@@ -76,11 +84,13 @@ class OrderRepository {
       const sql = `
         INSERT INTO purchase_orders (
           id, numeroPedido, fornecedor, supplierId, aliquotaSt, vendedor,
-          contatoVendedor, condicaoPagamento, dataEmissao, dataEntregaPrevista,
-          percentualDescontoOff, percentualNota, observacoes, status,
-          separationStatus, totalLiquido, totalPecas, installmentsJson,
-          itemsJson, separationDistributionJson, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          contatoVendedor, condicaoPagamento, formaPagamento, previsaoPagamento,
+          tipoFrete, valorFrete, descontoComercialTotal, descontoComercialTipo,
+          isDraft, dataEmissao, dataEntregaPrevista, percentualDescontoOff,
+          percentualNota, observacoes, status, separationStatus, totalLiquido,
+          totalPecas, installmentsJson, itemsJson, separationDistributionJson,
+          createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await execute(sql, [
         order.header.id,
@@ -91,6 +101,13 @@ class OrderRepository {
         order.header.vendedor || '',
         order.header.contatoVendedor || '',
         order.header.condicaoPagamento || '30/60/90 Dias',
+        order.header.formaPagamento || 'Boleto',
+        order.header.previsaoPagamento || '',
+        order.header.tipoFrete || 'CIF',
+        Number(order.header.valorFrete) || 0,
+        Number(order.header.descontoComercialTotal) || 0,
+        order.header.descontoComercialTipo || '%',
+        order.header.isDraft ? 1 : 0,
         order.header.dataEmissao || '',
         order.header.dataEntregaPrevista || '',
         Number(order.header.percentualDescontoOff) || 0,
@@ -116,10 +133,11 @@ class OrderRepository {
         await execute(`
           INSERT INTO order_items (
             id, orderId, codigoInterno, codigoFornecedor, codigo, descricao, fotoUrl,
-            qtdTotalUnidades, precoUnitario, valorTotalBruto, percentualDesconto, valorDescontoItem, valorTotalLiquido,
+            qtdNoPacote, qtdPacotes, qtdTotalUnidades, precoUnitario, valorTotalBruto,
+            percentualDesconto, valorDescontoItem, valorTotalLiquido,
             pdvAlvo, despesasPdvUnit, creditoIcmsUnit, custoRealEfetivo, margemRealUnit, margemPercentual,
             qtdReservaEstoque, separacaoManual, separacaoLojasJson, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           itemId,
           order.header.id,
@@ -128,6 +146,8 @@ class OrderRepository {
           item.codigo || item.codigoInterno || '',
           item.descricao || '',
           item.fotoUrl || '',
+          Number(item.qtdNoPacote !== undefined ? item.qtdNoPacote : (item.qtdPorPacote || 1)) || 1,
+          Number(item.qtdPacotes !== undefined ? item.qtdPacotes : 0) || 0,
           Number(item.qtdTotalUnidades) || 0,
           Number(item.precoUnitario) || 0,
           Number(item.valorTotalBruto) || 0,
@@ -272,6 +292,8 @@ class OrderRepository {
           codigo: it.codigo,
           descricao: it.descricao,
           fotoUrl: it.fotoUrl,
+          qtdNoPacote: it.qtdNoPacote !== undefined ? it.qtdNoPacote : (it.qtdPorPacote || 1),
+          qtdPacotes: it.qtdPacotes !== undefined ? it.qtdPacotes : 0,
           qtdTotalUnidades: it.qtdTotalUnidades,
           precoUnitario: it.precoUnitario,
           valorTotalBruto: it.valorTotalBruto,
@@ -356,6 +378,13 @@ class OrderRepository {
         vendedor: r.vendedor,
         contatoVendedor: r.contatoVendedor,
         condicaoPagamento: r.condicaoPagamento,
+        formaPagamento: r.formaPagamento || 'Boleto',
+        previsaoPagamento: r.previsaoPagamento || '',
+        tipoFrete: r.tipoFrete || 'CIF',
+        valorFrete: r.valorFrete || 0,
+        descontoComercialTotal: r.descontoComercialTotal || 0,
+        descontoComercialTipo: r.descontoComercialTipo || '%',
+        isDraft: r.isDraft === 1,
         dataEmissao: r.dataEmissao,
         dataEntregaPrevista: r.dataEntregaPrevista,
         percentualDescontoOff: r.percentualDescontoOff,
@@ -371,6 +400,55 @@ class OrderRepository {
       inspection,
       separationDistribution
     };
+  }
+
+  async getNextNumeroPedido() {
+    const rows = await queryAll("SELECT numeroPedido FROM purchase_orders");
+    let maxNum = 0;
+    rows.forEach(r => {
+      const match = r.numeroPedido && r.numeroPedido.match(/PED-(\d+)/i);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    return `PED-${String(maxNum + 1).padStart(4, '0')}`;
+  }
+
+  async duplicate(id) {
+    const original = await this.findById(id);
+    if (!original) throw new Error('Pedido não encontrado para duplicação');
+    const newNumero = await this.getNextNumeroPedido();
+    const newId = `po_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+
+    const duplicatedItems = (original.items || []).map(item => ({
+      ...item,
+      id: `it_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      orderId: newId,
+      qtdReservaEstoque: 0,
+      separacaoLojas: {}
+    }));
+
+    const duplicatedOrder = {
+      header: {
+        ...original.header,
+        id: newId,
+        numeroPedido: newNumero,
+        dataEmissao: now.split('T')[0],
+        status: 'Em Cotação',
+        separationStatus: 'Pendente',
+        isDraft: true,
+        createdAt: now,
+        updatedAt: now
+      },
+      items: duplicatedItems,
+      installments: [],
+      inspection: null,
+      separationDistribution: null
+    };
+
+    return await this.save(duplicatedOrder);
   }
 }
 

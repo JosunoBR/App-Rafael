@@ -111,6 +111,16 @@ export async function deleteOrderFromDb(orderId: string): Promise<void> {
   if (!res.ok) throw new Error('Erro ao excluir pedido do SQLite');
 }
 
+export async function duplicateOrderInDb(orderId: string): Promise<PurchaseOrder> {
+  const res = await fetch(`${API_BASE_URL}/orders/${orderId}/duplicate`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' })
+  });
+  if (!res.ok) throw new Error('Erro ao duplicar pedido no SQLite');
+  const data = await res.json();
+  return data.order;
+}
+
 export async function updateInstallmentInDb(
   orderId: string, 
   installment: any

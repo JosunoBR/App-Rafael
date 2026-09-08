@@ -45,6 +45,15 @@ class OrderController {
       next(err);
     }
   }
+
+  async duplicate(req, res, next) {
+    try {
+      const result = await orderService.duplicateOrder(req.params.id);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new OrderController();

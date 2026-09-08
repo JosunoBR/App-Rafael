@@ -66,14 +66,14 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setFillColor(5, 150, 105); // Emerald-600
     doc.rect(0, 0, 210, 22, 'F');
 
-    doc.setFontSize(13);
+    doc.setFontSize(14);
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.text('REDE MEGA 12 - PEDIDO DE COMPRA OFICIAL', 12, 11);
+    doc.text('MEGA 12 - PEDIDO DE COMPRA', 12, 11);
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text('PROPOSTA COMERCIAL & AUTORIZAÇÃO DE FORNECIMENTO', 12, 17);
+    doc.text('AUTORIZAÇÃO DE FORNECIMENTO & COMPRA OFICIAL', 12, 17);
 
     const now = new Date();
     doc.text(`Emissão: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 148, 17);
@@ -114,23 +114,30 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.text(`Status: ${order.header?.status || 'Aprovado'}`, 160, 36);
     doc.text(`Fornecedor: ${order.header?.fornecedor || 'Fornecedor'}`, 111, 40.5);
     doc.text(`Vendedor / Contato: ${order.header?.vendedor || 'N/A'} (${order.header?.contatoVendedor || 'S/ Contato'})`, 111, 45);
-    doc.text(`Condição de Pagto: ${order.header?.condicaoPagamento || '30/60/90 Dias'}`, 111, 49.5);
-    doc.text(`Entrega Prevista: ${order.header?.dataEntregaPrevista || 'A combinar'}`, 111, 54);
+    
+    const formaPg = order.header?.formaPagamento ? ` (${order.header.formaPagamento})` : '';
+    const condPg = order.header?.condicaoPagamento || 'A Combinar';
+    doc.text(`Pagamento: ${condPg}${formaPg}`, 111, 49.5);
 
-    const descOff = Number(order.header?.percentualDescontoOff || 0);
+    const freteTipo = order.header?.tipoFrete || 'CIF';
+    const freteVal = Number(order.header?.valorFrete) > 0 ? ` (R$ ${Number(order.header?.valorFrete).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : '';
+    doc.text(`Frete: ${freteTipo}${freteVal} | Entrega: ${order.header?.dataEntregaPrevista || 'A combinar'}`, 111, 54);
+
+    const descOff = Number(order.header?.percentualDescontoOff || order.header?.descontoComercialTotal || 0);
     const aliqSt = Number(order.header?.aliquotaSt || 0);
 
-    // Tabela de Itens Comercial
+    // Tabela de Itens Comercial (SEM PDV ALVO OU MARGENS INTERNAS - PARA FORNECEDOR)
     const headCols = [
       '#',
       'Cód. Interno',
       'Ref. Fornec.',
       'Descrição do Produto',
-      'Qtd (Unidades)',
+      'Qtd/Pac',
+      'Qtd Pac',
+      'Total Peças',
       'Preço Unit.',
       'Desc. (%)',
-      'Total Líq.',
-      'PDV Alvo'
+      'Total Líq.'
     ];
 
     let totalPecasGeral = 0;
@@ -141,14 +148,14 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     const bodyRows = (order.items || []).map((item, idx) => {
       const codInterno = item.codigoInterno || item.codigo || `PRD-${idx + 1}`;
       const codFornecedor = item.codigoFornecedor || '-';
-      const pecas = Number(item.qtdTotalUnidades) || 0;
+      const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
       const pacotes = Number(item.qtdPacotes) || 0;
+      const pecas = Number(item.qtdTotalUnidades) || (pack * pacotes);
       const precoUnit = Number(item.precoUnitario) || 0;
       const descPct = Number(item.percentualDesconto) || 0;
       const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
       const valorDesc = item.valorDescontoItem !== undefined ? item.valorDescontoItem : (valorBruto * (descPct / 100));
       const valorLiquido = item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (valorBruto - valorDesc);
-      const pdv = Number(item.pdvAlvo) || 12.00;
 
       totalPecasGeral += pecas;
       totalVolumesGeral += pacotes;
@@ -160,11 +167,12 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
         codInterno,
         codFornecedor,
         item.descricao || 'Produto sem descrição',
+        String(pack),
+        pacotes.toLocaleString('pt-BR'),
         pecas.toLocaleString('pt-BR') + ' un',
         `R$ ${precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         descPct > 0 ? `${descPct}%` : '-',
-        `R$ ${valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        `R$ ${pdv.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        `R$ ${valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       ];
     });
 
@@ -173,18 +181,19 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     const valorStTotal = aliqSt > 0 ? subtotalAposDesconto * (aliqSt / 100) : 0;
     const subtotalLiquidoGeral = subtotalAposDesconto + valorStTotal;
 
-    doc.text(`Desconto Itens: ${valorDescontoTotal > 0 ? `- R$ ${valorDescontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Sem desconto'} | ST: ${aliqSt > 0 ? `${aliqSt}%` : '0%'}`, 111, 58.5);
+    doc.text(`Desconto Geral: ${descOff > 0 ? `${descOff}%` : '0%'} | ST: ${aliqSt > 0 ? `${aliqSt}%` : '0%'}`, 111, 58.5);
 
     const footerRow = [
       '',
       'TOTAL DO PEDIDO',
       '',
       `${(order.items || []).length} itens`,
+      '',
+      totalVolumesGeral.toLocaleString('pt-BR') + ' pac',
       totalPecasGeral.toLocaleString('pt-BR') + ' un',
       '',
       valorDescontoTotal > 0 ? `-R$ ${valorDescontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '',
-      `R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      ''
+      `R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     ];
 
     autoTable(doc, {
@@ -192,17 +201,19 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       head: [headCols],
       body: [...bodyRows, footerRow],
       theme: 'grid',
-      styles: { fontSize: 7.5, cellPadding: 1.5, halign: 'center', valign: 'middle' },
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+      styles: { fontSize: 7, cellPadding: 1.2, halign: 'center', valign: 'middle' },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.2 },
       columnStyles: {
-        0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 24, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
-        2: { cellWidth: 24, halign: 'center', textColor: [100, 116, 139] },
-        3: { cellWidth: 80, halign: 'left', fontStyle: 'bold' },
-        4: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
-        5: { cellWidth: 24, halign: 'right' },
-        6: { cellWidth: 28, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] },
-        7: { cellWidth: 22, halign: 'right', textColor: [5, 150, 105] }
+        0: { cellWidth: 8, halign: 'center' },
+        1: { cellWidth: 18, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
+        2: { cellWidth: 18, halign: 'center', textColor: [100, 116, 139] },
+        3: { cellWidth: 48, halign: 'left', fontStyle: 'bold' },
+        4: { cellWidth: 14, halign: 'center' },
+        5: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+        6: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+        7: { cellWidth: 18, halign: 'right' },
+        8: { cellWidth: 14, halign: 'center' },
+        9: { cellWidth: 20, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }
       },
       didParseCell: (data) => {
         if (data.row.index === bodyRows.length) {
@@ -283,7 +294,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setFontSize(7);
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'bold');
-    doc.text('ALS 10 / REDE MEGA 12 (COMPRADOR)', 30, sigY + 12);
+    doc.text('ALS 10 / MEGA 12 (COMPRADOR)', 30, sigY + 12);
     doc.text('ACEITE DO FORNECEDOR / REPRESENTANTE', 126, sigY + 12);
 
     doc.save(filename);

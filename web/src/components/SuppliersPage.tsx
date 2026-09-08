@@ -361,44 +361,10 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               />
             </div>
 
-            {/* Condição de Pagamento */}
+            {/* Desconto OFF (%) */}
             <div>
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Condição de Pagamento Padrão
-              </label>
-              <input
-                type="text"
-                value={formData.condicaoPagamentoPadrao}
-                onChange={(e) => setFormData(prev => ({ ...prev, condicaoPagamentoPadrao: e.target.value }))}
-                placeholder="Ex: 30/60/90 Dias"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-medium"
-              />
-            </div>
-
-            {/* Alíquota ST */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Alíquota ST Padrão (%)
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={formData.aliquotaStPadrao === 0 ? '' : formData.aliquotaStPadrao}
-                  placeholder="0"
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => setFormData(prev => ({ ...prev, aliquotaStPadrao: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono font-bold"
-                />
-                <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">%</span>
-              </div>
-            </div>
-
-            {/* Desconto OFF */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Desconto Comercial OFF (%)
+                Histórico OFF (%)
               </label>
               <div className="relative">
                 <input
@@ -413,18 +379,19 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                 />
                 <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">%</span>
               </div>
+              <span className="text-[10px] text-slate-400 mt-1 block">Referência de barganha para próximos pedidos</span>
             </div>
 
-            {/* Observações de Descarga */}
+            {/* Observações sobre o Fornecedor */}
             <div className="md:col-span-3">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Instruções de Entrega & Paletização de Doca
+                Observações sobre o Fornecedor
               </label>
               <textarea
                 rows={2}
                 value={formData.observacoesDescarga}
                 onChange={(e) => setFormData(prev => ({ ...prev, observacoesDescarga: e.target.value }))}
-                placeholder="Ex: Entregar com paletes padrão PBR. Agendar entrega com 24h de antecedência no Depósito Central."
+                placeholder="Anotações gerais, acordos comerciais, restrições ou observações sobre o fornecedor."
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
               />
             </div>

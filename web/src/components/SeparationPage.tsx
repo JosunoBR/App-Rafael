@@ -890,14 +890,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-              Cluster A: 51.3%
-            </span>
-            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-              Cluster B: 35.9%
-            </span>
-            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
-              Cluster C: 12.8%
+            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+              {activeStores.length} Lojas Ativas • Rateio Direto
             </span>
           </div>
         </div>
@@ -906,7 +900,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             
-            {/* Linha 1 de Cabeçalho: Clusters */}
+            {/* Linha 1 de Cabeçalho: Lojas Diretas sem Cluster */}
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-700 text-center font-extrabold text-[11px]">
                 <th rowSpan={2} className="py-2.5 px-3 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 sticky left-0 z-20 min-w-[220px] uppercase">
@@ -915,14 +909,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 <th colSpan={3} className="py-2 px-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
                   BALANÇO GERAL
                 </th>
-                <th colSpan={clusterA.length} className="py-2 px-2 bg-blue-50/70 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
-                  CLUSTER A ({clusterA.length} LOJAS • 51.3%)
-                </th>
-                <th colSpan={clusterB.length} className="py-2 px-2 bg-slate-100 dark:bg-slate-900/70 text-slate-900 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
-                  CLUSTER B ({clusterB.length} LOJAS • 35.9%)
-                </th>
-                <th colSpan={clusterC.length} className="py-2 px-2 bg-teal-50/70 dark:bg-teal-950/60 text-teal-900 dark:text-teal-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
-                  CLUSTER C ({clusterC.length} LOJAS • 12.8%)
+                <th colSpan={activeStores.length} className="py-2 px-2 bg-emerald-50/70 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                  RATEIO INDIVIDUAL POR LOJA ({activeStores.length} FILIAIS)
                 </th>
               </tr>
 

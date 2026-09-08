@@ -67,6 +67,15 @@ class OrderService {
     await orderRepository.delete(id);
     return { success: true, message: `Pedido ${existing.header.numeroPedido} excluído com sucesso.` };
   }
+
+  async duplicateOrder(id) {
+    const duplicated = await orderRepository.duplicate(id);
+    return {
+      success: true,
+      message: `Pedido duplicado com sucesso: ${duplicated.header.numeroPedido}`,
+      order: duplicated
+    };
+  }
 }
 
 module.exports = new OrderService();

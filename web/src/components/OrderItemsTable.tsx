@@ -107,6 +107,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const [isBatchDiscountModalOpen, setIsBatchDiscountModalOpen] = useState(false);
   const [batchDiscountValue, setBatchDiscountValue] = useState<number>(0);
 
+  // Estado para controlar digitação da coluna de preço garantindo sempre 2 casas decimais (R$)
+  const [editingPriceMap, setEditingPriceMap] = useState<Record<string, string>>({});
+
   const fileInputRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const activeInputRef = useRef<HTMLInputElement | null>(null);
   const autocompletePortalRef = useRef<HTMLDivElement | null>(null);
@@ -405,15 +408,32 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
   const handleFieldChange = (item: OrderItem, field: keyof OrderItem, rawValue: any) => {
     let value = rawValue;
-    if (['qtdTotalUnidades', 'precoUnitario', 'percentualDesconto', 'pdvAlvo'].includes(field as string)) {
-      value = parseFloat(rawValue) || 0;
+    if (['qtdNoPacote', 'qtdPacotes', 'qtdTotalUnidades', 'precoUnitario', 'percentualDesconto', 'pdvAlvo'].includes(field as string)) {
+      const sanitized = typeof rawValue === 'string' ? rawValue.replace(',', '.') : rawValue;
+      value = parseFloat(sanitized) || 0;
       if (field === 'percentualDesconto') {
         value = Math.max(0, Math.min(100, value));
       }
     }
 
     const updatedItem = { ...item, [field]: value };
-    const qtd = field === 'qtdTotalUnidades' ? Number(value) : (updatedItem.qtdTotalUnidades || 0);
+
+    // Auto-cálculo de embalagem e peças totais:
+    if (field === 'qtdNoPacote' || field === 'qtdPacotes') {
+      const pacNo = field === 'qtdNoPacote' ? Number(value) : (updatedItem.qtdNoPacote !== undefined ? updatedItem.qtdNoPacote : (updatedItem.qtdPorPacote || 1));
+      const pacQtd = field === 'qtdPacotes' ? Number(value) : (updatedItem.qtdPacotes || 0);
+      updatedItem.qtdTotalUnidades = pacNo * pacQtd;
+    } else if (field === 'qtdTotalUnidades') {
+      const total = Number(value);
+      const pacNo = updatedItem.qtdNoPacote || updatedItem.qtdPorPacote || 1;
+      if (pacNo > 1) {
+        updatedItem.qtdPacotes = Math.floor(total / pacNo);
+      } else {
+        updatedItem.qtdPacotes = total;
+      }
+    }
+
+    const qtd = updatedItem.qtdTotalUnidades || 0;
     const precoBruto = field === 'precoUnitario' ? Number(value) : (updatedItem.precoUnitario || 0);
     const descPct = field === 'percentualDesconto' ? Number(value) : (updatedItem.percentualDesconto || 0);
 
@@ -427,8 +447,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     updatedItem.valorTotalLiquido = valorLiquido;
 
     // Se a separação não for manual, recalcula o rateio automático das 20 lojas
-    if (field === 'qtdTotalUnidades' && !updatedItem.separacaoManual) {
-      const autoSep = calculateAutomaticSeparation(Number(value), stores, updatedItem.qtdReservaEstoque || 0);
+    if (['qtdTotalUnidades', 'qtdNoPacote', 'qtdPacotes'].includes(field as string) && !updatedItem.separacaoManual) {
+      const autoSep = calculateAutomaticSeparation(Number(updatedItem.qtdTotalUnidades), stores, updatedItem.qtdReservaEstoque || 0);
       updatedItem.separacaoLojas = autoSep.allocations;
       updatedItem.qtdReservaEstoque = autoSep.reserveStock;
     }
@@ -643,19 +663,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             <Package className="w-3.5 h-3.5" />
             <span>Catálogo ({products.length || 40})</span>
           </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setQuickSearchText('Presentes');
-              setIsQuickSearchOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition cursor-pointer shadow-2xs"
-            title="Exemplo Presentes"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span>Exemplo Presentes</span>
-          </button>
         </div>
       </div>
 
@@ -668,12 +675,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               <th className="py-2.5 px-2 w-12 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">FOTO</th>
               <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CÓD. INTERNO</th>
               <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CÓD. FORNECEDOR</th>
-              <th className="py-2.5 px-3.5 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-full min-w-[280px]">DESCRIÇÃO DO ITEM</th>
-              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">QTD</th>
-              <th className="py-2.5 px-3.5 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">COMPRA (R$)</th>
+              <th className="py-2.5 px-3.5 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-full min-w-[260px]">DESCRIÇÃO DO ITEM</th>
+              <th className="py-2.5 px-2.5 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-20" title="Quantidade por Embalagem (Caixa, Fardo, Display)">QTD NO PAC</th>
+              <th className="py-2.5 px-2.5 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-20" title="Quantidade de Pacotes ou Caixas Compradas">QTD DE PAC</th>
+              <th className="py-2.5 px-2.5 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-24" title="Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)">TOTAL PEÇAS</th>
+              <th className="py-2.5 px-3 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-24" title="Valor unitário do produto (R$)">VALOR</th>
               <th className="py-2.5 px-3.5 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">TOTAL (R$)</th>
-              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">PDV (R$ 12)</th>
-              <th className="py-2.5 px-3.5 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CUSTO REAL</th>
+              <th className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-16">PDV</th>
+              <th className="py-2.5 px-3 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CUSTO REAL</th>
               <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">MARGEM</th>
               <th className="py-2.5 px-3 text-center whitespace-nowrap">AÇÕES</th>
             </tr>
@@ -809,8 +818,42 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     />
                   </td>
 
-                  {/* Quantidade Total de Unidades (editável) */}
-                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
+                  {/* Quantidade por Pacote/Embalagem */}
+                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-20">
+                    <input
+                      type="number"
+                      min="1"
+                      data-excel-row={index}
+                      data-excel-field="qtdNoPacote"
+                      value={item.qtdNoPacote === 0 || item.qtdNoPacote === undefined ? '' : item.qtdNoPacote}
+                      placeholder="1"
+                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdNoPacote')}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => handleFieldChange(item, 'qtdNoPacote', e.target.value)}
+                      className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-semibold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+                      title="Unidades por pacote/caixa/fardo"
+                    />
+                  </td>
+
+                  {/* Quantidade de Pacotes/Caixas Comprados */}
+                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-20">
+                    <input
+                      type="number"
+                      min="0"
+                      data-excel-row={index}
+                      data-excel-field="qtdPacotes"
+                      value={item.qtdPacotes === 0 || item.qtdPacotes === undefined ? '' : item.qtdPacotes}
+                      placeholder="0"
+                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdPacotes')}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => handleFieldChange(item, 'qtdPacotes', e.target.value)}
+                      className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-bold font-mono text-emerald-700 dark:text-emerald-400 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+                      title="Quantidade de pacotes ou caixas adquiridos"
+                    />
+                  </td>
+
+                  {/* Quantidade Total de Peças (auto-calculada, mas editável) */}
+                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-24 bg-slate-50/40 dark:bg-slate-900/30">
                     <input
                       type="number"
                       min="0"
@@ -821,25 +864,57 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdTotalUnidades')}
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
-                      className="w-full h-full min-h-[38px] px-3 py-1.5 text-center text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+                      className="w-full h-full min-h-[38px] px-2.5 py-1.5 text-center text-xs font-extrabold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+                      title="Total de peças = Qtd no Pac × Qtd de Pac"
                     />
                   </td>
 
-                  {/* Preço Unitário Compra Bruta */}
-                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      data-excel-row={index}
-                      data-excel-field="precoUnitario"
-                      value={item.precoUnitario === 0 ? '' : item.precoUnitario}
-                      placeholder="0,00"
-                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'precoUnitario')}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => handleFieldChange(item, 'precoUnitario', e.target.value)}
-                      className="w-full h-full min-h-[38px] px-3.5 py-1.5 text-right text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
-                    />
+                  {/* Valor do Produto (Preço Unitário de Compra - Sempre com 2 casas decimais) */}
+                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-28">
+                    {(() => {
+                      const isEditing = item.id in editingPriceMap;
+                      const formattedPrice = item.precoUnitario > 0
+                        ? item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : (isOrderItemBlank(item) ? '' : '0,00');
+                      const displayVal = isEditing ? editingPriceMap[item.id] : formattedPrice;
+
+                      return (
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          data-excel-row={index}
+                          data-excel-field="precoUnitario"
+                          value={displayVal}
+                          placeholder="0,00"
+                          onKeyDown={(e) => handleExcelKeyDown(e, index, 'precoUnitario')}
+                          onFocus={(e) => {
+                            setEditingPriceMap(prev => ({
+                              ...prev,
+                              [item.id]: item.precoUnitario > 0
+                                ? item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                : ''
+                            }));
+                            e.target.select();
+                          }}
+                          onBlur={() => {
+                            setEditingPriceMap(prev => {
+                              const next = { ...prev };
+                              delete next[item.id];
+                              return next;
+                            });
+                          }}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            setEditingPriceMap(prev => ({ ...prev, [item.id]: raw }));
+                            const cleaned = raw.replace(',', '.');
+                            const num = parseFloat(cleaned);
+                            handleFieldChange(item, 'precoUnitario', isNaN(num) ? 0 : num);
+                          }}
+                          className="w-full h-full min-h-[38px] px-3 py-1.5 text-right text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+                          title="Valor do produto por unidade (R$)"
+                        />
+                      );
+                    })()}
                   </td>
 
                   {/* Total Compra do Produto */}
@@ -849,13 +924,13 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     </span>
                   </td>
 
-                  {/* PDV Alvo - Fixo R$ 12,00 */}
-                  <td className="py-2 px-3 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
+                  {/* PDV Alvo - Compacto */}
+                  <td className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-16">
                     <span 
-                      className="inline-block px-2.5 py-0.5 rounded text-xs font-bold font-mono text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 whitespace-nowrap"
-                      title="Preço de Venda Único Rede Mega 12 (Travado em R$ 12,00)"
+                      className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 whitespace-nowrap"
+                      title="Preço de Venda Padrão R$ 12,00"
                     >
-                      R$ 12,00
+                      R$ 12
                     </span>
                   </td>
 

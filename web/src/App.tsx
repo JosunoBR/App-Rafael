@@ -119,7 +119,8 @@ import {
   deleteStockItemFromDb,
   fetchSeparationPresetsFromDb,
   saveSeparationPresetToDb,
-  deleteSeparationPresetFromDb
+  deleteSeparationPresetFromDb,
+  duplicateOrderInDb
 } from './utils/api';
 import { exportOrderToExcel } from './utils/excelExporter';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
@@ -558,74 +559,84 @@ export function App() {
     showToast(`📦 Compra Padrão de "${targetSup.razaoSocial}" carregada (${template.items.length} itens)!`, 'success');
   };
 
-  const handleSaveOrder = async () => {
+  // Registro automático de produtos novos no catálogo ao salvar pedidos
+  const autoRegisterProductsFromOrder = async (validItems: OrderItem[]) => {
+    const itemsToAutoRegister = validItems.filter(it => it.descricao && it.descricao.trim().length > 0);
+    if (itemsToAutoRegister.length === 0) return;
+
+    const newProdsToRegister: Product[] = [];
+    let currentProds = [...products];
+
+    for (const it of itemsToAutoRegister) {
+      const existing = currentProds.find(p => {
+        const pDesc = (p.descricao || '').trim().toLowerCase();
+        const pCodInt = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
+        const itCodInt = (it.codigoInterno || it.codigo || '').trim().toLowerCase();
+        const itDesc = (it.descricao || '').trim().toLowerCase();
+        return (itCodInt && pCodInt && itCodInt === pCodInt) || (itDesc && pDesc && itDesc === pDesc);
+      });
+
+      if (!existing) {
+        const codInterno = it.codigoInterno || it.codigo || generateNextProductCode(currentProds);
+        const newProd: Product = {
+          id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+          codigoInterno: codInterno,
+          codigo: codInterno,
+          codigoFornecedor: it.codigoFornecedor || '',
+          codigoBarras: '',
+          eanBarcode: '',
+          descricao: it.descricao.trim(),
+          categoria: 'Geral',
+          fotoUrl: it.fotoUrl || '',
+          precoUnitarioPadrao: it.precoUnitario || 0,
+          pdvSugerido: it.pdvAlvo || 12.00,
+          ncm: '',
+          supplierId: order.header.supplierId || '',
+          nomeFornecedor: order.header.fornecedor || '',
+          ativo: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        newProdsToRegister.push(newProd);
+        currentProds.push(newProd);
+      }
+    }
+
+    if (newProdsToRegister.length > 0) {
+      try {
+        await saveProductsBatchToDb(newProdsToRegister);
+      } catch {
+        for (const p of newProdsToRegister) {
+          await saveProductToDb(p).catch(() => {});
+        }
+      }
+      saveBatchProductsToStorage(newProdsToRegister);
+      const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
+      setProducts(refreshed);
+    }
+  };
+
+  // 1. Salvar Pedido em Rascunho / Espera (mantém o pedido na tela para continuar editando)
+  const handleSaveDraftOrder = async () => {
     const validItems = order.items.filter(it => !isOrderItemBlank(it));
     if (validItems.length === 0 && (!order.header.fornecedor || order.header.fornecedor.trim() === '')) {
       showToast('Não é possível salvar um pedido totalmente vazio.', 'error');
       return;
     }
 
-    // Salva automaticamente no catálogo todos os produtos digitados que ainda não foram salvos anteriormente
-    const itemsToAutoRegister = validItems.filter(it => it.descricao && it.descricao.trim().length > 0);
-    if (itemsToAutoRegister.length > 0) {
-      const newProdsToRegister: Product[] = [];
-      let currentProds = [...products];
-
-      for (const it of itemsToAutoRegister) {
-        const existing = currentProds.find(p => {
-          const pDesc = (p.descricao || '').trim().toLowerCase();
-          const pCodInt = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
-          const itCodInt = (it.codigoInterno || it.codigo || '').trim().toLowerCase();
-          const itDesc = (it.descricao || '').trim().toLowerCase();
-          return (itCodInt && pCodInt && itCodInt === pCodInt) || (itDesc && pDesc && itDesc === pDesc);
-        });
-
-        if (!existing) {
-          const codInterno = it.codigoInterno || it.codigo || generateNextProductCode(currentProds);
-          const newProd: Product = {
-            id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-            codigoInterno: codInterno,
-            codigo: codInterno,
-            codigoFornecedor: it.codigoFornecedor || '',
-            codigoBarras: '',
-            eanBarcode: '',
-            descricao: it.descricao.trim(),
-            categoria: 'Geral',
-            fotoUrl: it.fotoUrl || '',
-            precoUnitarioPadrao: it.precoUnitario || 0,
-            pdvSugerido: it.pdvAlvo || 12.00,
-            ncm: '',
-            supplierId: order.header.supplierId || '',
-            nomeFornecedor: order.header.fornecedor || '',
-            ativo: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          newProdsToRegister.push(newProd);
-          currentProds.push(newProd);
-        }
-      }
-
-      if (newProdsToRegister.length > 0) {
-        try {
-          await saveProductsBatchToDb(newProdsToRegister);
-        } catch {
-          for (const p of newProdsToRegister) {
-            await saveProductToDb(p).catch(() => {});
-          }
-        }
-        saveBatchProductsToStorage(newProdsToRegister);
-        const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
-        setProducts(refreshed);
-      }
-    }
+    await autoRegisterProductsFromOrder(validItems);
 
     const orderToSave: PurchaseOrder = {
       ...order,
-      items: validItems
+      items: validItems,
+      header: {
+        ...order.header,
+        isDraft: true,
+        status: order.header.status === 'Em Separação' || order.header.status === 'Finalizado' ? order.header.status : 'Em Cotação',
+        updatedAt: new Date().toISOString()
+      }
     };
 
-    const savedOrderNumber = order.header.numeroPedido;
     const orderWithInstallments: PurchaseOrder = {
       ...orderToSave,
       installments: (orderToSave.installments && orderToSave.installments.length > 0)
@@ -638,15 +649,72 @@ export function App() {
       saveOrderToHistory(orderWithInstallments);
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
+      setOrder({
+        ...orderWithInstallments,
+        items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
+      });
+      showToast(`Pedido ${order.header.numeroPedido} salvo com sucesso em espera!`, 'success');
+    } catch {
+      saveOrderToHistory(orderWithInstallments);
+      setSavedOrders(loadSavedOrdersList());
+      setOrder({
+        ...orderWithInstallments,
+        items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
+      });
+      showToast(`Pedido ${order.header.numeroPedido} salvo localmente em espera!`, 'info');
+    }
+  };
+
+  // 2. Fechar Pedido (Conclui compras e envia diretamente para a Esteira de Separação do Depósito)
+  const handleCloseOrder = async () => {
+    const validItems = order.items.filter(it => !isOrderItemBlank(it));
+    if (validItems.length === 0) {
+      showToast('Adicione ao menos um produto antes de fechar o pedido.', 'error');
+      return;
+    }
+    if (!order.header.fornecedor || order.header.fornecedor.trim() === '') {
+      showToast('Selecione um fornecedor para fechar o pedido.', 'error');
+      return;
+    }
+
+    await autoRegisterProductsFromOrder(validItems);
+
+    const closedOrder: PurchaseOrder = {
+      ...order,
+      items: validItems,
+      header: {
+        ...order.header,
+        status: 'Em Separação',
+        separationStatus: 'Pendente',
+        isDraft: false,
+        liberadoPorDeposito: currentUser?.nome || 'Comprador',
+        dataLiberacaoSeparacao: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    };
+
+    const orderWithInstallments: PurchaseOrder = {
+      ...closedOrder,
+      installments: (closedOrder.installments && closedOrder.installments.length > 0)
+        ? closedOrder.installments
+        : generateOrderInstallments(closedOrder)
+    };
+
+    const closedNum = closedOrder.header.numeroPedido;
+
+    try {
+      await saveOrderToDb(orderWithInstallments);
+      saveOrderToHistory(orderWithInstallments);
+      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(updatedOrders);
       clearCurrentDraft();
 
       confetti({
-        particleCount: 60,
-        spread: 70,
-        origin: { y: 0.75 }
+        particleCount: 80,
+        spread: 80,
+        origin: { y: 0.65 }
       });
 
-      // Limpa a tela preparando o próximo pedido zerado
       const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
       const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
       setOrder({
@@ -654,8 +722,8 @@ export function App() {
         items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
       });
 
-      showToast(`Pedido ${savedOrderNumber} gravado no SQLite! Tela pronta para o próximo pedido.`, 'success');
-    } catch (err: any) {
+      showToast(`Pedido ${closedNum} FECHADO e enviado para a Separação do Depósito!`, 'success');
+    } catch {
       saveOrderToHistory(orderWithInstallments);
       setSavedOrders(loadSavedOrdersList());
       clearCurrentDraft();
@@ -667,7 +735,51 @@ export function App() {
         items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
       });
 
-      showToast(`Pedido ${savedOrderNumber} salvo localmente! Tela pronta para o próximo pedido.`, 'info');
+      showToast(`Pedido ${closedNum} fechado localmente e enviado para separação!`, 'info');
+    }
+  };
+
+  // 3. Duplicar Pedido Atual
+  const handleDuplicateCurrentOrder = async () => {
+    if (!order.header.id) return;
+    try {
+      let duplicated: PurchaseOrder;
+      try {
+        duplicated = await duplicateOrderInDb(order.header.id);
+      } catch {
+        const nextNum = getNextOrderNumber();
+        const newId = 'po_' + Date.now();
+        duplicated = {
+          ...order,
+          header: {
+            ...order.header,
+            id: newId,
+            numeroPedido: nextNum,
+            status: 'Em Cotação',
+            separationStatus: 'Pendente',
+            isDraft: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          },
+          items: order.items.map(it => ({
+            ...it,
+            id: 'it_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)
+          })),
+          installments: []
+        };
+        await saveOrderToDb(duplicated).catch(() => {});
+        saveOrderToHistory(duplicated);
+      }
+
+      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(updatedOrders);
+      setOrder({
+        ...duplicated,
+        items: ensureTrailingBlankItem(duplicated.items || [], fiscalConfig, storeConfigs)
+      });
+      showToast(`Pedido duplicado com sucesso: ${duplicated.header.numeroPedido}! Altere os itens e quantidades.`, 'success');
+    } catch (err: any) {
+      showToast(`Erro ao duplicar pedido: ${err.message}`, 'error');
     }
   };
 
@@ -1246,7 +1358,9 @@ export function App() {
           hasActiveDraft={hasActiveDraft}
           isSavedOrder={isCurrentOrderSaved}
           onNewOrder={handleNewOrder}
-          onSaveOrder={handleSaveOrder}
+          onSaveOrder={handleSaveDraftOrder}
+          onCloseOrder={handleCloseOrder}
+          onDuplicateOrder={handleDuplicateCurrentOrder}
           onDiscardDraft={handleDiscardDraft}
           onExportExcel={handleExportExcel}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
@@ -1266,7 +1380,7 @@ export function App() {
               onUpdateOrder={setOrder}
               onExportPDF={handleExportCommercialPDF}
               onExportExcel={handleExportExcel}
-              onSaveOrder={handleSaveOrder}
+              onSaveOrder={handleSaveDraftOrder}
               onNewOrder={handleNewOrder}
               onOpenSeparationModal={(item) => setSelectedSeparationItem(item)}
             />

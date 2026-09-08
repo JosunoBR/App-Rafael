@@ -259,7 +259,14 @@ async function getDatabase() {
         supplierId: "TEXT",
         vendedor: "TEXT",
         contatoVendedor: "TEXT",
-        condicaoPagamento: "TEXT"
+        condicaoPagamento: "TEXT",
+        formaPagamento: "TEXT",
+        previsaoPagamento: "TEXT",
+        tipoFrete: "TEXT DEFAULT 'CIF'",
+        valorFrete: "REAL DEFAULT 0",
+        descontoComercialTotal: "REAL DEFAULT 0",
+        descontoComercialTipo: "TEXT DEFAULT '%'",
+        isDraft: "INTEGER DEFAULT 0"
       };
 
       Object.entries(requiredCols).forEach(([col, def]) => {
@@ -294,7 +301,8 @@ async function getDatabase() {
       const colNames = supTableInfo[0].values.map(v => v[1]);
       const requiredSupCols = {
         pedidoPadraoJson: "TEXT",
-        percentualNotaPadrao: "REAL DEFAULT 100"
+        percentualNotaPadrao: "REAL DEFAULT 100",
+        observacoes: "TEXT"
       };
 
       Object.entries(requiredSupCols).forEach(([col, def]) => {
@@ -310,7 +318,9 @@ async function getDatabase() {
       const requiredItemCols = {
         percentualDesconto: "REAL DEFAULT 0",
         valorDescontoItem: "REAL DEFAULT 0",
-        valorTotalLiquido: "REAL DEFAULT 0"
+        valorTotalLiquido: "REAL DEFAULT 0",
+        qtdNoPacote: "REAL DEFAULT 1",
+        qtdPacotes: "REAL DEFAULT 0"
       };
 
       Object.entries(requiredItemCols).forEach(([col, def]) => {

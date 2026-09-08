@@ -115,17 +115,18 @@ export interface OrderItem {
   codigoFornecedor?: string;    // Código de produto do fornecedor (visível na página de compras)
   codigo?: string;              // Mantido para retrocompatibilidade
   descricao: string;
-  fotoUrl?: string;          // Foto/Imagem do produto (URL ou Base64)
-  qtdPorPacote?: number;     // @deprecated — Mantido por retrocompatibilidade
-  qtdPacotes?: number;       // @deprecated — Mantido por retrocompatibilidade
-  qtdTotalUnidades: number;  // Quantidade total de unidades compradas (entrada principal)
-  precoUnitario: number;     // Preço de compra por unidade (tabela / bruto)
-  valorTotalBruto: number;   // = qtdTotalUnidades × precoUnitario
+  fotoUrl?: string;             // Foto/Imagem do produto (URL ou Base64)
+  qtdNoPacote?: number;         // Quantidade de unidades na embalagem/pacote/caixa/fardo
+  qtdPacotes?: number;          // Quantidade de embalagens/caixas compradas
+  qtdPorPacote?: number;        // Retrocompatibilidade
+  qtdTotalUnidades: number;     // Quantidade total de unidades compradas (= qtdNoPacote * qtdPacotes)
+  precoUnitario: number;        // Preço de compra / valor do produto por unidade
+  valorTotalBruto: number;      // = qtdTotalUnidades × precoUnitario
   
   // Desconto comercial por produto
-  percentualDesconto?: number; // % OFF negociado para este item (ex: 5%)
-  valorDescontoItem?: number;  // Valor em R$ do desconto total do item
-  valorTotalLiquido?: number;  // = valorTotalBruto - valorDescontoItem
+  percentualDesconto?: number;  // % OFF negociado para este item (ex: 5%)
+  valorDescontoItem?: number;   // Valor em R$ do desconto total do item
+  valorTotalLiquido?: number;   // = valorTotalBruto - valorDescontoItem
   // Acréscimos rateados ou específicos
   freteUnitario?: number;
   stUnitario?: number;
@@ -133,20 +134,20 @@ export interface OrderItem {
   difalUnitario?: number;
   
   // Limite de Preço / Engenharia Fiscal
-  pdvAlvo: number;           // Preço de venda pretendido na ponta (ex: 12.00)
+  pdvAlvo: number;              // Preço de venda pretendido na ponta (ex: 12.00)
   fiscalOverride?: OrderItemFiscalOverride;
   
   // Cálculos resultantes
-  despesasPdvUnit?: number;  // PDV * % Despesas (40%)
-  creditoIcmsUnit?: number;  // Compra * % Crédito (19.5%)
-  custoRealEfetivo?: number; // Compra + Despesas PDV - Crédito ICMS
-  margemRealUnit?: number;   // PDV - Custo Real Efetivo
-  margemPercentual?: number; // Margem Real / PDV
+  despesasPdvUnit?: number;     // PDV * % Despesas (40%)
+  creditoIcmsUnit?: number;     // Compra * % Crédito (19.5%)
+  custoRealEfetivo?: number;    // Compra + Despesas PDV - Crédito ICMS
+  margemRealUnit?: number;      // PDV - Custo Real Efetivo
+  margemPercentual?: number;    // Margem Real / PDV
 
   // Grade de separação por loja: { [storeId]: quantidadeCalculadaOuEditada }
   separacaoLojas?: Record<string, number>;
-  separacaoManual?: boolean; // Se foi editado manualmente
-  qtdReservaEstoque?: number; // Quantidade retida no Estoque Central / Matriz / CD
+  separacaoManual?: boolean;    // Se foi editado manualmente
+  qtdReservaEstoque?: number;   // Quantidade retida no Estoque Central / Matriz / CD
 }
 
 export type OrderStatus = 'Em Cotação' | 'Aprovado' | 'Em Separação' | 'Finalizado';
@@ -155,16 +156,25 @@ export interface OrderHeader {
   id: string;
   numeroPedido: string;
   fornecedor: string;
-  supplierId?: string;       // Vínculo com cadastro de fornecedor
-  aliquotaSt?: number;       // % ST do Fornecedor aplicada no pedido
+  supplierId?: string;          // Vínculo com cadastro de fornecedor
+  aliquotaSt?: number;          // % ST do Fornecedor aplicada no pedido
   vendedor: string;
   contatoVendedor?: string;
   condicaoPagamento: string;
-  dataPedido: string;
+  formaPagamento?: string;      // Boleto, Depósito, Cheque, Boleto / Depósito, Boleto / Cheque
+  previsaoPagamento?: string;   // Data ou texto de previsão
+  tipoFrete?: 'CIF' | 'FOB' | 'Retira';
+  valorFrete?: number;
+  descontoComercialTotal?: number;
+  descontoComercialTipo?: '%' | 'R$';
+  isDraft?: boolean;
+  dataPedido?: string;
+  dataEmissao?: string;
   dataEntregaPrevista: string;
   percentualDescontoOff: number; // % OFF negociado
   percentualNota?: number;       // % NOTA (Percentual faturado em Nota Fiscal para média histórica)
   observacoesDescarga?: string;
+  observacoes?: string;
   
   // Despesas adicionais globais a ratear
   valorFreteGlobal: number;
@@ -182,6 +192,7 @@ export interface OrderHeader {
 
   // Esteira Operacional & Auditoria
   status: OrderStatus | 'Rascunho';
+  separationStatus?: string;
   aprovadoPor?: string;
   dataAprovacao?: string;
   liberadoPorDeposito?: string;

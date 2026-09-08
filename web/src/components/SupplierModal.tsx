@@ -258,48 +258,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                   />
                 </div>
 
-                {/* Condição de Pagamento */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <CreditCard className="w-3.5 h-3.5 text-slate-400" />
-                    Condição de Pagamento
-                  </label>
-                  <input
-                    type="text"
-                    value={condicaoPagamentoPadrao}
-                    onChange={(e) => setCondicaoPagamentoPadrao(e.target.value)}
-                    placeholder="Ex: 30/60/90 Dias"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                  />
-                </div>
-
-                {/* ST (%) */}
-                <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/50">
-                  <label className="block text-xs font-bold text-amber-900 dark:text-amber-300 mb-1 flex items-center gap-1">
-                    <Percent className="w-3.5 h-3.5 text-amber-600" />
-                    ST - Substituição Tributária (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={aliquotaStPadrao === 0 ? '' : aliquotaStPadrao}
-                    placeholder="0"
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setAliquotaStPadrao(parseFloat(e.target.value) || 0)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-300 font-bold"
-                  />
-                  <span className="text-[10px] text-amber-700 dark:text-amber-400 mt-1 block">
-                    Alíquota de imposto ST cobrada na nota deste fornecedor
-                  </span>
-                </div>
-
                 {/* Desconto OFF (%) */}
                 <div className="bg-emerald-50/70 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
                   <label className="block text-xs font-bold text-emerald-900 dark:text-emerald-300 mb-1 flex items-center gap-1">
                     <Percent className="w-3.5 h-3.5 text-emerald-600" />
-                    Desconto Habitual (% OFF)
+                    Histórico OFF (%)
                   </label>
                   <input
                     type="number"
@@ -313,21 +276,21 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-emerald-900 dark:text-emerald-300 font-bold"
                   />
                   <span className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1 block">
-                    Desconto comercial médio praticado
+                    Referência de barganha para próximos pedidos
                   </span>
                 </div>
 
-                {/* Observações de Descarga */}
+                {/* Observações sobre o Fornecedor */}
                 <div className="sm:col-span-2 md:col-span-3">
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                     <FileText className="w-3.5 h-3.5 text-slate-400" />
-                    Observações de Descarga & Regras de Paletização
+                    Observações sobre o Fornecedor
                   </label>
                   <input
                     type="text"
                     value={observacoesDescarga}
                     onChange={(e) => setObservacoesDescarga(e.target.value)}
-                    placeholder="Ex: Entregar paletizado no CD; Horário: 08h às 16h"
+                    placeholder="Anotações gerais, acordos comerciais, restrições ou observações sobre o fornecedor"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
                   />
                 </div>

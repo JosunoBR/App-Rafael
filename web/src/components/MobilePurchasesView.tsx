@@ -111,9 +111,6 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
       return acc + d;
     }, 0);
     subtotalAposDesconto = Math.max(0, totalBrutoCompra - valorDesconto);
-  } else if ((order.header?.percentualDescontoOff || 0) > 0) {
-    valorDesconto = (totalBrutoCompra * (order.header.percentualDescontoOff || 0)) / 100;
-    subtotalAposDesconto = Math.max(0, totalBrutoCompra - valorDesconto);
   } else {
     subtotalAposDesconto = totalBrutoCompra;
   }

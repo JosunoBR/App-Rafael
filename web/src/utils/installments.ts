@@ -46,10 +46,7 @@ export function calculateOrderNetTotal(order: PurchaseOrder): number {
       return sum + liq;
     }, 0);
   } else {
-    // Fallback para pedidos antigos com desconto global no cabeçalho
-    const itemsBruto = items.reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0);
-    const discountOff = (order.header?.percentualDescontoOff || 0) / 100;
-    itemsComDesconto = itemsBruto * (1 - Math.max(0, Math.min(1, discountOff)));
+    itemsComDesconto = items.reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0);
   }
 
   const frete = Number(order.header?.valorFreteGlobal) || 0;

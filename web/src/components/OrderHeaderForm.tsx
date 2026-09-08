@@ -477,10 +477,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               )}
             </div>
 
-            {/* 3. Desconto OFF % (4ª coluna da linha 1 conforme Imagem 1) */}
+            {/* 3. Desconto OFF % (Informativo / Referencial de Negociação) */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Desconto OFF %
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                <span>Desconto OFF %</span>
+                <span className="text-[10px] text-slate-400 font-normal">Informativo</span>
               </label>
               <div className="relative">
                 <input
@@ -655,8 +656,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
                 </div>
 
-                {/* LINHA 2: FRETE, DESCONTO GERAL E FATURAMENTO */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                {/* LINHA 2: FRETE E NOTA FISCAL */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   {/* 4. Tipo de Frete */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -692,34 +693,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     />
                   </div>
 
-                  {/* 6. Desconto Geral (% OFF) */}
+                  {/* 6. NOTA (%) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>6. Desconto Comercial</span>
-                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">Total</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
-                        value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => handleFieldChange('percentualDescontoOff', parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold pr-8 font-mono shadow-2xs"
-                        placeholder="0"
-                      />
-                      <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
-                        %
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 7. NOTA (%) */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>7. Faturamento Nota (%)</span>
+                      <span>6. Nota (%)</span>
                       <span className="text-[10px] font-mono text-slate-400">Histórico BD</span>
                     </label>
                     <div className="relative">

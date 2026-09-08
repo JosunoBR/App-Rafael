@@ -127,8 +127,9 @@ import {
 } from './utils/api';
 import { exportOrderToExcel } from './utils/excelExporter';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
-import { calculateOrderNetTotal, generateOrderInstallments } from './utils/installments';
-import { calculateItemFiscal } from './shared/fiscalEngine';
+import { calculateOrderNetTotal, calculateOrderMerchandiseTotal, generateOrderInstallments } from './utils/installments';
+import { calculateItemFiscal, normalizeRateToDecimal } from './shared/fiscalEngine';
+import { DEFAULT_FISCAL_CONFIG } from './shared/constants';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem, generateNextProductCode } from './utils/orderItemUtils';
 import { CheckCircle2, AlertCircle, Plus } from 'lucide-react';
@@ -311,9 +312,51 @@ export function App() {
     }
   };
 
+  // Sincroniza o frete proporcional ao total de produtos quando a alíquota percentual estiver definida
+  const syncOrderFreteAndItems = (
+    prev: PurchaseOrder, 
+    newItems: OrderItem[], 
+    activeFiscal?: FiscalConfig
+  ): { items: OrderItem[]; header: typeof prev.header } => {
+    const fiscal = activeFiscal || prev.fiscalConfig || fiscalConfig || DEFAULT_FISCAL_CONFIG;
+    const freteRate = normalizeRateToDecimal(fiscal.freteAliquota, 0);
+
+    // Calcula o total líquido dos produtos
+    const totalMerc = calculateOrderMerchandiseTotal({ ...prev, items: newItems });
+    let updatedHeader = prev.header;
+
+    if (freteRate > 0) {
+      const novoValorFrete = Number((totalMerc * freteRate).toFixed(2));
+      updatedHeader = {
+        ...prev.header,
+        valorFrete: novoValorFrete,
+        valorFreteGlobal: novoValorFrete
+      };
+    }
+
+    return { items: newItems, header: updatedHeader };
+  };
+
   // Handlers for Order Header
   const handleHeaderChange = (updatedHeader: typeof order.header) => {
-    setOrder(prev => ({ ...prev, header: updatedHeader }));
+    setOrder(prev => {
+      let newFiscal = prev.fiscalConfig || fiscalConfig;
+      // Se o usuário digitou ou alterou o valor do frete em R$ manualmente no cabeçalho
+      if (updatedHeader.valorFrete !== prev.header.valorFrete) {
+        const totalMerc = calculateOrderMerchandiseTotal(prev);
+        const newRate = totalMerc > 0 ? Number(((updatedHeader.valorFrete || 0) / totalMerc).toFixed(4)) : 0;
+        newFiscal = {
+          ...newFiscal,
+          freteAliquota: newRate
+        };
+      }
+
+      return { 
+        ...prev, 
+        header: updatedHeader,
+        fiscalConfig: newFiscal
+      };
+    });
   };
 
   // Handler para configuração fiscal individual do pedido
@@ -322,17 +365,23 @@ export function App() {
       const stValue = newFiscal.aliquotaSt !== undefined 
         ? Number((newFiscal.aliquotaSt > 1 ? newFiscal.aliquotaSt : newFiscal.aliquotaSt * 100).toFixed(2)) 
         : prev.header.aliquotaSt;
+
+      const totalMerc = calculateOrderMerchandiseTotal(prev);
+      const freteRate = normalizeRateToDecimal(newFiscal.freteAliquota, 0);
+      const novoValorFrete = freteRate > 0 ? Number((totalMerc * freteRate).toFixed(2)) : 0;
       
       const updatedHeader = {
         ...prev.header,
-        aliquotaSt: stValue
+        aliquotaSt: stValue,
+        valorFrete: novoValorFrete,
+        valorFreteGlobal: novoValorFrete
       };
 
       const updatedItems = (prev.items || []).map(it => {
         if (!it.precoUnitario && !it.descricao) return it;
         const descPct = it.percentualDesconto || 0;
         const precoEfetivo = it.precoUnitario * (1 - descPct / 100);
-        const pdv = 12.00;
+        const pdv = it.pdvAlvo || 12.00;
         const f = calculateItemFiscal(precoEfetivo, pdv, newFiscal, it.fiscalOverride);
         return {
           ...it,
@@ -374,9 +423,12 @@ export function App() {
   const handleUpdateItem = (itemId: string, updatedFields: Partial<OrderItem>) => {
     setOrder(prev => {
       const updatedItems = prev.items.map(item => item.id === itemId ? { ...item, ...updatedFields } : item);
+      const cleanItems = ensureTrailingBlankItem(updatedItems, fiscalConfig, storeConfigs);
+      const synced = syncOrderFreteAndItems(prev, cleanItems);
       return {
         ...prev,
-        items: ensureTrailingBlankItem(updatedItems, fiscalConfig, storeConfigs)
+        header: synced.header,
+        items: synced.items
       };
     });
   };
@@ -390,26 +442,37 @@ export function App() {
         } else {
           newItems.push(customItem);
         }
+        const cleanItems = ensureTrailingBlankItem(newItems, fiscalConfig, storeConfigs);
+        const synced = syncOrderFreteAndItems(prev, cleanItems);
         return {
           ...prev,
-          items: ensureTrailingBlankItem(newItems, fiscalConfig, storeConfigs)
+          header: synced.header,
+          items: synced.items
         };
       });
       showToast(`Produto "${customItem.descricao}" adicionado.`);
       return;
     }
-    setOrder(prev => ({
-      ...prev,
-      items: ensureTrailingBlankItem(prev.items, fiscalConfig, storeConfigs)
-    }));
+    setOrder(prev => {
+      const cleanItems = ensureTrailingBlankItem(prev.items, fiscalConfig, storeConfigs);
+      const synced = syncOrderFreteAndItems(prev, cleanItems);
+      return {
+        ...prev,
+        header: synced.header,
+        items: synced.items
+      };
+    });
   };
 
   const handleDeleteItem = (itemId: string) => {
     setOrder(prev => {
       const filtered = prev.items.filter(item => item.id !== itemId);
+      const cleanItems = ensureTrailingBlankItem(filtered, fiscalConfig, storeConfigs);
+      const synced = syncOrderFreteAndItems(prev, cleanItems);
       return {
         ...prev,
-        items: ensureTrailingBlankItem(filtered, fiscalConfig, storeConfigs)
+        header: synced.header,
+        items: synced.items
       };
     });
     showToast('Item removido do pedido.', 'info');
@@ -424,9 +487,12 @@ export function App() {
 
     setOrder(prev => {
       const nonTrailing = prev.items.filter((_, idx) => idx < prev.items.length - 1 || !isOrderItemBlank(prev.items[idx]));
+      const cleanItems = ensureTrailingBlankItem([...nonTrailing, clonedItem], fiscalConfig, storeConfigs);
+      const synced = syncOrderFreteAndItems(prev, cleanItems);
       return {
         ...prev,
-        items: ensureTrailingBlankItem([...nonTrailing, clonedItem], fiscalConfig, storeConfigs)
+        header: synced.header,
+        items: synced.items
       };
     });
     showToast('Item duplicado com sucesso!');
@@ -596,9 +662,8 @@ export function App() {
 
     const itemsWithBlank = ensureTrailingBlankItem(clonedItems, fiscalConfig, storeConfigs);
 
-    setOrder(prev => ({
-      ...prev,
-      header: {
+    setOrder(prev => {
+      const newHeader = {
         ...prev.header,
         fornecedor: targetSup.razaoSocial,
         supplierId: targetSup.id,
@@ -609,9 +674,14 @@ export function App() {
         percentualDescontoOff: template.descontoOff !== undefined ? template.descontoOff : (targetSup.descontoOffPadrao || 0),
         percentualNota: template.percentualNota !== undefined ? template.percentualNota : (targetSup.percentualNotaPadrao || 100),
         observacoesDescarga: template.observacoes || prev.header.observacoesDescarga
-      },
-      items: itemsWithBlank
-    }));
+      };
+      const synced = syncOrderFreteAndItems({ ...prev, header: newHeader }, itemsWithBlank);
+      return {
+        ...prev,
+        header: synced.header,
+        items: synced.items
+      };
+    });
 
     showToast(`📦 Compra Padrão de "${targetSup.razaoSocial}" carregada (${template.items.length} itens)!`, 'success');
   };
@@ -696,9 +766,7 @@ export function App() {
 
     const orderWithInstallments: PurchaseOrder = {
       ...orderToSave,
-      installments: (orderToSave.installments && orderToSave.installments.length > 0)
-        ? orderToSave.installments
-        : generateOrderInstallments(orderToSave)
+      installments: generateOrderInstallments(orderToSave, undefined, undefined, true)
     };
 
     try {
@@ -752,9 +820,7 @@ export function App() {
 
     const orderWithInstallments: PurchaseOrder = {
       ...closedOrder,
-      installments: (closedOrder.installments && closedOrder.installments.length > 0)
-        ? closedOrder.installments
-        : generateOrderInstallments(closedOrder)
+      installments: generateOrderInstallments(closedOrder, undefined, undefined, true)
     };
 
     const closedNum = closedOrder.header.numeroPedido;
@@ -1516,6 +1582,15 @@ export function App() {
                         aliquotaSt: newSt
                       });
                     }}
+                    valorFreteHeader={order.header.valorFrete}
+                    onUpdateHeaderFrete={(newFrete) => {
+                      handleHeaderChange({
+                        ...order.header,
+                        valorFrete: newFrete,
+                        valorFreteGlobal: newFrete
+                      });
+                    }}
+                    totalMercadorias={calculateOrderMerchandiseTotal(order)}
                     averageItemPrice={averageItemPrice}
                     samplePdv={samplePdv}
                   />
@@ -1552,6 +1627,7 @@ export function App() {
                     onDuplicateItem={handleDuplicateItem}
                     onDeleteItem={handleDeleteItem}
                     onSaveProduct={handleSaveProduct}
+                    onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
                   />
                 </div>
               )}
@@ -1718,7 +1794,7 @@ export function App() {
       {/* Modais de Contexto por Linha de Produto */}
       <FiscalPanelModal
         item={selectedFiscalItem}
-        globalFiscal={fiscalConfig}
+        globalFiscal={order.fiscalConfig || fiscalConfig}
         isOpen={!!selectedFiscalItem}
         onClose={() => setSelectedFiscalItem(null)}
         onApplyChanges={handleUpdateItem}

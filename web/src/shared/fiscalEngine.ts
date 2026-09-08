@@ -52,8 +52,18 @@ export function calculateItemFiscal(
       : globalConfig.ipiAliquota,
     0
   );
-  const stRate = normalizeRateToDecimal(globalConfig.aliquotaSt, 0);
-  const freteRate = normalizeRateToDecimal(globalConfig.freteAliquota, 0);
+  const stRate = normalizeRateToDecimal(
+    override?.useCustomFiscal && override.aliquotaSt !== undefined
+      ? override.aliquotaSt
+      : globalConfig.aliquotaSt,
+    0
+  );
+  const freteRate = normalizeRateToDecimal(
+    override?.useCustomFiscal && override.freteAliquota !== undefined
+      ? override.freteAliquota
+      : globalConfig.freteAliquota,
+    0
+  );
 
   // Alíquotas de Saída
   const icmsEntradaRate = normalizeRateToDecimal(
@@ -152,8 +162,8 @@ export function calculateMaxPurchasePrice(
   const margemDecimal = margemAlvoPercentual / 100;
 
   const ipiRate = normalizeRateToDecimal(override?.ipiAliquota ?? globalConfig.ipiAliquota, 0);
-  const stRate = normalizeRateToDecimal(globalConfig.aliquotaSt, 0);
-  const freteRate = normalizeRateToDecimal(globalConfig.freteAliquota, 0);
+  const stRate = normalizeRateToDecimal(override?.aliquotaSt ?? globalConfig.aliquotaSt, 0);
+  const freteRate = normalizeRateToDecimal(override?.freteAliquota ?? globalConfig.freteAliquota, 0);
   const encargosEntradaRate = ipiRate + stRate + freteRate;
 
   const icmsEntradaRate = normalizeRateToDecimal(override?.creditoEntradaICMS ?? globalConfig.creditoEntradaICMS, 0.12);

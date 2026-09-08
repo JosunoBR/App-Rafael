@@ -66,6 +66,8 @@ export interface OrderItemFiscalOverride {
   useCustomFiscal?: boolean;
   icmsAliquota?: number;
   ipiAliquota?: number;
+  aliquotaSt?: number;
+  freteAliquota?: number;
   pisCofinsAliquota?: number;
   custosFixos?: number;
   creditoEntradaICMS?: number;
@@ -229,6 +231,8 @@ export interface PaymentInstallment {
   dataPagamento?: string; // YYYY-MM-DD quando liquidado
   observacao?: string; // Motivo do acordo comercial / desconto / abatimento
   documentoRef?: string; // Código de barras / Boleto / NF
+  isBoletoFrete?: boolean; // Identificador de boleto de frete (gerado 10 dias após entrega)
+  tipoTitulo?: 'mercadoria' | 'frete';
   updatedAt?: string;
 }
 

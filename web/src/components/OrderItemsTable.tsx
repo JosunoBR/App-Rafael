@@ -32,7 +32,8 @@ import {
   ArrowDown,
   GripVertical,
   SlidersHorizontal,
-  RotateCcw
+  RotateCcw,
+  Calculator
 } from 'lucide-react';
 import { OrderItem, FiscalConfig, StoreConfig, Product } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
@@ -52,6 +53,7 @@ interface OrderItemsTableProps {
   onDuplicateItem: (item: OrderItem) => void;
   onDeleteItem: (itemId: string) => void;
   onSaveProduct?: (product: Product, silent?: boolean) => void;
+  onOpenFiscalModal?: (item: OrderItem) => void;
 }
 
 export type ColumnKey =
@@ -78,24 +80,26 @@ export interface ColumnMeta {
   thClass: string;
   title?: string;
   sortable: boolean;
+  defaultWidth?: number; // Largura padrão em pixels
+  minWidth?: number; // Largura mínima em pixels
 }
 
 const ALL_COLUMNS: ColumnMeta[] = [
-  { key: 'foto', label: 'FOTO', thClass: 'py-2.5 px-2 w-12 text-center', sortable: false },
-  { key: 'codigoInterno', label: 'CÓD. INTERNO', thClass: 'py-2.5 px-3 text-center w-28', sortable: true },
-  { key: 'codigoBarras', label: 'CÓD. BARRAS', thClass: 'py-2.5 px-3 text-center w-32', title: 'Código de Barras EAN-13', sortable: true },
-  { key: 'codigoFornecedor', label: 'REF. FÁBRICA', thClass: 'py-2.5 px-3 text-center w-28', title: 'Referência de Fábrica / Cód. Fornecedor', sortable: true },
-  { key: 'descricao', label: 'DESCRIÇÃO DO ITEM', thClass: 'py-2.5 px-3.5 text-left w-full min-w-[260px]', sortable: true },
-  { key: 'qtdNoPacote', label: 'QTD NO PAC', thClass: 'py-2.5 px-2.5 text-center w-20', title: 'Quantidade por Embalagem (Caixa, Fardo, Display)', sortable: true },
-  { key: 'qtdPacotes', label: 'QTD DE PAC', thClass: 'py-2.5 px-2.5 text-center w-20', title: 'Quantidade de Pacotes ou Caixas Compradas', sortable: true },
-  { key: 'qtdTotalUnidades', label: 'TOTAL PEÇAS', thClass: 'py-2.5 px-2.5 text-center w-24', title: 'Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)', sortable: true },
-  { key: 'precoUnitario', label: 'VALOR', thClass: 'py-2.5 px-3 text-right w-24', title: 'Valor unitário do produto (R$)', sortable: true },
-  { key: 'valorTotalLiquido', label: 'TOTAL (R$)', thClass: 'py-2.5 px-3.5 text-right w-28', sortable: true },
-  { key: 'pdvAlvo', label: 'PDV', thClass: 'py-2.5 px-2 text-center w-16', sortable: true },
-  { key: 'custoLoja', label: 'CUSTO LOJA', thClass: 'py-2.5 px-3 text-right w-28', title: 'Custo Total da Loja (conforme modelo da planilha)', sortable: true },
-  { key: 'custoFornecedor', label: 'CUSTO FORN.', thClass: 'py-2.5 px-3 text-right w-28', title: 'Custo Real Fornecedor (Produto + IPI + ST + Frete)', sortable: true },
-  { key: 'margem', label: 'MARGEM', thClass: 'py-2.5 px-3 text-center w-28', sortable: true },
-  { key: 'acoes', label: 'AÇÕES', thClass: 'py-2.5 px-3 text-center w-24', sortable: false },
+  { key: 'foto', label: 'FOTO', thClass: 'py-2.5 px-2 text-center', sortable: false, defaultWidth: 48, minWidth: 40 },
+  { key: 'codigoInterno', label: 'CÓD. INTERNO', thClass: 'py-2.5 px-3 text-center', sortable: true, defaultWidth: 105, minWidth: 70 },
+  { key: 'codigoBarras', label: 'CÓD. BARRAS', thClass: 'py-2.5 px-3 text-center', title: 'Código de Barras EAN-13', sortable: true, defaultWidth: 125, minWidth: 80 },
+  { key: 'codigoFornecedor', label: 'REF. FÁBRICA', thClass: 'py-2.5 px-3 text-center', title: 'Referência de Fábrica / Cód. Fornecedor', sortable: true, defaultWidth: 110, minWidth: 75 },
+  { key: 'descricao', label: 'DESCRIÇÃO DO ITEM', thClass: 'py-2.5 px-3.5 text-left', sortable: true, defaultWidth: 320, minWidth: 160 },
+  { key: 'qtdNoPacote', label: 'QTD NO PAC', thClass: 'py-2.5 px-2.5 text-center', title: 'Quantidade por Embalagem (Caixa, Fardo, Display)', sortable: true, defaultWidth: 85, minWidth: 60 },
+  { key: 'qtdPacotes', label: 'QTD DE PAC', thClass: 'py-2.5 px-2.5 text-center', title: 'Quantidade de Pacotes ou Caixas Compradas', sortable: true, defaultWidth: 85, minWidth: 60 },
+  { key: 'qtdTotalUnidades', label: 'TOTAL PEÇAS', thClass: 'py-2.5 px-2.5 text-center', title: 'Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)', sortable: true, defaultWidth: 95, minWidth: 65 },
+  { key: 'precoUnitario', label: 'VALOR', thClass: 'py-2.5 px-3 text-right', title: 'Valor unitário do produto (R$)', sortable: true, defaultWidth: 100, minWidth: 75 },
+  { key: 'valorTotalLiquido', label: 'TOTAL (R$)', thClass: 'py-2.5 px-3.5 text-right', sortable: true, defaultWidth: 115, minWidth: 80 },
+  { key: 'pdvAlvo', label: 'PDV', thClass: 'py-2.5 px-2 text-center', sortable: true, defaultWidth: 70, minWidth: 55 },
+  { key: 'custoLoja', label: 'CUSTO LOJA', thClass: 'py-2.5 px-3 text-right', title: 'Custo Total da Loja (conforme modelo da planilha)', sortable: true, defaultWidth: 110, minWidth: 80 },
+  { key: 'custoFornecedor', label: 'CUSTO FORN.', thClass: 'py-2.5 px-3 text-right', title: 'Custo Real Fornecedor (Produto + IPI + ST + Frete)', sortable: true, defaultWidth: 110, minWidth: 80 },
+  { key: 'margem', label: 'MARGEM', thClass: 'py-2.5 px-3 text-center', sortable: true, defaultWidth: 115, minWidth: 80 },
+  { key: 'acoes', label: 'AÇÕES', thClass: 'py-2.5 px-3 text-center', sortable: false, defaultWidth: 90, minWidth: 70 },
 ];
 
 // Helper para destacar os caracteres digitados no texto
@@ -130,7 +134,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   onAddItem,
   onDuplicateItem,
   onDeleteItem,
-  onSaveProduct
+  onSaveProduct,
+  onOpenFiscalModal
 }) => {
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
   const [isCatalogPickerOpen, setIsCatalogPickerOpen] = useState(false);
@@ -193,6 +198,32 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     ALL_COLUMNS.forEach(c => { initial[c.key] = true; });
     return initial as Record<ColumnKey, boolean>;
   });
+
+  // Estado para larguras das colunas (Redimensionamento individual)
+  const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>(() => {
+    try {
+      const saved = localStorage.getItem('mega12_order_columns_widths');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const merged: Record<string, number> = {};
+        ALL_COLUMNS.forEach(c => {
+          merged[c.key] = typeof parsed[c.key] === 'number' ? parsed[c.key] : (c.defaultWidth || 100);
+        });
+        return merged as Record<ColumnKey, number>;
+      }
+    } catch (e) {}
+    const initial: Record<string, number> = {};
+    ALL_COLUMNS.forEach(c => { initial[c.key] = c.defaultWidth || 100; });
+    return initial as Record<ColumnKey, number>;
+  });
+
+  // Referência para redimensionamento de coluna
+  const resizingColumnRef = useRef<{
+    key: ColumnKey;
+    startX: number;
+    startWidth: number;
+    minWidth: number;
+  } | null>(null);
 
   const [isColumnsDropdownOpen, setIsColumnsDropdownOpen] = useState(false);
   const columnsDropdownRef = useRef<HTMLDivElement>(null);
@@ -747,15 +778,62 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     } catch (e) {}
   };
 
+  // Redimensionamento de Colunas (Drag to Resize)
+  const handleResizeStart = (e: React.MouseEvent, key: ColumnKey, minWidth: number = 60) => {
+    e.preventDefault();
+    e.stopPropagation(); // Evitar ordenação ou drag da coluna
+    const currentWidth = columnWidths[key] || ALL_COLUMNS.find(c => c.key === key)?.defaultWidth || 100;
+    resizingColumnRef.current = {
+      key,
+      startX: e.clientX,
+      startWidth: currentWidth,
+      minWidth
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizingColumnRef.current) return;
+      const deltaX = moveEvent.clientX - resizingColumnRef.current.startX;
+      const newWidth = Math.max(resizingColumnRef.current.minWidth, resizingColumnRef.current.startWidth + deltaX);
+      
+      setColumnWidths(prev => ({
+        ...prev,
+        [resizingColumnRef.current!.key]: Math.round(newWidth)
+      }));
+    };
+
+    const handleMouseUp = () => {
+      if (resizingColumnRef.current) {
+        setColumnWidths(current => {
+          try {
+            localStorage.setItem('mega12_order_columns_widths', JSON.stringify(current));
+          } catch (err) {}
+          return current;
+        });
+      }
+      resizingColumnRef.current = null;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   const resetColumns = () => {
     const defaultOrder = ALL_COLUMNS.map(c => c.key);
     const defaultVis: Record<string, boolean> = {};
-    ALL_COLUMNS.forEach(c => { defaultVis[c.key] = true; });
+    const defaultWidths: Record<string, number> = {};
+    ALL_COLUMNS.forEach(c => {
+      defaultVis[c.key] = true;
+      defaultWidths[c.key] = c.defaultWidth || 100;
+    });
     setColumnOrder(defaultOrder);
     setVisibleColumns(defaultVis as Record<ColumnKey, boolean>);
+    setColumnWidths(defaultWidths as Record<ColumnKey, number>);
     try {
       localStorage.removeItem('mega12_order_columns_order');
       localStorage.removeItem('mega12_order_columns_visibility');
+      localStorage.removeItem('mega12_order_columns_widths');
     } catch (e) {}
   };
 
@@ -882,10 +960,20 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     index: number,
     fiscal: any
   ) => {
+    const colWidth = columnWidths[colKey] || ALL_COLUMNS.find(c => c.key === colKey)?.defaultWidth || 100;
+    const colMeta = ALL_COLUMNS.find(c => c.key === colKey);
+    const minWidth = colMeta?.minWidth || 60;
+    const cellStyle: React.CSSProperties = {
+      width: `${colWidth}px`,
+      minWidth: `${minWidth}px`,
+      maxWidth: `${colWidth}px`,
+      overflow: 'hidden'
+    };
+
     switch (colKey) {
       case 'foto':
         return (
-          <td key="foto" className="py-1 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/20 whitespace-nowrap">
+          <td key="foto" style={cellStyle} className="py-1 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/20 whitespace-nowrap">
             <div className="flex items-center justify-center">
               {item.fotoUrl ? (
                 <div 
@@ -914,7 +1002,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'codigoInterno':
         return (
-          <td key="codigoInterno" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
+          <td key="codigoInterno" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
             <input
               type="text"
               data-excel-row={index}
@@ -938,7 +1026,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 setAutocompleteQuery(e.target.value);
               }}
               placeholder="CÓD INT"
-              className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-center font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              className="w-full h-full min-h-[38px] px-2 py-1.5 text-xs text-center font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
               title="Código Interno Mega12"
             />
           </td>
@@ -946,7 +1034,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'codigoBarras':
         return (
-          <td key="codigoBarras" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
+          <td key="codigoBarras" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
             <input
               type="text"
               data-excel-row={index}
@@ -955,7 +1043,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               onKeyDown={(e) => handleExcelKeyDown(e, index, 'codigoBarras')}
               onChange={(e) => handleFieldChange(item, 'codigoBarras', e.target.value)}
               placeholder="789..."
-              className="w-full h-full min-h-[38px] px-2.5 py-1.5 text-xs text-center font-mono text-slate-600 dark:text-slate-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              className="w-full h-full min-h-[38px] px-2 py-1.5 text-xs text-center font-mono text-slate-600 dark:text-slate-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
               title="Código de Barras EAN-13"
             />
           </td>
@@ -963,7 +1051,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'codigoFornecedor':
         return (
-          <td key="codigoFornecedor" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
+          <td key="codigoFornecedor" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
             <input
               type="text"
               data-excel-row={index}
@@ -986,7 +1074,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 setAutocompleteQuery(e.target.value);
               }}
               placeholder="REF FORN"
-              className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-center font-mono text-slate-700 dark:text-slate-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              className="w-full h-full min-h-[38px] px-2 py-1.5 text-xs text-center font-mono text-slate-700 dark:text-slate-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
               title="Código de Referência do Fornecedor"
             />
           </td>
@@ -994,7 +1082,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'descricao':
         return (
-          <td key="descricao" className="p-0 border-r border-slate-200 dark:border-slate-700/80 relative w-full min-w-[280px]">
+          <td key="descricao" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 relative">
             <input
               type="text"
               data-excel-row={index}
@@ -1017,14 +1105,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 setAutocompleteQuery(e.target.value);
               }}
               placeholder="Digite o nome ou código do produto..."
-              className="w-full h-full min-h-[38px] px-3.5 py-1.5 text-xs text-slate-900 dark:text-white font-medium bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors"
+              className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-slate-900 dark:text-white font-medium bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors"
             />
           </td>
         );
 
       case 'qtdNoPacote':
         return (
-          <td key="qtdNoPacote" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-20">
+          <td key="qtdNoPacote" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
             <input
               type="number"
               min="1"
@@ -1043,7 +1131,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'qtdPacotes':
         return (
-          <td key="qtdPacotes" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-20">
+          <td key="qtdPacotes" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
             <input
               type="number"
               min="0"
@@ -1062,7 +1150,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'qtdTotalUnidades':
         return (
-          <td key="qtdTotalUnidades" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-24 bg-slate-50/40 dark:bg-slate-900/30">
+          <td key="qtdTotalUnidades" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-slate-50/40 dark:bg-slate-900/30">
             <input
               type="number"
               min="0"
@@ -1073,7 +1161,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdTotalUnidades')}
               onFocus={(e) => e.target.select()}
               onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
-              className="w-full h-full min-h-[38px] px-2.5 py-1.5 text-center text-xs font-extrabold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-extrabold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
               title="Total de peças = Qtd no Pac × Qtd de Pac"
             />
           </td>
@@ -1087,7 +1175,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         const displayVal = isEditing ? editingPriceMap[item.id] : formattedPrice;
 
         return (
-          <td key="precoUnitario" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-28">
+          <td key="precoUnitario" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
             <input
               type="text"
               inputMode="numeric"
@@ -1117,7 +1205,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 setEditingPriceMap(prev => ({ ...prev, [item.id]: formatted }));
                 handleFieldChange(item, 'precoUnitario', value);
               }}
-              className="w-full h-full min-h-[38px] px-3 py-1.5 text-right text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              className="w-full h-full min-h-[38px] px-2.5 py-1.5 text-right text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
               title="Valor do produto por unidade (R$)"
             />
           </td>
@@ -1126,7 +1214,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'valorTotalLiquido':
         return (
-          <td key="valorTotalLiquido" className="py-2 px-3.5 text-right font-mono border-r border-slate-200 dark:border-slate-700/80 bg-slate-50/30 dark:bg-slate-900/20 whitespace-nowrap">
+          <td key="valorTotalLiquido" style={cellStyle} className="py-2 px-3 text-right font-mono border-r border-slate-200 dark:border-slate-700/80 bg-slate-50/30 dark:bg-slate-900/20 whitespace-nowrap">
             <span className="font-extrabold text-slate-900 dark:text-white text-xs whitespace-nowrap">
               R$ {((item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto * (1 - (item.percentualDesconto || 0) / 100)))).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
@@ -1135,7 +1223,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'pdvAlvo':
         return (
-          <td key="pdvAlvo" className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-16">
+          <td key="pdvAlvo" style={cellStyle} className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
             <span 
               className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 whitespace-nowrap"
               title="Preço de Venda Padrão R$ 12,00"
@@ -1146,43 +1234,112 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         );
 
       case 'custoLoja':
-      case 'custoReal':
+      case 'custoReal': {
+        const hasCustomFiscal = Boolean(item.fiscalOverride?.useCustomFiscal);
         return (
-          <td key="custoLoja" className="py-2 px-3 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-blue-50/20 dark:bg-blue-950/10">
-            <div className="font-extrabold text-blue-700 dark:text-blue-400 font-mono text-xs whitespace-nowrap" title="Custo Total da Loja (conforme modelo da planilha)">
-              R$ {fiscal.custoLoja.toFixed(2)}
+          <td key="custoLoja" style={cellStyle} className="py-2 px-3 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-blue-50/20 dark:bg-blue-950/10">
+            <div className="flex items-center justify-end gap-1.5">
+              {hasCustomFiscal && (
+                <span
+                  title="Este item possui alíquotas fiscais individuais personalizadas"
+                  className="inline-flex items-center px-1 py-0.2 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300/50"
+                >
+                  Indiv.
+                </span>
+              )}
+              <div 
+                className={`font-extrabold text-blue-700 dark:text-blue-400 font-mono text-xs whitespace-nowrap ${onOpenFiscalModal && !isOrderItemBlank(item) ? 'cursor-pointer hover:underline' : ''}`} 
+                title="Custo Total da Loja (conforme modelo da planilha). Clique para abrir calculadora fiscal."
+                onClick={() => {
+                  if (onOpenFiscalModal && !isOrderItemBlank(item)) {
+                    onOpenFiscalModal(item);
+                  }
+                }}
+              >
+                R$ {fiscal.custoLoja.toFixed(2)}
+              </div>
             </div>
           </td>
         );
+      }
 
-      case 'custoFornecedor':
+      case 'custoFornecedor': {
+        const hasCustomFiscal = Boolean(item.fiscalOverride?.useCustomFiscal);
         return (
-          <td key="custoFornecedor" className="py-2 px-3 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-emerald-50/20 dark:bg-emerald-950/10">
-            <div className="font-extrabold text-emerald-700 dark:text-emerald-400 font-mono text-xs whitespace-nowrap" title="Custo Real Fornecedor (Produto + IPI + ST + Frete)">
-              R$ {fiscal.custoFornecedor.toFixed(2)}
+          <td key="custoFornecedor" style={cellStyle} className="py-2 px-3 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-emerald-50/20 dark:bg-emerald-950/10">
+            <div className="flex items-center justify-end gap-1.5">
+              {hasCustomFiscal && (
+                <span
+                  title="Este item possui alíquotas fiscais individuais personalizadas"
+                  className="inline-flex items-center px-1 py-0.2 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300/50"
+                >
+                  Indiv.
+                </span>
+              )}
+              <div 
+                className={`font-extrabold text-emerald-700 dark:text-emerald-400 font-mono text-xs whitespace-nowrap ${onOpenFiscalModal && !isOrderItemBlank(item) ? 'cursor-pointer hover:underline' : ''}`} 
+                title="Custo Real Fornecedor (Produto + IPI + ST + Frete). Clique para abrir calculadora fiscal."
+                onClick={() => {
+                  if (onOpenFiscalModal && !isOrderItemBlank(item)) {
+                    onOpenFiscalModal(item);
+                  }
+                }}
+              >
+                R$ {fiscal.custoFornecedor.toFixed(2)}
+              </div>
             </div>
           </td>
         );
+      }
 
       case 'margem': {
         const isLucro = fiscal.margemRealUnit >= 0;
         return (
-          <td key="margem" className="py-2 px-3 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
-            <span className={`inline-block px-2.5 py-0.5 rounded text-xs font-bold font-mono border whitespace-nowrap ${
-              isLucro 
-                ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800'
-            }`}>
+          <td key="margem" style={cellStyle} className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
+            <span 
+              onClick={() => {
+                if (onOpenFiscalModal && !isOrderItemBlank(item)) {
+                  onOpenFiscalModal(item);
+                }
+              }}
+              title="Margem Real deste produto. Clique para abrir calculadora fiscal."
+              className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold font-mono border whitespace-nowrap ${onOpenFiscalModal && !isOrderItemBlank(item) ? 'cursor-pointer hover:opacity-85' : ''} ${
+                isLucro 
+                  ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+              }`}
+            >
               R$ {fiscal.margemRealUnit.toFixed(2)} <span className="text-[10px] font-semibold">({fiscal.margemPercentual.toFixed(0)}%)</span>
             </span>
           </td>
         );
       }
 
-      case 'acoes':
+      case 'acoes': {
+        const hasCustomFiscal = Boolean(item.fiscalOverride?.useCustomFiscal);
         return (
-          <td key="acoes" className="py-1 px-2 text-center whitespace-nowrap">
+          <td key="acoes" style={cellStyle} className="py-1 px-2 text-center whitespace-nowrap">
             <div className="flex items-center justify-center gap-1 text-slate-400">
+              {/* Botão de Engenharia Fiscal Individual */}
+              {onOpenFiscalModal && !isOrderItemBlank(item) && (
+                <button
+                  type="button"
+                  onClick={() => onOpenFiscalModal(item)}
+                  className={`p-1 rounded-md transition cursor-pointer ${
+                    hasCustomFiscal
+                      ? 'text-amber-700 bg-amber-100 dark:bg-amber-950/80 dark:text-amber-300 hover:bg-amber-200 border border-amber-300/60 shadow-2xs'
+                      : 'text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60'
+                  }`}
+                  title={
+                    hasCustomFiscal
+                      ? 'Engenharia fiscal individual ativa neste produto (Clique para alterar)'
+                      : 'Abrir calculadora fiscal individual deste produto'
+                  }
+                >
+                  <Calculator className="w-3.5 h-3.5" />
+                </button>
+              )}
+
               {!isOrderItemBlank(item) && item.descricao && item.descricao.trim().length > 0 && !findCatalogProduct(item) && onSaveProduct && (
                 <button
                   type="button"
@@ -1224,6 +1381,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             </div>
           </td>
         );
+      }
 
       default:
         return null;
@@ -1484,11 +1642,13 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 )}
               </th>
 
-              {/* Colunas Reordenáveis com Drag-and-Drop e Ordenação por Clique */}
+              {/* Colunas Reordenáveis com Drag-and-Drop, Ordenação por Clique e Ajuste de Largura */}
               {orderedVisibleColumns.map(col => {
                 const isSorted = sortConfig.key === col.key;
                 const isDragOver = dragOverColumn === col.key;
                 const isBeingDragged = draggedColumn === col.key;
+                const colWidth = columnWidths[col.key] || col.defaultWidth || 100;
+                const minWidth = col.minWidth || 60;
 
                 return (
                   <th
@@ -1503,18 +1663,19 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       if (isDraggingRef.current) return;
                       handleToggleSort(col.key);
                     }}
-                    className={`py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none transition-colors group/th cursor-pointer ${col.thClass} ${
+                    style={{ width: `${colWidth}px`, minWidth: `${minWidth}px`, maxWidth: `${colWidth}px` }}
+                    className={`py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none transition-colors group/th cursor-pointer relative overflow-hidden ${col.thClass} ${
                       isDragOver ? 'bg-emerald-100/80 dark:bg-emerald-950/80 ring-2 ring-emerald-500' : ''
                     } ${isBeingDragged ? 'opacity-30' : ''} ${
                       isSorted ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/30' : 'hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                     }`}
-                    title={col.sortable ? "Clique para ordenar • Arraste para reposicionar" : "Arraste para reposicionar"}
+                    title={col.sortable ? "Clique para ordenar • Arraste o cabeçalho para trocar de posição • Arraste a borda direita para redimensionar" : "Arraste o cabeçalho para trocar de posição • Arraste a borda direita para redimensionar"}
                   >
-                    <div className={`flex items-center gap-1.5 ${
+                    <div className={`flex items-center gap-1.5 overflow-hidden ${
                       col.thClass.includes('text-right') ? 'justify-end' : col.thClass.includes('text-center') ? 'justify-center' : 'justify-start'
                     }`}>
                       <GripVertical className="w-3 h-3 text-slate-300 dark:text-slate-600 opacity-0 group-hover/th:opacity-100 transition cursor-grab active:cursor-grabbing shrink-0" />
-                      <span>{col.label}</span>
+                      <span className="truncate">{col.label}</span>
                       {col.sortable && (
                         <span className="shrink-0 ml-0.5">
                           {isSorted ? (
@@ -1528,6 +1689,19 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                           )}
                         </span>
                       )}
+                    </div>
+
+                    {/* Alça de Redimensionamento da Coluna */}
+                    <div
+                      onMouseDown={(e) => handleResizeStart(e, col.key, minWidth)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
+                      title="Arraste para redimensionar largura"
+                      className="absolute top-0 right-0 w-2.5 h-full cursor-col-resize z-20 group-hover/th:bg-slate-400/30 active:bg-emerald-500 transition-colors hover:w-3 flex items-center justify-end"
+                    >
+                      <div className="w-[2px] h-4 bg-slate-300 dark:bg-slate-600 group-hover/th:bg-emerald-500 rounded-full mr-[2px]" />
                     </div>
                   </th>
                 );

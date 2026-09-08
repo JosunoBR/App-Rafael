@@ -135,6 +135,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   }, []);
 
   const handleFieldChange = (field: keyof OrderHeader, value: any) => {
+    if (field === 'valorFrete') {
+      onChange({
+        ...header,
+        valorFrete: value,
+        valorFreteGlobal: value
+      });
+      return;
+    }
     onChange({
       ...header,
       [field]: value
@@ -150,13 +158,16 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const isVistaIntegral = currentPrazo === 'vista';
 
   const valorTotalPedido = orderTotal || 0;
+  const valorFreteNum = Number(header.valorFrete ?? header.valorFreteGlobal) || 0;
+  const valorBaseMercadoria = Math.max(0, valorTotalPedido - valorFreteNum);
+
   const valorEntrada = header.valorEntradaAVista !== undefined 
     ? header.valorEntradaAVista 
-    : (valorTotalPedido > 0 ? Number((valorTotalPedido * 0.3).toFixed(2)) : 0);
+    : (valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * 0.3).toFixed(2)) : 0);
   const saldoParcelas = header.saldoParcelasCount || 2;
   const saldoPrazo = String(header.saldoPrazoDias || '30');
 
-  const saldoRestante = Math.max(0, valorTotalPedido - valorEntrada);
+  const saldoRestante = Math.max(0, valorBaseMercadoria - valorEntrada);
   const valorPorParcelaSaldo = saldoParcelas > 0 ? (saldoRestante / saldoParcelas) : 0;
 
   const handlePaymentParcelasChange = (newParcelas: number) => {
@@ -280,10 +291,24 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           numeroParcela: num,
           rotulo: currentPrazo === 'vista' ? 'À Vista' : `${num}ª Parcela`,
           dataVencimento: addDaysToDate(baseDate, dueDays),
-          valor: currentParcelas > 0 ? valorTotalPedido / currentParcelas : valorTotalPedido,
-          isEntrada: currentPrazo === 'vista'
+          valor: currentParcelas > 0 ? valorBaseMercadoria / currentParcelas : valorBaseMercadoria,
+          isEntrada: currentPrazo === 'vista',
+          isFrete: false
         };
       });
+
+  // Previsão do Boleto de Frete (10 dias após a entrega)
+  if (valorFreteNum > 0) {
+    const dataVencFrete = addDaysToDate(baseDate, 10);
+    previewInstallments.push({
+      numeroParcela: previewInstallments.length + 1,
+      rotulo: 'Boleto Frete (10d)',
+      dataVencimento: dataVencFrete,
+      valor: valorFreteNum,
+      isEntrada: false,
+      isFrete: true
+    });
+  }
 
   // Quando o usuário seleciona um fornecedor no autocomplete
   const handleSelectSupplier = (supplier: Supplier) => {
@@ -711,8 +736,13 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
                   {/* 5. Valor do Frete */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      5. Valor Frete (R$)
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span>5. Valor Frete (R$)</span>
+                      {valorFreteNum > 0 && valorBaseMercadoria > 0 && (
+                        <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400">
+                          {((valorFreteNum / valorBaseMercadoria) * 100).toFixed(2)}% dos produtos
+                        </span>
+                      )}
                     </label>
                     <input
                       type="text"
@@ -726,6 +756,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       placeholder="0,00"
                       className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-bold shadow-2xs"
                     />
+                    {valorFreteNum > 0 && (
+                      <p className="text-[10px] text-sky-600 dark:text-sky-400 font-medium mt-1 flex items-center gap-1">
+                        <span>🚚 Boleto de frete gerado em {addDaysToDate(baseDate, 10).split('-').reverse().join('/')} (10d após entrega)</span>
+                      </p>
+                    )}
                   </div>
 
                   {/* 6. NOTA (%) */}
@@ -870,13 +905,16 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       {previewInstallments.map((inst) => {
                         const [y, m, d] = inst.dataVencimento.split('-');
                         const formattedDate = d && m && y ? `${d}/${m}/${y}` : inst.dataVencimento;
+                        const isFreteItem = (inst as any).isFrete;
                         const isEntradaItem = inst.isEntrada;
 
                         return (
                           <div 
                             key={inst.numeroParcela}
                             className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 shadow-xs ${
-                              isEntradaItem
+                              isFreteItem
+                                ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-300 dark:border-sky-800 text-sky-900 dark:text-sky-200'
+                                : isEntradaItem
                                 ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
                                 : (inst.valor > LIMITE_MAXIMO_BOLETO)
                                 ? 'bg-rose-50/90 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800'
@@ -886,9 +924,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                             <span className="font-bold text-slate-600 dark:text-slate-300">
                               {inst.rotulo}:
                             </span>
-                            {valorTotalPedido > 0 ? (
+                            {valorTotalPedido > 0 || isFreteItem ? (
                               <span className={`font-extrabold font-mono ${
-                                isEntradaItem 
+                                isFreteItem
+                                  ? 'text-sky-700 dark:text-sky-300'
+                                  : isEntradaItem 
                                   ? 'text-emerald-700 dark:text-emerald-300' 
                                   : (inst.valor > LIMITE_MAXIMO_BOLETO) 
                                   ? 'text-rose-600 dark:text-rose-400' 

@@ -204,8 +204,9 @@ class OrderRepository {
         await execute(`
           INSERT INTO order_installments (
             id, orderId, numeroParcela, totalParcelas, dataVencimento, valor,
-            valorOriginal, status, dataPagamento, observacao, documentoRef, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            valorOriginal, status, dataPagamento, observacao, documentoRef,
+            isBoletoFrete, tipoTitulo, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           instId,
           order.header.id,
@@ -218,6 +219,8 @@ class OrderRepository {
           inst.dataPagamento || null,
           inst.observacao || '',
           inst.documentoRef || '',
+          inst.isBoletoFrete ? 1 : 0,
+          inst.tipoTitulo || (inst.isBoletoFrete ? 'frete' : 'mercadoria'),
           inst.createdAt || now,
           now
         ]);
@@ -364,7 +367,9 @@ class OrderRepository {
           status: ins.status,
           dataPagamento: ins.dataPagamento,
           observacao: ins.observacao,
-          documentoRef: ins.documentoRef
+          documentoRef: ins.documentoRef,
+          isBoletoFrete: ins.isBoletoFrete === 1,
+          tipoTitulo: ins.tipoTitulo || (ins.isBoletoFrete === 1 ? 'frete' : 'mercadoria')
         }));
       } else if (r.installmentsJson) {
         installments = JSON.parse(r.installmentsJson);

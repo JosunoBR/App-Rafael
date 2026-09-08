@@ -23,6 +23,9 @@ interface OrderFiscalCardProps {
   onChangeFiscalConfig: (newConfig: FiscalConfig) => void;
   aliquotaStHeader?: number;
   onUpdateHeaderSt?: (newSt: number) => void;
+  valorFreteHeader?: number;
+  onUpdateHeaderFrete?: (newFrete: number) => void;
+  totalMercadorias?: number;
   averageItemPrice?: number;
   samplePdv?: number;
 }
@@ -32,6 +35,9 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
   onChangeFiscalConfig,
   aliquotaStHeader,
   onUpdateHeaderSt,
+  valorFreteHeader,
+  onUpdateHeaderFrete,
+  totalMercadorias = 0,
   averageItemPrice = 7.00,
   samplePdv = 12.00
 }) => {
@@ -48,6 +54,11 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
   const custoFixoPct = Number(((normalizeRateToDecimal(fiscalConfig.custosFixos, 0.26)) * 100).toFixed(2));
   const icmsSaidaPct = Number(((normalizeRateToDecimal(fiscalConfig.icmsAliquota, 0.195)) * 100).toFixed(2));
   const pisCofinsPct = Number(((normalizeRateToDecimal(fiscalConfig.pisCofinsAliquota, 0.06)) * 100).toFixed(2));
+
+  // Valor em R$ calculado do frete a partir da alíquota e do total de mercadorias
+  const freteValorCalculado = valorFreteHeader !== undefined && valorFreteHeader > 0
+    ? valorFreteHeader
+    : (totalMercadorias > 0 && fretePct > 0 ? Number((totalMercadorias * (fretePct / 100)).toFixed(2)) : 0);
 
   // Handler para campos de porcentagem usando handleCurrencyInput (2 casas decimais)
   const handleRateChange = (
@@ -68,6 +79,11 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
       if (onUpdateHeaderSt) {
         onUpdateHeaderSt(value); // sincroniza o header
       }
+    }
+
+    if (field === 'freteAliquota' && onUpdateHeaderFrete) {
+      const calcFrete = totalMercadorias > 0 ? Number((totalMercadorias * decimalValue).toFixed(2)) : 0;
+      onUpdateHeaderFrete(calcFrete);
     }
 
     onChangeFiscalConfig(updated);
@@ -91,6 +107,9 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
     };
     onChangeFiscalConfig(p1);
     if (onUpdateHeaderSt) onUpdateHeaderSt(18);
+    if (onUpdateHeaderFrete) {
+      onUpdateHeaderFrete(totalMercadorias > 0 ? Number((totalMercadorias * 0.035).toFixed(2)) : 0);
+    }
     setSimPreco(7.00);
     setSimPdv(12.00);
   };
@@ -108,6 +127,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
     };
     onChangeFiscalConfig(p2);
     if (onUpdateHeaderSt) onUpdateHeaderSt(0);
+    if (onUpdateHeaderFrete) onUpdateHeaderFrete(0);
     setSimPreco(7.00);
     setSimPdv(12.00);
   };
@@ -116,6 +136,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
   const handleResetDefaults = () => {
     onChangeFiscalConfig(DEFAULT_FISCAL_CONFIG);
     if (onUpdateHeaderSt) onUpdateHeaderSt(0);
+    if (onUpdateHeaderFrete) onUpdateHeaderFrete(0);
   };
 
   return (
@@ -149,7 +170,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
         <div className="flex items-center gap-2.5">
           <div className="hidden sm:flex items-center gap-2 text-[11px]">
             <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium text-slate-700 dark:text-slate-300">
-              📥 Entrada: <strong className="text-emerald-600">{(ipiPct + stPct + fretePct).toFixed(1)}%</strong>
+              📥 Custo Fornecedor: <strong className="text-emerald-600">+{(ipiPct + stPct + fretePct).toFixed(1)}%</strong>
             </span>
             <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium text-slate-700 dark:text-slate-300">
               📤 Saída: <strong className="text-blue-600">{(custoFixoPct + icmsSaidaPct + pisCofinsPct).toFixed(1)}%</strong> PDV
@@ -215,14 +236,14 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 <div>
                   <h4 className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
                     <ArrowDownRight className="w-4 h-4 text-emerald-600" />
-                    1. IMPOSTOS + CUSTOS DE ENTRADA
+                    1. CUSTO REAL FORNECEDOR (ENTRADA)
                   </h4>
                   <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400 font-medium">
-                    Valor do item acrescenta IPI, ST e Frete (Custo Real Fornecedor)
+                    Valor do item acrescenta IPI, ST e Frete (Desembolso Compra / Boletos)
                   </p>
                 </div>
                 <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-md border border-emerald-300/40">
-                  +{(ipiPct + stPct + fretePct).toFixed(2)}%
+                  Encargos: +{(ipiPct + stPct + fretePct).toFixed(2)}%
                 </span>
               </div>
 
@@ -259,9 +280,16 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    FRETE (%)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      FRETE (%)
+                    </label>
+                    {freteValorCalculado > 0 && (
+                      <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400">
+                        = R$ {freteValorCalculado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <input
                       type="text"
@@ -271,6 +299,9 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
                   </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    Gera boleto frete 10d após entrega
+                  </p>
                 </div>
               </div>
 
@@ -331,21 +362,21 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 <div>
                   <h4 className="text-xs font-bold text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
                     <ArrowUpRight className="w-4 h-4 text-blue-600" />
-                    2. IMPOSTOS + CUSTOS DE SAÍDA (CUSTO LOJA)
+                    2. FORMAÇÃO DO CUSTO LOJA (CUSTO & MARGEM)
                   </h4>
                   <p className="text-[10px] text-blue-700/80 dark:text-blue-400 font-medium">
-                    Desconta ICMS Entrada do item e soma custos incidentes sobre o PDV
+                    Desconta ICMS Entrada do produto e soma custos incidentes sobre o PDV
                   </p>
                 </div>
                 <span className="text-xs font-bold text-blue-800 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 rounded-md border border-blue-300/40">
-                  Custo Fixo + Saída: {(custoFixoPct + icmsSaidaPct + pisCofinsPct).toFixed(2)}%
+                  Custos s/ PDV: {(custoFixoPct + icmsSaidaPct + pisCofinsPct).toFixed(2)}%
                 </span>
               </div>
 
               {/* INPUTS DE SAÍDA */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1" title="Desconta do valor de compra do item">
+                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1" title="Crédito de ICMS de Entrada a descontar do produto">
                     ICMS Entrada (%)
                   </label>
                   <div className="relative">
@@ -353,10 +384,13 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                       type="text"
                       value={icmsEntradaPct > 0 ? icmsEntradaPct.toFixed(2).replace('.', ',') : '0,00'}
                       onChange={(e) => handleRateChange('creditoEntradaICMS', e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
                   </div>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                    Desconta do item
+                  </p>
                 </div>
 
                 <div>
@@ -368,10 +402,13 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                       type="text"
                       value={custoFixoPct > 0 ? custoFixoPct.toFixed(2).replace('.', ',') : '0,00'}
                       onChange={(e) => handleRateChange('custosFixos', e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
                   </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    s/ PDV
+                  </p>
                 </div>
 
                 <div>
@@ -383,10 +420,13 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                       type="text"
                       value={icmsSaidaPct > 0 ? icmsSaidaPct.toFixed(2).replace('.', ',') : '0,00'}
                       onChange={(e) => handleRateChange('icmsAliquota', e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
                   </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    s/ PDV
+                  </p>
                 </div>
 
                 <div>
@@ -398,10 +438,13 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                       type="text"
                       value={pisCofinsPct > 0 ? pisCofinsPct.toFixed(2).replace('.', ',') : '0,00'}
                       onChange={(e) => handleRateChange('pisCofinsAliquota', e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
                   </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    s/ PDV
+                  </p>
                 </div>
               </div>
 
@@ -434,7 +477,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-                  <span>CUSTO REAL (ENTRADA)</span>
+                  <span>CUSTO REAL (ENCARGOS ENTRADA)</span>
                   <span>(IPI + ST + Frete da Parte 1)</span>
                   <strong className="text-slate-800 dark:text-slate-200">R$ {simResult.custoRealEntrada.toFixed(2)}</strong>
                 </div>

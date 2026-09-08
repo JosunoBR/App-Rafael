@@ -27,29 +27,32 @@ export const PRAZO_OPTIONS = [
 ];
 
 /**
+ * Calcula o valor líquido total apenas das mercadorias/produtos (com desconto OFF)
+ */
+export function calculateOrderMerchandiseTotal(order: PurchaseOrder): number {
+  if (!order) return 0;
+
+  const items = order.items || [];
+  return items.reduce((sum, it) => {
+    if (!it || (!it.descricao && !it.codigo)) return sum;
+    const bruto = it.valorTotalBruto || ((it.qtdTotalUnidades || 0) * (it.precoUnitario || 0)) || 0;
+    if (bruto <= 0) return sum;
+    const descPct = Math.max(0, Math.min(100, it.percentualDesconto || 0));
+    const liq = it.valorTotalLiquido !== undefined 
+      ? it.valorTotalLiquido 
+      : (bruto * (1 - descPct / 100));
+    return sum + Math.max(0, liq);
+  }, 0);
+}
+
+/**
  * Calcula o valor líquido total do pedido (itens com desconto OFF + frete + outras despesas)
  */
 export function calculateOrderNetTotal(order: PurchaseOrder): number {
   if (!order) return 0;
 
-  // Verifica se há descontos aplicados por produto
-  const items = order.items || [];
-  const hasItemDiscounts = items.some(it => (it.percentualDesconto && it.percentualDesconto > 0) || (it.valorTotalLiquido !== undefined && it.valorTotalLiquido < (it.valorTotalBruto || 0)));
-
-  let itemsComDesconto = 0;
-  if (hasItemDiscounts) {
-    // Soma o valor líquido real de cada produto
-    itemsComDesconto = items.reduce((sum, it) => {
-      const liq = it.valorTotalLiquido !== undefined 
-        ? it.valorTotalLiquido 
-        : (it.valorTotalBruto || 0) * (1 - Math.max(0, Math.min(1, (it.percentualDesconto || 0) / 100)));
-      return sum + liq;
-    }, 0);
-  } else {
-    itemsComDesconto = items.reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0);
-  }
-
-  const frete = Number(order.header?.valorFreteGlobal) || 0;
+  const itemsComDesconto = calculateOrderMerchandiseTotal(order);
+  const frete = Number(order.header?.valorFrete ?? order.header?.valorFreteGlobal) || 0;
   const outras = Number(order.header?.valorOutrasDespesasGlobal) || 0;
   return Math.max(0, itemsComDesconto + frete + outras);
 }
@@ -204,11 +207,14 @@ export function generateOrderInstallments(
   }
 
   const list: PaymentInstallment[] = [];
+  const valorFrete = Number(order.header?.valorFrete ?? order.header?.valorFreteGlobal) || 0;
+  // As parcelas de mercadoria do fornecedor dividem o valor líquido sem o frete (pois o frete possui boleto próprio)
+  const valorBaseMercadoria = Math.max(0, netTotal - valorFrete);
 
   // CENÁRIO A: ENTRADA À VISTA + SALDO PARCELADO A PRAZO
   if (prazo === 'entrada_com_parcelamento') {
-    const valorEntrada = Math.min(netTotal, Math.max(0, order.header.valorEntradaAVista || 0));
-    const saldoRestante = Math.max(0, netTotal - valorEntrada);
+    const valorEntrada = Math.min(valorBaseMercadoria, Math.max(0, order.header.valorEntradaAVista || 0));
+    const saldoRestante = Math.max(0, valorBaseMercadoria - valorEntrada);
     const totalParcelasSaldo = Math.max(1, order.header.saldoParcelasCount || 2);
     const saldoPrazo = String(order.header.saldoPrazoDias || '30');
     const totalParcelasGeral = 1 + totalParcelasSaldo;
@@ -233,6 +239,8 @@ export function generateOrderInstallments(
       dataPagamento: existingEntrada?.dataPagamento,
       observacao: existingEntrada?.observacao || 'Entrada / Sinal À Vista (TED/PIX)',
       documentoRef: existingEntrada?.documentoRef,
+      tipoTitulo: 'mercadoria',
+      isBoletoFrete: false,
       updatedAt: new Date().toISOString()
     });
 
@@ -273,19 +281,18 @@ export function generateOrderInstallments(
         valorOriginal: existing?.valorOriginal ?? originalProportionalVal,
         status: statusFinal,
         dataPagamento: existing?.dataPagamento,
-        observacao: existing?.observacao || `Saldo Parcela ${j}/${totalParcelasSaldo} (${dueDays}d da Entrega)`,
+        observacao: existing?.observacao || `Saldo ${j}/${totalParcelasSaldo} (${dueDays}d da Entrega)`,
         documentoRef: existing?.documentoRef,
+        tipoTitulo: 'mercadoria',
+        isBoletoFrete: false,
         updatedAt: new Date().toISOString()
       });
     }
-
-    return list;
-  }
-
-  // CENÁRIO B: PARCELAMENTO PADRÃO (OU 100% À VISTA)
-  const totalParcelas = customParcelas ?? order.header.parcelasCount ?? parsed.parcelas ?? 3;
-  const baseValue = totalParcelas > 0 ? Number((netTotal / totalParcelas).toFixed(2)) : netTotal;
-  const remainder = totalParcelas > 0 ? Number((netTotal - baseValue * totalParcelas).toFixed(2)) : 0;
+  } else {
+    // CENÁRIO B: PARCELAMENTO PADRÃO (OU 100% À VISTA)
+    const totalParcelas = customParcelas ?? order.header.parcelasCount ?? parsed.parcelas ?? 3;
+    const baseValue = totalParcelas > 0 ? Number((valorBaseMercadoria / totalParcelas).toFixed(2)) : valorBaseMercadoria;
+    const remainder = totalParcelas > 0 ? Number((valorBaseMercadoria - baseValue * totalParcelas).toFixed(2)) : 0;
 
   for (let i = 1; i <= totalParcelas; i++) {
     const existing = existingMap.get(i);
@@ -323,6 +330,43 @@ export function generateOrderInstallments(
       dataPagamento: existing?.dataPagamento,
       observacao: existing?.observacao || (prazo === 'vista' ? 'Pagamento 100% À Vista' : `Parcela ${i}/${totalParcelas} (${dueDays}d da Entrega)`),
       documentoRef: existing?.documentoRef,
+      tipoTitulo: 'mercadoria',
+      isBoletoFrete: false,
+      updatedAt: new Date().toISOString()
+    });
+  }
+}
+
+  // CENÁRIO C: BOLETO AUTOMÁTICO DE FRETE (10 DIAS APÓS A DATA DE ENTREGA)
+  if (valorFrete > 0) {
+    const freteDueDate = addDaysToDate(baseDeliveryDate, 10);
+    // Verificar se já existia um boleto de frete preservado
+    const existingFrete = Array.isArray(order.installments)
+      ? order.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
+      : undefined;
+
+    const valorFreteFinal = existingFrete?.valor !== undefined ? existingFrete.valor : valorFrete;
+    const dataVencFrete = existingFrete?.dataVencimento || freteDueDate;
+    const statusFrete = existingFrete?.status || getInstallmentStatus(dataVencFrete, existingFrete?.dataPagamento);
+
+    const nextParcelaNum = list.length + 1;
+
+    list.push({
+      id: existingFrete?.id || `inst_frete_${order.header.id || 'ord'}_${Date.now()}`,
+      orderId: order.header.id,
+      numeroPedido: order.header.numeroPedido,
+      fornecedor: order.header.fornecedor ? `${order.header.fornecedor} (Frete)` : 'Transportadora / Frete',
+      numeroParcela: nextParcelaNum,
+      totalParcelas: nextParcelaNum,
+      dataVencimento: dataVencFrete,
+      valor: valorFreteFinal,
+      valorOriginal: existingFrete?.valorOriginal ?? valorFrete,
+      status: statusFrete,
+      dataPagamento: existingFrete?.dataPagamento,
+      observacao: existingFrete?.observacao || 'Boleto de Frete (10 dias após a entrega)',
+      documentoRef: existingFrete?.documentoRef || 'Boleto Frete',
+      isBoletoFrete: true,
+      tipoTitulo: 'frete',
       updatedAt: new Date().toISOString()
     });
   }

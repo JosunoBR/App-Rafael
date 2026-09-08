@@ -351,6 +351,21 @@ async function getDatabase() {
         }
       });
     }
+
+    const orderInstTableInfo = dbInstance.exec("PRAGMA table_info(order_installments)");
+    if (orderInstTableInfo[0]) {
+      const colNames = orderInstTableInfo[0].values.map(v => v[1]);
+      const requiredInstCols = {
+        isBoletoFrete: "INTEGER DEFAULT 0",
+        tipoTitulo: "TEXT DEFAULT 'mercadoria'"
+      };
+
+      Object.entries(requiredInstCols).forEach(([col, def]) => {
+        if (!colNames.includes(col)) {
+          try { dbInstance.run(`ALTER TABLE order_installments ADD COLUMN ${col} ${def}`); } catch (e) {}
+        }
+      });
+    }
   } catch (err) {
     console.error('Aviso na verificação de migrações:', err.message);
   }

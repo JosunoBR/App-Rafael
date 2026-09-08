@@ -16,6 +16,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { Supplier } from '../shared/types';
+import { maskCNPJ, maskPhone } from '../utils/masks';
 
 interface SupplierModalProps {
   suppliers: Supplier[];
@@ -222,7 +223,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                   <input
                     type="text"
                     value={cnpj}
-                    onChange={(e) => setCnpj(e.target.value)}
+                    onChange={(e) => setCnpj(maskCNPJ(e.target.value))}
                     placeholder="00.000.000/0001-00"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono"
                   />
@@ -252,7 +253,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                   <input
                     type="text"
                     value={contatoVendedor}
-                    onChange={(e) => setContatoVendedor(e.target.value)}
+                    onChange={(e) => setContatoVendedor(maskPhone(e.target.value))}
                     placeholder="(42) 99999-9999"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
                   />

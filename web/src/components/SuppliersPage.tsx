@@ -23,6 +23,7 @@ import {
   Star
 } from 'lucide-react';
 import { Supplier, Product } from '../shared/types';
+import { maskCNPJ, maskPhone, handleCurrencyInput, formatCurrency } from '../utils/masks';
 
 interface SuppliersPageProps {
   suppliers: Supplier[];
@@ -327,7 +328,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               <input
                 type="text"
                 value={formData.cnpj}
-                onChange={(e) => setFormData(prev => ({ ...prev, cnpj: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, cnpj: maskCNPJ(e.target.value) }))}
                 placeholder="00.000.000/0001-00"
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono"
               />
@@ -355,7 +356,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               <input
                 type="text"
                 value={formData.contatoVendedor}
-                onChange={(e) => setFormData(prev => ({ ...prev, contatoVendedor: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, contatoVendedor: maskPhone(e.target.value) }))}
                 placeholder="(42) 99999-8888"
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono"
               />
@@ -764,13 +765,15 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                     Preço Compra (R$)
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newProductData.precoUnitarioPadrao === 0 ? '' : (newProductData.precoUnitarioPadrao || '')}
-                    placeholder="0.00"
+                    type="text"
+                    inputMode="numeric"
+                    value={newProductData.precoUnitarioPadrao ? formatCurrency(newProductData.precoUnitarioPadrao, false) : ''}
+                    placeholder="0,00"
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => setNewProductData(prev => ({ ...prev, precoUnitarioPadrao: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => {
+                      const { value } = handleCurrencyInput(e.target.value, true);
+                      setNewProductData(prev => ({ ...prev, precoUnitarioPadrao: value }));
+                    }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                   />
                 </div>
@@ -780,13 +783,15 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                     PDV Sugerido (R$)
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newProductData.pdvSugerido === 0 ? '' : (newProductData.pdvSugerido || '')}
-                    placeholder="0.00"
+                    type="text"
+                    inputMode="numeric"
+                    value={newProductData.pdvSugerido ? formatCurrency(newProductData.pdvSugerido, false) : ''}
+                    placeholder="0,00"
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => setNewProductData(prev => ({ ...prev, pdvSugerido: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => {
+                      const { value } = handleCurrencyInput(e.target.value, true);
+                      setNewProductData(prev => ({ ...prev, pdvSugerido: value }));
+                    }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 outline-hidden"
                   />
                 </div>

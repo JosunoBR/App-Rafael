@@ -22,6 +22,7 @@ import {
   X
 } from 'lucide-react';
 import { OrderHeader, Supplier } from '../shared/types';
+import { handleCurrencyInput, formatCurrency, maskPhone } from '../utils/masks';
 import { 
   PARCELAS_OPTIONS, 
   PRAZO_OPTIONS, 
@@ -74,22 +75,43 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   // Identificar o fornecedor ativo no cadastro
   const currentSupplier = suppliers.find(s => 
     (header.supplierId && s.id === header.supplierId) || 
-    s.razaoSocial.toLowerCase() === (header.fornecedor || '').toLowerCase()
+    s.razaoSocial.toLowerCase() === (header.fornecedor || '').toLowerCase() ||
+    (s.nomeFantasia && s.nomeFantasia.toLowerCase() === (header.fornecedor || '').toLowerCase())
   );
 
-  // Alíquota de ST do cadastro do fornecedor ou do header
+  // Alíquota de ST e Desconto OFF do cadastro do fornecedor ou do header
   const aliquotaStCadastrada = currentSupplier?.aliquotaStPadrao !== undefined 
     ? currentSupplier.aliquotaStPadrao 
     : (header.aliquotaSt ?? 0);
 
-  // Sincronizar o ST do pedido se o fornecedor cadastrado tiver ST diferente
+  const offCadastrado = currentSupplier?.descontoOffPadrao !== undefined
+    ? currentSupplier.descontoOffPadrao
+    : (header.percentualDescontoOff ?? 0);
+
+  // Sincronizar ST e OFF do pedido se o fornecedor cadastrado tiver valores definidos
   useEffect(() => {
-    if (currentSupplier && currentSupplier.aliquotaStPadrao !== undefined && header.aliquotaSt !== currentSupplier.aliquotaStPadrao) {
-      onChange({
-        ...header,
-        supplierId: currentSupplier.id,
-        aliquotaSt: currentSupplier.aliquotaStPadrao
-      });
+    if (!currentSupplier) return;
+
+    let needsUpdate = false;
+    const updatedHeader = { ...header };
+
+    if (!header.supplierId || header.supplierId !== currentSupplier.id) {
+      updatedHeader.supplierId = currentSupplier.id;
+      needsUpdate = true;
+    }
+
+    if (currentSupplier.aliquotaStPadrao !== undefined && header.aliquotaSt !== currentSupplier.aliquotaStPadrao) {
+      updatedHeader.aliquotaSt = currentSupplier.aliquotaStPadrao;
+      needsUpdate = true;
+    }
+
+    if (currentSupplier.descontoOffPadrao !== undefined && header.percentualDescontoOff !== currentSupplier.descontoOffPadrao) {
+      updatedHeader.percentualDescontoOff = currentSupplier.descontoOffPadrao;
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      onChange(updatedHeader);
     }
   }, [currentSupplier, header.fornecedor]);
 
@@ -270,7 +292,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       parcelasCount: supParsed.parcelas,
       prazoDias: supParsed.prazo,
       aliquotaSt: supplier.aliquotaStPadrao || 0,
-      percentualDescontoOff: supplier.descontoOffPadrao !== undefined ? supplier.descontoOffPadrao : header.percentualDescontoOff,
+      percentualDescontoOff: supplier.descontoOffPadrao !== undefined ? supplier.descontoOffPadrao : 0,
       observacoesDescarga: supplier.observacoesDescarga || header.observacoesDescarga
     });
     setIsDropdownOpen(false);
@@ -477,10 +499,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               )}
             </div>
 
-            {/* 3. Desconto OFF % (Informativo / Referencial de Negociação) */}
+            {/* 3. OFF (Informativo / Cadastro do Fornecedor) */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span>Desconto OFF %</span>
+                <span>OFF</span>
                 <span className="text-[10px] text-slate-400 font-normal">Informativo</span>
               </label>
               <div className="relative">
@@ -489,7 +511,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   step="0.1"
                   min="0"
                   max="100"
-                  value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
+                  value={offCadastrado === 0 ? '' : offCadastrado}
                   onFocus={(e) => e.target.select()}
                   onChange={(e) => handleFieldChange('percentualDescontoOff', parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold pr-8 font-mono"
@@ -524,7 +546,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               <input
                 type="text"
                 value={header.contatoVendedor || ''}
-                onChange={(e) => handleFieldChange('contatoVendedor', e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleFieldChange('contatoVendedor', val.includes('@') ? val : maskPhone(val));
+                }}
                 className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
                 placeholder="(42) 99988-7766"
               />
@@ -682,12 +707,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       5. Valor Frete (R$)
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={header.valorFrete === 0 || header.valorFrete === undefined ? '' : header.valorFrete}
+                      type="text"
+                      inputMode="numeric"
+                      value={header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : ''}
                       onFocus={(e) => e.target.select()}
-                      onChange={(e) => handleFieldChange('valorFrete', parseFloat(e.target.value) || 0)}
+                      onChange={(e) => {
+                        const { value } = handleCurrencyInput(e.target.value, true);
+                        handleFieldChange('valorFrete', value);
+                      }}
                       placeholder="0,00"
                       className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-bold shadow-2xs"
                     />
@@ -742,14 +769,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         </label>
                         <div className="relative">
                           <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max={valorTotalPedido}
-                            value={valorEntrada === 0 ? '' : valorEntrada}
+                            type="text"
+                            inputMode="numeric"
+                            value={valorEntrada > 0 ? formatCurrency(valorEntrada, false) : ''}
                             placeholder="0,00"
                             onFocus={(e) => e.target.select()}
-                            onChange={(e) => handleEntradaChange(parseFloat(e.target.value) || 0)}
+                            onChange={(e) => {
+                              const { value } = handleCurrencyInput(e.target.value, true);
+                              handleEntradaChange(Math.min(valorTotalPedido, value));
+                            }}
                             className="w-full px-3 py-1.5 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold font-mono focus:ring-2 focus:ring-emerald-500 outline-hidden"
                           />
                         </div>

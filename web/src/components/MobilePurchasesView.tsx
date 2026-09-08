@@ -33,6 +33,7 @@ import {
 import { PurchaseOrder, OrderItem, Supplier, Product, StoreConfig, FiscalConfig } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
+import { handleCurrencyInput, formatCurrency } from '../utils/masks';
 
 interface MobilePurchasesViewProps {
   order: PurchaseOrder;
@@ -763,12 +764,15 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
             <div>
               <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Compra (R$)</label>
               <input
-                type="number"
-                step="0.01"
-                value={novoItem.precoUnitario === 0 ? '' : (novoItem.precoUnitario || '')}
-                placeholder="0.00"
+                type="text"
+                inputMode="numeric"
+                value={novoItem.precoUnitario ? formatCurrency(novoItem.precoUnitario, false) : ''}
+                placeholder="0,00"
                 onFocus={(e) => e.target.select()}
-                onChange={(e) => setNovoItem(prev => ({ ...prev, precoUnitario: Number(e.target.value) }))}
+                onChange={(e) => {
+                  const { value } = handleCurrencyInput(e.target.value, true);
+                  setNovoItem(prev => ({ ...prev, precoUnitario: value }));
+                }}
                 className="w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400"
               />
             </div>

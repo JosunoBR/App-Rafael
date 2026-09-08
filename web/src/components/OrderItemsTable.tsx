@@ -32,6 +32,7 @@ import { OrderItem, FiscalConfig, StoreConfig, Product } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
 import { isOrderItemBlank, generateNextProductCode } from '../utils/orderItemUtils';
+import { handleCurrencyInput, formatCurrency } from '../utils/masks';
 
 interface OrderItemsTableProps {
   items: OrderItem[];
@@ -523,7 +524,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       liquido += l;
       pecas += (it.qtdTotalUnidades || 0);
     });
-    return { bruto, desconto, liquido, pecas };
+    const precoMedio = pecas > 0 ? (liquido / pecas) : 0;
+    return { bruto, desconto, liquido, pecas, precoMedio };
   }, [items]);
 
   // Navegação por teclado estilo planilha Excel (Enter para descer de linha, Setas Cima/Baixo)
@@ -869,19 +871,19 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     />
                   </td>
 
-                  {/* Valor do Produto (Preço Unitário de Compra - Sempre com 2 casas decimais) */}
+                  {/* Valor do Produto (Preço Unitário de Compra - Sempre com 2 casas decimais e máscara em tempo real) */}
                   <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-28">
                     {(() => {
                       const isEditing = item.id in editingPriceMap;
                       const formattedPrice = item.precoUnitario > 0
-                        ? item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        ? formatCurrency(item.precoUnitario, false)
                         : (isOrderItemBlank(item) ? '' : '0,00');
                       const displayVal = isEditing ? editingPriceMap[item.id] : formattedPrice;
 
                       return (
                         <input
                           type="text"
-                          inputMode="decimal"
+                          inputMode="numeric"
                           data-excel-row={index}
                           data-excel-field="precoUnitario"
                           value={displayVal}
@@ -891,8 +893,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                             setEditingPriceMap(prev => ({
                               ...prev,
                               [item.id]: item.precoUnitario > 0
-                                ? item.precoUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                : ''
+                                ? formatCurrency(item.precoUnitario, false)
+                                : '0,00'
                             }));
                             e.target.select();
                           }}
@@ -904,11 +906,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                             });
                           }}
                           onChange={(e) => {
-                            const raw = e.target.value;
-                            setEditingPriceMap(prev => ({ ...prev, [item.id]: raw }));
-                            const cleaned = raw.replace(',', '.');
-                            const num = parseFloat(cleaned);
-                            handleFieldChange(item, 'precoUnitario', isNaN(num) ? 0 : num);
+                            const { formatted, value } = handleCurrencyInput(e.target.value, false);
+                            setEditingPriceMap(prev => ({ ...prev, [item.id]: formatted }));
+                            handleFieldChange(item, 'precoUnitario', value);
                           }}
                           className="w-full h-full min-h-[38px] px-3 py-1.5 text-right text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
                           title="Valor do produto por unidade (R$)"
@@ -1021,6 +1021,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               Desc. Itens: -R$ {totals.desconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           )}
+          <div className="text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700" title="Preço médio por peça/item (Total Líquido ÷ Total de Peças)">
+            Preço Médio: <strong className="text-slate-900 dark:text-white font-bold">R$ {totals.precoMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          </div>
           <div className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
             Total Líquido: R$ {totals.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>

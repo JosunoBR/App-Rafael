@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Product, Supplier } from '../shared/types';
 import { INITIAL_PRODUCTS } from '../utils/storage';
+import { handleCurrencyInput, formatCurrency } from '../utils/masks';
 
 interface ProductsCatalogPageProps {
   products: Product[];
@@ -798,13 +799,15 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                     Preço Compra Padrão (R$)
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editingProduct.precoUnitarioPadrao === 0 ? '' : (editingProduct.precoUnitarioPadrao || '')}
-                    placeholder="0.00"
+                    type="text"
+                    inputMode="numeric"
+                    value={formatCurrency(editingProduct.precoUnitarioPadrao || 0)}
+                    placeholder="0,00"
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => setEditingProduct(prev => prev ? { ...prev, precoUnitarioPadrao: parseFloat(e.target.value) || 0 } : null)}
+                    onChange={(e) => {
+                      const { value } = handleCurrencyInput(e.target.value, false);
+                      setEditingProduct(prev => prev ? { ...prev, precoUnitarioPadrao: value } : null);
+                    }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                   />
                 </div>
@@ -814,13 +817,15 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                     Preço de Venda / PDV (R$) *
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editingProduct.pdvSugerido === 0 ? '' : (editingProduct.pdvSugerido !== undefined ? editingProduct.pdvSugerido : 12.00)}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatCurrency(editingProduct.pdvSugerido !== undefined ? editingProduct.pdvSugerido : 12.00)}
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => setEditingProduct(prev => prev ? { ...prev, pdvSugerido: parseFloat(e.target.value) || 0 } : null)}
-                    placeholder="12.00"
+                    onChange={(e) => {
+                      const { value } = handleCurrencyInput(e.target.value, false);
+                      setEditingProduct(prev => prev ? { ...prev, pdvSugerido: value } : null);
+                    }}
+                    placeholder="12,00"
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 outline-hidden focus:ring-2 focus:ring-emerald-500"
                   />
                   <span className="text-[9px] text-slate-400 block mt-0.5">Preço no caixa (Padrão R$ 12,00)</span>

@@ -330,7 +330,7 @@ function generateHistoricalOrders(fiscalConfig, stores) {
       dataEntrega: '2026-08-30T15:00:00.000Z',
       status: 'Em Separação',
       separationStatus: 'Em Andamento',
-      descontoOff: 7.0,
+      descontoOff: 8.0,
       prodIndices: [6, 14, 15, 17], // Facas, Escorredor, Assadeiras, Faqueiro
       pacotes: [30, 25, 40, 25]
     },

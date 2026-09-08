@@ -26,7 +26,6 @@ import {
   UploadCloud,
   CheckCircle2,
   Trash,
-  Percent,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -158,10 +157,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const [quickSearchText, setQuickSearchText] = useState('');
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
   const quickSearchInputRef = useRef<HTMLInputElement>(null);
-
-  // Estado do modal/popover de aplicação de desconto em lote
-  const [isBatchDiscountModalOpen, setIsBatchDiscountModalOpen] = useState(false);
-  const [batchDiscountValue, setBatchDiscountValue] = useState<number>(0);
 
   // Estado para controlar digitação da coluna de preço garantindo sempre 2 casas decimais (R$)
   const [editingPriceMap, setEditingPriceMap] = useState<Record<string, string>>({});
@@ -622,33 +617,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     onUpdateItem(item.id, updatedItem);
   };
 
-  // Aplicação rápida de desconto em massa a todos os produtos do pedido
-  const handleApplyDiscountToAll = (percent: number) => {
-    const cleanPct = Math.max(0, Math.min(100, percent));
-    items.forEach(it => {
-      if (isOrderItemBlank(it)) return;
-      const qtd = it.qtdTotalUnidades || 0;
-      const preco = it.precoUnitario || 0;
-      const valorBruto = qtd * preco;
-      const valorDesc = valorBruto * (cleanPct / 100);
-      const valorLiquido = valorBruto - valorDesc;
-      const precoEfetivo = preco * (1 - cleanPct / 100);
-      const fiscal = calculateItemFiscal(precoEfetivo, 12.00, globalFiscal, it.fiscalOverride);
-
-      onUpdateItem(it.id, {
-        ...it,
-        percentualDesconto: cleanPct,
-        valorDescontoItem: valorDesc,
-        valorTotalLiquido: valorLiquido,
-        despesasPdvUnit: fiscal.despesasPdvUnit,
-        creditoIcmsUnit: fiscal.creditoIcmsUnit,
-        custoRealEfetivo: fiscal.custoRealEfetivo,
-        margemRealUnit: fiscal.margemRealUnit,
-        margemPercentual: fiscal.margemPercentual
-      });
-    });
-    setIsBatchDiscountModalOpen(false);
-  };
 
   const validItemsCount = useMemo(() => items.filter(it => !isOrderItemBlank(it)).length, [items]);
 
@@ -1410,69 +1378,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         {/* Barra de Ações Rápidas Superior */}
         <div className="flex flex-wrap items-center gap-2">
           
-          {/* Ação de Desconto em Massa para Todos os Itens */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsBatchDiscountModalOpen(prev => !prev)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition cursor-pointer shadow-2xs"
-              title="Aplicar desconto comercial percentual uniforme a todos os produtos da tabela"
-            >
-              <Percent className="w-3.5 h-3.5" />
-              <span>Desconto Global nos Itens</span>
-            </button>
-
-            {/* Popover de Aplicação de Desconto em Lote */}
-            {isBatchDiscountModalOpen && (
-              <div className="absolute right-0 top-full mt-2 w-72 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-40 animate-in fade-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <Percent className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Aplicar Desconto em Todos</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsBatchDiscountModalOpen(false)}
-                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                  Insira a porcentagem de desconto negociada que será replicada para cada produto desta lista:
-                </p>
-                <div className="flex items-center gap-2 mb-3">
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="100"
-                    value={batchDiscountValue === 0 ? '' : batchDiscountValue}
-                    placeholder="ex: 5"
-                    onChange={(e) => setBatchDiscountValue(parseFloat(e.target.value) || 0)}
-                    className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold outline-hidden focus:ring-2 focus:ring-emerald-500"
-                  />
-                  <span className="text-xs font-bold text-slate-500">%</span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleApplyDiscountToAll(0)}
-                    className="flex-1 py-1.5 text-xs font-medium rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                  >
-                    Zerar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyDiscountToAll(batchDiscountValue)}
-                    className="flex-1 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition"
-                  >
-                    Aplicar
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Busca Rápida com Autocomplete no Catálogo */}
           <div className="relative min-w-[200px] sm:min-w-[240px]">
@@ -2173,108 +2078,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         document.body
       )}
 
-      {/* Modal de Desconto em Massa para todos os produtos */}
-      {isBatchDiscountModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
-                  <Percent className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Aplicar Desconto em Massa
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Definir desconto comercial em todos os {validItemsCount} produtos
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsBatchDiscountModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Percentual de Desconto (% OFF)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={batchDiscountValue === 0 ? '' : batchDiscountValue}
-                    placeholder="0.0"
-                    autoFocus
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setBatchDiscountValue(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold text-lg focus:ring-2 focus:ring-emerald-500 outline-hidden pr-8 text-center"
-                  />
-                  <span className="absolute right-3 top-3 text-sm font-bold text-slate-400 pointer-events-none">
-                    %
-                  </span>
-                </div>
-              </div>
-
-              {/* Atalhos rápidos de percentuais comuns */}
-              <div className="flex items-center gap-1.5 justify-center flex-wrap">
-                {[3, 5, 7, 10, 15].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => setBatchDiscountValue(pct)}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
-                      batchDiscountValue === pct
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {pct}%
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setBatchDiscountValue(0)}
-                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition cursor-pointer"
-                  title="Zerar desconto de todos os produtos"
-                >
-                  Zerar (0%)
-                </button>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                💡 Este percentual será aplicado individualmente na coluna <strong>Desc. (%)</strong> de cada produto do pedido. Você poderá ajustar itens específicos depois, se necessário.
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsBatchDiscountModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleApplyDiscountToAll(batchDiscountValue)}
-                  className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition shadow-xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Aplicar aos Produtos</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

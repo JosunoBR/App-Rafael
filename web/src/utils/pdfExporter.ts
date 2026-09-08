@@ -282,7 +282,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.text('3. AGENDAMENTO OBRIGATÓRIO DE ENTREGA com Roberta pelo WhatsApp/Telefone: (42) 9 9136-5009.', 16, noticeY + 18.5);
     doc.text('4. Boletos NÃO devem exceder R$ 9.999,00 por título e devem ser enviados com o XML para als.conecta@gmail.com.', 16, noticeY + 22.5);
     if (order.header?.observacoesDescarga) {
-      doc.text(`5. Obs: ${order.header.observacoesDescarga}`, 16, noticeY + 26.5);
+      doc.text(`5. Descrição: ${order.header.observacoesDescarga}`, 16, noticeY + 26.5);
     }
 
     // Assinaturas

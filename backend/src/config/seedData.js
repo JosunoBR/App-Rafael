@@ -38,7 +38,7 @@ const DEFAULT_SUPPLIERS = [
     aliquotaStPadrao: 0,
     aliquotaIpiPadrao: 0,
     descontoOffPadrao: 5.0,
-    observacoesDescarga: 'Entregar com paletização padrão no Depósito Central.'
+    observacoesDescarga: ''
   },
   {
     id: 'sup_2',
@@ -51,7 +51,7 @@ const DEFAULT_SUPPLIERS = [
     aliquotaStPadrao: 7.5,
     aliquotaIpiPadrao: 2.0,
     descontoOffPadrao: 3.0,
-    observacoesDescarga: 'Descarga das 08h às 16h no Depósito Central.'
+    observacoesDescarga: ''
   },
   {
     id: 'sup_3',
@@ -64,7 +64,7 @@ const DEFAULT_SUPPLIERS = [
     aliquotaStPadrao: 12.0,
     aliquotaIpiPadrao: 5.0,
     descontoOffPadrao: 8.0,
-    observacoesDescarga: 'Paletes padrão PBR. Agendar entrega com 24h de antecedência.'
+    observacoesDescarga: ''
   }
 ];
 

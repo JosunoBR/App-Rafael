@@ -1,12 +1,17 @@
 import { FiscalConfig, StoreConfig } from './types';
 
-// Configurações fiscais padrão baseadas na planilha MATRIZ.xlsx
+// Configurações fiscais padrão baseadas na planilha modelo para sistema.xlsx
 export const DEFAULT_FISCAL_CONFIG: FiscalConfig = {
-  icmsAliquota: 0.11,       // 11%
+  // Entrada
   ipiAliquota: 0.00,        // 0%
-  pisCofinsAliquota: 0.03,  // 3%
-  custosFixos: 0.26,        // 26%
-  creditoEntradaICMS: 0.195 // 19.5%
+  aliquotaSt: 0.00,         // 0%
+  freteAliquota: 0.00,      // 0%
+
+  // Saída
+  creditoEntradaICMS: 0.12, // 12% (ICMS Entrada a descontar do produto)
+  custosFixos: 0.26,        // 26% (Custo Fixo sobre PDV)
+  icmsAliquota: 0.195,      // 19.5% (ICMS Saída sobre PDV)
+  pisCofinsAliquota: 0.06   // 6% (PIS, COFINS, IR sobre PDV)
 };
 
 // Percentual padrão de reserva no Estoque Central / CD Matriz: 10%

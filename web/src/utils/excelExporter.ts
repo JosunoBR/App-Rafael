@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { API_BASE_URL } from './config';
 import { PurchaseOrder, FiscalConfig, StoreConfig } from '../shared/types';
 import { DEFAULT_FISCAL_CONFIG, DEFAULT_STORES } from '../shared/constants';
+import { calculateItemFiscal } from '../shared/fiscalEngine';
 
 export function exportOrderToExcel(order: PurchaseOrder, fallbackStores?: StoreConfig[], fallbackFiscal?: FiscalConfig) {
   const numeroPedido = (order.header?.numeroPedido || 'PED-0001').replace(/[^a-zA-Z0-9_-]/g, '');
@@ -55,31 +56,43 @@ export function exportOrderToExcel(order: PurchaseOrder, fallbackStores?: StoreC
       ['Fornecedor:', order.header?.fornecedor || 'Fornecedor', 'Data Entrega Prevista:', order.header?.dataEntregaPrevista || ''],
       ['Vendedor:', order.header?.vendedor || '', 'Contato:', order.header?.contatoVendedor || ''],
       ['Condição Pagamento:', order.header?.condicaoPagamento || '', '% OFF Negociado:', `${order.header?.percentualDescontoOff || 0}%`, '% NOTA:', `${order.header?.percentualNota !== undefined ? order.header.percentualNota : 100}%`],
-      ['Observações:', order.header?.observacoesDescarga || ''],
+      ['Descrição do Pedido:', order.header?.observacoesDescarga || ''],
       []
     ];
 
     const itemHeaders = [
-      'Código', 'Descrição do Item', 'Quantidade (Unidades)',
-      'Preço Compra Bruto (R$)', 'Desc. (%)', 'Valor Total Líquido (R$)', 'PDV Alvo (R$)'
+      'Código Interno', 'Código de Barras', 'Referência de Fábrica', 'Descrição do Produto',
+      'Qtd no Pac', 'Qtd de Pac', 'Qtd Uni',
+      'Valor do Item (R$)', 'Valor Total (R$)', 'PDV (R$)', 'Custo Loja (R$)', 'Custo Forn. (R$)', 'Margem (%)'
     ];
 
     const itemRows = (order.items || []).map(item => {
-      const pecas = Number(item.qtdTotalUnidades) || 0;
+      const pacNo = Number(item.qtdNoPacote !== undefined ? item.qtdNoPacote : (item.qtdPorPacote || 1)) || 1;
+      const pacQtd = Number(item.qtdPacotes || 0);
+      const pecas = Number(item.qtdTotalUnidades) || (pacNo * pacQtd);
       const preco = Number(item.precoUnitario) || 0;
       const desc = Number(item.percentualDesconto) || 0;
       const bruto = Number(item.valorTotalBruto) || (pecas * preco);
       const descVal = item.valorDescontoItem !== undefined ? item.valorDescontoItem : (bruto * (desc / 100));
       const liquido = item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (bruto - descVal);
 
+      const precoEfetivo = preco * (1 - desc / 100);
+      const fiscal = calculateItemFiscal(precoEfetivo, item.pdvAlvo || 12.0, order.fiscalConfig || fallbackFiscal || DEFAULT_FISCAL_CONFIG, item.fiscalOverride);
+
       return [
         item.codigoInterno || item.codigo || '',
+        item.codigoBarras || '',
+        item.codigoFornecedor || '',
         item.descricao || 'Produto',
+        pacNo,
+        pacQtd,
         pecas,
         preco,
-        desc > 0 ? `${desc}%` : '0%',
         liquido,
-        Number(item.pdvAlvo) || 12.0
+        Number(item.pdvAlvo) || 12.0,
+        fiscal.custoLoja,
+        fiscal.custoFornecedor,
+        `${fiscal.margemPercentual.toFixed(1)}%`
       ];
     });
 

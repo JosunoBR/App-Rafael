@@ -23,11 +23,16 @@ export interface SeparationPreset {
 }
 
 export interface FiscalConfig {
-  icmsAliquota: number;      // Padrão: 11%
-  ipiAliquota: number;       // Padrão: 0%
-  pisCofinsAliquota: number; // Padrão: 3%
-  custosFixos: number;       // Padrão: 26%
-  creditoEntradaICMS: number;// Padrão: 19.5%
+  // Impostos & Custos de Entrada (Custo Real Fornecedor)
+  ipiAliquota: number;          // % IPI sobre produto (ex: 5.0 ou 0.05)
+  aliquotaSt?: number;          // % ST sobre produto (ex: 18.0 ou 0.18)
+  freteAliquota?: number;       // % Frete de Entrada sobre produto (ex: 3.5 ou 0.035)
+
+  // Impostos & Custos de Saída (Custo Loja)
+  creditoEntradaICMS: number;   // % ICMS Entrada (desconto sobre o produto, ex: 12.0 ou 0.12)
+  custosFixos: number;          // % Custos Fixos (sobre PDV, ex: 26.0 ou 0.26)
+  icmsAliquota: number;         // % ICMS Saída (sobre PDV, ex: 19.5 ou 0.195)
+  pisCofinsAliquota: number;    // % PIS, COFINS, IR (sobre PDV, ex: 6.0 ou 0.06)
 }
 
 export interface Supplier {
@@ -136,6 +141,11 @@ export interface OrderItem {
   // Limite de Preço / Engenharia Fiscal
   pdvAlvo: number;              // Preço de venda pretendido na ponta (ex: 12.00)
   fiscalOverride?: OrderItemFiscalOverride;
+  
+  // Colunas do modelo do sistema (Excel)
+  codigoBarras?: string;        // Código de barras EAN-13
+  custoLoja?: number;           // Custo Loja calculado (conforme planilha)
+  custoFornecedor?: number;     // Custo Fornecedor calculado (conforme planilha)
   
   // Cálculos resultantes
   despesasPdvUnit?: number;     // PDV * % Despesas (40%)

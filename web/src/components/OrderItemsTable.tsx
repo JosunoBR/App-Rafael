@@ -26,7 +26,13 @@ import {
   UploadCloud,
   CheckCircle2,
   Trash,
-  Percent
+  Percent,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  GripVertical,
+  SlidersHorizontal,
+  RotateCcw
 } from 'lucide-react';
 import { OrderItem, FiscalConfig, StoreConfig, Product } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
@@ -47,6 +53,50 @@ interface OrderItemsTableProps {
   onDeleteItem: (itemId: string) => void;
   onSaveProduct?: (product: Product, silent?: boolean) => void;
 }
+
+export type ColumnKey =
+  | 'foto'
+  | 'codigoInterno'
+  | 'codigoBarras'
+  | 'codigoFornecedor'
+  | 'descricao'
+  | 'qtdNoPacote'
+  | 'qtdPacotes'
+  | 'qtdTotalUnidades'
+  | 'precoUnitario'
+  | 'valorTotalLiquido'
+  | 'pdvAlvo'
+  | 'custoLoja'
+  | 'custoFornecedor'
+  | 'custoReal'
+  | 'margem'
+  | 'acoes';
+
+export interface ColumnMeta {
+  key: ColumnKey;
+  label: string;
+  thClass: string;
+  title?: string;
+  sortable: boolean;
+}
+
+const ALL_COLUMNS: ColumnMeta[] = [
+  { key: 'foto', label: 'FOTO', thClass: 'py-2.5 px-2 w-12 text-center', sortable: false },
+  { key: 'codigoInterno', label: 'CÓD. INTERNO', thClass: 'py-2.5 px-3 text-center w-28', sortable: true },
+  { key: 'codigoBarras', label: 'CÓD. BARRAS', thClass: 'py-2.5 px-3 text-center w-32', title: 'Código de Barras EAN-13', sortable: true },
+  { key: 'codigoFornecedor', label: 'REF. FÁBRICA', thClass: 'py-2.5 px-3 text-center w-28', title: 'Referência de Fábrica / Cód. Fornecedor', sortable: true },
+  { key: 'descricao', label: 'DESCRIÇÃO DO ITEM', thClass: 'py-2.5 px-3.5 text-left w-full min-w-[260px]', sortable: true },
+  { key: 'qtdNoPacote', label: 'QTD NO PAC', thClass: 'py-2.5 px-2.5 text-center w-20', title: 'Quantidade por Embalagem (Caixa, Fardo, Display)', sortable: true },
+  { key: 'qtdPacotes', label: 'QTD DE PAC', thClass: 'py-2.5 px-2.5 text-center w-20', title: 'Quantidade de Pacotes ou Caixas Compradas', sortable: true },
+  { key: 'qtdTotalUnidades', label: 'TOTAL PEÇAS', thClass: 'py-2.5 px-2.5 text-center w-24', title: 'Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)', sortable: true },
+  { key: 'precoUnitario', label: 'VALOR', thClass: 'py-2.5 px-3 text-right w-24', title: 'Valor unitário do produto (R$)', sortable: true },
+  { key: 'valorTotalLiquido', label: 'TOTAL (R$)', thClass: 'py-2.5 px-3.5 text-right w-28', sortable: true },
+  { key: 'pdvAlvo', label: 'PDV', thClass: 'py-2.5 px-2 text-center w-16', sortable: true },
+  { key: 'custoLoja', label: 'CUSTO LOJA', thClass: 'py-2.5 px-3 text-right w-28', title: 'Custo Total da Loja (conforme modelo da planilha)', sortable: true },
+  { key: 'custoFornecedor', label: 'CUSTO FORN.', thClass: 'py-2.5 px-3 text-right w-28', title: 'Custo Real Fornecedor (Produto + IPI + ST + Frete)', sortable: true },
+  { key: 'margem', label: 'MARGEM', thClass: 'py-2.5 px-3 text-center w-28', sortable: true },
+  { key: 'acoes', label: 'AÇÕES', thClass: 'py-2.5 px-3 text-center w-24', sortable: false },
+];
 
 // Helper para destacar os caracteres digitados no texto
 function highlightMatch(text: string, query: string) {
@@ -111,6 +161,53 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   // Estado para controlar digitação da coluna de preço garantindo sempre 2 casas decimais (R$)
   const [editingPriceMap, setEditingPriceMap] = useState<Record<string, string>>({});
 
+  // Estado para visibilidade e ordem das colunas (Personalização do Usuário)
+  const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(() => {
+    try {
+      const saved = localStorage.getItem('mega12_order_columns_order');
+      if (saved) {
+        const parsed: ColumnKey[] = JSON.parse(saved);
+        const validKeys = ALL_COLUMNS.map(c => c.key);
+        const filtered = parsed.filter(k => validKeys.includes(k));
+        validKeys.forEach(k => {
+          if (!filtered.includes(k)) filtered.push(k);
+        });
+        return filtered;
+      }
+    } catch (e) {}
+    return ALL_COLUMNS.map(c => c.key);
+  });
+
+  const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('mega12_order_columns_visibility');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        ALL_COLUMNS.forEach(c => {
+          if (parsed[c.key] === undefined) parsed[c.key] = true;
+        });
+        return parsed;
+      }
+    } catch (e) {}
+    const initial: Record<string, boolean> = {};
+    ALL_COLUMNS.forEach(c => { initial[c.key] = true; });
+    return initial as Record<ColumnKey, boolean>;
+  });
+
+  const [isColumnsDropdownOpen, setIsColumnsDropdownOpen] = useState(false);
+  const columnsDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Drag and drop states
+  const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<ColumnKey | null>(null);
+  const isDraggingRef = useRef(false);
+
+  // Ordenação de colunas (Sort por coluna)
+  const [sortConfig, setSortConfig] = useState<{ key: ColumnKey | null; direction: 'asc' | 'desc' }>({
+    key: null,
+    direction: 'asc'
+  });
+
   const fileInputRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const activeInputRef = useRef<HTMLInputElement | null>(null);
   const autocompletePortalRef = useRef<HTMLDivElement | null>(null);
@@ -138,6 +235,13 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         !activeInputRef.current.contains(target)
       ) {
         setActiveAutocompleteItemId(null);
+      }
+
+      if (
+        columnsDropdownRef.current &&
+        !columnsDropdownRef.current.contains(target)
+      ) {
+        setIsColumnsDropdownOpen(false);
       }
     };
 
@@ -200,6 +304,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       id: 'item_' + Date.now(),
       codigoInterno: codInterno,
       codigoFornecedor: codFornecedor,
+      codigoBarras: prod.codigoBarras || prod.eanBarcode || '',
       codigo: codInterno,
       descricao: prod.descricao,
       fotoUrl: prod.fotoUrl || '',
@@ -217,6 +322,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
     const fullItem: OrderItem = {
       ...defaultItem,
+      custoLoja: fiscal.custoLoja,
+      custoFornecedor: fiscal.custoFornecedor,
       despesasPdvUnit: fiscal.despesasPdvUnit,
       creditoIcmsUnit: fiscal.creditoIcmsUnit,
       custoRealEfetivo: fiscal.custoRealEfetivo,
@@ -254,6 +361,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       ...item,
       codigoInterno: codInterno,
       codigoFornecedor: codFornecedor,
+      codigoBarras: prod.codigoBarras || prod.eanBarcode || item.codigoBarras || '',
       codigo: codInterno,
       descricao: prod.descricao,
       fotoUrl: prod.fotoUrl || item.fotoUrl || '',
@@ -264,6 +372,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       valorDescontoItem: valorDesc,
       valorTotalLiquido: totalLiquido,
       pdvAlvo: pdv,
+      custoLoja: fiscal.custoLoja,
+      custoFornecedor: fiscal.custoFornecedor,
       despesasPdvUnit: fiscal.despesasPdvUnit,
       creditoIcmsUnit: fiscal.creditoIcmsUnit,
       custoRealEfetivo: fiscal.custoRealEfetivo,
@@ -460,6 +570,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const fiscal = calculateItemFiscal(precoCompraEfetivo, pdv, globalFiscal, updatedItem.fiscalOverride);
 
     updatedItem.pdvAlvo = 12.00;
+    updatedItem.custoLoja = fiscal.custoLoja;
+    updatedItem.custoFornecedor = fiscal.custoFornecedor;
     updatedItem.despesasPdvUnit = fiscal.despesasPdvUnit;
     updatedItem.creditoIcmsUnit = fiscal.creditoIcmsUnit;
     updatedItem.custoRealEfetivo = fiscal.custoRealEfetivo;
@@ -561,6 +673,563 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     }
   };
 
+  // Manipulação de ordem e visibilidade de colunas
+  const handleColumnReorder = (draggedKey: ColumnKey, targetKey: ColumnKey) => {
+    if (!draggedKey || !targetKey || draggedKey === targetKey) return;
+    setColumnOrder(prevOrder => {
+      const newOrder = [...prevOrder];
+      const draggedIdx = newOrder.indexOf(draggedKey);
+      const targetIdx = newOrder.indexOf(targetKey);
+      if (draggedIdx === -1 || targetIdx === -1) return prevOrder;
+      newOrder.splice(draggedIdx, 1);
+      newOrder.splice(targetIdx, 0, draggedKey);
+      try {
+        localStorage.setItem('mega12_order_columns_order', JSON.stringify(newOrder));
+      } catch (e) {}
+      return newOrder;
+    });
+  };
+
+  const handleDragStart = (e: React.DragEvent, key: ColumnKey) => {
+    isDraggingRef.current = true;
+    setDraggedColumn(key);
+    e.dataTransfer.setData('text/plain', key);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, key: ColumnKey) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverColumn !== key) {
+      setDragOverColumn(key);
+    }
+  };
+
+  const handleDragLeave = (key: ColumnKey) => {
+    if (dragOverColumn === key) {
+      setDragOverColumn(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetKey: ColumnKey) => {
+    e.preventDefault();
+    if (draggedColumn) {
+      handleColumnReorder(draggedColumn, targetKey);
+    }
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+    setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 120);
+  };
+
+  const toggleColumnVisibility = (key: ColumnKey) => {
+    setVisibleColumns(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem('mega12_order_columns_visibility', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const showAllColumns = () => {
+    const next: Record<string, boolean> = {};
+    ALL_COLUMNS.forEach(c => { next[c.key] = true; });
+    setVisibleColumns(next as Record<ColumnKey, boolean>);
+    try {
+      localStorage.setItem('mega12_order_columns_visibility', JSON.stringify(next));
+    } catch (e) {}
+  };
+
+  const resetColumns = () => {
+    const defaultOrder = ALL_COLUMNS.map(c => c.key);
+    const defaultVis: Record<string, boolean> = {};
+    ALL_COLUMNS.forEach(c => { defaultVis[c.key] = true; });
+    setColumnOrder(defaultOrder);
+    setVisibleColumns(defaultVis as Record<ColumnKey, boolean>);
+    try {
+      localStorage.removeItem('mega12_order_columns_order');
+      localStorage.removeItem('mega12_order_columns_visibility');
+    } catch (e) {}
+  };
+
+  const handleToggleSort = (key: ColumnKey) => {
+    const col = ALL_COLUMNS.find(c => c.key === key);
+    if (!col || col.sortable === false) return;
+
+    setSortConfig(prev => {
+      if (prev.key === key) {
+        if (prev.direction === 'asc') {
+          return { key, direction: 'desc' };
+        }
+        return { key: null, direction: 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const orderedVisibleColumns = useMemo(() => {
+    return columnOrder
+      .filter(k => visibleColumns[k] !== false)
+      .map(k => ALL_COLUMNS.find(c => c.key === k)!)
+      .filter(Boolean);
+  }, [columnOrder, visibleColumns]);
+
+  // Itens ordenados conforme a coluna selecionada pelo usuário
+  const sortedItems = useMemo(() => {
+    if (!sortConfig.key) return items;
+
+    const blankRows = items.filter(it => isOrderItemBlank(it));
+    const validRows = items.filter(it => !isOrderItemBlank(it));
+
+    const sorted = [...validRows].sort((a, b) => {
+      let valA: any;
+      let valB: any;
+
+      switch (sortConfig.key) {
+        case 'codigoInterno':
+          valA = a.codigoInterno || a.codigo || '';
+          valB = b.codigoInterno || b.codigo || '';
+          break;
+        case 'codigoBarras':
+          valA = a.codigoBarras || '';
+          valB = b.codigoBarras || '';
+          break;
+        case 'codigoFornecedor':
+          valA = a.codigoFornecedor || '';
+          valB = b.codigoFornecedor || '';
+          break;
+        case 'descricao':
+          valA = (a.descricao || '').toLowerCase();
+          valB = (b.descricao || '').toLowerCase();
+          break;
+        case 'qtdNoPacote':
+          valA = Number(a.qtdNoPacote) || 0;
+          valB = Number(b.qtdNoPacote) || 0;
+          break;
+        case 'qtdPacotes':
+          valA = Number(a.qtdPacotes) || 0;
+          valB = Number(b.qtdPacotes) || 0;
+          break;
+        case 'qtdTotalUnidades':
+          valA = Number(a.qtdTotalUnidades) || 0;
+          valB = Number(b.qtdTotalUnidades) || 0;
+          break;
+        case 'precoUnitario':
+          valA = Number(a.precoUnitario) || 0;
+          valB = Number(b.precoUnitario) || 0;
+          break;
+        case 'valorTotalLiquido': {
+          const lA = a.valorTotalLiquido !== undefined ? a.valorTotalLiquido : (a.valorTotalBruto * (1 - (a.percentualDesconto || 0) / 100));
+          const lB = b.valorTotalLiquido !== undefined ? b.valorTotalLiquido : (b.valorTotalBruto * (1 - (b.percentualDesconto || 0) / 100));
+          valA = lA || 0;
+          valB = lB || 0;
+          break;
+        }
+        case 'pdvAlvo':
+          valA = Number(a.pdvAlvo) || 12;
+          valB = Number(b.pdvAlvo) || 12;
+          break;
+        case 'custoLoja':
+        case 'custoReal': {
+          const pA = a.precoUnitario * (1 - (a.percentualDesconto || 0) / 100);
+          const pB = b.precoUnitario * (1 - (b.percentualDesconto || 0) / 100);
+          valA = calculateItemFiscal(pA, a.pdvAlvo, globalFiscal, a.fiscalOverride).custoLoja;
+          valB = calculateItemFiscal(pB, b.pdvAlvo, globalFiscal, b.fiscalOverride).custoLoja;
+          break;
+        }
+        case 'custoFornecedor': {
+          const pA = a.precoUnitario * (1 - (a.percentualDesconto || 0) / 100);
+          const pB = b.precoUnitario * (1 - (b.percentualDesconto || 0) / 100);
+          valA = calculateItemFiscal(pA, a.pdvAlvo, globalFiscal, a.fiscalOverride).custoFornecedor;
+          valB = calculateItemFiscal(pB, b.pdvAlvo, globalFiscal, b.fiscalOverride).custoFornecedor;
+          break;
+        }
+        case 'margem': {
+          const pA = a.precoUnitario * (1 - (a.percentualDesconto || 0) / 100);
+          const pB = b.precoUnitario * (1 - (b.percentualDesconto || 0) / 100);
+          valA = calculateItemFiscal(pA, a.pdvAlvo, globalFiscal, a.fiscalOverride).margemPercentual;
+          valB = calculateItemFiscal(pB, b.pdvAlvo, globalFiscal, b.fiscalOverride).margemPercentual;
+          break;
+        }
+        default:
+          return 0;
+      }
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        const cmp = valA.localeCompare(valB, 'pt-BR', { numeric: true, sensitivity: 'base' });
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
+      }
+
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return [...sorted, ...blankRows];
+  }, [items, sortConfig, globalFiscal]);
+
+  // Renderizador dinâmico de células da tabela
+  const renderTableCell = (
+    colKey: ColumnKey,
+    item: OrderItem,
+    index: number,
+    fiscal: any
+  ) => {
+    switch (colKey) {
+      case 'foto':
+        return (
+          <td key="foto" className="py-1 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/20 whitespace-nowrap">
+            <div className="flex items-center justify-center">
+              {item.fotoUrl ? (
+                <div 
+                  className="w-8 h-8 rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer relative group/photo shadow-2xs"
+                  onClick={() => handleOpenPhotoModal(item)}
+                  title="Clique para trocar, ver ampliado ou remover foto"
+                >
+                  <img src={item.fotoUrl} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition">
+                    <Upload className="w-3 h-3" />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleOpenPhotoModal(item)}
+                  className="w-8 h-8 rounded-md border border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-center text-slate-400 hover:text-emerald-600 transition cursor-pointer"
+                  title="Anexar foto do produto"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </td>
+        );
+
+      case 'codigoInterno':
+        return (
+          <td key="codigoInterno" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
+            <input
+              type="text"
+              data-excel-row={index}
+              data-excel-field="codigoInterno"
+              value={item.codigoInterno || item.codigo || ''}
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'codigoInterno')}
+              onChange={(e) => {
+                handleFieldChange(item, 'codigoInterno', e.target.value);
+                handleFieldChange(item, 'codigo', e.target.value);
+                activeInputRef.current = e.currentTarget;
+                updateDropdownPosition(e.currentTarget);
+                setActiveAutocompleteItemId(item.id);
+                setActiveAutocompleteField('codigoInterno');
+                setAutocompleteQuery(e.target.value);
+              }}
+              onFocus={(e) => {
+                activeInputRef.current = e.currentTarget;
+                updateDropdownPosition(e.currentTarget);
+                setActiveAutocompleteItemId(item.id);
+                setActiveAutocompleteField('codigoInterno');
+                setAutocompleteQuery(e.target.value);
+              }}
+              placeholder="CÓD INT"
+              className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-center font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              title="Código Interno Mega12"
+            />
+          </td>
+        );
+
+      case 'codigoBarras':
+        return (
+          <td key="codigoBarras" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
+            <input
+              type="text"
+              data-excel-row={index}
+              data-excel-field="codigoBarras"
+              value={item.codigoBarras || ''}
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'codigoBarras')}
+              onChange={(e) => handleFieldChange(item, 'codigoBarras', e.target.value)}
+              placeholder="789..."
+              className="w-full h-full min-h-[38px] px-2.5 py-1.5 text-xs text-center font-mono text-slate-600 dark:text-slate-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              title="Código de Barras EAN-13"
+            />
+          </td>
+        );
+
+      case 'codigoFornecedor':
+        return (
+          <td key="codigoFornecedor" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
+            <input
+              type="text"
+              data-excel-row={index}
+              data-excel-field="codigoFornecedor"
+              value={item.codigoFornecedor || ''}
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'codigoFornecedor')}
+              onChange={(e) => {
+                handleFieldChange(item, 'codigoFornecedor', e.target.value);
+                activeInputRef.current = e.currentTarget;
+                updateDropdownPosition(e.currentTarget);
+                setActiveAutocompleteItemId(item.id);
+                setActiveAutocompleteField('codigoFornecedor');
+                setAutocompleteQuery(e.target.value);
+              }}
+              onFocus={(e) => {
+                activeInputRef.current = e.currentTarget;
+                updateDropdownPosition(e.currentTarget);
+                setActiveAutocompleteItemId(item.id);
+                setActiveAutocompleteField('codigoFornecedor');
+                setAutocompleteQuery(e.target.value);
+              }}
+              placeholder="REF FORN"
+              className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-center font-mono text-slate-700 dark:text-slate-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              title="Código de Referência do Fornecedor"
+            />
+          </td>
+        );
+
+      case 'descricao':
+        return (
+          <td key="descricao" className="p-0 border-r border-slate-200 dark:border-slate-700/80 relative w-full min-w-[280px]">
+            <input
+              type="text"
+              data-excel-row={index}
+              data-excel-field="descricao"
+              value={item.descricao}
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'descricao')}
+              onChange={(e) => {
+                handleFieldChange(item, 'descricao', e.target.value);
+                activeInputRef.current = e.currentTarget;
+                updateDropdownPosition(e.currentTarget);
+                setActiveAutocompleteItemId(item.id);
+                setActiveAutocompleteField('descricao');
+                setAutocompleteQuery(e.target.value);
+              }}
+              onFocus={(e) => {
+                activeInputRef.current = e.currentTarget;
+                updateDropdownPosition(e.currentTarget);
+                setActiveAutocompleteItemId(item.id);
+                setActiveAutocompleteField('descricao');
+                setAutocompleteQuery(e.target.value);
+              }}
+              placeholder="Digite o nome ou código do produto..."
+              className="w-full h-full min-h-[38px] px-3.5 py-1.5 text-xs text-slate-900 dark:text-white font-medium bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors"
+            />
+          </td>
+        );
+
+      case 'qtdNoPacote':
+        return (
+          <td key="qtdNoPacote" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-20">
+            <input
+              type="number"
+              min="1"
+              data-excel-row={index}
+              data-excel-field="qtdNoPacote"
+              value={item.qtdNoPacote === 0 || item.qtdNoPacote === undefined ? '' : item.qtdNoPacote}
+              placeholder="1"
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdNoPacote')}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => handleFieldChange(item, 'qtdNoPacote', e.target.value)}
+              className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-semibold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              title="Unidades por pacote/caixa/fardo"
+            />
+          </td>
+        );
+
+      case 'qtdPacotes':
+        return (
+          <td key="qtdPacotes" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-20">
+            <input
+              type="number"
+              min="0"
+              data-excel-row={index}
+              data-excel-field="qtdPacotes"
+              value={item.qtdPacotes === 0 || item.qtdPacotes === undefined ? '' : item.qtdPacotes}
+              placeholder="0"
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdPacotes')}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => handleFieldChange(item, 'qtdPacotes', e.target.value)}
+              className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-bold font-mono text-emerald-700 dark:text-emerald-400 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              title="Quantidade de pacotes ou caixas adquiridos"
+            />
+          </td>
+        );
+
+      case 'qtdTotalUnidades':
+        return (
+          <td key="qtdTotalUnidades" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-24 bg-slate-50/40 dark:bg-slate-900/30">
+            <input
+              type="number"
+              min="0"
+              data-excel-row={index}
+              data-excel-field="qtdTotalUnidades"
+              value={item.qtdTotalUnidades === 0 ? '' : item.qtdTotalUnidades}
+              placeholder="0"
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdTotalUnidades')}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
+              className="w-full h-full min-h-[38px] px-2.5 py-1.5 text-center text-xs font-extrabold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              title="Total de peças = Qtd no Pac × Qtd de Pac"
+            />
+          </td>
+        );
+
+      case 'precoUnitario': {
+        const isEditing = item.id in editingPriceMap;
+        const formattedPrice = item.precoUnitario > 0
+          ? formatCurrency(item.precoUnitario, false)
+          : (isOrderItemBlank(item) ? '' : '0,00');
+        const displayVal = isEditing ? editingPriceMap[item.id] : formattedPrice;
+
+        return (
+          <td key="precoUnitario" className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-28">
+            <input
+              type="text"
+              inputMode="numeric"
+              data-excel-row={index}
+              data-excel-field="precoUnitario"
+              value={displayVal}
+              placeholder="0,00"
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'precoUnitario')}
+              onFocus={(e) => {
+                setEditingPriceMap(prev => ({
+                  ...prev,
+                  [item.id]: item.precoUnitario > 0
+                    ? formatCurrency(item.precoUnitario, false)
+                    : '0,00'
+                }));
+                e.target.select();
+              }}
+              onBlur={() => {
+                setEditingPriceMap(prev => {
+                  const next = { ...prev };
+                  delete next[item.id];
+                  return next;
+                });
+              }}
+              onChange={(e) => {
+                const { formatted, value } = handleCurrencyInput(e.target.value, false);
+                setEditingPriceMap(prev => ({ ...prev, [item.id]: formatted }));
+                handleFieldChange(item, 'precoUnitario', value);
+              }}
+              className="w-full h-full min-h-[38px] px-3 py-1.5 text-right text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              title="Valor do produto por unidade (R$)"
+            />
+          </td>
+        );
+      }
+
+      case 'valorTotalLiquido':
+        return (
+          <td key="valorTotalLiquido" className="py-2 px-3.5 text-right font-mono border-r border-slate-200 dark:border-slate-700/80 bg-slate-50/30 dark:bg-slate-900/20 whitespace-nowrap">
+            <span className="font-extrabold text-slate-900 dark:text-white text-xs whitespace-nowrap">
+              R$ {((item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto * (1 - (item.percentualDesconto || 0) / 100)))).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </td>
+        );
+
+      case 'pdvAlvo':
+        return (
+          <td key="pdvAlvo" className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-16">
+            <span 
+              className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 whitespace-nowrap"
+              title="Preço de Venda Padrão R$ 12,00"
+            >
+              R$ 12
+            </span>
+          </td>
+        );
+
+      case 'custoLoja':
+      case 'custoReal':
+        return (
+          <td key="custoLoja" className="py-2 px-3 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-blue-50/20 dark:bg-blue-950/10">
+            <div className="font-extrabold text-blue-700 dark:text-blue-400 font-mono text-xs whitespace-nowrap" title="Custo Total da Loja (conforme modelo da planilha)">
+              R$ {fiscal.custoLoja.toFixed(2)}
+            </div>
+          </td>
+        );
+
+      case 'custoFornecedor':
+        return (
+          <td key="custoFornecedor" className="py-2 px-3 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-emerald-50/20 dark:bg-emerald-950/10">
+            <div className="font-extrabold text-emerald-700 dark:text-emerald-400 font-mono text-xs whitespace-nowrap" title="Custo Real Fornecedor (Produto + IPI + ST + Frete)">
+              R$ {fiscal.custoFornecedor.toFixed(2)}
+            </div>
+          </td>
+        );
+
+      case 'margem': {
+        const isLucro = fiscal.margemRealUnit >= 0;
+        return (
+          <td key="margem" className="py-2 px-3 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
+            <span className={`inline-block px-2.5 py-0.5 rounded text-xs font-bold font-mono border whitespace-nowrap ${
+              isLucro 
+                ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+            }`}>
+              R$ {fiscal.margemRealUnit.toFixed(2)} <span className="text-[10px] font-semibold">({fiscal.margemPercentual.toFixed(0)}%)</span>
+            </span>
+          </td>
+        );
+      }
+
+      case 'acoes':
+        return (
+          <td key="acoes" className="py-1 px-2 text-center whitespace-nowrap">
+            <div className="flex items-center justify-center gap-1 text-slate-400">
+              {!isOrderItemBlank(item) && item.descricao && item.descricao.trim().length > 0 && !findCatalogProduct(item) && onSaveProduct && (
+                <button
+                  type="button"
+                  onClick={() => handleQuickRegisterProduct(item)}
+                  className="p-1 rounded-md text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition cursor-pointer"
+                  title="Salvar produto no Catálogo"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => onDuplicateItem(item)}
+                disabled={isOrderItemBlank(item)}
+                className={`p-1 rounded-md transition ${
+                  isOrderItemBlank(item)
+                    ? 'text-slate-300 dark:text-slate-700 opacity-30 cursor-not-allowed'
+                    : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer'
+                }`}
+                title="Duplicar Linha"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onDeleteItem(item.id)}
+                disabled={isOrderItemBlank(item) && index === items.length - 1}
+                className={`p-1 rounded-md transition ${
+                  isOrderItemBlank(item) && index === items.length - 1
+                    ? 'text-slate-300 dark:text-slate-700 opacity-30 cursor-not-allowed'
+                    : 'text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/60 cursor-pointer'
+                }`}
+                title={isOrderItemBlank(item) && index === items.length - 1 ? 'Linha automática' : 'Remover Item'}
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+              </button>
+            </div>
+          </td>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-visible">
       
@@ -583,9 +1252,75 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         {/* Barra de Ações Rápidas Superior */}
         <div className="flex flex-wrap items-center gap-2">
           
-          {/* Campo de Busca Rápida no Topo com Autocomplete */}
-          <div className="relative min-w-[260px] sm:min-w-[300px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          {/* Ação de Desconto em Massa para Todos os Itens */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsBatchDiscountModalOpen(prev => !prev)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition cursor-pointer shadow-2xs"
+              title="Aplicar desconto comercial percentual uniforme a todos os produtos da tabela"
+            >
+              <Percent className="w-3.5 h-3.5" />
+              <span>Desconto Global nos Itens</span>
+            </button>
+
+            {/* Popover de Aplicação de Desconto em Lote */}
+            {isBatchDiscountModalOpen && (
+              <div className="absolute right-0 top-full mt-2 w-72 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-40 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Percent className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Aplicar Desconto em Todos</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsBatchDiscountModalOpen(false)}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
+                  Insira a porcentagem de desconto negociada que será replicada para cada produto desta lista:
+                </p>
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="100"
+                    value={batchDiscountValue === 0 ? '' : batchDiscountValue}
+                    placeholder="ex: 5"
+                    onChange={(e) => setBatchDiscountValue(parseFloat(e.target.value) || 0)}
+                    className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <span className="text-xs font-bold text-slate-500">%</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleApplyDiscountToAll(0)}
+                    className="flex-1 py-1.5 text-xs font-medium rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  >
+                    Zerar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyDiscountToAll(batchDiscountValue)}
+                    className="flex-1 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Busca Rápida com Autocomplete no Catálogo */}
+          <div className="relative min-w-[200px] sm:min-w-[240px]">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-3.5 h-3.5" />
+            </div>
             <input
               ref={quickSearchInputRef}
               type="text"
@@ -673,327 +1408,149 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         <table className="w-full text-left border-collapse border-t border-slate-200 dark:border-slate-700 font-sans text-xs">
           <thead>
             <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-100/90 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider select-none whitespace-nowrap">
-              <th className="py-2.5 px-2 w-10 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-200/50 dark:bg-slate-800/90 whitespace-nowrap">#</th>
-              <th className="py-2.5 px-2 w-12 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">FOTO</th>
-              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CÓD. INTERNO</th>
-              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CÓD. FORNECEDOR</th>
-              <th className="py-2.5 px-3.5 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-full min-w-[260px]">DESCRIÇÃO DO ITEM</th>
-              <th className="py-2.5 px-2.5 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-20" title="Quantidade por Embalagem (Caixa, Fardo, Display)">QTD NO PAC</th>
-              <th className="py-2.5 px-2.5 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-20" title="Quantidade de Pacotes ou Caixas Compradas">QTD DE PAC</th>
-              <th className="py-2.5 px-2.5 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-24" title="Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)">TOTAL PEÇAS</th>
-              <th className="py-2.5 px-3 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-24" title="Valor unitário do produto (R$)">VALOR</th>
-              <th className="py-2.5 px-3.5 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">TOTAL (R$)</th>
-              <th className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap w-16">PDV</th>
-              <th className="py-2.5 px-3 text-right border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">CUSTO REAL</th>
-              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap">MARGEM</th>
-              <th className="py-2.5 px-3 text-center whitespace-nowrap">AÇÕES</th>
+              {/* Coluna # com Dropdown para escolha de colunas visíveis */}
+              <th className="py-2.5 px-2 w-12 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-200/60 dark:bg-slate-800/90 whitespace-nowrap relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsColumnsDropdownOpen(prev => !prev);
+                  }}
+                  className="inline-flex items-center justify-center gap-1 font-extrabold text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 p-1 rounded-md hover:bg-slate-300/60 dark:hover:bg-slate-700 transition cursor-pointer"
+                  title="Configurar Colunas Visíveis"
+                >
+                  <span>#</span>
+                  <SlidersHorizontal className="w-3 h-3 text-slate-500" />
+                </button>
+
+                {isColumnsDropdownOpen && (
+                  <div
+                    ref={columnsDropdownRef}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute left-0 top-full mt-1.5 w-64 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl z-50 p-3 text-left font-sans normal-case tracking-normal animate-in fade-in slide-in-from-top-2 duration-150"
+                  >
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-white">
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Colunas Visíveis</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {orderedVisibleColumns.length}/{ALL_COLUMNS.length}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                      {ALL_COLUMNS.map(col => {
+                        const isVisible = visibleColumns[col.key] !== false;
+                        return (
+                          <label
+                            key={col.key}
+                            className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer text-xs text-slate-700 dark:text-slate-300 transition"
+                          >
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isVisible}
+                                onChange={() => toggleColumnVisibility(col.key)}
+                                className="rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                              />
+                              <span className={isVisible ? 'font-medium text-slate-900 dark:text-white' : 'text-slate-400'}>
+                                {col.label}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                      <button
+                        type="button"
+                        onClick={resetColumns}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Restaurar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={showAllColumns}
+                        className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
+                      >
+                        Marcar Todas
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </th>
+
+              {/* Colunas Reordenáveis com Drag-and-Drop e Ordenação por Clique */}
+              {orderedVisibleColumns.map(col => {
+                const isSorted = sortConfig.key === col.key;
+                const isDragOver = dragOverColumn === col.key;
+                const isBeingDragged = draggedColumn === col.key;
+
+                return (
+                  <th
+                    key={col.key}
+                    draggable={true}
+                    onDragStart={(e) => handleDragStart(e, col.key)}
+                    onDragOver={(e) => handleDragOver(e, col.key)}
+                    onDragLeave={() => handleDragLeave(col.key)}
+                    onDrop={(e) => handleDrop(e, col.key)}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => {
+                      if (isDraggingRef.current) return;
+                      handleToggleSort(col.key);
+                    }}
+                    className={`py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none transition-colors group/th cursor-pointer ${col.thClass} ${
+                      isDragOver ? 'bg-emerald-100/80 dark:bg-emerald-950/80 ring-2 ring-emerald-500' : ''
+                    } ${isBeingDragged ? 'opacity-30' : ''} ${
+                      isSorted ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/30' : 'hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                    }`}
+                    title={col.sortable ? "Clique para ordenar • Arraste para reposicionar" : "Arraste para reposicionar"}
+                  >
+                    <div className={`flex items-center gap-1.5 ${
+                      col.thClass.includes('text-right') ? 'justify-end' : col.thClass.includes('text-center') ? 'justify-center' : 'justify-start'
+                    }`}>
+                      <GripVertical className="w-3 h-3 text-slate-300 dark:text-slate-600 opacity-0 group-hover/th:opacity-100 transition cursor-grab active:cursor-grabbing shrink-0" />
+                      <span>{col.label}</span>
+                      {col.sortable && (
+                        <span className="shrink-0 ml-0.5">
+                          {isSorted ? (
+                            sortConfig.direction === 'asc' ? (
+                              <ArrowUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600 opacity-0 group-hover/th:opacity-60 transition" />
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-700/80 text-xs">
-            {items.map((item, index) => {
+            {sortedItems.map((item, index) => {
               const precoCompraEfetivo = item.precoUnitario * (1 - (item.percentualDesconto || 0) / 100);
               const fiscal = calculateItemFiscal(precoCompraEfetivo, item.pdvAlvo, globalFiscal, item.fiscalOverride);
-              const isLucrativo = fiscal.isLucrativo;
-              const isItemRowActive = activeAutocompleteItemId === item.id;
 
               return (
                 <tr 
                   key={item.id}
                   className="hover:bg-emerald-50/20 dark:hover:bg-slate-800/40 transition-colors group whitespace-nowrap"
                 >
-                  {/* Index / Linha Excel */}
+                  {/* Index / Linha fixa */}
                   <td className="py-2 px-2 text-center bg-slate-50 dark:bg-slate-900/40 text-slate-400 font-mono text-[11px] font-semibold border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap select-none">
                     {index + 1}
                   </td>
 
-                  {/* Foto do Produto */}
-                  <td className="py-1 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/20 whitespace-nowrap">
-                    <div className="flex items-center justify-center">
-                      {item.fotoUrl ? (
-                        <div 
-                          className="w-8 h-8 rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer relative group/photo shadow-2xs"
-                          onClick={() => handleOpenPhotoModal(item)}
-                          title="Clique para trocar, ver ampliado ou remover foto"
-                        >
-                          <img src={item.fotoUrl} alt="" className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition">
-                            <Upload className="w-3 h-3" />
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenPhotoModal(item)}
-                          className="w-8 h-8 rounded-md border border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-center text-slate-400 hover:text-emerald-600 transition cursor-pointer"
-                          title="Anexar foto do produto"
-                        >
-                          <ImageIcon className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Código Interno */}
-                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
-                    <input
-                      type="text"
-                      data-excel-row={index}
-                      data-excel-field="codigoInterno"
-                      value={item.codigoInterno || item.codigo || ''}
-                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'codigoInterno')}
-                      onChange={(e) => {
-                        handleFieldChange(item, 'codigoInterno', e.target.value);
-                        handleFieldChange(item, 'codigo', e.target.value);
-                        activeInputRef.current = e.currentTarget;
-                        updateDropdownPosition(e.currentTarget);
-                        setActiveAutocompleteItemId(item.id);
-                        setActiveAutocompleteField('codigoInterno');
-                        setAutocompleteQuery(e.target.value);
-                      }}
-                      onFocus={(e) => {
-                        activeInputRef.current = e.currentTarget;
-                        updateDropdownPosition(e.currentTarget);
-                        setActiveAutocompleteItemId(item.id);
-                        setActiveAutocompleteField('codigoInterno');
-                        setAutocompleteQuery(e.target.value);
-                      }}
-                      placeholder="CÓD INT"
-                      className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-center font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
-                      title="Código Interno Mega12"
-                    />
-                  </td>
-
-                  {/* Código do Fornecedor */}
-                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
-                    <input
-                      type="text"
-                      data-excel-row={index}
-                      data-excel-field="codigoFornecedor"
-                      value={item.codigoFornecedor || ''}
-                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'codigoFornecedor')}
-                      onChange={(e) => {
-                        handleFieldChange(item, 'codigoFornecedor', e.target.value);
-                        activeInputRef.current = e.currentTarget;
-                        updateDropdownPosition(e.currentTarget);
-                        setActiveAutocompleteItemId(item.id);
-                        setActiveAutocompleteField('codigoFornecedor');
-                        setAutocompleteQuery(e.target.value);
-                      }}
-                      onFocus={(e) => {
-                        activeInputRef.current = e.currentTarget;
-                        updateDropdownPosition(e.currentTarget);
-                        setActiveAutocompleteItemId(item.id);
-                        setActiveAutocompleteField('codigoFornecedor');
-                        setAutocompleteQuery(e.target.value);
-                      }}
-                      placeholder="REF FORN"
-                      className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-center font-mono text-slate-700 dark:text-slate-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
-                      title="Código de Referência do Fornecedor"
-                    />
-                  </td>
-
-                  {/* Descrição com FILTRO INTELIGENTE / AUTOCOMPLETE */}
-                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 relative w-full min-w-[280px]">
-                    <input
-                      type="text"
-                      data-excel-row={index}
-                      data-excel-field="descricao"
-                      value={item.descricao}
-                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'descricao')}
-                      onChange={(e) => {
-                        handleFieldChange(item, 'descricao', e.target.value);
-                        activeInputRef.current = e.currentTarget;
-                        updateDropdownPosition(e.currentTarget);
-                        setActiveAutocompleteItemId(item.id);
-                        setActiveAutocompleteField('descricao');
-                        setAutocompleteQuery(e.target.value);
-                      }}
-                      onFocus={(e) => {
-                        activeInputRef.current = e.currentTarget;
-                        updateDropdownPosition(e.currentTarget);
-                        setActiveAutocompleteItemId(item.id);
-                        setActiveAutocompleteField('descricao');
-                        setAutocompleteQuery(e.target.value);
-                      }}
-                      placeholder="Digite o nome ou código do produto..."
-                      className="w-full h-full min-h-[38px] px-3.5 py-1.5 text-xs text-slate-900 dark:text-white font-medium bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors"
-                    />
-                  </td>
-
-                  {/* Quantidade por Pacote/Embalagem */}
-                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-20">
-                    <input
-                      type="number"
-                      min="1"
-                      data-excel-row={index}
-                      data-excel-field="qtdNoPacote"
-                      value={item.qtdNoPacote === 0 || item.qtdNoPacote === undefined ? '' : item.qtdNoPacote}
-                      placeholder="1"
-                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdNoPacote')}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => handleFieldChange(item, 'qtdNoPacote', e.target.value)}
-                      className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-semibold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
-                      title="Unidades por pacote/caixa/fardo"
-                    />
-                  </td>
-
-                  {/* Quantidade de Pacotes/Caixas Comprados */}
-                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-20">
-                    <input
-                      type="number"
-                      min="0"
-                      data-excel-row={index}
-                      data-excel-field="qtdPacotes"
-                      value={item.qtdPacotes === 0 || item.qtdPacotes === undefined ? '' : item.qtdPacotes}
-                      placeholder="0"
-                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdPacotes')}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => handleFieldChange(item, 'qtdPacotes', e.target.value)}
-                      className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-bold font-mono text-emerald-700 dark:text-emerald-400 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
-                      title="Quantidade de pacotes ou caixas adquiridos"
-                    />
-                  </td>
-
-                  {/* Quantidade Total de Peças (auto-calculada, mas editável) */}
-                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-24 bg-slate-50/40 dark:bg-slate-900/30">
-                    <input
-                      type="number"
-                      min="0"
-                      data-excel-row={index}
-                      data-excel-field="qtdTotalUnidades"
-                      value={item.qtdTotalUnidades === 0 ? '' : item.qtdTotalUnidades}
-                      placeholder="0"
-                      onKeyDown={(e) => handleExcelKeyDown(e, index, 'qtdTotalUnidades')}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
-                      className="w-full h-full min-h-[38px] px-2.5 py-1.5 text-center text-xs font-extrabold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
-                      title="Total de peças = Qtd no Pac × Qtd de Pac"
-                    />
-                  </td>
-
-                  {/* Valor do Produto (Preço Unitário de Compra - Sempre com 2 casas decimais e máscara em tempo real) */}
-                  <td className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-28">
-                    {(() => {
-                      const isEditing = item.id in editingPriceMap;
-                      const formattedPrice = item.precoUnitario > 0
-                        ? formatCurrency(item.precoUnitario, false)
-                        : (isOrderItemBlank(item) ? '' : '0,00');
-                      const displayVal = isEditing ? editingPriceMap[item.id] : formattedPrice;
-
-                      return (
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          data-excel-row={index}
-                          data-excel-field="precoUnitario"
-                          value={displayVal}
-                          placeholder="0,00"
-                          onKeyDown={(e) => handleExcelKeyDown(e, index, 'precoUnitario')}
-                          onFocus={(e) => {
-                            setEditingPriceMap(prev => ({
-                              ...prev,
-                              [item.id]: item.precoUnitario > 0
-                                ? formatCurrency(item.precoUnitario, false)
-                                : '0,00'
-                            }));
-                            e.target.select();
-                          }}
-                          onBlur={() => {
-                            setEditingPriceMap(prev => {
-                              const next = { ...prev };
-                              delete next[item.id];
-                              return next;
-                            });
-                          }}
-                          onChange={(e) => {
-                            const { formatted, value } = handleCurrencyInput(e.target.value, false);
-                            setEditingPriceMap(prev => ({ ...prev, [item.id]: formatted }));
-                            handleFieldChange(item, 'precoUnitario', value);
-                          }}
-                          className="w-full h-full min-h-[38px] px-3 py-1.5 text-right text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
-                          title="Valor do produto por unidade (R$)"
-                        />
-                      );
-                    })()}
-                  </td>
-
-                  {/* Total Compra do Produto */}
-                  <td className="py-2 px-3.5 text-right font-mono border-r border-slate-200 dark:border-slate-700/80 bg-slate-50/30 dark:bg-slate-900/20 whitespace-nowrap">
-                    <span className="font-extrabold text-slate-900 dark:text-white text-xs whitespace-nowrap">
-                      R$ {((item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto * (1 - (item.percentualDesconto || 0) / 100)))).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </td>
-
-                  {/* PDV Alvo - Compacto */}
-                  <td className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap w-16">
-                    <span 
-                      className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 whitespace-nowrap"
-                      title="Preço de Venda Padrão R$ 12,00"
-                    >
-                      R$ 12
-                    </span>
-                  </td>
-
-                  {/* Custo Real Efetivo */}
-                  <td className="py-2 px-3.5 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
-                    <div className="font-extrabold text-amber-700 dark:text-amber-400 font-mono text-xs whitespace-nowrap">
-                      R$ {fiscal.custoRealEfetivo.toFixed(2)}
-                    </div>
-                  </td>
-
-                  {/* Margem Real (R$ / %) */}
-                  <td className="py-2 px-3 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
-                    <span className="inline-block px-2.5 py-0.5 rounded text-xs font-bold font-mono bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
-                      R$ {fiscal.margemRealUnit.toFixed(2)} <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">({fiscal.margemPercentual.toFixed(0)}%)</span>
-                    </span>
-                  </td>
-
-                  {/* Botões de Ação */}
-                  <td className="py-1 px-2 text-center whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-1 text-slate-400">
-                      {/* Salvar Produto no Catálogo (quando necessário) */}
-                      {!isOrderItemBlank(item) && item.descricao && item.descricao.trim().length > 0 && !findCatalogProduct(item) && onSaveProduct && (
-                        <button
-                          type="button"
-                          onClick={() => handleQuickRegisterProduct(item)}
-                          className="p-1 rounded-md text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition cursor-pointer"
-                          title="Salvar produto no Catálogo"
-                        >
-                          <Save className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-
-                      {/* Duplicar */}
-                      <button
-                        type="button"
-                        onClick={() => onDuplicateItem(item)}
-                        disabled={isOrderItemBlank(item)}
-                        className={`p-1 rounded-md transition ${
-                          isOrderItemBlank(item)
-                            ? 'text-slate-300 dark:text-slate-700 opacity-30 cursor-not-allowed'
-                            : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer'
-                        }`}
-                        title="Duplicar Linha"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Excluir */}
-                      <button
-                        type="button"
-                        onClick={() => onDeleteItem(item.id)}
-                        disabled={isOrderItemBlank(item) && index === items.length - 1}
-                        className={`p-1 rounded-md transition ${
-                          isOrderItemBlank(item) && index === items.length - 1
-                            ? 'text-slate-300 dark:text-slate-700 opacity-30 cursor-not-allowed'
-                            : 'text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/60 cursor-pointer'
-                        }`}
-                        title={isOrderItemBlank(item) && index === items.length - 1 ? 'Linha automática' : 'Remover Item'}
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                      </button>
-                    </div>
-                  </td>
+                  {/* Células dinâmicas de acordo com orderedVisibleColumns */}
+                  {orderedVisibleColumns.map(col => renderTableCell(col.key, item, index, fiscal))}
                 </tr>
               );
             })}
@@ -1001,14 +1558,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         </table>
       </div>
 
-      {/* Footer bar com atalhos e totais dos produtos */}
-      <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200/70 dark:border-slate-700/70 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-            💡 Planilha Excel: Pressione <strong>Enter</strong> ou <strong>Setas (↑ ↓)</strong> para navegar rapidamente entre as células • Digite na última linha para auto-inclusão
-          </span>
-        </div>
-
+      {/* Footer bar com totais dos produtos */}
+      <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200/70 dark:border-slate-700/70 flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
           <div className="text-slate-500 dark:text-slate-400">
             Itens: <strong className="text-slate-900 dark:text-white font-bold">{validItemsCount}</strong> ({totals.pecas.toLocaleString('pt-BR')} un)
@@ -1021,8 +1572,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               Desc. Itens: -R$ {totals.desconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           )}
-          <div className="text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700" title="Preço médio por peça/item (Total Líquido ÷ Total de Peças)">
-            Preço Médio: <strong className="text-slate-900 dark:text-white font-bold">R$ {totals.precoMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          <div className="text-slate-500 dark:text-slate-400" title="Preço médio por peça/item (Total Líquido ÷ Total de Peças)">
+            Preço Médio: <strong className="text-slate-700 dark:text-slate-300 font-bold">R$ {totals.precoMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
           </div>
           <div className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
             Total Líquido: R$ {totals.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

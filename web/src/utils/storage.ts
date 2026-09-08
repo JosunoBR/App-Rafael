@@ -1031,7 +1031,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     aliquotaStPadrao: 0,
     aliquotaIpiPadrao: 0,
     descontoOffPadrao: 5.0,
-    observacoesDescarga: 'Entregar com paletização padrão no Depósito Central.',
+    observacoesDescarga: '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   },
@@ -1046,7 +1046,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     aliquotaStPadrao: 7.5,
     aliquotaIpiPadrao: 2.0,
     descontoOffPadrao: 3.0,
-    observacoesDescarga: 'Descarga das 08h às 16h no Depósito.',
+    observacoesDescarga: '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   },
@@ -1061,7 +1061,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     aliquotaStPadrao: 12.0,
     aliquotaIpiPadrao: 5.0,
     descontoOffPadrao: 8.0,
-    observacoesDescarga: 'Paletes padrão PBR. Agendar entrega com 24h de antecedência.',
+    observacoesDescarga: '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }
@@ -1094,6 +1094,16 @@ export function getNextOrderNumber(): string {
   }
 }
 
+export const LEGACY_DEFAULT_OBSERVACOES = [
+  'Entregar com paletização padrão PBR no Depósito Central.',
+  'Entregar com paletização padrão no Depósito Central.',
+  'Descarga das 08h às 16h no Depósito.',
+  'Descarga das 08h às 16h no Depósito Central.',
+  'Paletes padrão PBR. Agendar entrega com 24h de antecedência.',
+  'Descarga em paletes padrão PBR no Depósito Central.',
+  'Descarga no CD.'
+];
+
 export function getSuppliersList(): Supplier[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.SUPPLIERS);
@@ -1105,8 +1115,13 @@ export function getSuppliersList(): Supplier[] {
           parsedPadrao = JSON.parse(s.pedidoPadraoJson);
         } catch {}
       }
+      let obs = s.observacoesDescarga || '';
+      if (LEGACY_DEFAULT_OBSERVACOES.includes(obs.trim())) {
+        obs = '';
+      }
       return {
         ...s,
+        observacoesDescarga: obs,
         pedidoPadrao: parsedPadrao
       };
     });
@@ -1369,7 +1384,7 @@ export function createNewOrder(
       dataEntregaPrevista: deliveryDate,
       percentualDescontoOff: targetSupplier?.descontoOffPadrao || 0,
       percentualNota: targetSupplier?.percentualNotaPadrao ?? 100,
-      observacoesDescarga: targetSupplier?.observacoesDescarga || 'Entregar com paletização padrão no Depósito Central.',
+      observacoesDescarga: targetSupplier?.observacoesDescarga || '',
       valorFreteGlobal: 0,
       valorOutrasDespesasGlobal: 0,
       status: 'Em Cotação',
@@ -1402,6 +1417,9 @@ export function loadCurrentOrder(): PurchaseOrder | null {
     if (ord.header?.status === 'Finalizado') return null;
     if (ord.items) {
       ord.items = ord.items.map(it => ({ ...it, pdvAlvo: 12.00 }));
+    }
+    if (ord.header?.observacoesDescarga && LEGACY_DEFAULT_OBSERVACOES.includes(ord.header.observacoesDescarga.trim())) {
+      ord.header.observacoesDescarga = '';
     }
     return ord;
   } catch {
@@ -1506,7 +1524,7 @@ export function createRealisticMockOrder(
       dataEntregaPrevista: deliveryDate,
       percentualDescontoOff: sup.descontoOffPadrao || 3.0,
       percentualNota: 100,
-      observacoesDescarga: 'Entregar com paletização padrão PBR no Depósito Central.',
+      observacoesDescarga: '',
       valorFreteGlobal: 0,
       valorOutrasDespesasGlobal: 0,
       status: 'Aprovado',

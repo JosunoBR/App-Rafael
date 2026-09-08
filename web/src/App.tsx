@@ -17,6 +17,9 @@ import {
   OrderHeaderForm 
 } from './components/OrderHeaderForm';
 import { 
+  OrderFiscalCard 
+} from './components/OrderFiscalCard';
+import { 
   OrderItemsTable 
 } from './components/OrderItemsTable';
 import { 
@@ -312,6 +315,60 @@ export function App() {
   const handleHeaderChange = (updatedHeader: typeof order.header) => {
     setOrder(prev => ({ ...prev, header: updatedHeader }));
   };
+
+  // Handler para configuração fiscal individual do pedido
+  const handleOrderFiscalConfigChange = (newFiscal: FiscalConfig) => {
+    setOrder(prev => {
+      const stValue = newFiscal.aliquotaSt !== undefined 
+        ? Number((newFiscal.aliquotaSt > 1 ? newFiscal.aliquotaSt : newFiscal.aliquotaSt * 100).toFixed(2)) 
+        : prev.header.aliquotaSt;
+      
+      const updatedHeader = {
+        ...prev.header,
+        aliquotaSt: stValue
+      };
+
+      const updatedItems = (prev.items || []).map(it => {
+        if (!it.precoUnitario && !it.descricao) return it;
+        const descPct = it.percentualDesconto || 0;
+        const precoEfetivo = it.precoUnitario * (1 - descPct / 100);
+        const pdv = 12.00;
+        const f = calculateItemFiscal(precoEfetivo, pdv, newFiscal, it.fiscalOverride);
+        return {
+          ...it,
+          custoLoja: f.custoLoja,
+          custoFornecedor: f.custoFornecedor,
+          despesasPdvUnit: f.despesasPdvUnit,
+          creditoIcmsUnit: f.creditoIcmsUnit,
+          custoRealEfetivo: f.custoRealEfetivo,
+          margemRealUnit: f.margemRealUnit,
+          margemPercentual: f.margemPercentual
+        };
+      });
+
+      return {
+        ...prev,
+        fiscalConfig: newFiscal,
+        header: updatedHeader,
+        items: updatedItems
+      };
+    });
+  };
+
+  // Média de preço dos itens e PDV para a simulação ao vivo do card fiscal
+  const averageItemPrice = useMemo(() => {
+    const validItems = (order.items || []).filter(it => it.descricao && it.precoUnitario > 0);
+    if (validItems.length === 0) return 7.00;
+    const sum = validItems.reduce((acc, it) => acc + (it.precoUnitario || 0), 0);
+    return Number((sum / validItems.length).toFixed(2));
+  }, [order.items]);
+
+  const samplePdv = useMemo(() => {
+    const validItems = (order.items || []).filter(it => it.descricao && it.pdvAlvo > 0);
+    if (validItems.length === 0) return 12.00;
+    const sum = validItems.reduce((acc, it) => acc + (it.pdvAlvo || 12.00), 0);
+    return Number((sum / validItems.length).toFixed(2));
+  }, [order.items]);
 
   // Handlers for Items
   const handleUpdateItem = (itemId: string, updatedFields: Partial<OrderItem>) => {
@@ -1448,6 +1505,21 @@ export function App() {
                     supplierTemplateItemsCount={activeSupplierTemplate?.items?.length || 0}
                   />
 
+                  {/* Card Retrátil de Engenharia Fiscal do Pedido (Entrada e Saída) */}
+                  <OrderFiscalCard
+                    fiscalConfig={order.fiscalConfig || fiscalConfig}
+                    onChangeFiscalConfig={handleOrderFiscalConfigChange}
+                    aliquotaStHeader={order.header.aliquotaSt}
+                    onUpdateHeaderSt={(newSt) => {
+                      handleHeaderChange({
+                        ...order.header,
+                        aliquotaSt: newSt
+                      });
+                    }}
+                    averageItemPrice={averageItemPrice}
+                    samplePdv={samplePdv}
+                  />
+
                   {/* Banner de Pedido Gravado / Status (Conforme Imagem 1) */}
                   <div className="p-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
                     <div className="flex items-center gap-2.5">
@@ -1470,7 +1542,7 @@ export function App() {
 
                   <OrderItemsTable
                     items={order.items}
-                    globalFiscal={fiscalConfig}
+                    globalFiscal={order.fiscalConfig || fiscalConfig}
                     stores={storeConfigs}
                     products={products}
                     currentSupplierName={order.header.fornecedor}

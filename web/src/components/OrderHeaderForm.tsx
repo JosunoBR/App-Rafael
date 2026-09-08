@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { OrderHeader, Supplier } from '../shared/types';
 import { handleCurrencyInput, formatCurrency, maskPhone } from '../utils/masks';
+import { LEGACY_DEFAULT_OBSERVACOES } from '../utils/storage';
 import { 
   PARCELAS_OPTIONS, 
   PRAZO_OPTIONS, 
@@ -114,6 +115,13 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       onChange(updatedHeader);
     }
   }, [currentSupplier, header.fornecedor]);
+
+  // Limpar texto padrão legado caso o rascunho salvo ainda contenha texto fixo antigo
+  useEffect(() => {
+    if (header.observacoesDescarga && LEGACY_DEFAULT_OBSERVACOES.includes(header.observacoesDescarga.trim())) {
+      handleFieldChange('observacoesDescarga', '');
+    }
+  }, [header.observacoesDescarga]);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -293,7 +301,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       prazoDias: supParsed.prazo,
       aliquotaSt: supplier.aliquotaStPadrao || 0,
       percentualDescontoOff: supplier.descontoOffPadrao !== undefined ? supplier.descontoOffPadrao : 0,
-      observacoesDescarga: supplier.observacoesDescarga || header.observacoesDescarga
+      observacoesDescarga: supplier.observacoesDescarga || ''
     });
     setIsDropdownOpen(false);
   };
@@ -902,19 +910,42 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
             );
           })()}
 
-          {/* SEÇÃO 3: OBSERVAÇÕES DE DESCARGA & PALETES (Full Width) */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-slate-400" />
-              Observações / Instruções de Descarga & Paletes
-            </label>
-            <input
-              type="text"
-              value={header.observacoesDescarga || ''}
-              onChange={(e) => handleFieldChange('observacoesDescarga', e.target.value)}
-              className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-              placeholder="Ex: Entregar paletizado no Depósito Central; Horário de recebimento: 08h às 16h"
-            />
+          {/* SEÇÃO 3: DESCRIÇÃO DO FORNECEDOR (ESPELHO) & DESCRIÇÃO DO PEDIDO */}
+          <div className="space-y-3">
+            {/* Espelho da Descrição do Cadastro do Fornecedor */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  Descrição do Fornecedor (Cadastro)
+                </span>
+                <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/60 dark:border-emerald-800/40 px-2 py-0.5 rounded-md">
+                  Espelho do Cadastro
+                </span>
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={currentSupplier?.observacoesDescarga || ''}
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 outline-hidden font-medium cursor-default"
+                placeholder="Nenhuma descrição cadastrada para este fornecedor"
+              />
+            </div>
+
+            {/* Descrição do Pedido */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-slate-400" />
+                Descrição do Pedido
+              </label>
+              <input
+                type="text"
+                value={header.observacoesDescarga || ''}
+                onChange={(e) => handleFieldChange('observacoesDescarga', e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                placeholder=""
+              />
+            </div>
           </div>
 
         </div>

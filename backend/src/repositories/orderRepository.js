@@ -30,6 +30,15 @@ class OrderRepository {
     const installmentsJson = JSON.stringify(installments);
     const separationJson = order.separationDistribution ? JSON.stringify(order.separationDistribution) : null;
 
+    const fiscal = order.fiscalConfig || {};
+    const fiscalConfigJson = JSON.stringify(fiscal);
+    const aliquotaIpi = Number(fiscal.ipiAliquota !== undefined ? fiscal.ipiAliquota : (order.header.aliquotaIpi || 0));
+    const aliquotaFrete = Number(fiscal.freteAliquota !== undefined ? fiscal.freteAliquota : (order.header.aliquotaFrete || 0));
+    const aliquotaIcmsEntrada = Number(fiscal.creditoEntradaICMS !== undefined ? fiscal.creditoEntradaICMS : (order.header.aliquotaIcmsEntrada !== undefined ? order.header.aliquotaIcmsEntrada : 12));
+    const aliquotaCustoFixo = Number(fiscal.custosFixos !== undefined ? fiscal.custosFixos : (order.header.aliquotaCustoFixo !== undefined ? order.header.aliquotaCustoFixo : 26));
+    const aliquotaIcmsSaida = Number(fiscal.icmsAliquota !== undefined ? fiscal.icmsAliquota : (order.header.aliquotaIcmsSaida !== undefined ? order.header.aliquotaIcmsSaida : 19.5));
+    const aliquotaPisCofinsIr = Number(fiscal.pisCofinsAliquota !== undefined ? fiscal.pisCofinsAliquota : (order.header.aliquotaPisCofinsIr !== undefined ? order.header.aliquotaPisCofinsIr : 6));
+
     let totalLiquido = 0;
     let totalPecas = 0;
     items.forEach(item => {
@@ -47,6 +56,8 @@ class OrderRepository {
           descontoComercialTipo = ?, isDraft = ?, dataEmissao = ?, dataEntregaPrevista = ?,
           percentualDescontoOff = ?, percentualNota = ?, observacoes = ?, status = ?,
           separationStatus = ?, totalLiquido = ?, totalPecas = ?, installmentsJson = ?,
+          fiscalConfigJson = ?, aliquotaIpi = ?, aliquotaFrete = ?, aliquotaIcmsEntrada = ?,
+          aliquotaCustoFixo = ?, aliquotaIcmsSaida = ?, aliquotaPisCofinsIr = ?,
           itemsJson = ?, separationDistributionJson = ?, updatedAt = ?
         WHERE id = ?
       `;
@@ -75,6 +86,13 @@ class OrderRepository {
         totalLiquido,
         totalPecas,
         installmentsJson,
+        fiscalConfigJson,
+        aliquotaIpi,
+        aliquotaFrete,
+        aliquotaIcmsEntrada,
+        aliquotaCustoFixo,
+        aliquotaIcmsSaida,
+        aliquotaPisCofinsIr,
         itemsJson,
         separationJson,
         now,
@@ -88,9 +106,11 @@ class OrderRepository {
           tipoFrete, valorFrete, descontoComercialTotal, descontoComercialTipo,
           isDraft, dataEmissao, dataEntregaPrevista, percentualDescontoOff,
           percentualNota, observacoes, status, separationStatus, totalLiquido,
-          totalPecas, installmentsJson, itemsJson, separationDistributionJson,
+          totalPecas, installmentsJson, fiscalConfigJson, aliquotaIpi,
+          aliquotaFrete, aliquotaIcmsEntrada, aliquotaCustoFixo, aliquotaIcmsSaida,
+          aliquotaPisCofinsIr, itemsJson, separationDistributionJson,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await execute(sql, [
         order.header.id,
@@ -118,6 +138,13 @@ class OrderRepository {
         totalLiquido,
         totalPecas,
         installmentsJson,
+        fiscalConfigJson,
+        aliquotaIpi,
+        aliquotaFrete,
+        aliquotaIcmsEntrada,
+        aliquotaCustoFixo,
+        aliquotaIcmsSaida,
+        aliquotaPisCofinsIr,
         itemsJson,
         separationJson,
         order.header.createdAt || now,
@@ -132,17 +159,18 @@ class OrderRepository {
         const itemId = item.id || `it_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         await execute(`
           INSERT INTO order_items (
-            id, orderId, codigoInterno, codigoFornecedor, codigo, descricao, fotoUrl,
+            id, orderId, codigoInterno, codigoFornecedor, codigoBarras, codigo, descricao, fotoUrl,
             qtdNoPacote, qtdPacotes, qtdTotalUnidades, precoUnitario, valorTotalBruto,
             percentualDesconto, valorDescontoItem, valorTotalLiquido,
-            pdvAlvo, despesasPdvUnit, creditoIcmsUnit, custoRealEfetivo, margemRealUnit, margemPercentual,
+            pdvAlvo, custoLoja, custoFornecedor, despesasPdvUnit, creditoIcmsUnit, custoRealEfetivo, margemRealUnit, margemPercentual,
             qtdReservaEstoque, separacaoManual, separacaoLojasJson, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           itemId,
           order.header.id,
           item.codigoInterno || item.codigo || '',
           item.codigoFornecedor || '',
+          item.codigoBarras || item.eanBarcode || '',
           item.codigo || item.codigoInterno || '',
           item.descricao || '',
           item.fotoUrl || '',
@@ -155,6 +183,8 @@ class OrderRepository {
           Number(item.valorDescontoItem) || 0,
           Number(item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : item.valorTotalBruto) || 0,
           Number(item.pdvAlvo) || 12.0,
+          Number(item.custoLoja) || 0,
+          Number(item.custoFornecedor) || 0,
           Number(item.despesasPdvUnit) || 0,
           Number(item.creditoIcmsUnit) || 0,
           Number(item.custoRealEfetivo) || 0,
@@ -163,7 +193,7 @@ class OrderRepository {
           Number(item.qtdReservaEstoque) || 0,
           item.separacaoManual ? 1 : 0,
           JSON.stringify(item.separacaoLojas || {}),
-          item.createdAt || now,
+          now,
           now
         ]);
       }
@@ -289,6 +319,7 @@ class OrderRepository {
           id: it.id,
           codigoInterno: it.codigoInterno,
           codigoFornecedor: it.codigoFornecedor,
+          codigoBarras: it.codigoBarras || '',
           codigo: it.codigo,
           descricao: it.descricao,
           fotoUrl: it.fotoUrl,
@@ -301,6 +332,8 @@ class OrderRepository {
           valorDescontoItem: it.valorDescontoItem || 0,
           valorTotalLiquido: it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : it.valorTotalBruto,
           pdvAlvo: it.pdvAlvo,
+          custoLoja: it.custoLoja || 0,
+          custoFornecedor: it.custoFornecedor || 0,
           despesasPdvUnit: it.despesasPdvUnit,
           creditoIcmsUnit: it.creditoIcmsUnit,
           custoRealEfetivo: it.custoRealEfetivo,
@@ -368,6 +401,22 @@ class OrderRepository {
 
     try { separationDistribution = r.separationDistributionJson ? JSON.parse(r.separationDistributionJson) : null; } catch {}
 
+    let parsedFiscal = null;
+    if (r.fiscalConfigJson) {
+      try { parsedFiscal = JSON.parse(r.fiscalConfigJson); } catch {}
+    }
+    if (!parsedFiscal) {
+      parsedFiscal = {
+        ipiAliquota: r.aliquotaIpi || 0,
+        aliquotaSt: r.aliquotaSt || 0,
+        freteAliquota: r.aliquotaFrete || 0,
+        creditoEntradaICMS: r.aliquotaIcmsEntrada !== undefined ? r.aliquotaIcmsEntrada : 12,
+        custosFixos: r.aliquotaCustoFixo !== undefined ? r.aliquotaCustoFixo : 26,
+        icmsAliquota: r.aliquotaIcmsSaida !== undefined ? r.aliquotaIcmsSaida : 19.5,
+        pisCofinsAliquota: r.aliquotaPisCofinsIr !== undefined ? r.aliquotaPisCofinsIr : 6
+      };
+    }
+
     return {
       header: {
         id: r.id,
@@ -395,6 +444,7 @@ class OrderRepository {
         createdAt: r.createdAt,
         updatedAt: r.updatedAt
       },
+      fiscalConfig: parsedFiscal,
       items,
       installments,
       inspection,

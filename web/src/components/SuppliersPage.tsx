@@ -64,7 +64,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
           aliquotaStPadrao: 0,
           aliquotaIpiPadrao: 0,
           descontoOffPadrao: 0,
-          observacoesDescarga: 'Descarga em paletes padrão PBR no Depósito Central.'
+          observacoesDescarga: ''
         });
         setEditingSupplier(null);
         setIsCreatingNew(true);
@@ -130,7 +130,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
       aliquotaStPadrao: 0,
       aliquotaIpiPadrao: 0,
       descontoOffPadrao: 0,
-      observacoesDescarga: 'Descarga em paletes padrão PBR no Depósito Central.'
+      observacoesDescarga: ''
     });
     setEditingSupplier(null);
     setIsCreatingNew(true);
@@ -383,10 +383,10 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               <span className="text-[10px] text-slate-400 mt-1 block">Referência de barganha para próximos pedidos</span>
             </div>
 
-            {/* Observações sobre o Fornecedor */}
+            {/* Descrição do Fornecedor */}
             <div className="md:col-span-3">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Observações sobre o Fornecedor
+                Descrição do Fornecedor
               </label>
               <textarea
                 rows={2}

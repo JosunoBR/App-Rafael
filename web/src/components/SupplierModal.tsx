@@ -53,7 +53,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   const [aliquotaStPadrao, setAliquotaStPadrao] = useState<number>(initialEditSupplier?.aliquotaStPadrao || 0);
   const [aliquotaIpiPadrao, setAliquotaIpiPadrao] = useState<number>(initialEditSupplier?.aliquotaIpiPadrao || 0);
   const [descontoOffPadrao, setDescontoOffPadrao] = useState<number>(initialEditSupplier?.descontoOffPadrao || 0);
-  const [observacoesDescarga, setObservacoesDescarga] = useState(initialEditSupplier?.observacoesDescarga || 'Entregar com paletização padrão no Depósito Central.');
+  const [observacoesDescarga, setObservacoesDescarga] = useState(initialEditSupplier?.observacoesDescarga || '');
 
   const handleOpenNewForm = () => {
     setEditingSupplier(null);
@@ -66,7 +66,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     setAliquotaStPadrao(0);
     setAliquotaIpiPadrao(0);
     setDescontoOffPadrao(0);
-    setObservacoesDescarga('Entregar com paletização padrão no Depósito Central.');
+    setObservacoesDescarga('');
     setIsFormOpen(true);
   };
 
@@ -285,7 +285,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                 <div className="sm:col-span-2 md:col-span-3">
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                     <FileText className="w-3.5 h-3.5 text-slate-400" />
-                    Observações sobre o Fornecedor
+                    Descrição do Fornecedor
                   </label>
                   <input
                     type="text"

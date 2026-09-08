@@ -592,7 +592,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 </div>
 
                 {/* LINHA 1: CONFIGURAÇÃO DE FORMA DE PAGAMENTO & PRAZOS */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-3.5">
                   {/* 1. Forma de Pagamento */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -653,28 +653,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       )}
                     </select>
                   </div>
-
-                  {/* 4. Previsão de Pagamento */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      4. Previsão de Pagamento
-                    </label>
-                    <input
-                      type="text"
-                      value={header.previsaoPagamento || ''}
-                      onChange={(e) => handleFieldChange('previsaoPagamento', e.target.value)}
-                      placeholder="Ex: 30 dias após entrega"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden shadow-2xs font-medium"
-                    />
-                  </div>
                 </div>
 
                 {/* LINHA 2: FRETE, DESCONTO GERAL E FATURAMENTO */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                  {/* 5. Tipo de Frete */}
+                  {/* 4. Tipo de Frete */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      5. Modalidade Frete
+                      4. Modalidade Frete
                     </label>
                     <select
                       value={header.tipoFrete || 'CIF'}
@@ -689,10 +675,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </select>
                   </div>
 
-                  {/* 6. Valor do Frete */}
+                  {/* 5. Valor do Frete */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      6. Valor Frete (R$)
+                      5. Valor Frete (R$)
                     </label>
                     <input
                       type="number"
@@ -706,10 +692,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     />
                   </div>
 
-                  {/* 7. Desconto Geral (% OFF) */}
+                  {/* 6. Desconto Geral (% OFF) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>7. Desconto Comercial</span>
+                      <span>6. Desconto Comercial</span>
                       <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">Total</span>
                     </label>
                     <div className="relative">
@@ -730,10 +716,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </div>
                   </div>
 
-                  {/* 8. NOTA (%) */}
+                  {/* 7. NOTA (%) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>8. Faturamento Nota (%)</span>
+                      <span>7. Faturamento Nota (%)</span>
                       <span className="text-[10px] font-mono text-slate-400">Histórico BD</span>
                     </label>
                     <div className="relative">

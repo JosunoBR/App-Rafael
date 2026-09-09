@@ -74,7 +74,7 @@ import {
   OrderPipelineStepper 
 } from './components/OrderPipelineStepper';
 
-import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem, SeparationPreset } from './shared/types';
+import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem, SeparationPreset, FiscalPreset } from './shared/types';
 import { 
   getInitialFiscalConfig, 
   getInitialStoresConfig, 
@@ -99,6 +99,8 @@ import {
   createStockTransferOrder,
   getInitialSeparationPresets,
   saveSeparationPresetsList,
+  getInitialFiscalPresets,
+  saveFiscalPresetsList,
   saveSavedOrdersList,
   saveBatchProductsToStorage,
   saveSuppliersList,
@@ -128,6 +130,9 @@ import {
   fetchSeparationPresetsFromDb,
   saveSeparationPresetToDb,
   deleteSeparationPresetFromDb,
+  fetchFiscalPresetsFromDb,
+  saveFiscalPresetToDb,
+  deleteFiscalPresetFromDb,
   isOfflineError,
   fetchHealth,
   duplicateOrderInDb
@@ -181,6 +186,7 @@ export function App() {
   const [centralStock, setCentralStock] = useState<CentralStockItem[]>(() => loadCentralStock());
   const [savedOrders, setSavedOrders] = useState<PurchaseOrder[]>(loadSavedOrdersList);
   const [separationPresets, setSeparationPresets] = useState<SeparationPreset[]>(getInitialSeparationPresets);
+  const [fiscalPresets, setFiscalPresets] = useState<FiscalPreset[]>(getInitialFiscalPresets);
 
   // Active Purchase Order: carrega rascunho se existir ou inicia limpo
   const [order, setOrder] = useState<PurchaseOrder>(() => {
@@ -242,14 +248,15 @@ export function App() {
   // Carregar dados oficiais do banco de dados SQLite (prioridade máxima)
   const loadFromSqlite = async () => {
     try {
-      const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock, dbPresets] = await Promise.all([
+      const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock, dbPresets, dbFiscalPresets] = await Promise.all([
         fetchSuppliersFromDb().catch(err => { console.warn('Fornecedores DB:', err); return null; }),
         fetchProductsFromDb().catch(err => { console.warn('Produtos DB:', err); return null; }),
         fetchOrdersFromDb().catch(err => { console.warn('Pedidos DB:', err); return null; }),
         fetchFiscalConfigFromDb().catch(err => { console.warn('Fiscal DB:', err); return null; }),
         fetchStoresFromDb().catch(err => { console.warn('Lojas DB:', err); return null; }),
         fetchStockFromDb().catch(err => { console.warn('Estoque DB:', err); return null; }),
-        fetchSeparationPresetsFromDb().catch(err => { console.warn('Presets DB:', err); return null; })
+        fetchSeparationPresetsFromDb().catch(err => { console.warn('Presets DB:', err); return null; }),
+        fetchFiscalPresetsFromDb().catch(err => { console.warn('Fiscal Presets DB:', err); return null; })
       ]);
 
       if (dbSuppliers !== null) {
@@ -280,6 +287,11 @@ export function App() {
       if (dbPresets && dbPresets.length > 0) {
         setSeparationPresets(dbPresets);
         saveSeparationPresetsList(dbPresets);
+      }
+
+      if (dbFiscalPresets && dbFiscalPresets.length > 0) {
+        setFiscalPresets(dbFiscalPresets);
+        saveFiscalPresetsList(dbFiscalPresets);
       }
 
       if (dbOrders !== null) {
@@ -1512,6 +1524,49 @@ export function App() {
     }
   };
 
+  // Handlers para Modelos / Saves de Engenharia Fiscal
+  const handleSaveFiscalPreset = async (preset: FiscalPreset) => {
+    try {
+      const saved = await saveFiscalPresetToDb(preset);
+      setFiscalPresets(prev => {
+        const existingIdx = prev.findIndex(p => p.id === saved.id || p.name.trim().toLowerCase() === saved.name.trim().toLowerCase());
+        const updated = existingIdx >= 0
+          ? prev.map((p, idx) => idx === existingIdx ? saved : p)
+          : [...prev, saved];
+        saveFiscalPresetsList(updated);
+        return updated;
+      });
+      showToast(`⭐ Modelo fiscal "${saved.name}" salvo no SQLite!`, 'success');
+      return saved;
+    } catch (err: any) {
+      console.warn('Persistindo modelo fiscal localmente:', err);
+      setFiscalPresets(prev => {
+        const existingIdx = prev.findIndex(p => p.id === preset.id || p.name.trim().toLowerCase() === preset.name.trim().toLowerCase());
+        const updated = existingIdx >= 0
+          ? prev.map((p, idx) => idx === existingIdx ? preset : p)
+          : [...prev, preset];
+        saveFiscalPresetsList(updated);
+        return updated;
+      });
+      showToast(`Modelo fiscal "${preset.name}" salvo localmente.`, 'info');
+      return preset;
+    }
+  };
+
+  const handleDeleteFiscalPreset = async (presetId: string) => {
+    try {
+      await deleteFiscalPresetFromDb(presetId);
+      setFiscalPresets(prev => {
+        const updated = prev.filter(p => p.id !== presetId);
+        saveFiscalPresetsList(updated);
+        return updated;
+      });
+      showToast('Modelo fiscal removido com sucesso.', 'info');
+    } catch (err: any) {
+      showToast(`Erro ao remover modelo fiscal: ${err.message}`, 'error');
+    }
+  };
+
   const handleDeleteOrder = async (orderId: string) => {
     try {
       await deleteOrderFromDb(orderId);
@@ -1707,6 +1762,9 @@ export function App() {
                     totalMercadorias={calculateOrderMerchandiseTotal(order)}
                     averageItemPrice={averageItemPrice}
                     samplePdv={samplePdv}
+                    fiscalPresets={fiscalPresets}
+                    onSaveFiscalPreset={handleSaveFiscalPreset}
+                    onDeleteFiscalPreset={handleDeleteFiscalPreset}
                   />
 
 

@@ -35,6 +35,22 @@ export interface FiscalConfig {
   pisCofinsAliquota: number;    // % PIS, COFINS, IR (sobre PDV, ex: 6.0 ou 0.06)
 }
 
+export interface FiscalPreset {
+  id: string;
+  name: string;
+  description?: string;
+  ipiAliquota: number;
+  aliquotaSt?: number;
+  freteAliquota?: number;
+  creditoEntradaICMS: number;
+  custosFixos: number;
+  icmsAliquota: number;
+  pisCofinsAliquota: number;
+  isDefault?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Supplier {
   id: string;
   razaoSocial: string;

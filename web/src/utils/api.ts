@@ -1,4 +1,4 @@
-import { PurchaseOrder, Supplier, FiscalConfig, StoreConfig, Product, User, CentralStockItem, SeparationPreset } from '../shared/types';
+import { PurchaseOrder, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset } from '../shared/types';
 import { API_BASE_URL } from './config';
 
 export class ApiError extends Error {
@@ -198,6 +198,27 @@ export async function saveSeparationPresetToDb(preset: SeparationPreset): Promis
 
 export async function deleteSeparationPresetFromDb(id: string): Promise<void> {
   await apiFetch(`/separation-presets/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+// MODELOS / PRESETS DE ENGENHARIA FISCAL (SAVES)
+export async function fetchFiscalPresetsFromDb(): Promise<FiscalPreset[]> {
+  const res = await apiFetch('/fiscal-presets');
+  return res.json();
+}
+
+export async function saveFiscalPresetToDb(preset: FiscalPreset): Promise<FiscalPreset> {
+  const res = await apiFetch('/fiscal-presets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(preset)
+  });
+  return res.json();
+}
+
+export async function deleteFiscalPresetFromDb(id: string): Promise<void> {
+  await apiFetch(`/fiscal-presets/${id}`, {
     method: 'DELETE'
   });
 }

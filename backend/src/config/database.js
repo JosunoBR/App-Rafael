@@ -250,6 +250,22 @@ async function getDatabase() {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS fiscal_presets (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      ipiAliquota REAL NOT NULL DEFAULT 0.00,
+      aliquotaSt REAL NOT NULL DEFAULT 0.00,
+      freteAliquota REAL NOT NULL DEFAULT 0.00,
+      creditoEntradaICMS REAL NOT NULL DEFAULT 0.12,
+      custosFixos REAL NOT NULL DEFAULT 0.26,
+      icmsAliquota REAL NOT NULL DEFAULT 0.19,
+      pisCofinsAliquota REAL NOT NULL DEFAULT 0.06,
+      isDefault INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
   `);
 
   // Migrações automáticas de colunas
@@ -429,6 +445,29 @@ async function getDatabase() {
     }
   } catch (presetErr) {
     console.warn('Aviso no seeding de separation_presets:', presetErr.message);
+  }
+
+  // Seed dos modelos fiscais padrão da Rede Mega 12 se a tabela estiver vazia
+  try {
+    const fiscalPresetCheck = dbInstance.exec("SELECT COUNT(*) as count FROM fiscal_presets");
+    if (fiscalPresetCheck[0] && fiscalPresetCheck[0].values[0][0] === 0) {
+      const now = new Date().toISOString();
+      dbInstance.run(`
+        INSERT INTO fiscal_presets (
+          id, name, description, ipiAliquota, aliquotaSt, freteAliquota,
+          creditoEntradaICMS, custosFixos, icmsAliquota, pisCofinsAliquota,
+          isDefault, createdAt, updatedAt
+        ) VALUES 
+          (
+            'preset_fiscal_padrao',
+            'Padrão Geral',
+            'Padrão Geral Rede Mega 12 (ICMS Entrada 12%, CF 26%, ICMS Saída 19.5%, PIS/COF 6%)',
+            0.00, 0.00, 0.00, 0.12, 0.26, 0.195, 0.06, 1, '${now}', '${now}'
+          );
+      `);
+    }
+  } catch (fiscPresetErr) {
+    console.warn('Aviso no seeding de fiscal_presets:', fiscPresetErr.message);
   }
 
   saveDatabaseToDisk();

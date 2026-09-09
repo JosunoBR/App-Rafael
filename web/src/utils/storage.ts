@@ -1,5 +1,5 @@
-import { PurchaseOrder, FiscalConfig, StoreConfig, Supplier, Product, CentralStockItem, OrderItem, SeparationPreset } from '../shared/types';
-import { DEFAULT_FISCAL_CONFIG, DEFAULT_STORES } from '../shared/constants';
+import { PurchaseOrder, FiscalConfig, FiscalPreset, StoreConfig, Supplier, Product, CentralStockItem, OrderItem, SeparationPreset } from '../shared/types';
+import { DEFAULT_FISCAL_CONFIG, DEFAULT_FISCAL_PRESETS, DEFAULT_STORES } from '../shared/constants';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
 
@@ -13,6 +13,7 @@ const STORAGE_KEYS = {
   CENTRAL_STOCK: 'mega12_central_stock_v1',
   ORDER_SEQUENCE: 'mega12_order_sequence_v1',
   SEPARATION_PRESETS: 'mega12_separation_presets_v1',
+  FISCAL_PRESETS: 'mega12_fiscal_presets_v1',
   THEME: 'mega12_theme_v1'
 };
 
@@ -1356,6 +1357,24 @@ export function getInitialSeparationPresets(): SeparationPreset[] {
 
 export function saveSeparationPresetsList(presets: SeparationPreset[]): void {
   localStorage.setItem(STORAGE_KEYS.SEPARATION_PRESETS, JSON.stringify(presets));
+}
+
+export function getInitialFiscalPresets(): FiscalPreset[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.FISCAL_PRESETS);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const cleaned = parsed.filter((p: FiscalPreset) => !p.id.includes('sim') && !p.name.toLowerCase().includes('simulação'));
+      return cleaned.length > 0 ? cleaned : DEFAULT_FISCAL_PRESETS;
+    }
+    return DEFAULT_FISCAL_PRESETS;
+  } catch {
+    return DEFAULT_FISCAL_PRESETS;
+  }
+}
+
+export function saveFiscalPresetsList(presets: FiscalPreset[]): void {
+  localStorage.setItem(STORAGE_KEYS.FISCAL_PRESETS, JSON.stringify(presets));
 }
 
 export function createNewOrder(

@@ -11,10 +11,14 @@ import {
   Percent,
   CheckCircle2,
   TrendingUp,
-  AlertTriangle
+  AlertTriangle,
+  Bookmark,
+  Sparkles,
+  Trash2,
+  X
 } from 'lucide-react';
-import { FiscalConfig } from '../shared/types';
-import { DEFAULT_FISCAL_CONFIG } from '../shared/constants';
+import { FiscalConfig, FiscalPreset } from '../shared/types';
+import { DEFAULT_FISCAL_CONFIG, DEFAULT_FISCAL_PRESETS } from '../shared/constants';
 import { calculateItemFiscal, normalizeRateToDecimal } from '../shared/fiscalEngine';
 import { formatCurrency, handleCurrencyInput, handleOneDecimalInput } from '../utils/masks';
 
@@ -28,6 +32,9 @@ interface OrderFiscalCardProps {
   totalMercadorias?: number;
   averageItemPrice?: number;
   samplePdv?: number;
+  fiscalPresets?: FiscalPreset[];
+  onSaveFiscalPreset?: (preset: FiscalPreset) => Promise<any> | void;
+  onDeleteFiscalPreset?: (presetId: string) => Promise<any> | void;
 }
 
 export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
@@ -39,7 +46,10 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
   onUpdateHeaderFrete,
   totalMercadorias = 0,
   averageItemPrice = 7.00,
-  samplePdv = 12.00
+  samplePdv = 12.00,
+  fiscalPresets = [],
+  onSaveFiscalPreset,
+  onDeleteFiscalPreset
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [simPreco, setSimPreco] = useState<number>(averageItemPrice > 0 ? averageItemPrice : 7.00);
@@ -94,49 +104,121 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
     return calculateItemFiscal(simPreco, simPdv, fiscalConfig);
   }, [simPreco, simPdv, fiscalConfig]);
 
-  // Aplicar Preset da Simulação 1 do Excel
-  const applyPreset1 = () => {
-    const p1: FiscalConfig = {
-      ipiAliquota: 0.05,
-      aliquotaSt: 0.18,
-      freteAliquota: 0.035,
-      creditoEntradaICMS: 0.12,
-      custosFixos: 0.26,
-      icmsAliquota: 0.19, // no excel 19% dá exatamente 2.28 para 12
-      pisCofinsAliquota: 0.06
+  // Lista de modelos fiscais disponíveis (mescla defaults com os do banco)
+  const presetsList = useMemo(() => {
+    if (fiscalPresets && fiscalPresets.length > 0) return fiscalPresets;
+    return DEFAULT_FISCAL_PRESETS;
+  }, [fiscalPresets]);
+
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('preset_fiscal_padrao');
+  const [presetInputValue, setPresetInputValue] = useState<string>('Padrão Geral');
+  const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showFeedback = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setActionFeedback({ text, type });
+    setTimeout(() => setActionFeedback(null), 3500);
+  };
+
+  // Aplicar modelo fiscal ao pedido atual
+  const handleApplyPreset = (targetPreset: FiscalPreset) => {
+    const updated: FiscalConfig = {
+      ipiAliquota: targetPreset.ipiAliquota,
+      aliquotaSt: targetPreset.aliquotaSt,
+      freteAliquota: targetPreset.freteAliquota,
+      creditoEntradaICMS: targetPreset.creditoEntradaICMS,
+      custosFixos: targetPreset.custosFixos,
+      icmsAliquota: targetPreset.icmsAliquota,
+      pisCofinsAliquota: targetPreset.pisCofinsAliquota
     };
-    onChangeFiscalConfig(p1);
-    if (onUpdateHeaderSt) onUpdateHeaderSt(18);
-    if (onUpdateHeaderFrete) {
-      onUpdateHeaderFrete(totalMercadorias > 0 ? Number((totalMercadorias * 0.035).toFixed(2)) : 0);
+
+    onChangeFiscalConfig(updated);
+
+    if (onUpdateHeaderSt) {
+      const stPerc = Number(((targetPreset.aliquotaSt || 0) * 100).toFixed(1));
+      onUpdateHeaderSt(stPerc);
     }
-    setSimPreco(7.00);
-    setSimPdv(12.00);
+
+    if (onUpdateHeaderFrete) {
+      const fretePerc = targetPreset.freteAliquota || 0;
+      const calcFrete = totalMercadorias > 0 ? Number((totalMercadorias * fretePerc).toFixed(2)) : 0;
+      onUpdateHeaderFrete(calcFrete);
+    }
+
+    setSelectedPresetId(targetPreset.id);
+    setPresetInputValue(targetPreset.name);
+    setIsPresetDropdownOpen(false);
+    showFeedback(`Modelo fiscal "${targetPreset.name}" aplicado ao pedido!`, 'success');
   };
 
-  // Aplicar Preset da Simulação 2 do Excel
-  const applyPreset2 = () => {
-    const p2: FiscalConfig = {
-      ipiAliquota: 0.035,
-      aliquotaSt: 0.00,
-      freteAliquota: 0.00,
-      creditoEntradaICMS: 0.04,
-      custosFixos: 0.20,
-      icmsAliquota: 0.11,
-      pisCofinsAliquota: 0.03
+  // Salvar alíquotas atualmente configuradas como um modelo no banco
+  const handleSaveCurrentPreset = async () => {
+    const name = presetInputValue.trim();
+    if (!name) {
+      showFeedback('Por favor, digite um nome para o modelo fiscal antes de salvar.', 'error');
+      return;
+    }
+    if (!onSaveFiscalPreset) return;
+
+    const existingPreset = presetsList.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+
+    const newPreset: FiscalPreset = {
+      id: existingPreset ? existingPreset.id : ('preset_fisc_' + Date.now()),
+      name,
+      description: `IPI ${ipiPct}% • ST ${stPct}% • Frete ${fretePct}% • CF ${custoFixoPct}% • ICMS ${icmsSaidaPct}%`,
+      ipiAliquota: normalizeRateToDecimal(fiscalConfig.ipiAliquota, 0),
+      aliquotaSt: normalizeRateToDecimal(fiscalConfig.aliquotaSt !== undefined ? fiscalConfig.aliquotaSt : aliquotaStHeader, 0),
+      freteAliquota: normalizeRateToDecimal(fiscalConfig.freteAliquota, 0),
+      creditoEntradaICMS: normalizeRateToDecimal(fiscalConfig.creditoEntradaICMS, 0.12),
+      custosFixos: normalizeRateToDecimal(fiscalConfig.custosFixos, 0.26),
+      icmsAliquota: normalizeRateToDecimal(fiscalConfig.icmsAliquota, 0.195),
+      pisCofinsAliquota: normalizeRateToDecimal(fiscalConfig.pisCofinsAliquota, 0.06),
+      isDefault: existingPreset ? existingPreset.isDefault : false,
+      createdAt: existingPreset ? existingPreset.createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
-    onChangeFiscalConfig(p2);
-    if (onUpdateHeaderSt) onUpdateHeaderSt(0);
-    if (onUpdateHeaderFrete) onUpdateHeaderFrete(0);
-    setSimPreco(7.00);
-    setSimPdv(12.00);
+
+    try {
+      await onSaveFiscalPreset(newPreset);
+      setSelectedPresetId(newPreset.id);
+      setPresetInputValue(newPreset.name);
+      setIsPresetDropdownOpen(false);
+      showFeedback(`⭐ Modelo fiscal "${newPreset.name}" salvo no banco com sucesso!`, 'success');
+    } catch (err: any) {
+      showFeedback(`Erro ao salvar modelo: ${err.message}`, 'error');
+    }
   };
 
-  // Restaurar padrão global
-  const handleResetDefaults = () => {
-    onChangeFiscalConfig(DEFAULT_FISCAL_CONFIG);
-    if (onUpdateHeaderSt) onUpdateHeaderSt(0);
-    if (onUpdateHeaderFrete) onUpdateHeaderFrete(0);
+  // Excluir modelo específico direto
+  const handleDeletePresetDirect = async (presetId: string, presetName: string) => {
+    if (!onDeleteFiscalPreset) return;
+    if (!window.confirm(`Tem certeza que deseja excluir o modelo fiscal "${presetName}"?`)) return;
+
+    try {
+      await onDeleteFiscalPreset(presetId);
+      const defaultP = presetsList.find(p => p.isDefault) || presetsList[0];
+      if (defaultP) {
+        setSelectedPresetId(defaultP.id);
+        setPresetInputValue(defaultP.name);
+      }
+      showFeedback(`Modelo fiscal "${presetName}" excluído com sucesso.`, 'info');
+    } catch (err: any) {
+      showFeedback(`Erro ao excluir modelo: ${err.message}`, 'error');
+    }
+  };
+
+  // Excluir modelo customizado atualmente selecionado
+  const handleDeleteSelectedPreset = async () => {
+    const targetPreset = presetsList.find(p => p.id === selectedPresetId || p.name.trim().toLowerCase() === presetInputValue.trim().toLowerCase());
+    if (!targetPreset) {
+      showFeedback('Nenhum modelo selecionado para exclusão.', 'info');
+      return;
+    }
+    if (targetPreset.isDefault) {
+      showFeedback('O modelo oficial "Padrão Geral" não pode ser excluído.', 'info');
+      return;
+    }
+    await handleDeletePresetDirect(targetPreset.id, targetPreset.name);
   };
 
   return (
@@ -160,23 +242,22 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 Individual por Pedido
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="text-[11px] text-slate-400">
               Personalize IPI, ST, Frete, ICMS Entrada/Saída, Custo Fixo e PIS/COFINS
             </p>
           </div>
         </div>
 
-        {/* Indicadores resumidos quando fechado */}
-        <div className="flex items-center gap-2.5">
-          <div className="hidden sm:flex items-center gap-2 text-[11px]">
-            <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium text-slate-700 dark:text-slate-300">
-              📥 Custo Fornecedor: <strong className="text-emerald-600">+{(ipiPct + stPct + fretePct).toFixed(1)}%</strong>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 text-xs">
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200/60">
+              Encargos Entrada: +{(ipiPct + stPct + fretePct).toFixed(1)}%
             </span>
-            <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium text-slate-700 dark:text-slate-300">
-              📤 Saída: <strong className="text-blue-600">{(custoFixoPct + icmsSaidaPct + pisCofinsPct).toFixed(1)}%</strong> PDV
+            <span className="px-2.5 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 font-bold border border-sky-200/60">
+              Custos s/ PDV: {(icmsSaidaPct + custoFixoPct + pisCofinsPct).toFixed(1)}%
             </span>
-            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 font-semibold text-emerald-700 dark:text-emerald-300">
-              Custo Loja: R$ {simResult.custoLoja.toFixed(2)}
+            <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 font-bold text-slate-800 dark:text-slate-200">
+              Custo Loja: {formatCurrency(simResult.custoLoja)}
             </span>
           </div>
 
@@ -188,40 +269,172 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
 
       {/* CONTEÚDO EXPANDIDO: DUAS PARTES (ENTRADA E SAÍDA) */}
       {isOpen && (
-        <div className="p-5 border-t border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800 space-y-5 animate-in fade-in duration-200">
+        <div className="p-5 border-t border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800 space-y-4 animate-in fade-in duration-200">
           
-          {/* BARRA DE PRESETS RÁPIDOS */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700/60">
-            <div className="flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Atalhos do Modelo da Planilha:
-              </span>
+          {/* BARRA DE FEEDBACK DE AÇÃO */}
+          {actionFeedback && (
+            <div className={`p-3 px-4 rounded-xl border flex items-center justify-between text-xs font-bold shadow-xs animate-in fade-in duration-200 ${
+              actionFeedback.type === 'success' 
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-950/60 dark:border-emerald-800 dark:text-emerald-200' 
+                : actionFeedback.type === 'error'
+                ? 'bg-rose-50 border-rose-300 text-rose-900 dark:bg-rose-950/60 dark:border-rose-800 dark:text-rose-200'
+                : 'bg-indigo-50 border-indigo-300 text-indigo-900 dark:bg-indigo-950/60 dark:border-indigo-800 dark:text-indigo-200'
+            }`}>
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>{actionFeedback.text}</span>
+              </div>
+              <button onClick={() => setActionFeedback(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <div className="flex items-center gap-2">
+          )}
+
+          {/* BARRA DE MODELOS & PRESETS FISCAIS */}
+          <div className="bg-slate-50/90 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-3 sm:p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+            
+            {/* Esquerda: Ícone, Título e Contador de Modelos */}
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-600 text-white shadow-xs">
+                <Bookmark className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                    MODELOS FISCAIS
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    {presetsList.length} {presetsList.length === 1 ? 'modelo' : 'modelos'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Configure as alíquotas e salve modelos reutilizáveis no banco de dados
+                </p>
+              </div>
+            </div>
+
+            {/* Direita: Seletor de Modelo, Dropdown, Aplicar, Salvar e Excluir */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Modelo:</span>
+              <div className="relative min-w-[200px] sm:w-56">
+                <div className="flex items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
+                  <input
+                    type="text"
+                    value={presetInputValue}
+                    onChange={(e) => {
+                      setPresetInputValue(e.target.value);
+                      setIsPresetDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsPresetDropdownOpen(true)}
+                    placeholder="Nome do modelo..."
+                    className="w-full text-xs font-bold px-2.5 py-1.5 bg-transparent text-slate-900 dark:text-white outline-hidden truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsPresetDropdownOpen(!isPresetDropdownOpen)}
+                    className="p-1.5 text-slate-400 hover:text-emerald-600 transition cursor-pointer shrink-0"
+                  >
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isPresetDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+
+                {/* Dropdown de Modelos com Botão de Lixeira para Cada Item Salvo */}
+                {isPresetDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setIsPresetDropdownOpen(false)} />
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl z-30 max-h-60 overflow-y-auto py-1 divide-y divide-slate-100 dark:divide-slate-800">
+                      {presetsList.map(p => (
+                        <div
+                          key={p.id}
+                          className={`px-3 py-2 text-xs font-bold flex items-center justify-between transition ${
+                            selectedPresetId === p.id 
+                              ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' 
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <div 
+                            onClick={() => handleApplyPreset(p)}
+                            className="flex-1 truncate cursor-pointer mr-2"
+                            title="Clique para aplicar este modelo"
+                          >
+                            <span>{p.name}</span>
+                            {p.description && (
+                              <span className="block text-[10px] font-normal text-slate-400 truncate">
+                                {p.description}
+                              </span>
+                            )}
+                          </div>
+
+                          {p.isDefault ? (
+                            <span className="text-[10px] text-amber-500 font-extrabold ml-2 shrink-0 select-none">
+                              ⭐ Padrão Rede
+                            </span>
+                          ) : (
+                            onDeleteFiscalPreset && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeletePresetDirect(p.id, p.name);
+                                }}
+                                className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer shrink-0 ml-1"
+                                title={`Excluir modelo "${p.name}"`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Botão Aplicar */}
               <button
                 type="button"
-                onClick={applyPreset1}
-                className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-emerald-300 transition"
+                onClick={() => {
+                  const target = presetsList.find(p => p.id === selectedPresetId || p.name.trim().toLowerCase() === presetInputValue.trim().toLowerCase());
+                  if (target) {
+                    handleApplyPreset(target);
+                  } else {
+                    showFeedback('Selecione um modelo da lista para aplicar.', 'info');
+                  }
+                }}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
+                title="Aplicar modelo selecionado ao pedido atual"
               >
-                📊 Simulação 1 (IPI 5%, ST 18%, CF 26%)
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Aplicar</span>
               </button>
-              <button
-                type="button"
-                onClick={applyPreset2}
-                className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-emerald-300 transition"
-              >
-                📊 Simulação 2 (IPI 3.5%, ST 0%, CF 20%)
-              </button>
-              <button
-                type="button"
-                onClick={handleResetDefaults}
-                title="Restaurar padrões das configurações gerais"
-                className="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition flex items-center gap-1"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Padrão Geral
-              </button>
+
+              {/* Botão Salvar no Banco SQLite */}
+              {onSaveFiscalPreset && (
+                <button
+                  type="button"
+                  onClick={handleSaveCurrentPreset}
+                  disabled={!presetInputValue.trim()}
+                  className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition cursor-pointer disabled:opacity-50"
+                  title="Salvar alíquotas configuradas neste card como um modelo no banco de dados"
+                >
+                  <Bookmark className="w-3.5 h-3.5" />
+                  <span>Salvar</span>
+                </button>
+              )}
+
+              {/* Botão Excluir Visível */}
+              {onDeleteFiscalPreset && !Boolean(presetsList.find(p => (p.id === selectedPresetId || p.name.trim().toLowerCase() === presetInputValue.trim().toLowerCase()) && p.isDefault)) && (
+                <button
+                  type="button"
+                  onClick={handleDeleteSelectedPreset}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 transition cursor-pointer shadow-xs"
+                  title="Excluir o modelo customizado selecionado"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir</span>
+                </button>
+              )}
             </div>
           </div>
 

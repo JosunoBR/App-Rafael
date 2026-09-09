@@ -288,49 +288,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                   </span>
                 </div>
 
-                {/* Alíquota ST Padrão (%) */}
-                <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/50">
-                  <label className="block text-xs font-bold text-amber-900 dark:text-amber-300 mb-1 flex items-center gap-1">
-                    <Percent className="w-3.5 h-3.5 text-amber-600" />
-                    ST Padrão (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={aliquotaStPadrao === 0 ? '' : aliquotaStPadrao}
-                    placeholder="0"
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setAliquotaStPadrao(parseFloat(e.target.value) || 0)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-300 font-bold"
-                  />
-                  <span className="text-[10px] text-amber-700 dark:text-amber-400 mt-1 block">
-                    Alíquota padrão de Subst. Tributária
-                  </span>
-                </div>
 
-                {/* Desconto OFF (%) */}
-                <div className="bg-emerald-50/70 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
-                  <label className="block text-xs font-bold text-emerald-900 dark:text-emerald-300 mb-1 flex items-center gap-1">
-                    <Percent className="w-3.5 h-3.5 text-emerald-600" />
-                    Histórico OFF (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={descontoOffPadrao === 0 ? '' : descontoOffPadrao}
-                    placeholder="0"
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setDescontoOffPadrao(parseFloat(e.target.value) || 0)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-emerald-900 dark:text-emerald-300 font-bold"
-                  />
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1 block">
-                    Referência de barganha para próximos pedidos
-                  </span>
-                </div>
 
                 {/* Observações sobre o Fornecedor */}
                 <div className="sm:col-span-2 md:col-span-3">
@@ -388,16 +346,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                             ({sup.nomeFantasia})
                           </span>
                         )}
-                        {sup.aliquotaStPadrao && sup.aliquotaStPadrao > 0 ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
-                            ST: {sup.aliquotaStPadrao}%
+                        {sup.percentualNotaPadrao !== undefined && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">
+                            Nota: {sup.percentualNotaPadrao}%
                           </span>
-                        ) : null}
-                        {sup.descontoOffPadrao && sup.descontoOffPadrao > 0 ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                            -{sup.descontoOffPadrao}% OFF
-                          </span>
-                        ) : null}
+                        )}
                       </div>
 
                       <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-3 mt-1">

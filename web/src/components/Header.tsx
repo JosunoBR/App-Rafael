@@ -23,7 +23,9 @@ import {
   CheckCircle2,
   ChevronRight,
   Warehouse,
-  Copy
+  Copy,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { ActiveNavTab } from './Sidebar';
@@ -44,6 +46,8 @@ interface HeaderProps {
   onExportExcel: () => void;
   onExportPDF: () => void;
   onSelectNav?: (tab: ActiveNavTab) => void;
+  onSyncDatabase?: () => Promise<void> | void;
+  isSyncing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -61,7 +65,9 @@ export const Header: React.FC<HeaderProps> = ({
   onDiscardDraft,
   onExportExcel,
   onExportPDF,
-  onSelectNav
+  onSelectNav,
+  onSyncDatabase,
+  isSyncing
 }) => {
   const userRole: UserRole = currentUser?.role || 'diretoria';
   const canAccessOrders = userRole === 'diretoria';
@@ -180,6 +186,23 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">Doca</span>
             </button>
           </div>
+
+          {/* Botão de Sincronização em Tempo Real com o Banco de Dados SQLite */}
+          {onSyncDatabase && (
+            <button
+              onClick={onSyncDatabase}
+              disabled={isSyncing}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
+                isSyncing 
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 border-emerald-300 dark:border-emerald-800' 
+                  : 'bg-white dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600'
+              }`}
+              title="Sincronizar e baixar dados mais recentes gravados no Banco de Dados SQLite"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Sincronizar BD'}</span>
+            </button>
+          )}
 
           {/* Ações Específicas da Tela de Cotação & Pedidos */}
           {activeNav === 'orders' && viewMode === 'desktop' && canAccessOrders && (

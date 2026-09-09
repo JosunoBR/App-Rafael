@@ -1,6 +1,27 @@
 import { PurchaseOrder, Supplier, FiscalConfig, StoreConfig, Product, User, CentralStockItem, SeparationPreset } from '../shared/types';
 import { API_BASE_URL } from './config';
 
+export class ApiError extends Error {
+  status: number;
+  isNetworkError: boolean;
+
+  constructor(message: string, status: number = 0, isNetworkError: boolean = false) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.isNetworkError = isNetworkError;
+  }
+}
+
+export function isOfflineError(err: any): boolean {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+  if (err instanceof ApiError && err.isNetworkError) return true;
+  if (err?.name === 'TypeError' && err?.message?.toLowerCase().includes('fetch')) return true;
+  if (err?.message?.toLowerCase().includes('failed to fetch')) return true;
+  if (err?.message?.toLowerCase().includes('networkerror')) return true;
+  return false;
+}
+
 function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extraHeaders };
   try {
@@ -15,6 +36,41 @@ function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<strin
   return headers;
 }
 
+async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  const headers = getAuthHeaders(options.headers as Record<string, string> || {});
+  
+  try {
+    const res = await fetch(url, { ...options, headers });
+    if (!res.ok) {
+      let errorMessage = `Erro HTTP ${res.status}`;
+      try {
+        const errorData = await res.json();
+        if (errorData?.error) errorMessage = errorData.error;
+        else if (errorData?.message) errorMessage = errorData.message;
+      } catch {}
+
+      if (res.status === 401) {
+        errorMessage = 'Sessão expirada ou não autenticada no servidor. Faça login novamente.';
+      } else if (res.status === 403) {
+        errorMessage = 'Acesso negado: seu usuário não tem permissão para esta operação.';
+      }
+
+      throw new ApiError(errorMessage, res.status, false);
+    }
+    return res;
+  } catch (err: any) {
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    throw new ApiError(
+      'Não foi possível conectar ao servidor. Verifique sua conexão ou se o servidor está ativo.',
+      0,
+      true
+    );
+  }
+}
+
 export async function fetchHealth(): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE_URL}/health`);
@@ -26,97 +82,76 @@ export async function fetchHealth(): Promise<boolean> {
 
 // PRODUTOS COM FOTOS
 export async function fetchProductsFromDb(): Promise<Product[]> {
-  const res = await fetch(`${API_BASE_URL}/products`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) throw new Error('Erro ao buscar produtos do SQLite');
+  const res = await apiFetch('/products');
   return res.json();
 }
 
 export async function saveProductToDb(product: Product): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/products`, {
+  await apiFetch('/products', {
     method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(product)
   });
-  if (!res.ok) throw new Error('Erro ao salvar produto no SQLite');
 }
 
 export async function saveProductsBatchToDb(products: Product[]): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/products/batch`, {
+  await apiFetch('/products/batch', {
     method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(products)
   });
-  if (!res.ok) throw new Error('Erro ao salvar lote de produtos no SQLite');
 }
 
 export async function deleteProductFromDb(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/products/${id}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders()
+  await apiFetch(`/products/${id}`, {
+    method: 'DELETE'
   });
-  if (!res.ok) throw new Error('Erro ao remover produto do SQLite');
 }
 
 // FORNECEDORES
 export async function fetchSuppliersFromDb(): Promise<Supplier[]> {
-  const res = await fetch(`${API_BASE_URL}/suppliers`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) throw new Error('Erro ao buscar fornecedores do SQLite');
+  const res = await apiFetch('/suppliers');
   return res.json();
 }
 
 export async function saveSupplierToDb(supplier: Supplier): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/suppliers`, {
+  await apiFetch('/suppliers', {
     method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(supplier)
   });
-  if (!res.ok) throw new Error('Erro ao salvar fornecedor no SQLite');
 }
 
 export async function deleteSupplierFromDb(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/suppliers/${id}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders()
+  await apiFetch(`/suppliers/${id}`, {
+    method: 'DELETE'
   });
-  if (!res.ok) throw new Error('Erro ao remover fornecedor do SQLite');
 }
 
 // PEDIDOS DE COMPRA
 export async function fetchOrdersFromDb(): Promise<PurchaseOrder[]> {
-  const res = await fetch(`${API_BASE_URL}/orders`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) throw new Error('Erro ao buscar pedidos do SQLite');
+  const res = await apiFetch('/orders');
   return res.json();
 }
 
 export async function saveOrderToDb(order: PurchaseOrder): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/orders`, {
+  await apiFetch('/orders', {
     method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(order)
   });
-  if (!res.ok) throw new Error('Erro ao salvar pedido no SQLite');
 }
 
 export async function deleteOrderFromDb(orderId: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders()
+  await apiFetch(`/orders/${orderId}`, {
+    method: 'DELETE'
   });
-  if (!res.ok) throw new Error('Erro ao excluir pedido do SQLite');
 }
 
 export async function duplicateOrderInDb(orderId: string): Promise<PurchaseOrder> {
-  const res = await fetch(`${API_BASE_URL}/orders/${orderId}/duplicate`, {
-    method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' })
+  const res = await apiFetch(`/orders/${orderId}/duplicate`, {
+    method: 'POST'
   });
-  if (!res.ok) throw new Error('Erro ao duplicar pedido no SQLite');
   const data = await res.json();
   return data.order;
 }
@@ -125,75 +160,60 @@ export async function updateInstallmentInDb(
   orderId: string, 
   installment: any
 ): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/orders/${orderId}/installment`, {
+  await apiFetch(`/orders/${orderId}/installment`, {
     method: 'PUT',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(installment)
   });
-  if (!res.ok) throw new Error('Erro ao atualizar parcela no SQLite');
 }
 
 export async function fetchStoresFromDb(): Promise<StoreConfig[]> {
-  const res = await fetch(`${API_BASE_URL}/config/stores`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) throw new Error('Erro ao buscar lojas do SQLite');
+  const res = await apiFetch('/config/stores');
   return res.json();
 }
 
 export async function saveStoresToDb(stores: StoreConfig[]): Promise<StoreConfig[]> {
-  const res = await fetch(`${API_BASE_URL}/config/stores`, {
+  const res = await apiFetch('/config/stores', {
     method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(stores)
   });
-  if (!res.ok) throw new Error('Erro ao salvar lojas no SQLite');
   return res.json();
 }
 
 // MODELOS / PRESETS DE SEPARAÇÃO DE LOJAS (SAVES)
 export async function fetchSeparationPresetsFromDb(): Promise<SeparationPreset[]> {
-  const res = await fetch(`${API_BASE_URL}/separation-presets`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) throw new Error('Erro ao buscar modelos de separação do SQLite');
+  const res = await apiFetch('/separation-presets');
   return res.json();
 }
 
 export async function saveSeparationPresetToDb(preset: SeparationPreset): Promise<SeparationPreset> {
-  const res = await fetch(`${API_BASE_URL}/separation-presets`, {
+  const res = await apiFetch('/separation-presets', {
     method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(preset)
   });
-  if (!res.ok) throw new Error('Erro ao salvar modelo de separação no SQLite');
   return res.json();
 }
 
 export async function deleteSeparationPresetFromDb(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/separation-presets/${id}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders()
+  await apiFetch(`/separation-presets/${id}`, {
+    method: 'DELETE'
   });
-  if (!res.ok) throw new Error('Erro ao excluir modelo de separação do SQLite');
 }
 
 // ESTOQUE DO DEPÓSITO CENTRAL (CD MATRIZ)
 export async function fetchStockFromDb(): Promise<CentralStockItem[]> {
-  const res = await fetch(`${API_BASE_URL}/stock`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) throw new Error('Erro ao buscar estoque central do SQLite');
+  const res = await apiFetch('/stock');
   return res.json();
 }
 
 export async function saveStockItemToDb(item: CentralStockItem): Promise<CentralStockItem> {
-  const res = await fetch(`${API_BASE_URL}/stock`, {
+  const res = await apiFetch('/stock', {
     method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(item)
   });
-  if (!res.ok) throw new Error('Erro ao salvar item no estoque central do SQLite');
   return res.json();
 }
 
@@ -202,28 +222,25 @@ export async function updateStockBalanceInDb(
   deltaUnidades: number, 
   localizacaoGalpao?: string
 ): Promise<CentralStockItem> {
-  const res = await fetch(`${API_BASE_URL}/stock/${id}/balance`, {
+  const res = await apiFetch(`/stock/${id}/balance`, {
     method: 'PUT',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deltaUnidades, localizacaoGalpao })
   });
-  if (!res.ok) throw new Error('Erro ao atualizar saldo de estoque central no SQLite');
   return res.json();
 }
 
 export async function deleteStockItemFromDb(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/stock/${id}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders()
+  await apiFetch(`/stock/${id}`, {
+    method: 'DELETE'
   });
-  if (!res.ok) throw new Error('Erro ao excluir item do estoque central no SQLite');
 }
 
 export async function fetchFiscalConfigFromDb(): Promise<FiscalConfig> {
-  const res = await fetch(`${API_BASE_URL}/config/fiscal`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) {
+  try {
+    const res = await apiFetch('/config/fiscal');
+    return await res.json();
+  } catch {
     return {
       icmsAliquota: 0.11,
       ipiAliquota: 0.00,
@@ -232,22 +249,19 @@ export async function fetchFiscalConfigFromDb(): Promise<FiscalConfig> {
       creditoEntradaICMS: 0.195
     };
   }
-  return res.json();
 }
 
 export async function saveFiscalConfigToDb(config: FiscalConfig): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/config/fiscal`, {
+  await apiFetch('/config/fiscal', {
     method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config)
   });
-  if (!res.ok) throw new Error('Erro ao salvar parâmetros fiscais no SQLite');
 }
 
 export async function fetchNextOrderNumberFromDb(): Promise<string> {
   try {
-    const res = await fetch(`${API_BASE_URL}/orders`, { headers: getAuthHeaders() });
-    if (!res.ok) return 'PED-0001';
+    const res = await apiFetch('/orders');
     const orders: PurchaseOrder[] = await res.json();
     if (!orders || orders.length === 0) return 'PED-0001';
 
@@ -267,36 +281,27 @@ export async function fetchNextOrderNumberFromDb(): Promise<string> {
 }
 
 export async function fetchUsersFromDb(): Promise<User[]> {
-  const res = await fetch(`${API_BASE_URL}/users`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) throw new Error('Erro ao buscar usuários do SQLite');
+  const res = await apiFetch('/users');
   return res.json();
 }
 
 export async function saveUserToDb(user: Partial<User> & { senha?: string }): Promise<User> {
   const isUpdate = Boolean(user.id);
-  const url = isUpdate ? `${API_BASE_URL}/users/${user.id}` : `${API_BASE_URL}/users`;
+  const url = isUpdate ? `/users/${user.id}` : '/users';
   const method = isUpdate ? 'PUT' : 'POST';
 
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method,
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(user)
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || 'Erro ao salvar usuário no SQLite');
-  }
   return res.json();
 }
 
 export async function deleteUserFromDb(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/users/${id}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders()
+  await apiFetch(`/users/${id}`, {
+    method: 'DELETE'
   });
-  if (!res.ok) throw new Error('Erro ao excluir usuário do SQLite');
 }
 
 

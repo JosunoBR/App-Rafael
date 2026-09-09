@@ -100,7 +100,9 @@ import {
   getInitialSeparationPresets,
   saveSeparationPresetsList,
   saveSavedOrdersList,
-  saveBatchProductsToStorage
+  saveBatchProductsToStorage,
+  saveSuppliersList,
+  saveProductsList
 } from './utils/storage';
 import { 
   fetchSuppliersFromDb, 
@@ -126,6 +128,8 @@ import {
   fetchSeparationPresetsFromDb,
   saveSeparationPresetToDb,
   deleteSeparationPresetFromDb,
+  isOfflineError,
+  fetchHealth,
   duplicateOrderInDb
 } from './utils/api';
 import { exportOrderToExcel } from './utils/excelExporter';
@@ -234,46 +238,80 @@ export function App() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   };
+  
+  // Estado de sincronização com o banco de dados
+  const [isSyncingDatabase, setIsSyncingDatabase] = useState(false);
 
-  // Carregar dados iniciais do banco de dados SQLite
-  useEffect(() => {
-    async function loadFromSqlite() {
-      try {
-        const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock, dbPresets] = await Promise.all([
-          fetchSuppliersFromDb().catch(() => null),
-          fetchProductsFromDb().catch(() => null),
-          fetchOrdersFromDb().catch(() => null),
-          fetchFiscalConfigFromDb().catch(() => null),
-          fetchStoresFromDb().catch(() => null),
-          fetchStockFromDb().catch(() => null),
-          fetchSeparationPresetsFromDb().catch(() => null)
-        ]);
+  // Carregar dados oficiais do banco de dados SQLite (prioridade máxima)
+  const loadFromSqlite = async (notify: boolean = false) => {
+    setIsSyncingDatabase(true);
+    try {
+      const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock, dbPresets] = await Promise.all([
+        fetchSuppliersFromDb().catch(err => { console.warn('Fornecedores DB:', err); return null; }),
+        fetchProductsFromDb().catch(err => { console.warn('Produtos DB:', err); return null; }),
+        fetchOrdersFromDb().catch(err => { console.warn('Pedidos DB:', err); return null; }),
+        fetchFiscalConfigFromDb().catch(err => { console.warn('Fiscal DB:', err); return null; }),
+        fetchStoresFromDb().catch(err => { console.warn('Lojas DB:', err); return null; }),
+        fetchStockFromDb().catch(err => { console.warn('Estoque DB:', err); return null; }),
+        fetchSeparationPresetsFromDb().catch(err => { console.warn('Presets DB:', err); return null; })
+      ]);
 
-        if (dbSuppliers && dbSuppliers.length > 0) setSuppliers(dbSuppliers);
-        if (dbProducts && dbProducts.length > 0) setProducts(dbProducts);
-        if (dbStores && dbStores.length > 0) setStoreConfigs(dbStores);
-        if (dbFiscal) setFiscalConfig(dbFiscal);
-        if (dbStock && dbStock.length > 0) setCentralStock(dbStock);
-        if (dbPresets && dbPresets.length > 0) {
-          setSeparationPresets(dbPresets);
-          saveSeparationPresetsList(dbPresets);
-        }
-
-        if (dbOrders && dbOrders.length > 0) {
-          const currentFiscal = dbFiscal || getInitialFiscalConfig();
-          const currentStores = (dbStores && dbStores.length > 0) ? dbStores : getInitialStoresConfig();
-          const hydratedOrders = dbOrders.map((o: PurchaseOrder) => ({
-            ...o,
-            storeConfigs: o.storeConfigs && o.storeConfigs.length > 0 ? o.storeConfigs : currentStores,
-            fiscalConfig: o.fiscalConfig || currentFiscal
-          }));
-          setSavedOrders(hydratedOrders);
-          saveSavedOrdersList(hydratedOrders);
-        }
-      } catch (err) {
-        console.warn('Usando armazenamento local de contingência:', err);
+      if (dbSuppliers !== null) {
+        setSuppliers(dbSuppliers);
+        saveSuppliersList(dbSuppliers);
       }
+
+      if (dbProducts !== null) {
+        setProducts(dbProducts);
+        saveProductsList(dbProducts);
+      }
+
+      if (dbStores && dbStores.length > 0) {
+        setStoreConfigs(dbStores);
+        saveStoresConfig(dbStores);
+      }
+
+      if (dbFiscal) {
+        setFiscalConfig(dbFiscal);
+        saveFiscalConfig(dbFiscal);
+      }
+
+      if (dbStock && dbStock.length > 0) {
+        setCentralStock(dbStock);
+        saveCentralStock(dbStock);
+      }
+
+      if (dbPresets && dbPresets.length > 0) {
+        setSeparationPresets(dbPresets);
+        saveSeparationPresetsList(dbPresets);
+      }
+
+      if (dbOrders !== null) {
+        const currentFiscal = dbFiscal || getInitialFiscalConfig();
+        const currentStores = (dbStores && dbStores.length > 0) ? dbStores : getInitialStoresConfig();
+        const hydratedOrders = dbOrders.map((o: PurchaseOrder) => ({
+          ...o,
+          storeConfigs: o.storeConfigs && o.storeConfigs.length > 0 ? o.storeConfigs : currentStores,
+          fiscalConfig: o.fiscalConfig || currentFiscal
+        }));
+        setSavedOrders(hydratedOrders);
+        saveSavedOrdersList(hydratedOrders);
+      }
+
+      if (notify) {
+        showToast('Dados sincronizados com sucesso com o Banco de Dados!', 'success');
+      }
+    } catch (err: any) {
+      console.warn('Usando armazenamento local de contingência:', err);
+      if (notify) {
+        showToast(err.message || 'Não foi possível sincronizar com o banco de dados.', 'error');
+      }
+    } finally {
+      setIsSyncingDatabase(false);
     }
+  };
+
+  useEffect(() => {
     loadFromSqlite();
   }, []);
 
@@ -303,13 +341,15 @@ export function App() {
     setActiveNav('home');
   };
 
-  const handleLoginSuccess = (user: User) => {
+  const handleLoginSuccess = async (user: User) => {
     const cleanUser = {
       ...user,
       nome: (user.nome || '').replace(/\s*\([^)]*\)/g, '').trim()
     };
     setCurrentUser(cleanUser);
     localStorage.setItem('mega12_user', JSON.stringify(cleanUser));
+    // Carrega na hora os dados do banco usando o token do usuário logado
+    await loadFromSqlite(false);
     if (cleanUser.role === 'separacao') {
       setActiveNav('separation');
     } else {
@@ -821,14 +861,19 @@ export function App() {
         items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
       });
       showToast(`Pedido ${order.header.numeroPedido} salvo com sucesso em espera!`, 'success');
-    } catch {
-      saveOrderToHistory(orderWithInstallments);
-      setSavedOrders(loadSavedOrdersList());
-      setOrder({
-        ...orderWithInstallments,
-        items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
-      });
-      showToast(`Pedido ${order.header.numeroPedido} salvo localmente em espera!`, 'info');
+    } catch (err: any) {
+      console.error('Erro ao salvar pedido no servidor:', err);
+      if (isOfflineError(err)) {
+        saveOrderToHistory(orderWithInstallments);
+        setSavedOrders(loadSavedOrdersList());
+        setOrder({
+          ...orderWithInstallments,
+          items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
+        });
+        showToast(`Você está sem conexão. Pedido ${order.header.numeroPedido} salvo localmente (contingência).`, 'info');
+        return;
+      }
+      showToast(err.message || 'Erro ao salvar pedido no Banco de Dados.', 'error');
     }
   };
 
@@ -887,20 +932,25 @@ export function App() {
         items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
       });
 
-      showToast(`Pedido ${closedNum} FECHADO e enviado para a Separação do Depósito!`, 'success');
-    } catch {
-      saveOrderToHistory(orderWithInstallments);
-      setSavedOrders(loadSavedOrdersList());
-      clearCurrentDraft();
+      showToast(`Pedido ${closedNum} FECHADO e gravado no Banco de Dados!`, 'success');
+    } catch (err: any) {
+      console.error('Erro ao fechar pedido no servidor:', err);
+      if (isOfflineError(err)) {
+        saveOrderToHistory(orderWithInstallments);
+        setSavedOrders(loadSavedOrdersList());
+        clearCurrentDraft();
 
-      const nextNum = getNextOrderNumber();
-      const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
-      setOrder({
-        ...cleanOrder,
-        items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
-      });
+        const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
+        const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
+        setOrder({
+          ...cleanOrder,
+          items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
+        });
 
-      showToast(`Pedido ${closedNum} fechado localmente e enviado para separação!`, 'info');
+        showToast(`Você está offline. Pedido ${closedNum} fechado localmente e será enviado ao reconectar.`, 'info');
+        return;
+      }
+      showToast(err.message || 'Erro ao fechar pedido no Banco de Dados.', 'error');
     }
   };
 
@@ -1260,18 +1310,25 @@ export function App() {
       const updated = await fetchSuppliersFromDb();
       setSuppliers(updated);
       saveSupplier(sup);
+      saveSuppliersList(updated);
       const found = updated.find(s => s.id === sup.id);
       if (found) savedSupplier = found;
-      showToast(`Fornecedor "${sup.razaoSocial}" salvo no SQLite.`);
-    } catch (err) {
-      saveSupplier(sup);
-      const updatedLocal = getSuppliersList();
-      setSuppliers(updatedLocal);
-      const found = updatedLocal.find(s => s.id === sup.id);
-      if (found) savedSupplier = found;
-      showToast(`Fornecedor "${sup.razaoSocial}" salvo localmente.`);
+      showToast(`Fornecedor "${sup.razaoSocial}" salvo com sucesso no Banco de Dados!`, 'success');
+      return savedSupplier;
+    } catch (err: any) {
+      console.error('Erro ao salvar fornecedor:', err);
+      if (isOfflineError(err)) {
+        saveSupplier(sup);
+        const updatedLocal = getSuppliersList();
+        setSuppliers(updatedLocal);
+        const found = updatedLocal.find(s => s.id === sup.id);
+        if (found) savedSupplier = found;
+        showToast(`Você está offline. Fornecedor "${sup.razaoSocial}" salvo em contingência local.`, 'info');
+        return savedSupplier;
+      }
+      showToast(err.message || 'Erro ao salvar fornecedor no Banco de Dados.', 'error');
+      throw err;
     }
-    return savedSupplier;
   };
 
   const handleDeleteSupplier = async (id: string) => {
@@ -1279,11 +1336,19 @@ export function App() {
       await deleteSupplierFromDb(id);
       const updated = await fetchSuppliersFromDb();
       setSuppliers(updated);
-      showToast('Fornecedor removido do SQLite.', 'info');
-    } catch (err) {
       deleteSupplier(id);
-      setSuppliers(getSuppliersList());
-      showToast('Fornecedor removido.', 'info');
+      saveSuppliersList(updated);
+      showToast('Fornecedor removido do Banco de Dados.', 'info');
+    } catch (err: any) {
+      console.error('Erro ao remover fornecedor:', err);
+      if (isOfflineError(err)) {
+        deleteSupplier(id);
+        setSuppliers(getSuppliersList());
+        showToast('Sem conexão: fornecedor removido localmente.', 'info');
+        return;
+      }
+      showToast(err.message || 'Erro ao remover fornecedor do Banco de Dados.', 'error');
+      throw err;
     }
   };
 
@@ -1294,15 +1359,24 @@ export function App() {
       const updated = await fetchProductsFromDb();
       setProducts(updated);
       saveProduct(productToSave);
+      saveProductsList(updated);
       if (!silent) {
-        showToast(`Produto "${productToSave.descricao}" salvo no catálogo!`, 'success');
+        showToast(`Produto "${productToSave.descricao}" salvo no Banco de Dados!`, 'success');
       }
-    } catch (err) {
-      const updated = saveProduct(productToSave);
-      setProducts(updated);
+    } catch (err: any) {
+      console.error('Erro ao salvar produto:', err);
+      if (isOfflineError(err)) {
+        const updated = saveProduct(productToSave);
+        setProducts(updated);
+        if (!silent) {
+          showToast(`Sem conexão: Produto "${productToSave.descricao}" salvo em contingência local!`, 'info');
+        }
+        return;
+      }
       if (!silent) {
-        showToast(`Produto "${productToSave.descricao}" salvo no catálogo!`);
+        showToast(err.message || 'Erro ao salvar produto no Banco de Dados.', 'error');
       }
+      throw err;
     }
   };
 
@@ -1311,11 +1385,19 @@ export function App() {
       await deleteProductFromDb(id);
       const updated = await fetchProductsFromDb();
       setProducts(updated);
-      showToast('Produto removido do catálogo.', 'info');
-    } catch (err) {
       deleteProduct(id);
-      setProducts(getProductsList());
-      showToast('Produto removido.', 'info');
+      saveProductsList(updated);
+      showToast('Produto removido do Banco de Dados.', 'info');
+    } catch (err: any) {
+      console.error('Erro ao excluir produto:', err);
+      if (isOfflineError(err)) {
+        deleteProduct(id);
+        setProducts(getProductsList());
+        showToast('Sem conexão: produto removido localmente.', 'info');
+        return;
+      }
+      showToast(err.message || 'Erro ao remover produto do Banco de Dados.', 'error');
+      throw err;
     }
   };
 
@@ -1539,6 +1621,8 @@ export function App() {
           onExportExcel={handleExportExcel}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
           onSelectNav={setActiveNav}
+          onSyncDatabase={() => loadFromSqlite(true)}
+          isSyncing={isSyncingDatabase}
         />
 
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">

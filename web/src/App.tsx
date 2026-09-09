@@ -239,12 +239,8 @@ export function App() {
     setTimeout(() => setToast(null), 3500);
   };
   
-  // Estado de sincronização com o banco de dados
-  const [isSyncingDatabase, setIsSyncingDatabase] = useState(false);
-
   // Carregar dados oficiais do banco de dados SQLite (prioridade máxima)
-  const loadFromSqlite = async (notify: boolean = false) => {
-    setIsSyncingDatabase(true);
+  const loadFromSqlite = async () => {
     try {
       const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock, dbPresets] = await Promise.all([
         fetchSuppliersFromDb().catch(err => { console.warn('Fornecedores DB:', err); return null; }),
@@ -297,17 +293,8 @@ export function App() {
         setSavedOrders(hydratedOrders);
         saveSavedOrdersList(hydratedOrders);
       }
-
-      if (notify) {
-        showToast('Dados sincronizados com sucesso com o Banco de Dados!', 'success');
-      }
     } catch (err: any) {
       console.warn('Usando armazenamento local de contingência:', err);
-      if (notify) {
-        showToast(err.message || 'Não foi possível sincronizar com o banco de dados.', 'error');
-      }
-    } finally {
-      setIsSyncingDatabase(false);
     }
   };
 
@@ -349,7 +336,7 @@ export function App() {
     setCurrentUser(cleanUser);
     localStorage.setItem('mega12_user', JSON.stringify(cleanUser));
     // Carrega na hora os dados do banco usando o token do usuário logado
-    await loadFromSqlite(false);
+    await loadFromSqlite();
     if (cleanUser.role === 'separacao') {
       setActiveNav('separation');
     } else {
@@ -1621,8 +1608,6 @@ export function App() {
           onExportExcel={handleExportExcel}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
           onSelectNav={setActiveNav}
-          onSyncDatabase={() => loadFromSqlite(true)}
-          isSyncing={isSyncingDatabase}
         />
 
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">

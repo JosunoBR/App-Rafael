@@ -23,9 +23,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Warehouse,
-  Copy,
-  RefreshCw,
-  Database
+  Copy
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { ActiveNavTab } from './Sidebar';
@@ -46,8 +44,6 @@ interface HeaderProps {
   onExportExcel: () => void;
   onExportPDF: () => void;
   onSelectNav?: (tab: ActiveNavTab) => void;
-  onSyncDatabase?: () => Promise<void> | void;
-  isSyncing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -65,9 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   onDiscardDraft,
   onExportExcel,
   onExportPDF,
-  onSelectNav,
-  onSyncDatabase,
-  isSyncing
+  onSelectNav
 }) => {
   const userRole: UserRole = currentUser?.role || 'diretoria';
   const canAccessOrders = userRole === 'diretoria';
@@ -188,22 +182,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden sm:inline">Doca</span>
               </button>
             </div>
-
-            {onSyncDatabase && (
-              <button
-                onClick={onSyncDatabase}
-                disabled={isSyncing}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-                  isSyncing 
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 border-emerald-300 dark:border-emerald-800' 
-                    : 'bg-white dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600'
-                }`}
-                title="Sincronizar dados gravados no Banco SQLite"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span className="hidden xl:inline">{isSyncing ? 'Sincronizando...' : 'Sincronizar BD'}</span>
-              </button>
-            )}
           </div>
 
           {/* Divisor vertical sutil */}

@@ -1665,7 +1665,7 @@ export function App() {
           onSelectNav={setActiveNav}
         />
 
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 w-full max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-all duration-300">
           
           {/* MODO MOBILE 1: COMPRAS EM VIAGENS / FEIRAS */}
           {viewMode === 'mobile_purchases' && (

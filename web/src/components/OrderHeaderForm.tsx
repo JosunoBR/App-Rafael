@@ -29,6 +29,7 @@ import { LEGACY_DEFAULT_OBSERVACOES } from '../utils/storage';
 import { 
   PARCELAS_OPTIONS, 
   PRAZO_OPTIONS, 
+  SALDO_PRAZO_OPTIONS,
   parsePaymentConditionString, 
   formatPaymentConditionString,
   addDaysToDate
@@ -944,12 +945,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           onChange={(e) => handleSaldoPrazoChange(e.target.value)}
                           className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
                         >
-                          <option value="30">A cada 30 dias (30/60/90...)</option>
-                          <option value="28">A cada 28 dias (28/56/84...)</option>
-                          <option value="15">A cada 15 dias (15/30/45...)</option>
-                          <option value="21">A cada 21 dias (21/42/63...)</option>
-                          <option value="45">45 dias direto</option>
-                          <option value="60">60 dias direto</option>
+                          {SALDO_PRAZO_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
                         </select>
                       </div>
 

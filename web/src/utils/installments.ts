@@ -15,16 +15,19 @@ export const PARCELAS_OPTIONS = [
 ];
 
 export const PRAZO_OPTIONS = [
-  { value: '30', label: 'A cada 30 dias (30/60/90...)' },
-  { value: '28', label: 'A cada 28 dias (28/56/84...)' },
+  { value: '7', label: 'A cada 7 dias (7/14/21...)' },
+  { value: '10', label: 'A cada 10 dias (10/20/30...)' },
   { value: '15', label: 'A cada 15 dias (15/30/45...)' },
   { value: '21', label: 'A cada 21 dias (21/42/63...)' },
-  { value: '45', label: '45 dias direto' },
-  { value: '60', label: '60 dias direto' },
+  { value: '28', label: 'A cada 28 dias (28/56/84...)' },
+  { value: '30', label: 'A cada 30 dias (30/60/90...)' },
   { value: 'vista', label: '100% À Vista Integral (TED / PIX)' },
   { value: 'entrada_com_parcelamento', label: 'Entrada À Vista + Saldo Parcelado' },
-  { value: 'custom', label: 'Personalizado' },
 ];
+
+export const SALDO_PRAZO_OPTIONS = PRAZO_OPTIONS.filter(
+  (opt) => !['vista', 'entrada_com_parcelamento'].includes(opt.value)
+);
 
 /**
  * Calcula o valor líquido total apenas das mercadorias/produtos (com desconto OFF)
@@ -123,9 +126,13 @@ export function parsePaymentConditionString(cond?: string): { parcelas: number; 
   const matchX = cond.match(/(\d+)\s*x/i);
   let parcelas = matchX ? parseInt(matchX[1], 10) : 0;
 
-  if (lower.includes('28')) {
+  if (lower.includes('7') && (lower.includes('7/') || lower.includes('7 dias') || lower.includes('cada 7') || lower.includes('(7/'))) {
     if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 2;
-    return { parcelas: parcelas || 2, prazo: '28' };
+    return { parcelas: parcelas || 2, prazo: '7' };
+  }
+  if (lower.includes('10') && (lower.includes('10/') || lower.includes('10 dias') || lower.includes('cada 10') || lower.includes('(10/'))) {
+    if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 3;
+    return { parcelas: parcelas || 3, prazo: '10' };
   }
   if (lower.includes('15')) {
     if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 3;
@@ -135,11 +142,9 @@ export function parsePaymentConditionString(cond?: string): { parcelas: number; 
     if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 3;
     return { parcelas: parcelas || 3, prazo: '21' };
   }
-  if (lower.includes('45')) {
-    return { parcelas: parcelas || 1, prazo: '45' };
-  }
-  if (lower.includes('60')) {
-    return { parcelas: parcelas || 1, prazo: '60' };
+  if (lower.includes('28')) {
+    if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 2;
+    return { parcelas: parcelas || 2, prazo: '28' };
   }
   if (lower.includes('30')) {
     if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 3;

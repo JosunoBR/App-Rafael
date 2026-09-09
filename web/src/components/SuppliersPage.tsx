@@ -20,7 +20,8 @@ import {
   Upload,
   X,
   Check,
-  Star
+  Star,
+  MapPin
 } from 'lucide-react';
 import { Supplier, Product } from '../shared/types';
 import { maskCNPJ, maskPhone, handleCurrencyInput, formatCurrency } from '../utils/masks';
@@ -60,6 +61,8 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
           cnpj: '',
           vendedorPadrao: '',
           contatoVendedor: '',
+          telefoneEmpresa: '',
+          endereco: '',
           condicaoPagamentoPadrao: '30/60/90 Dias',
           aliquotaStPadrao: 0,
           aliquotaIpiPadrao: 0,
@@ -109,6 +112,8 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
     cnpj: '',
     vendedorPadrao: '',
     contatoVendedor: '',
+    telefoneEmpresa: '',
+    endereco: '',
     condicaoPagamentoPadrao: '30/60/90 Dias',
     aliquotaStPadrao: 0,
     aliquotaIpiPadrao: 0,
@@ -131,6 +136,8 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
       cnpj: '',
       vendedorPadrao: '',
       contatoVendedor: '',
+      telefoneEmpresa: '',
+      endereco: '',
       condicaoPagamentoPadrao: '30/60/90 Dias',
       aliquotaStPadrao: 0,
       aliquotaIpiPadrao: 0,
@@ -167,6 +174,8 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
       cnpj: formData.cnpj?.trim() || '',
       vendedorPadrao: formData.vendedorPadrao?.trim() || '',
       contatoVendedor: formData.contatoVendedor?.trim() || '',
+      telefoneEmpresa: formData.telefoneEmpresa?.trim() || '',
+      endereco: formData.endereco?.trim() || '',
       condicaoPagamentoPadrao: formData.condicaoPagamentoPadrao || '30/60/90 Dias',
       aliquotaStPadrao: Number(formData.aliquotaStPadrao) || 0,
       aliquotaIpiPadrao: Number(formData.aliquotaIpiPadrao) || 0,
@@ -394,6 +403,36 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               <span className="text-[10px] text-slate-400 mt-1 block">Define o percentual da Nota no pedido</span>
             </div>
 
+            {/* Telefone da Empresa */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1 flex items-center gap-1">
+                <Phone className="w-3.5 h-3.5 text-slate-400" />
+                Telefone da Empresa
+              </label>
+              <input
+                type="text"
+                value={formData.telefoneEmpresa || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, telefoneEmpresa: maskPhone(e.target.value) }))}
+                placeholder="(00) 0000-0000"
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono"
+              />
+            </div>
+
+            {/* Endereço */}
+            <div className="md:col-span-2">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                Endereço
+              </label>
+              <input
+                type="text"
+                value={formData.endereco || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, endereco: e.target.value }))}
+                placeholder="Ex: Av. Brasil, 1500 - Centro, Curitiba - PR"
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
+              />
+            </div>
+
 
 
             {/* Descrição do Fornecedor */}
@@ -478,6 +517,12 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                           {sup.nomeFantasia}
                         </div>
                       )}
+                      {sup.endereco && (
+                        <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5" title={sup.endereco}>
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate max-w-xs">{sup.endereco}</span>
+                        </div>
+                      )}
                       {(sup.pedidoPadrao || sup.pedidoPadraoJson) && (
                         <div className="mt-1">
                           <button
@@ -503,7 +548,13 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                       {sup.contatoVendedor && (
                         <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
                           <Phone className="w-3 h-3 text-emerald-500" />
-                          {sup.contatoVendedor}
+                          <span>{sup.contatoVendedor}</span>
+                        </div>
+                      )}
+                      {sup.telefoneEmpresa && (
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1 mt-0.5" title="Telefone da Empresa">
+                          <Building2 className="w-3 h-3 text-blue-500 shrink-0" />
+                          <span>{sup.telefoneEmpresa}</span>
                         </div>
                       )}
                     </td>

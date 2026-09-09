@@ -1724,25 +1724,6 @@ export function App() {
                     samplePdv={samplePdv}
                   />
 
-                  {/* Banner de Pedido Gravado / Status (Conforme Imagem 1) */}
-                  <div className="p-3.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        Visualizando Pedido Gravado no Sistema ({order.header.numeroPedido}) • Status: <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold">{order.header.status || 'Em Separação'}</strong>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 self-end sm:self-auto">
-                      <button
-                        onClick={handleNewOrder}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Novo Pedido em Branco</span>
-                      </button>
-                    </div>
-                  </div>
 
                   <OrderItemsTable
                     items={order.items}

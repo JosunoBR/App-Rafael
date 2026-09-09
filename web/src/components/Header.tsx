@@ -216,6 +216,21 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden sm:inline">+ Novo</span>
               </button>
 
+              {onDiscardDraft && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('Tem certeza que deseja descartar as alterações deste pedido e zerar a digitação?')) {
+                      onDiscardDraft();
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 transition flex items-center gap-1 cursor-pointer"
+                  title="Descartar rascunho e zerar pedido"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                  <span className="hidden sm:inline">Descartar</span>
+                </button>
+              )}
+
               {onDuplicateOrder && (
                 <button
                   onClick={onDuplicateOrder}

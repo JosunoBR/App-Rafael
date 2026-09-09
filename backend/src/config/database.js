@@ -62,6 +62,8 @@ async function getDatabase() {
       aliquotaStPadrao REAL DEFAULT 0,
       aliquotaIpiPadrao REAL DEFAULT 0,
       descontoOffPadrao REAL DEFAULT 0,
+      telefoneEmpresa TEXT,
+      endereco TEXT,
       observacoesDescarga TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
@@ -321,7 +323,9 @@ async function getDatabase() {
       const requiredSupCols = {
         pedidoPadraoJson: "TEXT",
         percentualNotaPadrao: "REAL DEFAULT 100",
-        observacoes: "TEXT"
+        observacoes: "TEXT",
+        telefoneEmpresa: "TEXT",
+        endereco: "TEXT"
       };
 
       Object.entries(requiredSupCols).forEach(([col, def]) => {

@@ -13,7 +13,8 @@ import {
   FileText, 
   Search,
   CheckCircle2,
-  HelpCircle
+  HelpCircle,
+  MapPin
 } from 'lucide-react';
 import { Supplier } from '../shared/types';
 import { maskCNPJ, maskPhone } from '../utils/masks';
@@ -49,6 +50,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   const [cnpj, setCnpj] = useState(initialEditSupplier?.cnpj || '');
   const [vendedorPadrao, setVendedorPadrao] = useState(initialEditSupplier?.vendedorPadrao || '');
   const [contatoVendedor, setContatoVendedor] = useState(initialEditSupplier?.contatoVendedor || '');
+  const [telefoneEmpresa, setTelefoneEmpresa] = useState(initialEditSupplier?.telefoneEmpresa || '');
+  const [endereco, setEndereco] = useState(initialEditSupplier?.endereco || '');
   const [condicaoPagamentoPadrao, setCondicaoPagamentoPadrao] = useState(initialEditSupplier?.condicaoPagamentoPadrao || '30/60/90 Dias');
   const [aliquotaStPadrao, setAliquotaStPadrao] = useState<number>(initialEditSupplier?.aliquotaStPadrao || 0);
   const [aliquotaIpiPadrao, setAliquotaIpiPadrao] = useState<number>(initialEditSupplier?.aliquotaIpiPadrao || 0);
@@ -63,6 +66,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     setCnpj('');
     setVendedorPadrao('');
     setContatoVendedor('');
+    setTelefoneEmpresa('');
+    setEndereco('');
     setCondicaoPagamentoPadrao('30/60/90 Dias');
     setAliquotaStPadrao(0);
     setAliquotaIpiPadrao(0);
@@ -79,6 +84,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     setCnpj(sup.cnpj || '');
     setVendedorPadrao(sup.vendedorPadrao || '');
     setContatoVendedor(sup.contatoVendedor || '');
+    setTelefoneEmpresa(sup.telefoneEmpresa || '');
+    setEndereco(sup.endereco || '');
     setCondicaoPagamentoPadrao(sup.condicaoPagamentoPadrao || '30/60/90 Dias');
     setAliquotaStPadrao(sup.aliquotaStPadrao || 0);
     setAliquotaIpiPadrao(sup.aliquotaIpiPadrao || 0);
@@ -99,6 +106,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
       cnpj: cnpj.trim() || undefined,
       vendedorPadrao: vendedorPadrao.trim() || undefined,
       contatoVendedor: contatoVendedor.trim() || undefined,
+      telefoneEmpresa: telefoneEmpresa.trim() || undefined,
+      endereco: endereco.trim() || undefined,
       condicaoPagamentoPadrao: condicaoPagamentoPadrao.trim() || undefined,
       aliquotaStPadrao: aliquotaStPadrao || 0,
       aliquotaIpiPadrao: aliquotaIpiPadrao || 0,
@@ -270,7 +279,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                 <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/50">
                   <label className="block text-xs font-bold text-blue-900 dark:text-blue-300 mb-1 flex items-center gap-1">
                     <Percent className="w-3.5 h-3.5 text-blue-600" />
-                    % Nota Padrão
+                    % Nota Fiscal Padrão
                   </label>
                   <input
                     type="number"
@@ -284,8 +293,38 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-900 text-blue-900 dark:text-blue-300 font-bold"
                   />
                   <span className="text-[10px] text-blue-700 dark:text-blue-400 mt-1 block">
-                    Define % da Nota ao selecionar no pedido
+                    Define o percentual da Nota no pedido
                   </span>
+                </div>
+
+                {/* Telefone da Empresa */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                    Telefone da Empresa
+                  </label>
+                  <input
+                    type="text"
+                    value={telefoneEmpresa}
+                    onChange={(e) => setTelefoneEmpresa(maskPhone(e.target.value))}
+                    placeholder="(00) 0000-0000"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono"
+                  />
+                </div>
+
+                {/* Endereço */}
+                <div className="sm:col-span-2 md:col-span-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                    Endereço
+                  </label>
+                  <input
+                    type="text"
+                    value={endereco}
+                    onChange={(e) => setEndereco(e.target.value)}
+                    placeholder="Ex: Av. Brasil, 1500 - Centro, Curitiba - PR"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                  />
                 </div>
 
 
@@ -358,7 +397,13 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                           <span>Vendedor: <strong>{sup.vendedorPadrao}</strong></span>
                         )}
                         {sup.contatoVendedor && (
-                          <span>Tel: {sup.contatoVendedor}</span>
+                          <span>Vendedor Tel: {sup.contatoVendedor}</span>
+                        )}
+                        {sup.telefoneEmpresa && (
+                          <span>Empresa Tel: <strong>{sup.telefoneEmpresa}</strong></span>
+                        )}
+                        {sup.endereco && (
+                          <span className="truncate max-w-xs" title={sup.endereco}>End: {sup.endereco}</span>
                         )}
                         {sup.condicaoPagamentoPadrao && (
                           <span>Condição: {sup.condicaoPagamentoPadrao}</span>

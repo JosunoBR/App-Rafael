@@ -47,6 +47,8 @@ export interface Supplier {
   aliquotaIpiPadrao?: number;   // % de IPI
   descontoOffPadrao?: number;   // % de Desconto comercial habitual
   percentualNotaPadrao?: number; // % Nota fiscal padrão do fornecedor
+  telefoneEmpresa?: string;     // Telefone institucional / fixo / WhatsApp da empresa
+  endereco?: string;            // Endereço completo da empresa (logradouro, bairro, cidade, UF)
   observacoesDescarga?: string; // Instruções de entrega / paletes
   pedidoPadraoJson?: string;    // JSON com a grade de itens padrão deste fornecedor
   pedidoPadrao?: {

@@ -183,15 +183,6 @@ export const HomePage: React.FC<HomePageProps> = ({
 
             <div className="flex items-center gap-2 self-end sm:self-center">
               <button
-                onClick={onDiscardDraft}
-                className="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent transition flex items-center gap-1.5 cursor-pointer"
-                title="Descartar rascunho e limpar"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Descartar</span>
-              </button>
-
-              <button
                 onClick={onContinueDraft}
                 className="px-4 py-2 rounded-xl text-xs font-extrabold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20 transition flex items-center gap-1.5 cursor-pointer"
               >

@@ -28,7 +28,8 @@ class SupplierRepository {
           razaoSocial = ?, nomeFantasia = ?, cnpj = ?, vendedorPadrao = ?,
           contatoVendedor = ?, condicaoPagamentoPadrao = ?, aliquotaStPadrao = ?,
           aliquotaIpiPadrao = ?, descontoOffPadrao = ?, percentualNotaPadrao = ?,
-          observacoesDescarga = ?, pedidoPadraoJson = ?, updatedAt = ?
+          telefoneEmpresa = ?, endereco = ?, observacoesDescarga = ?,
+          pedidoPadraoJson = ?, updatedAt = ?
         WHERE id = ?
       `;
       await execute(sql, [
@@ -42,6 +43,8 @@ class SupplierRepository {
         Number(supplier.aliquotaIpiPadrao) || 0,
         Number(supplier.descontoOffPadrao) || 0,
         Number(supplier.percentualNotaPadrao) || 100,
+        supplier.telefoneEmpresa || '',
+        supplier.endereco || '',
         supplier.observacoesDescarga || '',
         pedidoPadraoJson,
         now,
@@ -52,9 +55,9 @@ class SupplierRepository {
         INSERT INTO suppliers (
           id, razaoSocial, nomeFantasia, cnpj, vendedorPadrao, contatoVendedor,
           condicaoPagamentoPadrao, aliquotaStPadrao, aliquotaIpiPadrao,
-          descontoOffPadrao, percentualNotaPadrao, observacoesDescarga,
-          pedidoPadraoJson, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          descontoOffPadrao, percentualNotaPadrao, telefoneEmpresa, endereco,
+          observacoesDescarga, pedidoPadraoJson, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await execute(sql, [
         supplier.id,
@@ -68,6 +71,8 @@ class SupplierRepository {
         Number(supplier.aliquotaIpiPadrao) || 0,
         Number(supplier.descontoOffPadrao) || 0,
         Number(supplier.percentualNotaPadrao) || 100,
+        supplier.telefoneEmpresa || '',
+        supplier.endereco || '',
         supplier.observacoesDescarga || '',
         pedidoPadraoJson,
         supplier.createdAt || now,

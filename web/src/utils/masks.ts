@@ -48,6 +48,43 @@ export function handleCurrencyInput(
 }
 
 /**
+ * Formata valores numéricos com exatamente 1 casa decimal (ex: 7,5% ou 19,5%)
+ */
+export function handleOneDecimalInput(
+  inputValue: string | number,
+  allowEmpty: boolean = false
+): { formatted: string; value: number } {
+  if (inputValue === '' || inputValue === null || inputValue === undefined) {
+    return { formatted: allowEmpty ? '' : '0,0', value: 0 };
+  }
+
+  if (typeof inputValue === 'number') {
+    if (inputValue === 0 && allowEmpty) {
+      return { formatted: '', value: 0 };
+    }
+    return {
+      formatted: inputValue.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+      value: inputValue
+    };
+  }
+
+  // Remove qualquer caracter não numérico
+  const digits = inputValue.replace(/\D/g, '');
+
+  if (!digits || (allowEmpty && digits === '0')) {
+    return { formatted: allowEmpty ? '' : '0,0', value: 0 };
+  }
+
+  const numeric = parseInt(digits, 10) / 10;
+  const formatted = numeric.toLocaleString('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1
+  });
+
+  return { formatted, value: numeric };
+}
+
+/**
  * Retorna apenas a string formatada em R$ a partir de um valor numérico ou string
  */
 export function formatCurrency(value: number | string | undefined | null, showPrefix: boolean = false): string {

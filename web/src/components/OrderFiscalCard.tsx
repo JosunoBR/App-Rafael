@@ -16,7 +16,7 @@ import {
 import { FiscalConfig } from '../shared/types';
 import { DEFAULT_FISCAL_CONFIG } from '../shared/constants';
 import { calculateItemFiscal, normalizeRateToDecimal } from '../shared/fiscalEngine';
-import { formatCurrency, handleCurrencyInput } from '../utils/masks';
+import { formatCurrency, handleCurrencyInput, handleOneDecimalInput } from '../utils/masks';
 
 interface OrderFiscalCardProps {
   fiscalConfig: FiscalConfig;
@@ -45,29 +45,29 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
   const [simPreco, setSimPreco] = useState<number>(averageItemPrice > 0 ? averageItemPrice : 7.00);
   const [simPdv, setSimPdv] = useState<number>(samplePdv > 0 ? samplePdv : 12.00);
 
-  // Normalização das alíquotas ativas em percentual (0 a 100)
-  const ipiPct = Number(((normalizeRateToDecimal(fiscalConfig.ipiAliquota, 0)) * 100).toFixed(2));
-  const stPct = Number(((normalizeRateToDecimal(fiscalConfig.aliquotaSt !== undefined ? fiscalConfig.aliquotaSt : aliquotaStHeader, 0)) * 100).toFixed(2));
-  const fretePct = Number(((normalizeRateToDecimal(fiscalConfig.freteAliquota, 0)) * 100).toFixed(2));
+  // Normalização das alíquotas ativas em percentual com 1 casa decimal (0 a 100)
+  const ipiPct = Number(((normalizeRateToDecimal(fiscalConfig.ipiAliquota, 0)) * 100).toFixed(1));
+  const stPct = Number(((normalizeRateToDecimal(fiscalConfig.aliquotaSt !== undefined ? fiscalConfig.aliquotaSt : aliquotaStHeader, 0)) * 100).toFixed(1));
+  const fretePct = Number(((normalizeRateToDecimal(fiscalConfig.freteAliquota, 0)) * 100).toFixed(1));
 
-  const icmsEntradaPct = Number(((normalizeRateToDecimal(fiscalConfig.creditoEntradaICMS, 0.12)) * 100).toFixed(2));
-  const custoFixoPct = Number(((normalizeRateToDecimal(fiscalConfig.custosFixos, 0.26)) * 100).toFixed(2));
-  const icmsSaidaPct = Number(((normalizeRateToDecimal(fiscalConfig.icmsAliquota, 0.195)) * 100).toFixed(2));
-  const pisCofinsPct = Number(((normalizeRateToDecimal(fiscalConfig.pisCofinsAliquota, 0.06)) * 100).toFixed(2));
+  const icmsEntradaPct = Number(((normalizeRateToDecimal(fiscalConfig.creditoEntradaICMS, 0.12)) * 100).toFixed(1));
+  const custoFixoPct = Number(((normalizeRateToDecimal(fiscalConfig.custosFixos, 0.26)) * 100).toFixed(1));
+  const icmsSaidaPct = Number(((normalizeRateToDecimal(fiscalConfig.icmsAliquota, 0.195)) * 100).toFixed(1));
+  const pisCofinsPct = Number(((normalizeRateToDecimal(fiscalConfig.pisCofinsAliquota, 0.06)) * 100).toFixed(1));
 
   // Valor em R$ calculado do frete a partir da alíquota e do total de mercadorias
   const freteValorCalculado = valorFreteHeader !== undefined && valorFreteHeader > 0
     ? valorFreteHeader
     : (totalMercadorias > 0 && fretePct > 0 ? Number((totalMercadorias * (fretePct / 100)).toFixed(2)) : 0);
 
-  // Handler para campos de porcentagem usando handleCurrencyInput (2 casas decimais)
+  // Handler para campos de porcentagem usando handleOneDecimalInput (1 casa decimal)
   const handleRateChange = (
     field: keyof FiscalConfig,
     inputValue: string,
     isST: boolean = false
   ) => {
-    const { value } = handleCurrencyInput(inputValue);
-    const decimalValue = value / 100;
+    const { value } = handleOneDecimalInput(inputValue);
+    const decimalValue = Number((value / 100).toFixed(4));
     
     const updated: FiscalConfig = {
       ...fiscalConfig,
@@ -243,7 +243,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   </p>
                 </div>
                 <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-md border border-emerald-300/40">
-                  Encargos: +{(ipiPct + stPct + fretePct).toFixed(2)}%
+                  Encargos: +{(ipiPct + stPct + fretePct).toFixed(1)}%
                 </span>
               </div>
 
@@ -256,7 +256,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={ipiPct > 0 ? ipiPct.toFixed(2).replace('.', ',') : '0,00'}
+                      value={ipiPct > 0 ? ipiPct.toFixed(1).replace('.', ',') : '0,0'}
                       onChange={(e) => handleRateChange('ipiAliquota', e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
@@ -271,7 +271,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={stPct > 0 ? stPct.toFixed(2).replace('.', ',') : '0,00'}
+                      value={stPct > 0 ? stPct.toFixed(1).replace('.', ',') : '0,0'}
                       onChange={(e) => handleRateChange('aliquotaSt', e.target.value, true)}
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
@@ -293,7 +293,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={fretePct > 0 ? fretePct.toFixed(2).replace('.', ',') : '0,00'}
+                      value={fretePct > 0 ? fretePct.toFixed(1).replace('.', ',') : '0,0'}
                       onChange={(e) => handleRateChange('freteAliquota', e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
@@ -323,19 +323,19 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
 
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-mono text-[11px]">
                   <span>IPI</span>
-                  <span>{ipiPct.toFixed(2)}% ({simPreco.toFixed(2)} × {ipiPct}%)</span>
+                  <span>{ipiPct.toFixed(1)}% ({simPreco.toFixed(2)} × {ipiPct.toFixed(1)}%)</span>
                   <strong className="text-slate-800 dark:text-slate-200">R$ {simResult.ipiUnit.toFixed(2)}</strong>
                 </div>
 
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-mono text-[11px]">
                   <span>ST</span>
-                  <span>{stPct.toFixed(2)}% ({simPreco.toFixed(2)} × {stPct}%)</span>
+                  <span>{stPct.toFixed(1)}% ({simPreco.toFixed(2)} × {stPct.toFixed(1)}%)</span>
                   <strong className="text-slate-800 dark:text-slate-200">R$ {simResult.stUnit.toFixed(2)}</strong>
                 </div>
 
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-mono text-[11px]">
                   <span>FRETE</span>
-                  <span>{fretePct.toFixed(2)}% ({simPreco.toFixed(2)} × {fretePct}%)</span>
+                  <span>{fretePct.toFixed(1)}% ({simPreco.toFixed(2)} × {fretePct.toFixed(1)}%)</span>
                   <strong className="text-slate-800 dark:text-slate-200">R$ {simResult.freteUnit.toFixed(2)}</strong>
                 </div>
 
@@ -369,7 +369,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   </p>
                 </div>
                 <span className="text-xs font-bold text-blue-800 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 rounded-md border border-blue-300/40">
-                  Custos s/ PDV: {(custoFixoPct + icmsSaidaPct + pisCofinsPct).toFixed(2)}%
+                  Custos s/ PDV: {(custoFixoPct + icmsSaidaPct + pisCofinsPct).toFixed(1)}%
                 </span>
               </div>
 
@@ -382,7 +382,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={icmsEntradaPct > 0 ? icmsEntradaPct.toFixed(2).replace('.', ',') : '0,00'}
+                      value={icmsEntradaPct > 0 ? icmsEntradaPct.toFixed(1).replace('.', ',') : '0,0'}
                       onChange={(e) => handleRateChange('creditoEntradaICMS', e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
@@ -400,7 +400,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={custoFixoPct > 0 ? custoFixoPct.toFixed(2).replace('.', ',') : '0,00'}
+                      value={custoFixoPct > 0 ? custoFixoPct.toFixed(1).replace('.', ',') : '0,0'}
                       onChange={(e) => handleRateChange('custosFixos', e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
@@ -418,7 +418,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={icmsSaidaPct > 0 ? icmsSaidaPct.toFixed(2).replace('.', ',') : '0,00'}
+                      value={icmsSaidaPct > 0 ? icmsSaidaPct.toFixed(1).replace('.', ',') : '0,0'}
                       onChange={(e) => handleRateChange('icmsAliquota', e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
@@ -436,7 +436,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={pisCofinsPct > 0 ? pisCofinsPct.toFixed(2).replace('.', ',') : '0,00'}
+                      value={pisCofinsPct > 0 ? pisCofinsPct.toFixed(1).replace('.', ',') : '0,0'}
                       onChange={(e) => handleRateChange('pisCofinsAliquota', e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
@@ -466,13 +466,13 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
 
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-mono text-[11px]">
                   <span>ICMS ENTRADA</span>
-                  <span>{icmsEntradaPct.toFixed(2)}% ({simPreco.toFixed(2)} - {icmsEntradaPct}%)</span>
+                  <span>{icmsEntradaPct.toFixed(1)}% ({simPreco.toFixed(2)} - {icmsEntradaPct.toFixed(1)}%)</span>
                   <strong className="text-slate-800 dark:text-slate-200">R$ {simResult.baseIcmsEntrada.toFixed(2)}</strong>
                 </div>
 
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-mono text-[11px]">
                   <span>CUSTO FIXO</span>
-                  <span>{custoFixoPct.toFixed(2)}% ({simPdv.toFixed(2)} × {custoFixoPct}%)</span>
+                  <span>{custoFixoPct.toFixed(1)}% ({simPdv.toFixed(2)} × {custoFixoPct.toFixed(1)}%)</span>
                   <strong className="text-slate-800 dark:text-slate-200">R$ {simResult.custoFixoUnit.toFixed(2)}</strong>
                 </div>
 
@@ -484,13 +484,13 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
 
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-mono text-[11px]">
                   <span>ICMS SAÍDA</span>
-                  <span>{icmsSaidaPct.toFixed(2)}% ({simPdv.toFixed(2)} × {icmsSaidaPct}%)</span>
+                  <span>{icmsSaidaPct.toFixed(1)}% ({simPdv.toFixed(2)} × {icmsSaidaPct.toFixed(1)}%)</span>
                   <strong className="text-slate-800 dark:text-slate-200">R$ {simResult.icmsSaidaUnit.toFixed(2)}</strong>
                 </div>
 
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-mono text-[11px]">
                   <span>PIS, COFINS, IR</span>
-                  <span>{pisCofinsPct.toFixed(2)}% ({simPdv.toFixed(2)} × {pisCofinsPct}%)</span>
+                  <span>{pisCofinsPct.toFixed(1)}% ({simPdv.toFixed(2)} × {pisCofinsPct.toFixed(1)}%)</span>
                   <strong className="text-slate-800 dark:text-slate-200">R$ {simResult.pisCofinsUnit.toFixed(2)}</strong>
                 </div>
 
@@ -504,7 +504,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 <div className="flex items-center justify-between pt-1 border-t border-dashed border-slate-200 dark:border-slate-800 text-[11px]">
                   <span className="font-semibold text-slate-700 dark:text-slate-300">Margem Real Estimada:</span>
                   <span className={`font-mono font-bold ${simResult.margemPercentual >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                    {simResult.margemPercentual.toFixed(2)}% ({formatCurrency(simResult.margemRealUnit, true)})
+                    {simResult.margemPercentual.toFixed(1)}% ({formatCurrency(simResult.margemRealUnit, true)})
                   </span>
                 </div>
               </div>

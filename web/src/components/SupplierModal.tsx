@@ -53,6 +53,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   const [aliquotaStPadrao, setAliquotaStPadrao] = useState<number>(initialEditSupplier?.aliquotaStPadrao || 0);
   const [aliquotaIpiPadrao, setAliquotaIpiPadrao] = useState<number>(initialEditSupplier?.aliquotaIpiPadrao || 0);
   const [descontoOffPadrao, setDescontoOffPadrao] = useState<number>(initialEditSupplier?.descontoOffPadrao || 0);
+  const [percentualNotaPadrao, setPercentualNotaPadrao] = useState<number>(initialEditSupplier?.percentualNotaPadrao !== undefined ? initialEditSupplier.percentualNotaPadrao : 100);
   const [observacoesDescarga, setObservacoesDescarga] = useState(initialEditSupplier?.observacoesDescarga || '');
 
   const handleOpenNewForm = () => {
@@ -66,6 +67,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     setAliquotaStPadrao(0);
     setAliquotaIpiPadrao(0);
     setDescontoOffPadrao(0);
+    setPercentualNotaPadrao(100);
     setObservacoesDescarga('');
     setIsFormOpen(true);
   };
@@ -81,6 +83,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     setAliquotaStPadrao(sup.aliquotaStPadrao || 0);
     setAliquotaIpiPadrao(sup.aliquotaIpiPadrao || 0);
     setDescontoOffPadrao(sup.descontoOffPadrao || 0);
+    setPercentualNotaPadrao(sup.percentualNotaPadrao !== undefined ? sup.percentualNotaPadrao : 100);
     setObservacoesDescarga(sup.observacoesDescarga || '');
     setIsFormOpen(true);
   };
@@ -100,12 +103,16 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
       aliquotaStPadrao: aliquotaStPadrao || 0,
       aliquotaIpiPadrao: aliquotaIpiPadrao || 0,
       descontoOffPadrao: descontoOffPadrao || 0,
+      percentualNotaPadrao: percentualNotaPadrao !== undefined ? percentualNotaPadrao : 100,
       observacoesDescarga: observacoesDescarga.trim() || undefined,
       createdAt: editingSupplier?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
     onSaveSupplier(supplierData);
+    if (onSelectSupplierForOrder) {
+      onSelectSupplierForOrder(supplierData);
+    }
     setIsFormOpen(false);
   };
 
@@ -257,6 +264,50 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                     placeholder="(42) 99999-9999"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
                   />
+                </div>
+
+                {/* % Nota Fiscal Padrão */}
+                <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/50">
+                  <label className="block text-xs font-bold text-blue-900 dark:text-blue-300 mb-1 flex items-center gap-1">
+                    <Percent className="w-3.5 h-3.5 text-blue-600" />
+                    % Nota Padrão
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={percentualNotaPadrao === 0 ? '' : percentualNotaPadrao}
+                    placeholder="100"
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setPercentualNotaPadrao(parseFloat(e.target.value) || 0)}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-900 text-blue-900 dark:text-blue-300 font-bold"
+                  />
+                  <span className="text-[10px] text-blue-700 dark:text-blue-400 mt-1 block">
+                    Define % da Nota ao selecionar no pedido
+                  </span>
+                </div>
+
+                {/* Alíquota ST Padrão (%) */}
+                <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/50">
+                  <label className="block text-xs font-bold text-amber-900 dark:text-amber-300 mb-1 flex items-center gap-1">
+                    <Percent className="w-3.5 h-3.5 text-amber-600" />
+                    ST Padrão (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={aliquotaStPadrao === 0 ? '' : aliquotaStPadrao}
+                    placeholder="0"
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setAliquotaStPadrao(parseFloat(e.target.value) || 0)}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-300 font-bold"
+                  />
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400 mt-1 block">
+                    Alíquota padrão de Subst. Tributária
+                  </span>
                 </div>
 
                 {/* Desconto OFF (%) */}

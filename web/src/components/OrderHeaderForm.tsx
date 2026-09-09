@@ -19,7 +19,9 @@ import {
   Star,
   BookmarkCheck,
   PackageCheck,
-  X
+  X,
+  Search,
+  Check
 } from 'lucide-react';
 import { OrderHeader, Supplier } from '../shared/types';
 import { handleCurrencyInput, formatCurrency, maskPhone } from '../utils/masks';
@@ -71,6 +73,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [supplierFilterText, setSupplierFilterText] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Identificar o fornecedor ativo no cadastro
@@ -341,18 +344,26 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     setIsDropdownOpen(false);
   };
 
-  // Filtrar fornecedores conforme digitação (busca ampla por razão, nome fantasia, cnpj e vendedor)
-  const supplierSearchQuery = (header.fornecedor || '').trim().toLowerCase();
+  // Filtrar fornecedores para a lista suspensa
   const filteredSuppliers = useMemo(() => {
-    if (!supplierSearchQuery) return suppliers;
-    const cleanQuery = supplierSearchQuery.replace(/\D/g, '');
+    const query = supplierFilterText.trim().toLowerCase();
+    if (!query) {
+      // Se não há termo de busca no dropdown, lista todos os fornecedores com o selecionado em primeiro
+      return [...suppliers].sort((a, b) => {
+        if (a.id === header.supplierId) return -1;
+        if (b.id === header.supplierId) return 1;
+        return a.razaoSocial.localeCompare(b.razaoSocial);
+      });
+    }
+
+    const cleanQuery = query.replace(/\D/g, '');
     return suppliers.filter(s =>
-      s.razaoSocial.toLowerCase().includes(supplierSearchQuery) ||
-      (s.nomeFantasia && s.nomeFantasia.toLowerCase().includes(supplierSearchQuery)) ||
+      s.razaoSocial.toLowerCase().includes(query) ||
+      (s.nomeFantasia && s.nomeFantasia.toLowerCase().includes(query)) ||
       (cleanQuery && s.cnpj && s.cnpj.replace(/\D/g, '').includes(cleanQuery)) ||
-      (s.vendedorPadrao && s.vendedorPadrao.toLowerCase().includes(supplierSearchQuery))
+      (s.vendedorPadrao && s.vendedorPadrao.toLowerCase().includes(query))
     );
-  }, [suppliers, supplierSearchQuery]);
+  }, [suppliers, supplierFilterText, header.supplierId]);
 
   return (
     <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-6 overflow-hidden transition-all">
@@ -473,18 +484,26 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        handleFieldChange('fornecedor', '');
+                        onChange({
+                          ...header,
+                          fornecedor: '',
+                          supplierId: undefined
+                        });
+                        setSupplierFilterText('');
                         setIsDropdownOpen(true);
                       }}
                       className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded cursor-pointer"
-                      title="Limpar seleção"
+                      title="Limpar seleção do fornecedor"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                   <button
                     type="button"
-                    onClick={() => setIsDropdownOpen(prev => !prev)}
+                    onClick={() => {
+                      setIsDropdownOpen(prev => !prev);
+                      setSupplierFilterText('');
+                    }}
                     className="p-1 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded cursor-pointer transition"
                     title={isDropdownOpen ? "Fechar lista de fornecedores" : "Abrir lista de fornecedores"}
                   >
@@ -495,43 +514,97 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
               {/* Dropdown Suggestions List (Abre ao clicar ou focar) */}
               {isDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-72 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2 duration-150 divide-y divide-slate-100 dark:divide-slate-700/60">
-                  <div className="px-3.5 py-2 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
-                    <span>Fornecedores Cadastrados ({filteredSuppliers.length})</span>
-                  </div>
-
-                  <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                    {filteredSuppliers.map(sup => {
-                      const isSelected = currentSupplier?.id === sup.id;
-
-                      return (
-                        <div
-                          key={sup.id}
-                          onClick={() => handleSelectSupplier(sup)}
-                          className={`px-3.5 py-2.5 hover:bg-emerald-50/80 dark:hover:bg-slate-700/70 cursor-pointer transition flex items-center justify-between gap-3 ${
-                            isSelected ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-l-4 border-emerald-500' : ''
-                          }`}
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-80 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col">
+                  {/* Barra de Pesquisa Dentro do Dropdown */}
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-900/90 border-b border-slate-100 dark:border-slate-700/60 sticky top-0 z-10 backdrop-blur-xs">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={supplierFilterText}
+                        onChange={(e) => setSupplierFilterText(e.target.value)}
+                        placeholder="Pesquisar fornecedor por nome, fantasia ou CNPJ..."
+                        className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500 font-normal"
+                        autoFocus
+                      />
+                      {supplierFilterText && (
+                        <button
+                          type="button"
+                          onClick={() => setSupplierFilterText('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                         >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                {sup.razaoSocial}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5 px-0.5">
+                      <span>Fornecedores Cadastrados ({filteredSuppliers.length})</span>
+                      {header.supplierId && (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold lowercase">
+                          selecionado no topo
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="p-2 bg-slate-50 dark:bg-slate-900/80 flex items-center justify-between border-t border-slate-100 dark:border-slate-700/60 sticky bottom-0">
+                  {/* Lista com Rolagem */}
+                  <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/50 flex-1 max-h-60">
+                    {filteredSuppliers.length > 0 ? (
+                      filteredSuppliers.map(sup => {
+                        const isSelected = currentSupplier?.id === sup.id || header.supplierId === sup.id;
+
+                        return (
+                          <div
+                            key={sup.id}
+                            onClick={() => {
+                              handleSelectSupplier(sup);
+                              setSupplierFilterText('');
+                            }}
+                            className={`px-3.5 py-2.5 hover:bg-emerald-50/80 dark:hover:bg-slate-700/70 cursor-pointer transition flex items-center justify-between gap-3 ${
+                              isSelected ? 'bg-emerald-50/70 dark:bg-emerald-950/40 border-l-4 border-emerald-500' : ''
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                  {sup.razaoSocial}
+                                </span>
+                                {sup.nomeFantasia && sup.nomeFantasia !== sup.razaoSocial && (
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                    ({sup.nomeFantasia})
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5 font-mono flex-wrap">
+                                {sup.cnpj && <span>CNPJ: {sup.cnpj}</span>}
+                                {sup.vendedorPadrao && <span>• Vendedor: {sup.vendedorPadrao}</span>}
+                                {sup.condicaoPagamentoPadrao && <span>• {sup.condicaoPagamentoPadrao}</span>}
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                                <Check className="w-3 h-3" />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="p-4 text-center text-xs text-slate-400">
+                        Nenhum fornecedor encontrado para "{supplierFilterText}".
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Rodapé: Botão Cadastrar Fornecedor */}
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-900/80 flex items-center justify-between border-t border-slate-100 dark:border-slate-700/60 sticky bottom-0">
                     <button
                       type="button"
                       onClick={() => {
                         setIsDropdownOpen(false);
                         onOpenSupplierModal(null);
                       }}
-                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer px-2 py-1"
+                      className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-1.5 cursor-pointer px-2 py-1 bg-emerald-50 dark:bg-emerald-950/60 rounded-lg border border-emerald-200 dark:border-emerald-800/80 transition"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Cadastrar Novo Fornecedor

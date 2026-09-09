@@ -64,6 +64,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
           aliquotaStPadrao: 0,
           aliquotaIpiPadrao: 0,
           descontoOffPadrao: 0,
+          percentualNotaPadrao: 100,
           observacoesDescarga: ''
         });
         setEditingSupplier(null);
@@ -71,7 +72,10 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
       } else {
         const target = suppliers.find(s => s.id === initialSupplierId);
         if (target) {
-          setFormData({ ...target });
+          setFormData({ 
+            ...target,
+            percentualNotaPadrao: target.percentualNotaPadrao !== undefined ? target.percentualNotaPadrao : 100
+          });
           setEditingSupplier(target);
           setIsCreatingNew(true);
           setSearchTerm(target.razaoSocial);
@@ -109,6 +113,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
     aliquotaStPadrao: 0,
     aliquotaIpiPadrao: 0,
     descontoOffPadrao: 0,
+    percentualNotaPadrao: 100,
     observacoesDescarga: ''
   });
 
@@ -130,6 +135,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
       aliquotaStPadrao: 0,
       aliquotaIpiPadrao: 0,
       descontoOffPadrao: 0,
+      percentualNotaPadrao: 100,
       observacoesDescarga: ''
     });
     setEditingSupplier(null);
@@ -137,7 +143,10 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
   };
 
   const handleStartEdit = (sup: Supplier) => {
-    setFormData({ ...sup });
+    setFormData({ 
+      ...sup,
+      percentualNotaPadrao: sup.percentualNotaPadrao !== undefined ? sup.percentualNotaPadrao : 100
+    });
     setEditingSupplier(sup);
     setIsCreatingNew(true);
   };
@@ -162,6 +171,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
       aliquotaStPadrao: Number(formData.aliquotaStPadrao) || 0,
       aliquotaIpiPadrao: Number(formData.aliquotaIpiPadrao) || 0,
       descontoOffPadrao: Number(formData.descontoOffPadrao) || 0,
+      percentualNotaPadrao: formData.percentualNotaPadrao !== undefined ? Number(formData.percentualNotaPadrao) : 100,
       observacoesDescarga: formData.observacoesDescarga?.trim() || '',
       createdAt: editingSupplier ? editingSupplier.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -362,6 +372,50 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               />
             </div>
 
+            {/* % Nota Fiscal Padrão */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                % Nota Fiscal Padrão
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="100"
+                  value={formData.percentualNotaPadrao === 0 ? '' : formData.percentualNotaPadrao}
+                  placeholder="100"
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setFormData(prev => ({ ...prev, percentualNotaPadrao: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-200 outline-hidden font-mono font-bold"
+                />
+                <span className="absolute right-3 top-2 text-xs text-blue-400 font-bold">%</span>
+              </div>
+              <span className="text-[10px] text-slate-400 mt-1 block">Define o percentual da Nota no pedido</span>
+            </div>
+
+            {/* Alíquota ST Padrão (%) */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                ST Padrão (%)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={formData.aliquotaStPadrao === 0 ? '' : formData.aliquotaStPadrao}
+                  placeholder="0"
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setFormData(prev => ({ ...prev, aliquotaStPadrao: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 outline-hidden font-mono font-bold"
+                />
+                <span className="absolute right-3 top-2 text-xs text-amber-400 font-bold">%</span>
+              </div>
+              <span className="text-[10px] text-slate-400 mt-1 block">Alíquota padrão de Subst. Tributária</span>
+            </div>
+
             {/* Desconto OFF (%) */}
             <div>
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
@@ -376,9 +430,9 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                   placeholder="0"
                   onFocus={(e) => e.target.select()}
                   onChange={(e) => setFormData(prev => ({ ...prev, descontoOffPadrao: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono font-bold"
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-emerald-200 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200 outline-hidden font-mono font-bold"
                 />
-                <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">%</span>
+                <span className="absolute right-3 top-2 text-xs text-emerald-400 font-bold">%</span>
               </div>
               <span className="text-[10px] text-slate-400 mt-1 block">Referência de barganha para próximos pedidos</span>
             </div>

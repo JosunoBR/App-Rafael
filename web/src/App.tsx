@@ -44,6 +44,9 @@ import {
   SuppliersPage 
 } from './components/SuppliersPage';
 import { 
+  SupplierModal 
+} from './components/SupplierModal';
+import { 
   OrderHistoryPage 
 } from './components/OrderHistoryPage';
 import { 
@@ -208,6 +211,8 @@ export function App() {
   const [selectedSeparationItem, setSelectedSeparationItem] = useState<OrderItem | null>(null);
   const [selectedCatalogSupplier, setSelectedCatalogSupplier] = useState<string>('all');
   const [selectedSupplierToEdit, setSelectedSupplierToEdit] = useState<string | null>(null);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState<boolean>(false);
+  const [supplierModalEditTarget, setSupplierModalEditTarget] = useState<Supplier | null>(null);
 
   // Lista consolidada de pedidos (o pedido em edição em memória sobrepõe a versão antiga salva)
   const effectiveOrders = useMemo(() => {
@@ -1248,17 +1253,25 @@ export function App() {
   };
 
   // Supplier Page Handlers
-  const handleSaveSupplier = async (sup: Supplier) => {
+  const handleSaveSupplier = async (sup: Supplier): Promise<Supplier> => {
+    let savedSupplier = sup;
     try {
       await saveSupplierToDb(sup);
       const updated = await fetchSuppliersFromDb();
       setSuppliers(updated);
+      saveSupplier(sup);
+      const found = updated.find(s => s.id === sup.id);
+      if (found) savedSupplier = found;
       showToast(`Fornecedor "${sup.razaoSocial}" salvo no SQLite.`);
     } catch (err) {
       saveSupplier(sup);
-      setSuppliers(getSuppliersList());
+      const updatedLocal = getSuppliersList();
+      setSuppliers(updatedLocal);
+      const found = updatedLocal.find(s => s.id === sup.id);
+      if (found) savedSupplier = found;
       showToast(`Fornecedor "${sup.razaoSocial}" salvo localmente.`);
     }
+    return savedSupplier;
   };
 
   const handleDeleteSupplier = async (id: string) => {
@@ -1333,6 +1346,7 @@ export function App() {
         condicaoPagamento: sup.condicaoPagamentoPadrao || prev.header.condicaoPagamento,
         aliquotaSt: sup.aliquotaStPadrao !== undefined ? sup.aliquotaStPadrao : prev.header.aliquotaSt,
         percentualDescontoOff: sup.descontoOffPadrao !== undefined ? sup.descontoOffPadrao : prev.header.percentualDescontoOff,
+        percentualNota: sup.percentualNotaPadrao !== undefined ? sup.percentualNotaPadrao : (prev.header.percentualNota ?? 100),
         observacoesDescarga: sup.observacoesDescarga || prev.header.observacoesDescarga
       }
     }));
@@ -1592,14 +1606,8 @@ export function App() {
                     suppliers={suppliers}
                     onChange={handleHeaderChange} 
                     onOpenSupplierModal={(supToEdit) => {
-                      if (supToEdit) {
-                        setSelectedSupplierToEdit(supToEdit.id);
-                        setActiveNav('suppliers');
-                        showToast(`Abrindo cadastro de ${supToEdit.razaoSocial}...`, 'info');
-                      } else {
-                        setSelectedSupplierToEdit('new');
-                        setActiveNav('suppliers');
-                      }
+                      setSupplierModalEditTarget(supToEdit || null);
+                      setIsSupplierModalOpen(true);
                     }}
                     orderTotal={calculateOrderNetTotal(order)}
                     onSaveAsSupplierTemplate={handleSaveAsSupplierTemplate}
@@ -1854,6 +1862,38 @@ export function App() {
           showToast('Grade de separação e estoque central salvos!');
         }}
         onSavePreset={handleSaveSeparationPreset}
+      />
+
+      {/* Modal Rápido de Fornecedor & Parâmetros Fiscais (Overlay direto no Pedido) */}
+      <SupplierModal
+        isOpen={isSupplierModalOpen}
+        suppliers={suppliers}
+        initialEditSupplier={supplierModalEditTarget}
+        onClose={() => {
+          setIsSupplierModalOpen(false);
+          setSupplierModalEditTarget(null);
+        }}
+        onSaveSupplier={async (sup) => {
+          const saved = await handleSaveSupplier(sup);
+          handleSelectSupplierForOrder(saved);
+          setIsSupplierModalOpen(false);
+          setSupplierModalEditTarget(null);
+        }}
+        onDeleteSupplier={async (supId) => {
+          await handleDeleteSupplier(supId);
+          if (order.header.supplierId === supId) {
+            handleHeaderChange({
+              ...order.header,
+              fornecedor: '',
+              supplierId: ''
+            });
+          }
+        }}
+        onSelectSupplierForOrder={(sup) => {
+          handleSelectSupplierForOrder(sup);
+          setIsSupplierModalOpen(false);
+          setSupplierModalEditTarget(null);
+        }}
       />
 
     </div>

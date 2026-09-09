@@ -295,7 +295,20 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   } | null>(null);
 
   const [isColumnsDropdownOpen, setIsColumnsDropdownOpen] = useState(false);
+  const [columnsCoords, setColumnsCoords] = useState<{ top: number; left: number } | null>(null);
   const columnsDropdownRef = useRef<HTMLDivElement>(null);
+  const columnsButtonRef = useRef<HTMLButtonElement>(null);
+
+  const updateColumnsPosition = () => {
+    if (!columnsButtonRef.current) return;
+    const rect = columnsButtonRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const isFlipped = spaceBelow < 320 && rect.top > 320;
+    setColumnsCoords({
+      top: isFlipped ? Math.max(10, rect.top - 330) : rect.bottom + 6,
+      left: Math.max(12, Math.min(rect.left, window.innerWidth - 280))
+    });
+  };
 
   // Drag and drop states
   const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
@@ -339,7 +352,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       if (
         columnsDropdownRef.current &&
-        !columnsDropdownRef.current.contains(target)
+        !columnsDropdownRef.current.contains(target) &&
+        columnsButtonRef.current &&
+        !columnsButtonRef.current.contains(target)
       ) {
         setIsColumnsDropdownOpen(false);
       }
@@ -348,6 +363,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const handleScrollOrResize = () => {
       if (activeInputRef.current && activeAutocompleteItemId) {
         updateDropdownPosition(activeInputRef.current);
+      }
+      if (isColumnsDropdownOpen) {
+        updateColumnsPosition();
       }
     };
 
@@ -359,7 +377,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       window.removeEventListener('scroll', handleScrollOrResize, true);
       window.removeEventListener('resize', handleScrollOrResize);
     };
-  }, [activeAutocompleteItemId]);
+  }, [activeAutocompleteItemId, isColumnsDropdownOpen]);
 
   // Produtos filtrados para o autocomplete ativo na linha (apenas do fornecedor do pedido)
   const matchingProductsForRow = useMemo(() => {
@@ -1573,10 +1591,23 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               {/* Coluna # com Dropdown para escolha de colunas visíveis */}
               <th className="py-2.5 px-2 w-12 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-200/60 dark:bg-slate-800/90 whitespace-nowrap relative">
                 <button
+                  ref={columnsButtonRef}
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsColumnsDropdownOpen(prev => !prev);
+                    setIsColumnsDropdownOpen(prev => {
+                      const next = !prev;
+                      if (next && columnsButtonRef.current) {
+                        const rect = columnsButtonRef.current.getBoundingClientRect();
+                        const spaceBelow = window.innerHeight - rect.bottom;
+                        const isFlipped = spaceBelow < 320 && rect.top > 320;
+                        setColumnsCoords({
+                          top: isFlipped ? Math.max(10, rect.top - 330) : rect.bottom + 6,
+                          left: Math.max(12, Math.min(rect.left, window.innerWidth - 280))
+                        });
+                      }
+                      return next;
+                    });
                   }}
                   className="inline-flex items-center justify-center gap-1 font-extrabold text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 p-1 rounded-md hover:bg-slate-300/60 dark:hover:bg-slate-700 transition cursor-pointer"
                   title="Configurar Colunas Visíveis"
@@ -1585,11 +1616,17 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   <SlidersHorizontal className="w-3 h-3 text-slate-500" />
                 </button>
 
-                {isColumnsDropdownOpen && (
+                {isColumnsDropdownOpen && columnsCoords && createPortal(
                   <div
                     ref={columnsDropdownRef}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute left-0 top-full mt-1.5 w-64 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl z-50 p-3 text-left font-sans normal-case tracking-normal animate-in fade-in slide-in-from-top-2 duration-150"
+                    style={{
+                      position: 'fixed',
+                      top: `${columnsCoords.top}px`,
+                      left: `${columnsCoords.left}px`,
+                      zIndex: 999999
+                    }}
+                    className="w-64 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-3 text-left font-sans normal-case tracking-normal animate-in fade-in slide-in-from-top-2 duration-150"
                   >
                     <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
                       <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-white">
@@ -1642,7 +1679,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                         Marcar Todas
                       </button>
                     </div>
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </th>
 

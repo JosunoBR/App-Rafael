@@ -93,7 +93,7 @@ const ALL_COLUMNS: ColumnMeta[] = [
   { key: 'valorTotalLiquido', label: 'TOTAL (R$)', thClass: 'text-right', defaultWidth: 115, minWidth: 95 },
   { key: 'pdvAlvo', label: 'PDV', thClass: 'text-center', defaultWidth: 75, minWidth: 65 },
   { key: 'custoLoja', label: 'CUSTO LOJA', thClass: 'text-right', title: 'Custo Total da Loja (conforme modelo da planilha)', defaultWidth: 110, minWidth: 98 },
-  { key: 'custoFornecedor', label: 'CUSTO FORN.', thClass: 'text-right', title: 'Custo Real Fornecedor (Produto + IPI + ST + Frete)', defaultWidth: 115, minWidth: 102 },
+  { key: 'custoFornecedor', label: 'CUSTO FORN.', thClass: 'text-right', title: 'Custo Real Fornecedor (Produto com Desconto Comercial + IPI + ST + Frete)', defaultWidth: 115, minWidth: 102 },
   { key: 'margem', label: 'MARGEM', thClass: 'text-center', defaultWidth: 105, minWidth: 88 },
   { key: 'acoes', label: 'AÇÕES', thClass: 'text-center', defaultWidth: 90, minWidth: 78 },
 ];
@@ -1223,6 +1223,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'custoFornecedor': {
         const hasCustomFiscal = Boolean(item.fiscalOverride?.useCustomFiscal);
+        const itemDescPct = (item.percentualDesconto !== undefined && item.percentualDesconto > 0)
+          ? item.percentualDesconto
+          : Math.max(0, Math.min(100, percentualDescontoOff || 0));
+        const precoLiquidoCompra = item.precoUnitario * (1 - itemDescPct / 100);
         return (
           <td key="custoFornecedor" style={cellStyle} className="py-2 px-3 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-emerald-50/20 dark:bg-emerald-950/10">
             <div className="flex items-center justify-end gap-1.5">
@@ -1234,9 +1238,19 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   Indiv.
                 </span>
               )}
+              {itemDescPct > 0 && !isOrderItemBlank(item) && (
+                <span
+                  title={`Desconto Comercial de ${itemDescPct}% OFF aplicado: Preço Líquido R$ ${precoLiquidoCompra.toFixed(2)}`}
+                  className="inline-flex items-center px-1 py-0.2 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300/40"
+                >
+                  -{itemDescPct}%
+                </span>
+              )}
               <div 
                 className={`font-extrabold text-emerald-700 dark:text-emerald-400 font-mono text-xs whitespace-nowrap ${onOpenFiscalModal && !isOrderItemBlank(item) ? 'cursor-pointer hover:underline' : ''}`} 
-                title="Custo Real Fornecedor (Produto + IPI + ST + Frete). Clique para abrir calculadora fiscal."
+                title={itemDescPct > 0
+                  ? `Custo Fornecedor = Preço com Desconto R$ ${precoLiquidoCompra.toFixed(2)} (R$ ${item.precoUnitario.toFixed(2)} - ${itemDescPct}% OFF) + Encargos R$ ${fiscal.custoRealEntrada.toFixed(2)} = R$ ${fiscal.custoFornecedor.toFixed(2)}`
+                  : 'Custo Real Fornecedor (Produto + IPI + ST + Frete). Clique para abrir calculadora fiscal.'}
                 onClick={() => {
                   if (onOpenFiscalModal && !isOrderItemBlank(item)) {
                     onOpenFiscalModal(item);

@@ -580,8 +580,15 @@ export function App() {
     showToast('Item duplicado com sucesso!');
   };
 
-  // Iniciar novo pedido em branco
+  // Iniciar novo pedido em branco (com proteção automática para não perder rascunho anterior em digitação)
   const handleNewOrder = async () => {
+    const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
+    const hasWork = validItems.length > 0 || (order.header.fornecedor && order.header.fornecedor.trim() !== '');
+    if (hasWork && !isCurrentOrderSaved) {
+      await saveOrderSilently(order);
+      showToast(`Pedido anterior ${order.header.numeroPedido} salvo em espera.`, 'info');
+    }
+
     try {
       const nextNum = await fetchNextOrderNumberFromDb();
       const newOrd = createNewOrder(fiscalConfig, storeConfigs, nextNum);
@@ -823,6 +830,58 @@ export function App() {
       const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
       setProducts(refreshed);
     }
+  };
+
+  // Salva o pedido silenciosamente para contingência e troca segura de telas/pedidos sem perda de dados
+  const saveOrderSilently = async (targetOrder: PurchaseOrder) => {
+    const validItems = (targetOrder.items || []).filter(it => !isOrderItemBlank(it));
+    if (validItems.length === 0 && (!targetOrder.header.fornecedor || targetOrder.header.fornecedor.trim() === '')) {
+      return;
+    }
+
+    await autoRegisterProductsFromOrder(validItems);
+
+    const orderToSave: PurchaseOrder = {
+      ...targetOrder,
+      items: validItems,
+      header: {
+        ...targetOrder.header,
+        isDraft: true,
+        status: targetOrder.header.status === 'Em Separação' || targetOrder.header.status === 'Finalizado' ? targetOrder.header.status : 'Em Cotação',
+        updatedAt: new Date().toISOString()
+      },
+      installments: generateOrderInstallments(targetOrder, undefined, undefined, true)
+    };
+
+    try {
+      await saveOrderToDb(orderToSave);
+      saveOrderToHistory(orderToSave);
+      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(updatedOrders);
+    } catch {
+      saveOrderToHistory(orderToSave);
+      setSavedOrders(loadSavedOrdersList());
+    }
+  };
+
+  // Carrega com segurança um pedido selecionado, salvando o atual automaticamente se houver trabalho em andamento
+  const handleOpenSelectedOrder = async (selected: PurchaseOrder, destinationTab: ActiveNavTab = 'orders') => {
+    if (order && order.header.id !== selected.header.id) {
+      const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
+      const hasWork = validItems.length > 0 || (order.header.fornecedor && order.header.fornecedor.trim() !== '');
+      if (hasWork) {
+        await saveOrderSilently(order);
+        showToast(`Pedido ${order.header.numeroPedido} salvo automaticamente em espera.`, 'info');
+      }
+    }
+    setOrder({
+      ...selected,
+      items: ensureTrailingBlankItem(selected.items || [], fiscalConfig, storeConfigs)
+    });
+    if (activeNav !== destinationTab) {
+      setActiveNav(destinationTab);
+    }
+    showToast(`Pedido ${selected.header.numeroPedido} carregado com sucesso.`);
   };
 
   // 1. Salvar Pedido em Rascunho / Espera (mantém o pedido na tela para continuar editando)
@@ -1656,6 +1715,8 @@ export function App() {
           onChangeViewMode={setViewMode}
           hasActiveDraft={hasActiveDraft}
           isSavedOrder={isCurrentOrderSaved}
+          savedOrders={savedOrders}
+          onSelectOrder={(selected) => handleOpenSelectedOrder(selected)}
           onNewOrder={handleNewOrder}
           onSaveOrder={handleSaveDraftOrder}
           onCloseOrder={handleCloseOrder}
@@ -1714,11 +1775,7 @@ export function App() {
                   onNewOrder={handleNewOrder}
                   onContinueDraft={handleContinueDraft}
                   onDiscardDraft={handleDiscardDraft}
-                  onSelectOrder={(selected) => {
-                    setOrder(selected);
-                    setActiveNav('orders');
-                    showToast(`Pedido ${selected.header.numeroPedido} aberto.`);
-                  }}
+                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
                   onSwitchViewMode={(mode) => setViewMode(mode)}
                 />
               )}
@@ -1830,11 +1887,7 @@ export function App() {
                 <SeparationHistoryPage
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
                   stores={storeConfigs}
-                  onSelectOrderForSeparation={(selected) => {
-                    setOrder(selected);
-                    setActiveNav('separation');
-                    showToast(`Romaneio do pedido ${selected.header.numeroPedido} aberto para conferência.`);
-                  }}
+                  onSelectOrderForSeparation={(selected) => handleOpenSelectedOrder(selected, 'separation')}
                   onNavigateToSeparation={() => setActiveNav('separation')}
                 />
               )}
@@ -1855,11 +1908,7 @@ export function App() {
                 <DashboardView
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
                   suppliers={suppliers}
-                  onSelectOrder={(selected) => {
-                    setOrder(selected);
-                    setActiveNav('orders');
-                    showToast(`Pedido ${selected.header.numeroPedido} aberto.`);
-                  }}
+                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
                   onNavigateToOrders={() => setActiveNav('orders')}
                 />
               )}
@@ -1869,11 +1918,7 @@ export function App() {
                 <FinancialBoletosPage
                   orders={effectiveOrders}
                   suppliers={suppliers}
-                  onSelectOrder={(selected) => {
-                    setOrder(selected);
-                    setActiveNav('orders');
-                    showToast(`Pedido ${selected.header.numeroPedido} aberto.`);
-                  }}
+                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
                   onUpdateInstallment={handleUpdateInstallment}
                   onSaveOrder={handleSaveOrderDirect}
                   showToast={showToast}
@@ -1907,19 +1952,11 @@ export function App() {
               {activeNav === 'history' && (
                 <OrderHistoryPage
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
-                  onSelectOrder={(selected) => {
-                    setOrder(selected);
-                    setActiveNav('orders');
-                    showToast(`Pedido ${selected.header.numeroPedido} carregado com sucesso.`);
-                  }}
+                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
                   onDeleteOrder={handleDeleteOrder}
                   onNewOrder={handleNewOrder}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
-                  onNavigateToSeparation={(selected) => {
-                    setOrder(selected);
-                    setActiveNav('separation');
-                    showToast(`Conferência do pedido ${selected.header.numeroPedido} iniciada.`);
-                  }}
+                  onNavigateToSeparation={(selected) => handleOpenSelectedOrder(selected, 'separation')}
                 />
               )}
 

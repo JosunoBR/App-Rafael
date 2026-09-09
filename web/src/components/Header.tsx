@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Home,
   ShoppingCart, 
@@ -22,11 +22,14 @@ import {
   Trash2,
   CheckCircle2,
   ChevronRight,
+  ChevronDown,
+  Check,
   Warehouse,
   Copy
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { ActiveNavTab } from './Sidebar';
+import { calculateOrderNetTotal } from '../utils/installments';
 
 interface HeaderProps {
   activeNav: ActiveNavTab;
@@ -36,6 +39,8 @@ interface HeaderProps {
   onChangeViewMode: (mode: 'desktop' | 'mobile_purchases' | 'mobile_separation') => void;
   hasActiveDraft: boolean;
   isSavedOrder: boolean;
+  savedOrders?: PurchaseOrder[];
+  onSelectOrder?: (selectedOrder: PurchaseOrder) => void;
   onNewOrder: () => void;
   onSaveOrder: () => void;
   onCloseOrder?: () => void;
@@ -54,6 +59,8 @@ export const Header: React.FC<HeaderProps> = ({
   onChangeViewMode,
   hasActiveDraft,
   isSavedOrder,
+  savedOrders = [],
+  onSelectOrder,
   onNewOrder,
   onSaveOrder,
   onCloseOrder,
@@ -63,6 +70,57 @@ export const Header: React.FC<HeaderProps> = ({
   onExportPDF,
   onSelectNav
 }) => {
+  const [isOrdersDropdownOpen, setIsOrdersDropdownOpen] = useState(false);
+  const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const ordersDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fecha o dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ordersDropdownRef.current && !ordersDropdownRef.current.contains(e.target as Node)) {
+        setIsOrdersDropdownOpen(false);
+      }
+    };
+    if (isOrdersDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOrdersDropdownOpen]);
+
+  // Filtra exclusivamente os pedidos salvos que ainda NÃO seguiram o fluxo da esteira (apenas 'Em Cotação' ou 'Rascunho')
+  const openSavedOrders = useMemo(() => {
+    if (!savedOrders) return [];
+    return savedOrders.filter(o => {
+      const status = o.header?.status || 'Em Cotação';
+      return status === 'Em Cotação' || status === 'Rascunho';
+    });
+  }, [savedOrders]);
+
+  const filteredOrders = useMemo(() => {
+    if (!orderSearchTerm.trim()) return openSavedOrders;
+    const term = orderSearchTerm.toLowerCase();
+    return openSavedOrders.filter(o => 
+      o.header.numeroPedido.toLowerCase().includes(term) ||
+      (o.header.fornecedor && o.header.fornecedor.toLowerCase().includes(term)) ||
+      (o.header.status && o.header.status.toLowerCase().includes(term))
+    );
+  }, [openSavedOrders, orderSearchTerm]);
+
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'Aprovado':
+        return { label: 'Aprovado', cls: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30' };
+      case 'Em Separação':
+        return { label: 'Em Separação', cls: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30' };
+      case 'Em Cotação':
+      case 'Rascunho':
+      default:
+        return { label: status || 'Em Cotação', cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' };
+    }
+  };
+
   const userRole: UserRole = currentUser?.role || 'diretoria';
   const canAccessOrders = userRole === 'diretoria';
 
@@ -74,9 +132,9 @@ export const Header: React.FC<HeaderProps> = ({
       case 'orders':
         return { title: 'Cotação & Pedidos de Compras', group: 'Operação', icon: ShoppingCart, color: 'text-emerald-500' };
       case 'stock':
-        return { title: 'Estoque do Depósito Central (CD Matriz)', group: 'Operação', icon: Warehouse, color: 'text-emerald-500' };
+        return { title: 'Estoque Central CD & Almoxarifado', group: 'Operação', icon: Warehouse, color: 'text-emerald-500' };
       case 'separation':
-        return { title: 'Separação & Distribuição', group: 'Operação', icon: PackageCheck, color: 'text-emerald-500' };
+        return { title: 'Separação & Distribuição de Lojas', group: 'Operação', icon: userRole === 'separacao' ? PackageCheck : Boxes, color: 'text-blue-500' };
       case 'financial':
         return { title: 'Gestão Financeira & Boletos', group: 'Gestão', icon: CreditCard, color: 'text-amber-500' };
       case 'dashboard':
@@ -128,10 +186,145 @@ export const Header: React.FC<HeaderProps> = ({
                 {activeNav === 'orders' ? 'Cotação & Pedidos' : navMeta.title}
               </h1>
               {(activeNav === 'orders' || activeNav === 'separation') && order?.header?.numeroPedido && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-600 text-white inline-flex items-center gap-1.5 shadow-xs whitespace-nowrap shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />
-                  <span>{order.header.numeroPedido}</span>
-                </span>
+                <div className="relative" ref={ordersDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsOrdersDropdownOpen(prev => !prev)}
+                    className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white inline-flex items-center gap-1.5 shadow-sm whitespace-nowrap shrink-0 cursor-pointer transition select-none group"
+                    title="Navegar entre pedidos salvos em cotação (que ainda não seguiram o fluxo)"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0 animate-pulse" />
+                    <span>{order.header.numeroPedido}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 opacity-80 group-hover:opacity-100 transition-transform duration-200 ${isOrdersDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Menu Dropdown de Pedidos Salvos em Cotação (Não seguiram o fluxo) */}
+                  {isOrdersDropdownOpen && (
+                    <div className="absolute left-0 top-full mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 p-2.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                      
+                      {/* Topo do Menu */}
+                      <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-100 dark:border-slate-800 mb-2">
+                        <div className="flex items-center gap-2">
+                          <ShoppingCart className="w-4 h-4 text-emerald-500" />
+                          <span className="text-xs font-bold text-slate-900 dark:text-white">
+                            Pedidos Salvos (Em Cotação)
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
+                          {openSavedOrders.length} {openSavedOrders.length === 1 ? 'salvo' : 'salvos'}
+                        </span>
+                      </div>
+
+                      {/* Campo de Busca Rápida se houver 4 ou mais pedidos */}
+                      {openSavedOrders.length >= 4 && (
+                        <div className="relative mb-2 px-1">
+                          <input
+                            type="text"
+                            value={orderSearchTerm}
+                            onChange={(e) => setOrderSearchTerm(e.target.value)}
+                            placeholder="Buscar por número ou fornecedor..."
+                            className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 outline-hidden focus:ring-1 focus:ring-emerald-500"
+                            autoFocus
+                          />
+                        </div>
+                      )}
+
+                      {/* Lista de Pedidos */}
+                      <div className="max-h-64 overflow-y-auto space-y-1 pr-0.5">
+                        {filteredOrders.length === 0 ? (
+                          <div className="py-6 text-center text-xs text-slate-400">
+                            {openSavedOrders.length === 0 
+                              ? 'Nenhum pedido em cotação salvo no momento.'
+                              : 'Nenhum pedido encontrado com esse filtro.'}
+                          </div>
+                        ) : (
+                          filteredOrders.map((ord) => {
+                            const isCurrent = ord.header.id === order.header.id;
+                            const statusBadge = getStatusBadge(ord.header.status);
+                            const totalVal = calculateOrderNetTotal(ord);
+
+                            return (
+                              <button
+                                key={ord.header.id}
+                                type="button"
+                                onClick={() => {
+                                  if (onSelectOrder) {
+                                    onSelectOrder(ord);
+                                  }
+                                  setIsOrdersDropdownOpen(false);
+                                }}
+                                className={`w-full text-left p-2.5 rounded-xl border transition flex flex-col gap-1 cursor-pointer ${
+                                  isCurrent
+                                    ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/80 shadow-2xs'
+                                    : 'border-transparent hover:border-slate-200 dark:hover:border-slate-700/80 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-black font-mono text-slate-900 dark:text-white">
+                                      {ord.header.numeroPedido}
+                                    </span>
+                                    <span className={`px-1.5 py-0.2 rounded-md text-[9px] font-extrabold uppercase border ${statusBadge.cls}`}>
+                                      {statusBadge.label}
+                                    </span>
+                                  </div>
+                                  {isCurrent ? (
+                                    <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                      <Check className="w-3 h-3" />
+                                      <span>Ativo</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                                      R$ {totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                                  <span className="truncate max-w-[200px] font-medium">
+                                    {ord.header.fornecedor || 'Fornecedor não informado'}
+                                  </span>
+                                  <span className="text-[10px]">
+                                    {ord.items?.length || 0} {(ord.items?.length || 0) === 1 ? 'item' : 'itens'}
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Rodapé do Menu */}
+                      <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between px-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onNewOrder();
+                            setIsOrdersDropdownOpen(false);
+                          }}
+                          className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Novo Pedido</span>
+                        </button>
+
+                        {onSelectNav && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelectNav('history');
+                              setIsOrdersDropdownOpen(false);
+                            }}
+                            className="text-[11px] font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                          >
+                            Ver Histórico →
+                          </button>
+                        )}
+                      </div>
+
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

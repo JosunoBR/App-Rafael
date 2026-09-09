@@ -290,6 +290,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     minWidth: number;
   } | null>(null);
 
+  const [resizingColKey, setResizingColKey] = useState<ColumnKey | null>(null);
+  const [isHoveringResize, setIsHoveringResize] = useState(false);
+
   const [isColumnsDropdownOpen, setIsColumnsDropdownOpen] = useState(false);
   const [columnsCoords, setColumnsCoords] = useState<{ top: number; left: number } | null>(null);
   const columnsDropdownRef = useRef<HTMLDivElement>(null);
@@ -791,6 +794,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   };
 
   const handleDragStart = (e: React.DragEvent, key: ColumnKey) => {
+    if (resizingColumnRef.current || isHoveringResize || resizingColKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     isDraggingRef.current = true;
     setDraggedColumn(key);
     e.dataTransfer.setData('text/plain', key);
@@ -851,6 +859,12 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const handleResizeStart = (e: React.MouseEvent, key: ColumnKey, minWidth: number = 60) => {
     e.preventDefault();
     e.stopPropagation(); // Evitar ordenação ou drag da coluna
+
+    // Cancela qualquer drag de coluna em andamento
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+    isDraggingRef.current = false;
+
     const currentWidth = columnWidths[key] || ALL_COLUMNS.find(c => c.key === key)?.defaultWidth || 100;
     resizingColumnRef.current = {
       key,
@@ -858,6 +872,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       startWidth: currentWidth,
       minWidth
     };
+    setResizingColKey(key);
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!resizingColumnRef.current) return;
@@ -866,22 +884,26 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       
       setColumnWidths(prev => ({
         ...prev,
-        [resizingColumnRef.current!.key]: Math.round(newWidth)
+        [key]: Math.round(newWidth)
       }));
     };
 
     const handleMouseUp = () => {
-      if (resizingColumnRef.current) {
-        setColumnWidths(current => {
-          try {
-            localStorage.setItem('mega12_order_columns_widths', JSON.stringify(current));
-          } catch (err) {}
-          return current;
-        });
-      }
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setResizingColKey(null);
+      setIsHoveringResize(false);
       resizingColumnRef.current = null;
+
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+
+      setColumnWidths(current => {
+        try {
+          localStorage.setItem('mega12_order_columns_widths', JSON.stringify(current));
+        } catch (err) {}
+        return current;
+      });
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -913,6 +935,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       .filter(Boolean);
   }, [columnOrder, visibleColumns]);
 
+  const totalTableWidth = useMemo(() => {
+    const indexColWidth = 48; // Coluna #
+    const colsWidth = orderedVisibleColumns.reduce((acc, col) => {
+      return acc + (columnWidths[col.key] || col.defaultWidth);
+    }, 0);
+    return indexColWidth + colsWidth;
+  }, [orderedVisibleColumns, columnWidths]);
+
   // Renderizador dinâmico de células da tabela
   const renderTableCell = (
     colKey: ColumnKey,
@@ -925,7 +955,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const minWidth = colMeta?.minWidth || 60;
     const cellStyle: React.CSSProperties = {
       width: `${colWidth}px`,
-      minWidth: `${minWidth}px`
+      minWidth: `${minWidth}px`,
+      maxWidth: `${colWidth}px`,
+      boxSizing: 'border-box'
     };
 
     switch (colKey) {
@@ -1478,11 +1510,29 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       {/* Table responsive container com visual e comportamento de planilha do Excel */}
       <div className="overflow-x-auto overflow-y-visible">
-        <table className="min-w-max w-full text-left border-collapse border-t border-slate-200 dark:border-slate-700 font-sans text-xs">
+        <table 
+          style={{ 
+            tableLayout: 'fixed', 
+            width: `${totalTableWidth}px`, 
+            minWidth: '100%' 
+          }} 
+          className="text-left border-collapse border-t border-slate-200 dark:border-slate-700 font-sans text-xs"
+        >
+          <colgroup>
+            <col style={{ width: '48px', minWidth: '48px' }} />
+            {orderedVisibleColumns.map(col => {
+              const w = columnWidths[col.key] || col.defaultWidth;
+              const minW = col.minWidth || 60;
+              return <col key={col.key} style={{ width: `${w}px`, minWidth: `${minW}px` }} />;
+            })}
+          </colgroup>
           <thead>
             <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-100/90 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider select-none whitespace-nowrap">
               {/* Coluna # com Dropdown para escolha de colunas visíveis */}
-              <th className="py-2 px-2 w-12 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-200/60 dark:bg-slate-800/90 whitespace-nowrap relative">
+              <th 
+                style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}
+                className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-200/60 dark:bg-slate-800/90 whitespace-nowrap relative"
+              >
                 <button
                   ref={columnsButtonRef}
                   type="button"
@@ -1582,39 +1632,62 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 const isDragOver = dragOverColumn === col.key;
                 const isBeingDragged = draggedColumn === col.key;
                 const colWidth = columnWidths[col.key] || col.defaultWidth;
-                const minWidth = col.minWidth;
+                const minWidth = col.minWidth || 60;
+                const isThisResizing = resizingColKey === col.key;
+                const canDrag = !resizingColKey && !isHoveringResize;
 
                 return (
                   <th
                     key={col.key}
-                    draggable={true}
+                    draggable={canDrag}
                     onDragStart={(e) => handleDragStart(e, col.key)}
                     onDragOver={(e) => handleDragOver(e, col.key)}
                     onDragLeave={() => handleDragLeave(col.key)}
                     onDrop={(e) => handleDrop(e, col.key)}
                     onDragEnd={handleDragEnd}
-                    style={{ width: `${colWidth}px`, minWidth: `${minWidth}px` }}
-                    className={`py-2 px-2.5 border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none transition-colors group/th cursor-grab active:cursor-grabbing relative text-center ${
+                    style={{ width: `${colWidth}px`, minWidth: `${minWidth}px`, maxWidth: `${colWidth}px` }}
+                    className={`py-2 px-2.5 border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none transition-colors relative text-center ${
+                      canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+                    } ${
                       isDragOver ? 'bg-emerald-100/90 dark:bg-emerald-950/90 ring-2 ring-emerald-500' : ''
-                    } ${isBeingDragged ? 'opacity-30' : 'hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+                    } ${isBeingDragged ? 'opacity-30' : 'hover:bg-slate-200/50 dark:hover:bg-slate-700/50'} ${
+                      isThisResizing ? 'bg-emerald-50/60 dark:bg-emerald-950/40' : ''
+                    }`}
                     title="Arraste para mover a posição da coluna • Arraste a divisória direita para ajustar a largura"
                   >
-                    <div className="flex items-center justify-center w-full">
-                      <span className="font-bold tracking-tight text-[11px] text-slate-700 dark:text-slate-200 text-center">
+                    <div className="flex items-center justify-center w-full pointer-events-none">
+                      <span className="font-bold tracking-tight text-[11px] text-slate-700 dark:text-slate-200 text-center truncate">
                         {col.label}
                       </span>
                     </div>
 
-                    {/* Alça de Redimensionamento Discreta e Invisível na Divisória Direita */}
+                    {/* Alça de Redimensionamento Confortável com Feedback Visual */}
                     <div
+                      draggable={false}
+                      onDragStart={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onMouseEnter={() => setIsHoveringResize(true)}
+                      onMouseLeave={() => {
+                        if (!resizingColumnRef.current) setIsHoveringResize(false);
+                      }}
                       onMouseDown={(e) => handleResizeStart(e, col.key, minWidth)}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
                       }}
-                      title="Arraste para ajustar a largura"
-                      className="absolute top-0 right-0 w-2 h-full cursor-col-resize z-20 hover:bg-emerald-500/40 active:bg-emerald-500 transition-colors"
-                    />
+                      title="Arraste para ajustar a largura desta coluna"
+                      className={`absolute top-0 -right-2 w-4 h-full cursor-col-resize z-30 flex items-center justify-center group/resize select-none ${
+                        isThisResizing ? 'bg-emerald-500/20' : ''
+                      }`}
+                    >
+                      <div className={`w-[3px] h-full rounded-full transition-colors ${
+                        isThisResizing 
+                          ? 'bg-emerald-500 shadow-sm' 
+                          : 'bg-transparent group-hover/resize:bg-emerald-500'
+                      }`} />
+                    </div>
                   </th>
                 );
               })}
@@ -1631,7 +1704,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   className="hover:bg-emerald-50/20 dark:hover:bg-slate-800/40 transition-colors group whitespace-nowrap"
                 >
                   {/* Index / Linha fixa */}
-                  <td className="py-2 px-2 text-center bg-slate-50 dark:bg-slate-900/40 text-slate-400 font-mono text-[11px] font-semibold border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap select-none">
+                  <td 
+                    style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}
+                    className="py-2 px-2 text-center bg-slate-50 dark:bg-slate-900/40 text-slate-400 font-mono text-[11px] font-semibold border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap select-none"
+                  >
                     {index + 1}
                   </td>
 

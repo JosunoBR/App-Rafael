@@ -26,10 +26,6 @@ import {
   UploadCloud,
   CheckCircle2,
   Trash,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  GripVertical,
   SlidersHorizontal,
   RotateCcw,
   Calculator
@@ -80,27 +76,26 @@ export interface ColumnMeta {
   label: string;
   thClass: string;
   title?: string;
-  sortable: boolean;
-  defaultWidth?: number; // Largura padrão em pixels
-  minWidth?: number; // Largura mínima em pixels
+  defaultWidth: number; // Largura padrão em pixels
+  minWidth: number; // Largura mínima em pixels
 }
 
 const ALL_COLUMNS: ColumnMeta[] = [
-  { key: 'foto', label: 'FOTO', thClass: 'py-2.5 px-2 text-center', sortable: false, defaultWidth: 48, minWidth: 40 },
-  { key: 'codigoInterno', label: 'CÓD. INTERNO', thClass: 'py-2.5 px-3 text-center', sortable: true, defaultWidth: 105, minWidth: 70 },
-  { key: 'codigoBarras', label: 'CÓD. BARRAS', thClass: 'py-2.5 px-3 text-center', title: 'Código de Barras EAN-13', sortable: true, defaultWidth: 125, minWidth: 80 },
-  { key: 'codigoFornecedor', label: 'REF. FÁBRICA', thClass: 'py-2.5 px-3 text-center', title: 'Referência de Fábrica / Cód. Fornecedor', sortable: true, defaultWidth: 110, minWidth: 75 },
-  { key: 'descricao', label: 'DESCRIÇÃO DO ITEM', thClass: 'py-2.5 px-3.5 text-left', sortable: true, defaultWidth: 320, minWidth: 160 },
-  { key: 'qtdNoPacote', label: 'QTD NO PAC', thClass: 'py-2.5 px-2.5 text-center', title: 'Quantidade por Embalagem (Caixa, Fardo, Display)', sortable: true, defaultWidth: 85, minWidth: 60 },
-  { key: 'qtdPacotes', label: 'QTD DE PAC', thClass: 'py-2.5 px-2.5 text-center', title: 'Quantidade de Pacotes ou Caixas Compradas', sortable: true, defaultWidth: 85, minWidth: 60 },
-  { key: 'qtdTotalUnidades', label: 'TOTAL PEÇAS', thClass: 'py-2.5 px-2.5 text-center', title: 'Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)', sortable: true, defaultWidth: 95, minWidth: 65 },
-  { key: 'precoUnitario', label: 'VALOR', thClass: 'py-2.5 px-3 text-right', title: 'Valor unitário do produto (R$)', sortable: true, defaultWidth: 100, minWidth: 75 },
-  { key: 'valorTotalLiquido', label: 'TOTAL (R$)', thClass: 'py-2.5 px-3.5 text-right', sortable: true, defaultWidth: 115, minWidth: 80 },
-  { key: 'pdvAlvo', label: 'PDV', thClass: 'py-2.5 px-2 text-center', sortable: true, defaultWidth: 70, minWidth: 55 },
-  { key: 'custoLoja', label: 'CUSTO LOJA', thClass: 'py-2.5 px-3 text-right', title: 'Custo Total da Loja (conforme modelo da planilha)', sortable: true, defaultWidth: 110, minWidth: 80 },
-  { key: 'custoFornecedor', label: 'CUSTO FORN.', thClass: 'py-2.5 px-3 text-right', title: 'Custo Real Fornecedor (Produto + IPI + ST + Frete)', sortable: true, defaultWidth: 110, minWidth: 80 },
-  { key: 'margem', label: 'MARGEM', thClass: 'py-2.5 px-3 text-center', sortable: true, defaultWidth: 115, minWidth: 80 },
-  { key: 'acoes', label: 'AÇÕES', thClass: 'py-2.5 px-3 text-center', sortable: false, defaultWidth: 90, minWidth: 70 },
+  { key: 'foto', label: 'FOTO', thClass: 'text-center', defaultWidth: 50, minWidth: 46 },
+  { key: 'codigoInterno', label: 'CÓD. INTERNO', thClass: 'text-center', defaultWidth: 115, minWidth: 105 },
+  { key: 'codigoBarras', label: 'CÓD. BARRAS', thClass: 'text-center', title: 'Código de Barras EAN-13', defaultWidth: 125, minWidth: 110 },
+  { key: 'codigoFornecedor', label: 'REF. FÁBRICA', thClass: 'text-center', title: 'Referência de Fábrica / Cód. Fornecedor', defaultWidth: 115, minWidth: 105 },
+  { key: 'descricao', label: 'DESCRIÇÃO DO ITEM', thClass: 'text-left', defaultWidth: 320, minWidth: 180 },
+  { key: 'qtdNoPacote', label: 'QTD NO PAC', thClass: 'text-center', title: 'Quantidade por Embalagem (Caixa, Fardo, Display)', defaultWidth: 100, minWidth: 92 },
+  { key: 'qtdPacotes', label: 'QTD DE PAC', thClass: 'text-center', title: 'Quantidade de Pacotes ou Caixas Compradas', defaultWidth: 100, minWidth: 92 },
+  { key: 'qtdTotalUnidades', label: 'TOTAL PEÇAS', thClass: 'text-center', title: 'Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)', defaultWidth: 110, minWidth: 98 },
+  { key: 'precoUnitario', label: 'VALOR', thClass: 'text-right', title: 'Valor unitário do produto (R$)', defaultWidth: 95, minWidth: 80 },
+  { key: 'valorTotalLiquido', label: 'TOTAL (R$)', thClass: 'text-right', defaultWidth: 115, minWidth: 95 },
+  { key: 'pdvAlvo', label: 'PDV', thClass: 'text-center', defaultWidth: 75, minWidth: 65 },
+  { key: 'custoLoja', label: 'CUSTO LOJA', thClass: 'text-right', title: 'Custo Total da Loja (conforme modelo da planilha)', defaultWidth: 110, minWidth: 98 },
+  { key: 'custoFornecedor', label: 'CUSTO FORN.', thClass: 'text-right', title: 'Custo Real Fornecedor (Produto + IPI + ST + Frete)', defaultWidth: 115, minWidth: 102 },
+  { key: 'margem', label: 'MARGEM', thClass: 'text-center', defaultWidth: 105, minWidth: 88 },
+  { key: 'acoes', label: 'AÇÕES', thClass: 'text-center', defaultWidth: 90, minWidth: 78 },
 ];
 
 // Helper para destacar os caracteres digitados no texto
@@ -276,13 +271,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         const parsed = JSON.parse(saved);
         const merged: Record<string, number> = {};
         ALL_COLUMNS.forEach(c => {
-          merged[c.key] = typeof parsed[c.key] === 'number' ? parsed[c.key] : (c.defaultWidth || 100);
+          const loaded = typeof parsed[c.key] === 'number' ? parsed[c.key] : c.defaultWidth;
+          merged[c.key] = Math.max(c.minWidth || 60, loaded);
         });
         return merged as Record<ColumnKey, number>;
       }
     } catch (e) {}
     const initial: Record<string, number> = {};
-    ALL_COLUMNS.forEach(c => { initial[c.key] = c.defaultWidth || 100; });
+    ALL_COLUMNS.forEach(c => { initial[c.key] = c.defaultWidth; });
     return initial as Record<ColumnKey, number>;
   });
 
@@ -314,12 +310,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<ColumnKey | null>(null);
   const isDraggingRef = useRef(false);
-
-  // Ordenação de colunas (Sort por coluna)
-  const [sortConfig, setSortConfig] = useState<{ key: ColumnKey | null; direction: 'asc' | 'desc' }>({
-    key: null,
-    direction: 'asc'
-  });
 
   const fileInputRef = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const activeInputRef = useRef<HTMLInputElement | null>(null);
@@ -916,121 +906,12 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     } catch (e) {}
   };
 
-  const handleToggleSort = (key: ColumnKey) => {
-    const col = ALL_COLUMNS.find(c => c.key === key);
-    if (!col || col.sortable === false) return;
-
-    setSortConfig(prev => {
-      if (prev.key === key) {
-        if (prev.direction === 'asc') {
-          return { key, direction: 'desc' };
-        }
-        return { key: null, direction: 'asc' };
-      }
-      return { key, direction: 'asc' };
-    });
-  };
-
   const orderedVisibleColumns = useMemo(() => {
     return columnOrder
       .filter(k => visibleColumns[k] !== false)
       .map(k => ALL_COLUMNS.find(c => c.key === k)!)
       .filter(Boolean);
   }, [columnOrder, visibleColumns]);
-
-  // Itens ordenados conforme a coluna selecionada pelo usuário
-  const sortedItems = useMemo(() => {
-    if (!sortConfig.key) return items;
-
-    const blankRows = items.filter(it => isOrderItemBlank(it));
-    const validRows = items.filter(it => !isOrderItemBlank(it));
-
-    const sorted = [...validRows].sort((a, b) => {
-      let valA: any;
-      let valB: any;
-
-      switch (sortConfig.key) {
-        case 'codigoInterno':
-          valA = a.codigoInterno || a.codigo || '';
-          valB = b.codigoInterno || b.codigo || '';
-          break;
-        case 'codigoBarras':
-          valA = a.codigoBarras || '';
-          valB = b.codigoBarras || '';
-          break;
-        case 'codigoFornecedor':
-          valA = a.codigoFornecedor || '';
-          valB = b.codigoFornecedor || '';
-          break;
-        case 'descricao':
-          valA = (a.descricao || '').toLowerCase();
-          valB = (b.descricao || '').toLowerCase();
-          break;
-        case 'qtdNoPacote':
-          valA = Number(a.qtdNoPacote) || 0;
-          valB = Number(b.qtdNoPacote) || 0;
-          break;
-        case 'qtdPacotes':
-          valA = Number(a.qtdPacotes) || 0;
-          valB = Number(b.qtdPacotes) || 0;
-          break;
-        case 'qtdTotalUnidades':
-          valA = Number(a.qtdTotalUnidades) || 0;
-          valB = Number(b.qtdTotalUnidades) || 0;
-          break;
-        case 'precoUnitario':
-          valA = Number(a.precoUnitario) || 0;
-          valB = Number(b.precoUnitario) || 0;
-          break;
-        case 'valorTotalLiquido': {
-          const lA = a.valorTotalLiquido !== undefined ? a.valorTotalLiquido : (a.valorTotalBruto * (1 - (a.percentualDesconto || 0) / 100));
-          const lB = b.valorTotalLiquido !== undefined ? b.valorTotalLiquido : (b.valorTotalBruto * (1 - (b.percentualDesconto || 0) / 100));
-          valA = lA || 0;
-          valB = lB || 0;
-          break;
-        }
-        case 'pdvAlvo':
-          valA = Number(a.pdvAlvo) || 12;
-          valB = Number(b.pdvAlvo) || 12;
-          break;
-        case 'custoLoja':
-        case 'custoReal': {
-          const pA = a.precoUnitario * (1 - (a.percentualDesconto || 0) / 100);
-          const pB = b.precoUnitario * (1 - (b.percentualDesconto || 0) / 100);
-          valA = calculateItemFiscal(pA, a.pdvAlvo, globalFiscal, a.fiscalOverride).custoLoja;
-          valB = calculateItemFiscal(pB, b.pdvAlvo, globalFiscal, b.fiscalOverride).custoLoja;
-          break;
-        }
-        case 'custoFornecedor': {
-          const pA = a.precoUnitario * (1 - (a.percentualDesconto || 0) / 100);
-          const pB = b.precoUnitario * (1 - (b.percentualDesconto || 0) / 100);
-          valA = calculateItemFiscal(pA, a.pdvAlvo, globalFiscal, a.fiscalOverride).custoFornecedor;
-          valB = calculateItemFiscal(pB, b.pdvAlvo, globalFiscal, b.fiscalOverride).custoFornecedor;
-          break;
-        }
-        case 'margem': {
-          const pA = a.precoUnitario * (1 - (a.percentualDesconto || 0) / 100);
-          const pB = b.precoUnitario * (1 - (b.percentualDesconto || 0) / 100);
-          valA = calculateItemFiscal(pA, a.pdvAlvo, globalFiscal, a.fiscalOverride).margemPercentual;
-          valB = calculateItemFiscal(pB, b.pdvAlvo, globalFiscal, b.fiscalOverride).margemPercentual;
-          break;
-        }
-        default:
-          return 0;
-      }
-
-      if (typeof valA === 'string' && typeof valB === 'string') {
-        const cmp = valA.localeCompare(valB, 'pt-BR', { numeric: true, sensitivity: 'base' });
-        return sortConfig.direction === 'asc' ? cmp : -cmp;
-      }
-
-      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return [...sorted, ...blankRows];
-  }, [items, sortConfig, globalFiscal]);
 
   // Renderizador dinâmico de células da tabela
   const renderTableCell = (
@@ -1044,9 +925,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const minWidth = colMeta?.minWidth || 60;
     const cellStyle: React.CSSProperties = {
       width: `${colWidth}px`,
-      minWidth: `${minWidth}px`,
-      maxWidth: `${colWidth}px`,
-      overflow: 'hidden'
+      minWidth: `${minWidth}px`
     };
 
     switch (colKey) {
@@ -1585,11 +1464,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       {/* Table responsive container com visual e comportamento de planilha do Excel */}
       <div className="overflow-x-auto overflow-y-visible">
-        <table className="w-full text-left border-collapse border-t border-slate-200 dark:border-slate-700 font-sans text-xs">
+        <table className="min-w-max w-full text-left border-collapse border-t border-slate-200 dark:border-slate-700 font-sans text-xs">
           <thead>
             <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-100/90 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider select-none whitespace-nowrap">
               {/* Coluna # com Dropdown para escolha de colunas visíveis */}
-              <th className="py-2.5 px-2 w-12 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-200/60 dark:bg-slate-800/90 whitespace-nowrap relative">
+              <th className="py-2 px-2 w-12 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-200/60 dark:bg-slate-800/90 whitespace-nowrap relative">
                 <button
                   ref={columnsButtonRef}
                   type="button"
@@ -1684,13 +1563,12 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 )}
               </th>
 
-              {/* Colunas Reordenáveis com Drag-and-Drop, Ordenação por Clique e Ajuste de Largura */}
+              {/* Colunas Reordenáveis com Arraste de Posição e Ajuste de Largura Limpo */}
               {orderedVisibleColumns.map(col => {
-                const isSorted = sortConfig.key === col.key;
                 const isDragOver = dragOverColumn === col.key;
                 const isBeingDragged = draggedColumn === col.key;
-                const colWidth = columnWidths[col.key] || col.defaultWidth || 100;
-                const minWidth = col.minWidth || 60;
+                const colWidth = columnWidths[col.key] || col.defaultWidth;
+                const minWidth = col.minWidth;
 
                 return (
                   <th
@@ -1701,57 +1579,35 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     onDragLeave={() => handleDragLeave(col.key)}
                     onDrop={(e) => handleDrop(e, col.key)}
                     onDragEnd={handleDragEnd}
-                    onClick={() => {
-                      if (isDraggingRef.current) return;
-                      handleToggleSort(col.key);
-                    }}
-                    style={{ width: `${colWidth}px`, minWidth: `${minWidth}px`, maxWidth: `${colWidth}px` }}
-                    className={`py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none transition-colors group/th cursor-pointer relative overflow-hidden ${col.thClass} ${
-                      isDragOver ? 'bg-emerald-100/80 dark:bg-emerald-950/80 ring-2 ring-emerald-500' : ''
-                    } ${isBeingDragged ? 'opacity-30' : ''} ${
-                      isSorted ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/30' : 'hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
-                    }`}
-                    title={col.sortable ? "Clique para ordenar • Arraste o cabeçalho para trocar de posição • Arraste a borda direita para redimensionar" : "Arraste o cabeçalho para trocar de posição • Arraste a borda direita para redimensionar"}
+                    style={{ width: `${colWidth}px`, minWidth: `${minWidth}px` }}
+                    className={`py-2 px-2.5 border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none transition-colors group/th cursor-grab active:cursor-grabbing relative text-center ${
+                      isDragOver ? 'bg-emerald-100/90 dark:bg-emerald-950/90 ring-2 ring-emerald-500' : ''
+                    } ${isBeingDragged ? 'opacity-30' : 'hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+                    title="Arraste para mover a posição da coluna • Arraste a divisória direita para ajustar a largura"
                   >
-                    <div className={`flex items-center gap-1.5 overflow-hidden ${
-                      col.thClass.includes('text-right') ? 'justify-end' : col.thClass.includes('text-center') ? 'justify-center' : 'justify-start'
-                    }`}>
-                      <GripVertical className="w-3 h-3 text-slate-300 dark:text-slate-600 opacity-0 group-hover/th:opacity-100 transition cursor-grab active:cursor-grabbing shrink-0" />
-                      <span className="truncate">{col.label}</span>
-                      {col.sortable && (
-                        <span className="shrink-0 ml-0.5">
-                          {isSorted ? (
-                            sortConfig.direction === 'asc' ? (
-                              <ArrowUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                            ) : (
-                              <ArrowDown className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                            )
-                          ) : (
-                            <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600 opacity-0 group-hover/th:opacity-60 transition" />
-                          )}
-                        </span>
-                      )}
+                    <div className="flex items-center justify-center w-full">
+                      <span className="font-bold tracking-tight text-[11px] text-slate-700 dark:text-slate-200 text-center">
+                        {col.label}
+                      </span>
                     </div>
 
-                    {/* Alça de Redimensionamento da Coluna */}
+                    {/* Alça de Redimensionamento Discreta e Invisível na Divisória Direita */}
                     <div
                       onMouseDown={(e) => handleResizeStart(e, col.key, minWidth)}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
                       }}
-                      title="Arraste para redimensionar largura"
-                      className="absolute top-0 right-0 w-2.5 h-full cursor-col-resize z-20 group-hover/th:bg-slate-400/30 active:bg-emerald-500 transition-colors hover:w-3 flex items-center justify-end"
-                    >
-                      <div className="w-[2px] h-4 bg-slate-300 dark:bg-slate-600 group-hover/th:bg-emerald-500 rounded-full mr-[2px]" />
-                    </div>
+                      title="Arraste para ajustar a largura"
+                      className="absolute top-0 right-0 w-2 h-full cursor-col-resize z-20 hover:bg-emerald-500/40 active:bg-emerald-500 transition-colors"
+                    />
                   </th>
                 );
               })}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-700/80 text-xs">
-            {sortedItems.map((item, index) => {
+            {items.map((item, index) => {
               const precoCompraEfetivo = item.precoUnitario * (1 - (item.percentualDesconto || 0) / 100);
               const fiscal = calculateItemFiscal(precoCompraEfetivo, item.pdvAlvo, globalFiscal, item.fiscalOverride);
 

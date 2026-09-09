@@ -382,14 +382,6 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               <span className="text-sm font-bold text-slate-800 dark:text-white">
                 {header.fornecedor || 'Fornecedor não informado'}
               </span>
-              <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-mono">
-                {header.numeroPedido || 'S/N'}
-              </span>
-
-              {/* Badge de ST único no cabeçalho */}
-              <span className="text-xs px-2.5 py-0.5 rounded-md font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                ST: {aliquotaStCadastrada > 0 ? `+${aliquotaStCadastrada}%` : '0%'}
-              </span>
 
               {/* Badge de Pedido Padrão se existir */}
               {hasSupplierTemplate && (
@@ -615,10 +607,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               )}
             </div>
 
-            {/* 3. NOTA (%) (Posicionado no topo com o fornecedor) */}
+            {/* 3. OFF (%) (Posicionado no topo com o fornecedor) */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span>Nota (%)</span>
+                <span>OFF (%)</span>
                 <span className="text-[10px] text-slate-400 font-normal">Histórico BD</span>
               </label>
               <div className="relative">
@@ -846,10 +838,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     )}
                   </div>
 
-                  {/* 6. OFF (%) (Desconto Direto no Valor do Pedido) */}
+                  {/* 6. Desconto comercial (%) (Desconto Direto no Valor do Pedido) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>6. OFF (%)</span>
+                      <span>6. Desconto comercial (%)</span>
                       <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">Desc. Direto</span>
                     </label>
                     <div className="relative">

@@ -21,7 +21,8 @@ import {
   PackageCheck,
   X,
   Search,
-  Check
+  Check,
+  RotateCcw
 } from 'lucide-react';
 import { OrderHeader, Supplier } from '../shared/types';
 import { handleCurrencyInput, formatCurrency, maskPhone } from '../utils/masks';
@@ -32,7 +33,8 @@ import {
   SALDO_PRAZO_OPTIONS,
   parsePaymentConditionString, 
   formatPaymentConditionString,
-  addDaysToDate
+  addDaysToDate,
+  getDaysDifference
 } from '../utils/installments';
 
 export const FORMA_PAGAMENTO_OPTIONS = [
@@ -188,7 +190,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     onChange({
       ...header,
       parcelasCount: newParcelas,
-      condicaoPagamento: newCondString
+      condicaoPagamento: newCondString,
+      datasVencimentoPersonalizadas: undefined
     });
   };
 
@@ -206,7 +209,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         valorEntradaAVista: initEntrada,
         saldoParcelasCount: initSaldoParc,
         saldoPrazoDias: initSaldoPrazo,
-        condicaoPagamento: newCondString
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: undefined
       });
     } else if (newPrazo === 'vista') {
       const newCondString = formatPaymentConditionString(1, 'vista');
@@ -214,14 +218,16 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         ...header,
         prazoDias: newPrazo,
         parcelasCount: 1,
-        condicaoPagamento: newCondString
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: undefined
       });
     } else {
       const newCondString = formatPaymentConditionString(currentParcelas, newPrazo);
       onChange({
         ...header,
         prazoDias: newPrazo,
-        condicaoPagamento: newCondString
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: undefined
       });
     }
   };
@@ -241,7 +247,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     onChange({
       ...header,
       saldoParcelasCount: newSaldoParc,
-      condicaoPagamento: newCondString
+      condicaoPagamento: newCondString,
+      datasVencimentoPersonalizadas: undefined
     });
   };
 
@@ -250,60 +257,53 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     onChange({
       ...header,
       saldoPrazoDias: newSaldoPrazo,
-      condicaoPagamento: newCondString
+      condicaoPagamento: newCondString,
+      datasVencimentoPersonalizadas: undefined
     });
   };
 
   // Previsão dinâmica das datas das parcelas a partir da data de entrega da mercadoria
   const baseDate = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
   const orderDate = header.dataPedido || new Date().toISOString().split('T')[0];
+  const customDates = header.datasVencimentoPersonalizadas;
 
   const previewInstallments = isEntradaMista
     ? [
         {
           numeroParcela: 1,
           rotulo: 'Entrada À Vista',
-          dataVencimento: orderDate,
+          dataVencimento: customDates?.['1'] || orderDate,
           valor: valorEntrada,
-          isEntrada: true
+          isEntrada: true,
+          isFrete: false
         },
         ...Array.from({ length: saldoParcelas }, (_, idx) => {
           const num = idx + 1;
-          let dueDays = 0;
-          if (saldoPrazo === '45') {
-            dueDays = 45 + (num - 1) * 30;
-          } else if (saldoPrazo === '60') {
-            dueDays = 60 + (num - 1) * 30;
-          } else {
-            const interval = Number(saldoPrazo) || 30;
-            dueDays = num * interval;
-          }
+          const numeroParcela = num + 1;
+          const interval = Number(saldoPrazo) || 30;
+          const dueDays = num * interval;
+          const defaultDate = addDaysToDate(baseDate, dueDays);
+          const customDate = customDates?.[String(numeroParcela)];
           return {
-            numeroParcela: num + 1,
+            numeroParcela,
             rotulo: `Saldo ${num}/${saldoParcelas}`,
-            dataVencimento: addDaysToDate(baseDate, dueDays),
+            dataVencimento: customDate || defaultDate,
             valor: valorPorParcelaSaldo,
-            isEntrada: false
+            isEntrada: false,
+            isFrete: false
           };
         })
       ]
     : Array.from({ length: currentParcelas }, (_, idx) => {
         const num = idx + 1;
-        let dueDays = 0;
-        if (currentPrazo === 'vista') {
-          dueDays = 0;
-        } else if (currentPrazo === '45') {
-          dueDays = 45 + (num - 1) * 30;
-        } else if (currentPrazo === '60') {
-          dueDays = 60 + (num - 1) * 30;
-        } else {
-          const interval = Number(currentPrazo) || 30;
-          dueDays = num * interval;
-        }
+        const interval = Number(currentPrazo) || 30;
+        const dueDays = currentPrazo === 'vista' ? 0 : num * interval;
+        const defaultDate = addDaysToDate(baseDate, dueDays);
+        const customDate = customDates?.[String(num)];
         return {
           numeroParcela: num,
           rotulo: currentPrazo === 'vista' ? 'À Vista' : `${num}ª Parcela`,
-          dataVencimento: addDaysToDate(baseDate, dueDays),
+          dataVencimento: customDate || defaultDate,
           valor: currentParcelas > 0 ? valorBaseMercadoria / currentParcelas : valorBaseMercadoria,
           isEntrada: currentPrazo === 'vista',
           isFrete: false
@@ -312,16 +312,67 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
   // Previsão do Boleto de Frete (10 dias após a entrega)
   if (valorFreteNum > 0) {
-    const dataVencFrete = addDaysToDate(baseDate, 10);
+    const defaultDateFrete = addDaysToDate(baseDate, 10);
+    const freteNum = previewInstallments.length + 1;
+    const customDateFrete = customDates?.['frete'] || customDates?.[String(freteNum)];
     previewInstallments.push({
-      numeroParcela: previewInstallments.length + 1,
+      numeroParcela: freteNum,
       rotulo: 'Boleto Frete (10d)',
-      dataVencimento: dataVencFrete,
+      dataVencimento: customDateFrete || defaultDateFrete,
       valor: valorFreteNum,
       isEntrada: false,
       isFrete: true
     });
   }
+
+  const hasCustomDates = Boolean(customDates && Object.keys(customDates).length > 0);
+
+  // Altera a data de uma parcela e recalcula automaticamente todas as parcelas subsequentes
+  const handleInstallmentDateChange = (numeroParcela: number, newDate: string, isFrete: boolean) => {
+    if (!newDate) return;
+
+    const currentMap: Record<string, string> = {};
+    previewInstallments.forEach(item => {
+      const key = item.isFrete ? 'frete' : String(item.numeroParcela);
+      currentMap[key] = item.dataVencimento;
+    });
+
+    const targetKey = isFrete ? 'frete' : String(numeroParcela);
+    const oldDate = currentMap[targetKey];
+    if (!oldDate || oldDate === newDate) return;
+
+    const diffDays = getDaysDifference(oldDate, newDate);
+
+    const updatedCustomDates: Record<string, string> = {
+      ...(header.datasVencimentoPersonalizadas || {}),
+      ...currentMap
+    };
+
+    updatedCustomDates[targetKey] = newDate;
+
+    // Se NÃO for frete, ajusta automaticamente todas as parcelas seguintes
+    if (!isFrete) {
+      previewInstallments.forEach(item => {
+        if (!item.isFrete && item.numeroParcela > numeroParcela) {
+          const key = String(item.numeroParcela);
+          const curD = currentMap[key] || item.dataVencimento;
+          updatedCustomDates[key] = addDaysToDate(curD, diffDays);
+        }
+      });
+    }
+
+    onChange({
+      ...header,
+      datasVencimentoPersonalizadas: updatedCustomDates
+    });
+  };
+
+  const handleResetDates = () => {
+    onChange({
+      ...header,
+      datasVencimentoPersonalizadas: undefined
+    });
+  };
 
   // Quando o usuário seleciona um fornecedor no autocomplete
   const handleSelectSupplier = (supplier: Supplier) => {
@@ -972,21 +1023,32 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 {/* Prévia dos Boletos e Parcelas */}
                 {previewInstallments.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-700">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 flex items-center gap-1.5">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      <span>Previsão de Vencimento dos Boletos ({previewInstallments.length}x):</span>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>Previsão de Vencimento dos Boletos ({previewInstallments.length}x):</span>
+                      </div>
+                      {hasCustomDates && (
+                        <button
+                          type="button"
+                          onClick={handleResetDates}
+                          className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-bold flex items-center gap-1 cursor-pointer transition lowercase first-letter:uppercase"
+                          title="Restaurar datas automáticas calculadas pelo intervalo selecionado"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Redefinir prazos padrão</span>
+                        </button>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {previewInstallments.map((inst) => {
-                        const [y, m, d] = inst.dataVencimento.split('-');
-                        const formattedDate = d && m && y ? `${d}/${m}/${y}` : inst.dataVencimento;
                         const isFreteItem = (inst as any).isFrete;
                         const isEntradaItem = inst.isEntrada;
 
                         return (
                           <div 
                             key={inst.numeroParcela}
-                            className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 shadow-xs ${
+                            className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 shadow-xs transition-all ${
                               isFreteItem
                                 ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-300 dark:border-sky-800 text-sky-900 dark:text-sky-200'
                                 : isEntradaItem
@@ -996,11 +1058,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
                             }`}
                           >
-                            <span className="font-bold text-slate-600 dark:text-slate-300">
+                            <span className="font-bold text-slate-600 dark:text-slate-300 shrink-0">
                               {inst.rotulo}:
                             </span>
                             {valorTotalPedido > 0 || isFreteItem ? (
-                              <span className={`font-extrabold font-mono ${
+                              <span className={`font-extrabold font-mono shrink-0 ${
                                 isFreteItem
                                   ? 'text-sky-700 dark:text-sky-300'
                                   : isEntradaItem 
@@ -1012,9 +1074,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                                 R$ {inst.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             ) : null}
-                            <span className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-                              📅 {formattedDate}
-                            </span>
+
+                            {/* Data editável com ajuste automático em cascata */}
+                            <div className="flex items-center gap-1 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition shadow-2xs">
+                              <Calendar className="w-3 h-3 text-slate-400 shrink-0 pointer-events-none" />
+                              <input
+                                type="date"
+                                value={inst.dataVencimento}
+                                onChange={(e) => handleInstallmentDateChange(inst.numeroParcela, e.target.value, Boolean(isFreteItem))}
+                                className="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-[11px] font-bold outline-hidden cursor-pointer"
+                                title="Clique para editar a data (as datas seguintes serão ajustadas automaticamente)"
+                              />
+                            </div>
                           </div>
                         );
                       })}

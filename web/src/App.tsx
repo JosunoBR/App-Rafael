@@ -435,7 +435,8 @@ export function App() {
         ...prev, 
         header: updatedHeader,
         fiscalConfig: newFiscal,
-        items: updatedItems
+        items: updatedItems,
+        installments: generateOrderInstallments({ ...prev, header: updatedHeader, items: updatedItems }, undefined, undefined, true)
       };
     });
   };

@@ -160,14 +160,30 @@ export function parsePaymentConditionString(cond?: string): { parcelas: number; 
 export function addDaysToDate(dateStr: string, days: number): string {
   try {
     const [year, month, day] = dateStr.split('-').map(Number);
-    const d = new Date(year, month - 1, day);
-    d.setDate(d.getDate() + days);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const dayFormatted = String(d.getDate()).padStart(2, '0');
+    const d = new Date(Date.UTC(year, month - 1, day));
+    d.setUTCDate(d.getUTCDate() + days);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dayFormatted = String(d.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${dayFormatted}`;
   } catch {
     return dateStr;
+  }
+}
+
+/**
+ * Calcula a diferença em dias exatos entre duas datas no formato YYYY-MM-DD
+ */
+export function getDaysDifference(d1: string, d2: string): number {
+  try {
+    const [y1, m1, day1] = d1.split('-').map(Number);
+    const [y2, m2, day2] = d2.split('-').map(Number);
+    const dt1 = new Date(Date.UTC(y1, m1 - 1, day1));
+    const dt2 = new Date(Date.UTC(y2, m2 - 1, day2));
+    const diffMs = dt2.getTime() - dt1.getTime();
+    return Math.round(diffMs / (1000 * 60 * 60 * 24));
+  } catch {
+    return 0;
   }
 }
 
@@ -207,6 +223,7 @@ export function generateOrderInstallments(
   const parsed = parsePaymentConditionString(order.header.condicaoPagamento);
   const prazo = String(customPrazo ?? order.header.prazoDias ?? parsed.prazo ?? '30');
   const netTotal = calculateOrderNetTotal(order);
+  const customDates = order.header.datasVencimentoPersonalizadas;
 
   // A primeira parcela a prazo é contada a partir da data de entrega da mercadoria
   const baseDeliveryDate = order.header.dataEntregaPrevista || order.header.dataPedido || new Date().toISOString().split('T')[0];
@@ -234,7 +251,8 @@ export function generateOrderInstallments(
 
     // 1. Parcela de Entrada (À Vista)
     const existingEntrada = existingMap.get(1);
-    const dataVencEntrada = existingEntrada?.dataVencimento || orderDate;
+    const customEntradaDate = customDates?.['1'];
+    const dataVencEntrada = customEntradaDate || existingEntrada?.dataVencimento || orderDate;
     const valorEntradaFinal = existingEntrada?.valor !== undefined ? existingEntrada.valor : valorEntrada;
     const statusEntrada = existingEntrada?.status || getInstallmentStatus(dataVencEntrada, existingEntrada?.dataPagamento);
 
@@ -266,20 +284,15 @@ export function generateOrderInstallments(
       const existing = existingMap.get(numParcela);
 
       let dueDays = 0;
-      if (saldoPrazo === '45') {
-        dueDays = 45 + (j - 1) * 30;
-      } else if (saldoPrazo === '60') {
-        dueDays = 60 + (j - 1) * 30;
-      } else {
-        const intervalNum = Number(saldoPrazo) || 30;
-        dueDays = j * intervalNum;
-      }
+      const intervalNum = Number(saldoPrazo) || 30;
+      dueDays = j * intervalNum;
 
       const calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
       const originalProportionalVal = j === 1 ? Number((saldoBaseValue + saldoRemainder).toFixed(2)) : saldoBaseValue;
 
+      const customSaldoDate = customDates?.[String(numParcela)];
       const valorFinal = existing?.valor !== undefined ? existing.valor : originalProportionalVal;
-      const dataVencimentoFinal = existing?.dataVencimento || calculatedDueDate;
+      const dataVencimentoFinal = customSaldoDate || existing?.dataVencimento || calculatedDueDate;
       const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
 
       list.push({
@@ -307,48 +320,45 @@ export function generateOrderInstallments(
     const baseValue = totalParcelas > 0 ? Number((valorBaseMercadoria / totalParcelas).toFixed(2)) : valorBaseMercadoria;
     const remainder = totalParcelas > 0 ? Number((valorBaseMercadoria - baseValue * totalParcelas).toFixed(2)) : 0;
 
-  for (let i = 1; i <= totalParcelas; i++) {
-    const existing = existingMap.get(i);
+    for (let i = 1; i <= totalParcelas; i++) {
+      const existing = existingMap.get(i);
 
-    let dueDays = 0;
-    if (prazo === 'vista') {
-      dueDays = 0;
-    } else if (prazo === '45') {
-      dueDays = 45 + (i - 1) * 30;
-    } else if (prazo === '60') {
-      dueDays = 60 + (i - 1) * 30;
-    } else {
-      const intervalNum = Number(prazo) || 30;
-      dueDays = i * intervalNum;
+      let dueDays = 0;
+      if (prazo === 'vista') {
+        dueDays = 0;
+      } else {
+        const intervalNum = Number(prazo) || 30;
+        dueDays = i * intervalNum;
+      }
+
+      const calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
+      const originalProportionalVal = i === 1 ? Number((baseValue + remainder).toFixed(2)) : baseValue;
+
+      const customDate = customDates?.[String(i)];
+      const valorFinal = existing?.valor !== undefined ? existing.valor : originalProportionalVal;
+      const dataVencimentoFinal = customDate || existing?.dataVencimento || calculatedDueDate;
+      const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
+
+      list.push({
+        id: existing?.id || `inst_${order.header.id || 'ord'}_${i}_${Date.now()}`,
+        orderId: order.header.id,
+        numeroPedido: order.header.numeroPedido,
+        fornecedor: order.header.fornecedor,
+        numeroParcela: i,
+        totalParcelas: totalParcelas,
+        dataVencimento: dataVencimentoFinal,
+        valor: valorFinal,
+        valorOriginal: existing?.valorOriginal ?? originalProportionalVal,
+        status: statusFinal,
+        dataPagamento: existing?.dataPagamento,
+        observacao: existing?.observacao || (prazo === 'vista' ? 'Pagamento 100% À Vista' : `Parcela ${i}/${totalParcelas} (${dueDays}d da Entrega)`),
+        documentoRef: existing?.documentoRef,
+        tipoTitulo: 'mercadoria',
+        isBoletoFrete: false,
+        updatedAt: new Date().toISOString()
+      });
     }
-
-    const calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
-    const originalProportionalVal = i === 1 ? Number((baseValue + remainder).toFixed(2)) : baseValue;
-
-    const valorFinal = existing?.valor !== undefined ? existing.valor : originalProportionalVal;
-    const dataVencimentoFinal = existing?.dataVencimento || calculatedDueDate;
-    const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
-
-    list.push({
-      id: existing?.id || `inst_${order.header.id || 'ord'}_${i}_${Date.now()}`,
-      orderId: order.header.id,
-      numeroPedido: order.header.numeroPedido,
-      fornecedor: order.header.fornecedor,
-      numeroParcela: i,
-      totalParcelas: totalParcelas,
-      dataVencimento: dataVencimentoFinal,
-      valor: valorFinal,
-      valorOriginal: existing?.valorOriginal ?? originalProportionalVal,
-      status: statusFinal,
-      dataPagamento: existing?.dataPagamento,
-      observacao: existing?.observacao || (prazo === 'vista' ? 'Pagamento 100% À Vista' : `Parcela ${i}/${totalParcelas} (${dueDays}d da Entrega)`),
-      documentoRef: existing?.documentoRef,
-      tipoTitulo: 'mercadoria',
-      isBoletoFrete: false,
-      updatedAt: new Date().toISOString()
-    });
   }
-}
 
   // CENÁRIO C: BOLETO AUTOMÁTICO DE FRETE (10 DIAS APÓS A DATA DE ENTREGA)
   if (valorFrete > 0) {
@@ -358,11 +368,12 @@ export function generateOrderInstallments(
       ? order.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
       : undefined;
 
-    const valorFreteFinal = existingFrete?.valor !== undefined ? existingFrete.valor : valorFrete;
-    const dataVencFrete = existingFrete?.dataVencimento || freteDueDate;
-    const statusFrete = existingFrete?.status || getInstallmentStatus(dataVencFrete, existingFrete?.dataPagamento);
-
     const nextParcelaNum = list.length + 1;
+    const customFreteDate = customDates?.['frete'] || customDates?.[String(nextParcelaNum)];
+
+    const valorFreteFinal = existingFrete?.valor !== undefined ? existingFrete.valor : valorFrete;
+    const dataVencFrete = customFreteDate || existingFrete?.dataVencimento || freteDueDate;
+    const statusFrete = existingFrete?.status || getInstallmentStatus(dataVencFrete, existingFrete?.dataPagamento);
 
     list.push({
       id: existingFrete?.id || `inst_frete_${order.header.id || 'ord'}_${Date.now()}`,

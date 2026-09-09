@@ -341,9 +341,45 @@ export function App() {
   const handleHeaderChange = (updatedHeader: typeof order.header) => {
     setOrder(prev => {
       let newFiscal = prev.fiscalConfig || fiscalConfig;
+      let updatedItems = prev.items;
+
+      // Se alterou o percentual de desconto OFF no cabeçalho/condições de pagamento
+      const oldOff = prev.header.percentualDescontoOff ?? 0;
+      const newOff = updatedHeader.percentualDescontoOff ?? 0;
+
+      if (newOff !== oldOff) {
+        const descPct = Math.max(0, Math.min(100, newOff));
+        updatedItems = (prev.items || []).map(it => {
+          if (!it.descricao && !it.codigo && !it.precoUnitario) return it;
+          const pecas = Number(it.qtdTotalUnidades) || ((Number(it.qtdNoPacote) || 1) * (Number(it.qtdPacotes) || 0)) || 0;
+          const preco = Number(it.precoUnitario) || 0;
+          const totalBruto = pecas * preco;
+          const valorDesc = Number((totalBruto * (descPct / 100)).toFixed(2));
+          const valorLiquido = Number((totalBruto - valorDesc).toFixed(2));
+          const precoEfetivo = preco * (1 - descPct / 100);
+          const pdv = it.pdvAlvo || 12.00;
+          const f = calculateItemFiscal(precoEfetivo, pdv, newFiscal, it.fiscalOverride);
+
+          return {
+            ...it,
+            percentualDesconto: descPct,
+            valorDescontoItem: valorDesc,
+            valorTotalLiquido: valorLiquido,
+            custoLoja: f.custoLoja,
+            custoFornecedor: f.custoFornecedor,
+            despesasPdvUnit: f.despesasPdvUnit,
+            creditoIcmsUnit: f.creditoIcmsUnit,
+            custoRealEfetivo: f.custoRealEfetivo,
+            margemRealUnit: f.margemRealUnit,
+            margemPercentual: f.margemPercentual
+          };
+        });
+      }
+
       // Se o usuário digitou ou alterou o valor do frete em R$ manualmente no cabeçalho
       if (updatedHeader.valorFrete !== prev.header.valorFrete) {
-        const totalMerc = calculateOrderMerchandiseTotal(prev);
+        const tempOrder = { ...prev, header: updatedHeader, items: updatedItems };
+        const totalMerc = calculateOrderMerchandiseTotal(tempOrder);
         const newRate = totalMerc > 0 ? Number(((updatedHeader.valorFrete || 0) / totalMerc).toFixed(4)) : 0;
         newFiscal = {
           ...newFiscal,
@@ -354,7 +390,8 @@ export function App() {
       return { 
         ...prev, 
         header: updatedHeader,
-        fiscalConfig: newFiscal
+        fiscalConfig: newFiscal,
+        items: updatedItems
       };
     });
   };
@@ -1620,8 +1657,10 @@ export function App() {
                     globalFiscal={order.fiscalConfig || fiscalConfig}
                     stores={storeConfigs}
                     products={products}
+                    suppliers={suppliers}
                     currentSupplierName={order.header.fornecedor}
                     currentSupplierId={order.header.supplierId}
+                    percentualDescontoOff={order.header.percentualDescontoOff}
                     onUpdateItem={handleUpdateItem}
                     onAddItem={handleAddItem}
                     onDuplicateItem={handleDuplicateItem}

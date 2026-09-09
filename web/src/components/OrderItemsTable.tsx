@@ -34,7 +34,7 @@ import {
   RotateCcw,
   Calculator
 } from 'lucide-react';
-import { OrderItem, FiscalConfig, StoreConfig, Product } from '../shared/types';
+import { OrderItem, FiscalConfig, StoreConfig, Product, Supplier } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
 import { isOrderItemBlank, generateNextProductCode } from '../utils/orderItemUtils';
@@ -45,8 +45,10 @@ interface OrderItemsTableProps {
   globalFiscal: FiscalConfig;
   stores: StoreConfig[];
   products?: Product[];
+  suppliers?: Supplier[];
   currentSupplierName?: string;
   currentSupplierId?: string;
+  percentualDescontoOff?: number;
   onUpdateItem: (itemId: string, updatedFields: Partial<OrderItem>) => void;
   onAddItem: (customItem?: OrderItem) => void;
   onDuplicateItem: (item: OrderItem) => void;
@@ -122,13 +124,85 @@ function highlightMatch(text: string, query: string) {
   );
 }
 
+/**
+ * Verifica se o produto pertence ao fornecedor informado no pedido.
+ * Compara por ID do fornecedor e por Nome/Razão Social/Nome Fantasia.
+ */
+function isProductFromSupplier(
+  product: Product,
+  targetSupplierId?: string,
+  targetSupplierName?: string,
+  suppliersList: Supplier[] = []
+): boolean {
+  const cleanTargetId = (targetSupplierId || '').trim().toLowerCase();
+  const cleanTargetName = (targetSupplierName || '').trim().toLowerCase();
+
+  // Se nenhum fornecedor estiver selecionado no pedido, não filtra
+  if (!cleanTargetId && !cleanTargetName) {
+    return true;
+  }
+
+  const validIds = new Set<string>();
+  const validNames: string[] = [];
+
+  if (cleanTargetId) {
+    validIds.add(cleanTargetId);
+  }
+  if (cleanTargetName) {
+    validNames.push(cleanTargetName);
+  }
+
+  // Se houver lista de fornecedores cadastrados, resolve IDs e Nomes alternativos (razão social vs nome fantasia)
+  if (suppliersList && suppliersList.length > 0) {
+    const matchedSupplier = suppliersList.find(s => {
+      const sId = (s.id || '').trim().toLowerCase();
+      const sRazao = (s.razaoSocial || '').trim().toLowerCase();
+      const sFantasia = (s.nomeFantasia || '').trim().toLowerCase();
+
+      if (cleanTargetId && sId === cleanTargetId) return true;
+      if (cleanTargetName && (sRazao === cleanTargetName || sFantasia === cleanTargetName)) return true;
+      if (cleanTargetName && (cleanTargetName.includes(sRazao) || sRazao.includes(cleanTargetName))) return true;
+      if (cleanTargetName && sFantasia && (cleanTargetName.includes(sFantasia) || sFantasia.includes(cleanTargetName))) return true;
+      return false;
+    });
+
+    if (matchedSupplier) {
+      if (matchedSupplier.id) validIds.add(matchedSupplier.id.trim().toLowerCase());
+      if (matchedSupplier.razaoSocial) validNames.push(matchedSupplier.razaoSocial.trim().toLowerCase());
+      if (matchedSupplier.nomeFantasia) validNames.push(matchedSupplier.nomeFantasia.trim().toLowerCase());
+    }
+  }
+
+  const prodSupId = (product.supplierId || '').trim().toLowerCase();
+  const prodSupName = (product.nomeFornecedor || '').trim().toLowerCase();
+
+  // 1. Verifica correspondência por ID do fornecedor
+  if (prodSupId && validIds.has(prodSupId)) {
+    return true;
+  }
+
+  // 2. Verifica correspondência por Nome do fornecedor
+  if (prodSupName) {
+    const matches = validNames.some(vn => 
+      vn && (prodSupName === vn || prodSupName.includes(vn) || vn.includes(prodSupName))
+    );
+    if (matches) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   items,
   globalFiscal,
   stores,
   products = [],
+  suppliers = [],
   currentSupplierName,
   currentSupplierId,
+  percentualDescontoOff = 0,
   onUpdateItem,
   onAddItem,
   onDuplicateItem,
@@ -287,11 +361,17 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     };
   }, [activeAutocompleteItemId]);
 
-  // Produtos filtrados para o autocomplete ativo na linha
+  // Produtos filtrados para o autocomplete ativo na linha (apenas do fornecedor do pedido)
   const matchingProductsForRow = useMemo(() => {
     if (!autocompleteQuery || autocompleteQuery.trim().length === 0) return [];
     const q = autocompleteQuery.trim().toLowerCase();
-    return products.filter(p => {
+
+    // Filtra estritamente pelo fornecedor informado no pedido
+    const supplierProducts = products.filter(p => 
+      isProductFromSupplier(p, currentSupplierId, currentSupplierName, suppliers)
+    );
+
+    return supplierProducts.filter(p => {
       const desc = (p.descricao || '').toLowerCase();
       const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
       const codForn = (p.codigoFornecedor || '').toLowerCase();
@@ -299,21 +379,27 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       const cat = (p.categoria || '').toLowerCase();
       return desc.includes(q) || codInt.includes(q) || codForn.includes(q) || ean.includes(q) || cat.includes(q);
     }).slice(0, 8);
-  }, [products, autocompleteQuery]);
+  }, [products, autocompleteQuery, currentSupplierId, currentSupplierName, suppliers]);
 
-  // Produtos filtrados para a Barra de Inclusão Rápida Superior
+  // Produtos filtrados para a Barra de Inclusão Rápida Superior (apenas do fornecedor do pedido)
   const matchingProductsForQuickBar = useMemo(() => {
     if (!quickSearchText || quickSearchText.trim().length === 0) return [];
     const q = quickSearchText.trim().toLowerCase();
-    return products.filter(p => {
+
+    // Filtra estritamente pelo fornecedor informado no pedido
+    const supplierProducts = products.filter(p => 
+      isProductFromSupplier(p, currentSupplierId, currentSupplierName, suppliers)
+    );
+
+    return supplierProducts.filter(p => {
       const desc = (p.descricao || '').toLowerCase();
       const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
       const codForn = (p.codigoFornecedor || '').toLowerCase();
       const ean = (p.codigoBarras || p.eanBarcode || '').toLowerCase();
       const cat = (p.categoria || '').toLowerCase();
       return desc.includes(q) || codInt.includes(q) || codForn.includes(q) || ean.includes(q) || cat.includes(q);
-    }).slice(0, 6);
-  }, [products, quickSearchText]);
+    }).slice(0, 8);
+  }, [products, quickSearchText, currentSupplierId, currentSupplierName, suppliers]);
 
   // Inserir novo produto selecionado do catálogo
   const handleSelectProductForNewItem = (prod: Product) => {
@@ -322,9 +408,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const preco = prod.precoUnitarioPadrao || 0;
     const qtdTotal = 100;
     const totalBruto = qtdTotal * preco;
-    const descPct = 0;
-    const valorDesc = 0;
-    const valorLiquido = totalBruto;
+    const descPct = Math.max(0, Math.min(100, percentualDescontoOff || 0));
+    const valorDesc = Number((totalBruto * (descPct / 100)).toFixed(2));
+    const valorLiquido = Number((totalBruto - valorDesc).toFixed(2));
+    const precoEfetivo = preco * (1 - descPct / 100);
 
     const defaultItem: OrderItem = {
       id: 'item_' + Date.now(),
@@ -343,7 +430,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       pdvAlvo: 12.00
     };
 
-    const fiscal = calculateItemFiscal(preco, 12.00, globalFiscal);
+    const fiscal = calculateItemFiscal(precoEfetivo, 12.00, globalFiscal);
     const separation = calculateAutomaticSeparation(defaultItem.qtdTotalUnidades, stores);
 
     const fullItem: OrderItem = {
@@ -372,10 +459,12 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const preco = prod.precoUnitarioPadrao || item.precoUnitario || 0;
     const pdv = 12.00;
     const qtdTotal = item.qtdTotalUnidades || 100;
-    const descPct = item.percentualDesconto || 0;
+    const descPct = (item.percentualDesconto !== undefined && item.percentualDesconto > 0) 
+      ? item.percentualDesconto 
+      : Math.max(0, Math.min(100, percentualDescontoOff || 0));
     const totalBruto = qtdTotal * preco;
-    const valorDesc = totalBruto * (descPct / 100);
-    const totalLiquido = totalBruto - valorDesc;
+    const valorDesc = Number((totalBruto * (descPct / 100)).toFixed(2));
+    const totalLiquido = Number((totalBruto - valorDesc).toFixed(2));
     const precoEfetivo = preco * (1 - descPct / 100);
 
     const fiscal = calculateItemFiscal(precoEfetivo, pdv, globalFiscal, item.fiscalOverride);
@@ -572,11 +661,15 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
     const qtd = updatedItem.qtdTotalUnidades || 0;
     const precoBruto = field === 'precoUnitario' ? Number(value) : (updatedItem.precoUnitario || 0);
-    const descPct = field === 'percentualDesconto' ? Number(value) : (updatedItem.percentualDesconto || 0);
+    const descPct = field === 'percentualDesconto' 
+      ? Number(value) 
+      : ((updatedItem.percentualDesconto !== undefined && updatedItem.percentualDesconto > 0) 
+          ? updatedItem.percentualDesconto 
+          : Math.max(0, Math.min(100, percentualDescontoOff || 0)));
 
     const valorBruto = qtd * precoBruto;
-    const valorDesc = valorBruto * (descPct / 100);
-    const valorLiquido = valorBruto - valorDesc;
+    const valorDesc = Number((valorBruto * (descPct / 100)).toFixed(2));
+    const valorLiquido = Number((valorBruto - valorDesc).toFixed(2));
 
     updatedItem.valorTotalBruto = valorBruto;
     updatedItem.percentualDesconto = descPct;
@@ -1416,16 +1509,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               <div
                 className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-40 max-h-72 overflow-y-auto p-1.5 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150"
               >
-                {products
-                  .filter(p => {
-                    const q = quickSearchText.toLowerCase();
-                    const desc = (p.descricao || '').toLowerCase();
-                    const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
-                    const codForn = (p.codigoFornecedor || '').toLowerCase();
-                    return desc.includes(q) || codInt.includes(q) || codForn.includes(q);
-                  })
-                  .slice(0, 8)
-                  .map(prod => (
+                {matchingProductsForQuickBar.length > 0 ? (
+                  matchingProductsForQuickBar.map(prod => (
                     <button
                       key={prod.id}
                       type="button"
@@ -1447,10 +1532,24 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                           <span>{prod.codigoInterno || prod.codigo}</span>
                           <span>•</span>
                           <span className="text-emerald-600 font-bold">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</span>
+                          {prod.nomeFornecedor && (
+                            <>
+                              <span>•</span>
+                              <span className="text-slate-500 truncate">{prod.nomeFornecedor}</span>
+                            </>
+                          )}
                         </div>
                       </div>
+                      <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition px-2 py-1 bg-indigo-50 dark:bg-indigo-950/60 rounded-lg shrink-0">
+                        Adicionar +
+                      </div>
                     </button>
-                  ))}
+                  ))
+                ) : (
+                  <div className="p-3 text-center text-xs text-slate-400">
+                    Nenhum produto {currentSupplierName ? `do fornecedor "${currentSupplierName}"` : ''} encontrado para "{quickSearchText}"
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1705,16 +1804,27 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
             {/* Lista de Produtos com Fotos */}
             <div className="p-4 overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {products
-                .filter(p => {
-                  const s = catalogSearch.toLowerCase();
-                  const desc = p.descricao.toLowerCase();
-                  const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
-                  const codForn = (p.codigoFornecedor || '').toLowerCase();
-                  const cat = (p.categoria || '').toLowerCase();
-                  return desc.includes(s) || codInt.includes(s) || codForn.includes(s) || cat.includes(s);
-                })
-                .map(prod => (
+              {(() => {
+                const filteredCatalog = products
+                  .filter(p => isProductFromSupplier(p, currentSupplierId, currentSupplierName, suppliers))
+                  .filter(p => {
+                    const s = catalogSearch.toLowerCase();
+                    const desc = p.descricao.toLowerCase();
+                    const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+                    const codForn = (p.codigoFornecedor || '').toLowerCase();
+                    const cat = (p.categoria || '').toLowerCase();
+                    return desc.includes(s) || codInt.includes(s) || codForn.includes(s) || cat.includes(s);
+                  });
+
+                if (filteredCatalog.length === 0) {
+                  return (
+                    <div className="col-span-full p-8 text-center text-slate-400 text-xs">
+                      Nenhum produto {currentSupplierName ? `vinculado a "${currentSupplierName}"` : ''} encontrado.
+                    </div>
+                  );
+                }
+
+                return filteredCatalog.map(prod => (
                   <div
                     key={prod.id}
                     onClick={() => handleSelectProductForNewItem(prod)}
@@ -1777,7 +1887,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       <Plus className="w-4 h-4" />
                     </div>
                   </div>
-                ))}
+                ));
+              })()}
             </div>
 
           </div>
@@ -2008,7 +2119,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           <div className="px-3.5 py-2.5 bg-emerald-50/90 dark:bg-emerald-950/90 border-b border-emerald-100 dark:border-emerald-900/60 flex items-center justify-between text-[11px] font-bold">
             <span className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300">
               <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              Produtos do Catálogo ({matchingProductsForRow.length})
+              <span>
+                {currentSupplierName ? `Produtos: ${currentSupplierName}` : 'Produtos do Catálogo'} ({matchingProductsForRow.length})
+              </span>
             </span>
             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">
               Clique para preencher a linha

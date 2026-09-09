@@ -80,7 +80,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     (s.nomeFantasia && s.nomeFantasia.toLowerCase() === (header.fornecedor || '').toLowerCase())
   );
 
-  // Alíquota de ST e Desconto OFF do cadastro do fornecedor ou do header
+  // Alíquota de ST, Desconto OFF e Percentual de Nota do cadastro do fornecedor ou do header
   const aliquotaStCadastrada = currentSupplier?.aliquotaStPadrao !== undefined 
     ? currentSupplier.aliquotaStPadrao 
     : (header.aliquotaSt ?? 0);
@@ -89,7 +89,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     ? currentSupplier.descontoOffPadrao
     : (header.percentualDescontoOff ?? 0);
 
-  // Sincronizar ST e OFF do pedido se o fornecedor cadastrado tiver valores definidos
+  const notaCadastrada = currentSupplier?.percentualNotaPadrao !== undefined
+    ? currentSupplier.percentualNotaPadrao
+    : (header.percentualNota ?? 100);
+
+  // Sincronizar ST, OFF e NOTA do pedido se o fornecedor cadastrado tiver valores definidos
   useEffect(() => {
     if (!currentSupplier) return;
 
@@ -108,6 +112,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
     if (currentSupplier.descontoOffPadrao !== undefined && header.percentualDescontoOff !== currentSupplier.descontoOffPadrao) {
       updatedHeader.percentualDescontoOff = currentSupplier.descontoOffPadrao;
+      needsUpdate = true;
+    }
+
+    if (currentSupplier.percentualNotaPadrao !== undefined && header.percentualNota !== currentSupplier.percentualNotaPadrao) {
+      updatedHeader.percentualNota = currentSupplier.percentualNotaPadrao;
       needsUpdate = true;
     }
 
@@ -326,6 +335,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       prazoDias: supParsed.prazo,
       aliquotaSt: supplier.aliquotaStPadrao || 0,
       percentualDescontoOff: supplier.descontoOffPadrao !== undefined ? supplier.descontoOffPadrao : 0,
+      percentualNota: supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : (header.percentualNota ?? 100),
       observacoesDescarga: supplier.observacoesDescarga || ''
     });
     setIsDropdownOpen(false);
@@ -532,11 +542,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               )}
             </div>
 
-            {/* 3. OFF (Informativo / Cadastro do Fornecedor) */}
+            {/* 3. NOTA (%) (Posicionado no topo com o fornecedor) */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span>OFF</span>
-                <span className="text-[10px] text-slate-400 font-normal">Informativo</span>
+                <span>Nota (%)</span>
+                <span className="text-[10px] text-slate-400 font-normal">Histórico BD</span>
               </label>
               <div className="relative">
                 <input
@@ -544,11 +554,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   step="0.1"
                   min="0"
                   max="100"
-                  value={offCadastrado === 0 ? '' : offCadastrado}
+                  value={header.percentualNota === 0 ? '' : (header.percentualNota !== undefined ? header.percentualNota : 100)}
                   onFocus={(e) => e.target.select()}
-                  onChange={(e) => handleFieldChange('percentualDescontoOff', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleFieldChange('percentualNota', parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold pr-8 font-mono"
-                  placeholder="0"
+                  placeholder="100"
                 />
                 <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
                   %
@@ -763,11 +773,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     )}
                   </div>
 
-                  {/* 6. NOTA (%) */}
+                  {/* 6. OFF (%) (Desconto Direto no Valor do Pedido) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>6. Nota (%)</span>
-                      <span className="text-[10px] font-mono text-slate-400">Histórico BD</span>
+                      <span>6. OFF (%)</span>
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">Desc. Direto</span>
                     </label>
                     <div className="relative">
                       <input
@@ -775,11 +785,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         step="0.1"
                         min="0"
                         max="100"
-                        value={header.percentualNota === 0 ? '' : (header.percentualNota !== undefined ? header.percentualNota : 100)}
+                        value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
                         onFocus={(e) => e.target.select()}
-                        onChange={(e) => handleFieldChange('percentualNota', parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-blue-600 dark:text-blue-400 font-mono shadow-2xs pr-8"
-                        placeholder="100"
+                        onChange={(e) => handleFieldChange('percentualDescontoOff', parseFloat(e.target.value) || 0)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs pr-8"
+                        placeholder="0"
                       />
                       <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
                         %

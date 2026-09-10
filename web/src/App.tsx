@@ -1050,6 +1050,7 @@ export function App() {
     if (!order.header.id) return;
     try {
       let duplicated: PurchaseOrder;
+      const today = new Date().toISOString().split('T')[0];
       try {
         duplicated = await duplicateOrderInDb(order.header.id);
       } catch {
@@ -1061,6 +1062,8 @@ export function App() {
             ...order.header,
             id: newId,
             numeroPedido: nextNum,
+            dataPedido: today,
+            dataEmissao: today,
             status: 'Em Cotação',
             separationStatus: 'Pendente',
             isDraft: true,
@@ -1073,9 +1076,35 @@ export function App() {
           })),
           installments: []
         };
-        await saveOrderToDb(duplicated).catch(() => {});
-        saveOrderToHistory(duplicated);
       }
+
+      // Garantir que a data do pedido seja a data atual (nunca zerada)
+      duplicated.header = {
+        ...duplicated.header,
+        dataPedido: today,
+        dataEmissao: today,
+        // Garantir que todas as condições de pagamento do pedido original venham exatamente iguais
+        condicaoPagamento: order.header.condicaoPagamento,
+        formaPagamento: order.header.formaPagamento,
+        prazoDias: order.header.prazoDias,
+        parcelasCount: order.header.parcelasCount,
+        percentualDescontoOff: order.header.percentualDescontoOff,
+        valorEntradaAVista: order.header.valorEntradaAVista,
+        depositoParcelasCount: order.header.depositoParcelasCount,
+        depositoPrazoDias: order.header.depositoPrazoDias,
+        saldoParcelasCount: order.header.saldoParcelasCount,
+        saldoPrazoDias: order.header.saldoPrazoDias,
+        diaVencimentoPersonalizado: order.header.diaVencimentoPersonalizado,
+        datasVencimentoPersonalizadas: order.header.datasVencimentoPersonalizadas,
+        previsaoPagamento: order.header.previsaoPagamento
+      };
+
+      // Gerar as parcelas de pagamento calculadas a partir da nova data do pedido com as condições idênticas
+      duplicated.installments = generateOrderInstallments(duplicated, undefined, undefined, false);
+
+      // Salva no banco e histórico com a data atual e as parcelas geradas
+      await saveOrderToDb(duplicated).catch(() => {});
+      saveOrderToHistory(duplicated);
 
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);

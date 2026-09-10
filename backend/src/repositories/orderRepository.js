@@ -478,6 +478,7 @@ class OrderRepository {
     const newNumero = await this.getNextNumeroPedido();
     const newId = `po_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
+    const today = now.split('T')[0];
 
     const duplicatedItems = (original.items || []).map(item => ({
       ...item,
@@ -487,12 +488,25 @@ class OrderRepository {
       separacaoLojas: {}
     }));
 
+    // Duplicar parcelas/títulos com as exatas condições do pedido original
+    const duplicatedInstallments = (original.installments || []).map(inst => ({
+      ...inst,
+      id: `inst_${newId}_${inst.numeroParcela || 1}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      orderId: newId,
+      numeroPedido: newNumero,
+      fornecedor: original.header?.fornecedor || inst.fornecedor,
+      status: 'A Vencer',
+      dataPagamento: null,
+      updatedAt: now
+    }));
+
     const duplicatedOrder = {
       header: {
         ...original.header,
         id: newId,
         numeroPedido: newNumero,
-        dataEmissao: now.split('T')[0],
+        dataPedido: today,
+        dataEmissao: today,
         status: 'Em Cotação',
         separationStatus: 'Pendente',
         isDraft: true,
@@ -500,7 +514,7 @@ class OrderRepository {
         updatedAt: now
       },
       items: duplicatedItems,
-      installments: [],
+      installments: duplicatedInstallments,
       inspection: null,
       separationDistribution: null
     };

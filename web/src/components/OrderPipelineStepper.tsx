@@ -138,34 +138,6 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Lado Direito: Botões de Ação Contextual Conforme Imagem 3 */}
-        <div className="flex items-center gap-2 shrink-0">
-          {onOpenSeparation && (
-            <button
-              type="button"
-              onClick={() => onOpenSeparation(order)}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition flex items-center gap-1.5 cursor-pointer"
-              title="Abrir tela de conferência física na doca"
-            >
-              <PackageCheck className="w-3.5 h-3.5 text-purple-500" />
-              <span>Conferência Doca</span>
-            </button>
-          )}
-
-          {onFinalizeSeparation && (
-            <button
-              type="button"
-              onClick={() => onFinalizeSeparation(order)}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-700 hover:bg-emerald-800 shadow-sm shadow-emerald-700/30 transition flex items-center gap-1.5 cursor-pointer"
-              title="Concluir a separação e despachar para as lojas"
-            >
-              <CheckCheck className="w-3.5 h-3.5" />
-              <span>Concluir Separação</span>
-            </button>
-          )}
-        </div>
-
       </div>
     </div>
   );

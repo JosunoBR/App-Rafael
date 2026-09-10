@@ -1842,6 +1842,23 @@ export function App() {
               {/* PÁGINA 1: COTAÇÃO E PEDIDOS */}
               {activeNav === 'orders' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
+                  {/* Esteira Operacional Visual do Pedido (Compras ➔ Depósito ➔ Separação ➔ Finalizado) */}
+                  <OrderPipelineStepper
+                    order={order}
+                    currentUser={currentUser}
+                    onApproveOrder={handleApproveOrder}
+                    onOpenDistribution={(ord) => {
+                      setOrder(ord);
+                      setActiveNav('separation');
+                    }}
+                    onReleaseToSeparation={handleReleaseToSeparation}
+                    onOpenSeparation={(ord) => {
+                      setOrder(ord);
+                      setActiveNav('separation');
+                    }}
+                    onFinalizeSeparation={handleFinalizeSeparation}
+                  />
+
                   <OrderHeaderForm 
                     header={order.header} 
                     suppliers={suppliers}

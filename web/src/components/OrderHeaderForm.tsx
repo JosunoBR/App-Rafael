@@ -489,7 +489,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
             numeroParcela: d,
             rotulo: (depositoParcelas === 1 && depositoPrazo === 'vista') 
               ? 'Entrada (Depósito / PIX)' 
-              : `${d}º Depósito (${dueDays}d da Entrega)`,
+              : `${d}º Depósito`,
             dataVencimento: customDate || defaultDate,
             valor: valorPorParcelaDeposito,
             isEntrada: true,
@@ -508,7 +508,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
           return {
             numeroParcela,
-            rotulo: `${b}º Boleto Saldo (${dueDays}d da Entrega)`,
+            rotulo: `${b}º Boleto Saldo`,
             dataVencimento: customDate || defaultDate,
             valor: valorPorParcelaSaldo,
             isEntrada: false,

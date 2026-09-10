@@ -27,13 +27,13 @@ export const PRAZO_OPTIONS = [
 ];
 
 export const DEPOSITO_PRAZO_OPTIONS = [
-  { value: 'vista', label: 'À Vista no Pedido (TED / PIX)' },
-  { value: '7', label: 'A cada 7 dias (7/14/21...)' },
-  { value: '10', label: 'A cada 10 dias (10/20/30...)' },
-  { value: '15', label: 'A cada 15 dias (15/30/45...)' },
-  { value: '21', label: 'A cada 21 dias (21/42/63...)' },
-  { value: '28', label: 'A cada 28 dias (28/56/84...)' },
   { value: '30', label: 'A cada 30 dias (30/60/90...)' },
+  { value: '28', label: 'A cada 28 dias (28/56/84...)' },
+  { value: '20', label: 'A cada 20 dias (20/40/60...)' },
+  { value: '15', label: 'A cada 15 dias (15/30/45...)' },
+  { value: '10', label: 'A cada 10 dias (10/20/30...)' },
+  { value: '7', label: 'A cada 7 dias (7/14/21...)' },
+  { value: 'vista', label: 'À Vista no Pedido (TED / PIX)' },
 ];
 
 export const SALDO_PRAZO_OPTIONS = PRAZO_OPTIONS.filter(
@@ -322,18 +322,21 @@ export function generateOrderInstallments(
       const customDepDate = customDates?.[String(d)];
 
       let dueDays = 0;
+      let calculatedDueDate = '';
       if (depositoPrazo === 'vista') {
         dueDays = 0;
+        calculatedDueDate = addDaysToDate(orderDate, 0);
       } else {
         const interval = Number(depositoPrazo) || 30;
-        dueDays = (d - 1) * interval;
+        // Primeira parcela é 10 dias depois da data de entrega; as seguintes seguem o intervalo escolhido
+        dueDays = 10 + (d - 1) * interval;
+        calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
       }
 
-      const calculatedDueDate = addDaysToDate(orderDate, dueDays);
       const origVal = d === 1 ? Number((depBaseValue + depRemainder).toFixed(2)) : depBaseValue;
       const isDepManuallyOverridden = existingDep?.valor !== undefined && existingDep?.valorOriginal !== undefined && Math.abs(existingDep.valor - existingDep.valorOriginal) > 0.01;
       const valorFinal = isDepManuallyOverridden ? existingDep.valor : origVal;
-      const rawDataVenc = customDepDate || existingDep?.dataVencimento || calculatedDueDate;
+      const rawDataVenc = customDepDate || calculatedDueDate;
       const dataVencFinal = addDaysToDate(rawDataVenc, 0);
       const statusFinal = existingDep?.status || getInstallmentStatus(dataVencFinal, existingDep?.dataPagamento);
 
@@ -349,7 +352,7 @@ export function generateOrderInstallments(
         valorOriginal: isDepManuallyOverridden ? existingDep.valorOriginal : origVal,
         status: statusFinal,
         dataPagamento: existingDep?.dataPagamento,
-        observacao: existingDep?.observacao || (totalParcelasDeposito === 1 ? 'Entrada / Sinal À Vista (TED/PIX)' : `Depósito ${d}/${totalParcelasDeposito} (${dueDays}d)`),
+        observacao: existingDep?.observacao || (totalParcelasDeposito === 1 && depositoPrazo === 'vista' ? 'Entrada / Sinal À Vista (TED/PIX)' : `Depósito ${d}/${totalParcelasDeposito} (${dueDays}d da Entrega)`),
         documentoRef: existingDep?.documentoRef,
         tipoTitulo: 'mercadoria',
         metodoPagamento: 'Depósito',
@@ -358,7 +361,7 @@ export function generateOrderInstallments(
       });
     }
 
-    // 2. Parcelas do Saldo em Boleto (Contadas a partir da entrega)
+    // 2. Parcelas do Saldo em Boleto (1ª parcela 10 dias após a entrega, seguintes somando o intervalo)
     const saldoBaseValue = totalParcelasSaldo > 0 ? Number((saldoRestante / totalParcelasSaldo).toFixed(2)) : saldoRestante;
     const saldoRemainder = totalParcelasSaldo > 0 ? Number((saldoRestante - saldoBaseValue * totalParcelasSaldo).toFixed(2)) : 0;
 
@@ -366,9 +369,9 @@ export function generateOrderInstallments(
       const numParcela = totalParcelasDeposito + j;
       const existing = existingMap.get(numParcela);
 
-      let dueDays = 0;
       const intervalNum = Number(saldoPrazo) || 30;
-      dueDays = j * intervalNum;
+      // Primeira parcela é 10 dias depois da data de entrega; as seguintes seguem o intervalo escolhido
+      const dueDays = 10 + (j - 1) * intervalNum;
 
       const calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
       const originalProportionalVal = j === 1 ? Number((saldoBaseValue + saldoRemainder).toFixed(2)) : saldoBaseValue;
@@ -376,7 +379,7 @@ export function generateOrderInstallments(
       const customSaldoDate = customDates?.[String(numParcela)];
       const isManuallyOverridden = existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01;
       const valorFinal = isManuallyOverridden ? existing.valor : originalProportionalVal;
-      const rawDueDate = customSaldoDate || existing?.dataVencimento || calculatedDueDate;
+      const rawDueDate = customSaldoDate || calculatedDueDate;
       const dataVencimentoFinal = addDaysToDate(rawDueDate, 0);
       const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
 

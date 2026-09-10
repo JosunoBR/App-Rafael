@@ -219,6 +219,21 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       });
       return;
     }
+
+    if (field === 'formaPagamento' && (value === 'Boleto' || value === 'Depósito' || value === 'Cheque')) {
+      const fallbackPrazo = (currentPrazo === 'deposito_e_boleto' || currentPrazo === 'entrada_com_parcelamento') ? '30' : currentPrazo;
+      const fallbackParc = currentParcelas > 0 ? currentParcelas : 3;
+      const newCondString = formatPaymentConditionString(fallbackParc, fallbackPrazo);
+      onChange({
+        ...header,
+        formaPagamento: value,
+        prazoDias: fallbackPrazo,
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: undefined
+      });
+      return;
+    }
+
     onChange({
       ...header,
       [field]: value
@@ -459,18 +474,22 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         ...Array.from({ length: depositoParcelas }, (_, idx) => {
           const d = idx + 1;
           let dueDays = 0;
+          let defaultDate = '';
           if (depositoPrazo === 'vista') {
             dueDays = 0;
+            defaultDate = addDaysToDate(orderDate, 0);
           } else {
             const interval = Number(depositoPrazo) || 30;
-            dueDays = (d - 1) * interval;
+            dueDays = 10 + (d - 1) * interval;
+            defaultDate = addDaysToDate(baseDate, dueDays);
           }
-          const defaultDate = addDaysToDate(orderDate, dueDays);
           const rawCustom = customDates?.[String(d)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
           return {
             numeroParcela: d,
-            rotulo: depositoParcelas === 1 ? 'Entrada (Depósito / PIX)' : `${d}º Depósito (${dueDays}d)`,
+            rotulo: (depositoParcelas === 1 && depositoPrazo === 'vista') 
+              ? 'Entrada (Depósito / PIX)' 
+              : `${d}º Depósito (${dueDays}d da Entrega)`,
             dataVencimento: customDate || defaultDate,
             valor: valorPorParcelaDeposito,
             isEntrada: true,
@@ -483,13 +502,13 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           const b = idx + 1;
           const numeroParcela = depositoParcelas + b;
           const interval = Number(saldoPrazo) || 30;
-          const dueDays = b * interval;
+          const dueDays = 10 + (b - 1) * interval;
           const defaultDate = addDaysToDate(baseDate, dueDays);
           const rawCustom = customDates?.[String(numeroParcela)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
           return {
             numeroParcela,
-            rotulo: `${b}º Boleto Saldo (${dueDays}d)`,
+            rotulo: `${b}º Boleto Saldo (${dueDays}d da Entrega)`,
             dataVencimento: customDate || defaultDate,
             valor: valorPorParcelaSaldo,
             isEntrada: false,
@@ -1014,7 +1033,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 </div>
 
                 {/* LINHA 1: CONFIGURAÇÃO DE FORMA DE PAGAMENTO & PRAZOS */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-3.5">
+                <div className={`grid grid-cols-1 ${isEntradaMista ? 'sm:grid-cols-1 max-w-sm' : 'sm:grid-cols-3'} gap-3.5 mb-3.5`}>
                   {/* 1. Forma de Pagamento */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -1033,50 +1052,50 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </select>
                   </div>
 
-                  {/* 2. Modalidade de Prazo */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      2. Prazo / Intervalo
-                    </label>
-                    <select
-                      value={currentPrazo}
-                      onChange={(e) => handlePaymentPrazoChange(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
-                    >
-                      {PRAZO_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {!isEntradaMista && (
+                    <>
+                      {/* 2. Modalidade de Prazo */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                          2. Prazo / Intervalo
+                        </label>
+                        <select
+                          value={currentPrazo}
+                          onChange={(e) => handlePaymentPrazoChange(e.target.value)}
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
+                        >
+                          {PRAZO_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                  {/* 3. Quantidade de Parcelas */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>3. Qtd Parcelas</span>
-                    </label>
-                    <select
-                      value={isVistaIntegral ? 1 : isEntradaMista ? (depositoParcelas + saldoParcelas) : currentParcelas}
-                      disabled={isVistaIntegral || isEntradaMista}
-                      onChange={(e) => handlePaymentParcelasChange(Number(e.target.value))}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {isVistaIntegral ? (
-                        <option value="1">1x (À Vista ou 1 Parcela)</option>
-                      ) : isEntradaMista ? (
-                        <option value={depositoParcelas + saldoParcelas}>
-                          {depositoParcelas}x Depósito + {saldoParcelas}x Boleto ({depositoParcelas + saldoParcelas}x Total)
-                        </option>
-                      ) : (
-                        PARCELAS_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
+                      {/* 3. Quantidade de Parcelas */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                          <span>3. Qtd Parcelas</span>
+                        </label>
+                        <select
+                          value={isVistaIntegral ? 1 : currentParcelas}
+                          disabled={isVistaIntegral}
+                          onChange={(e) => handlePaymentParcelasChange(Number(e.target.value))}
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {isVistaIntegral ? (
+                            <option value="1">1x (À Vista ou 1 Parcela)</option>
+                          ) : (
+                            PARCELAS_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* LINHA 2: FRETE E NOTA FISCAL */}

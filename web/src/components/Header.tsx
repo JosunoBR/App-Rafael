@@ -46,7 +46,7 @@ interface HeaderProps {
   onCloseOrder?: () => void;
   onDuplicateOrder?: () => void;
   onDiscardDraft: () => void;
-  onExportExcel: () => void;
+  onExportExcel?: () => void;
   onExportPDF: () => void;
   onSelectNav?: (tab: ActiveNavTab) => void;
 }
@@ -421,26 +421,15 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
 
-              {/* Subgrupo: Exportações (Excel & PDF) */}
-              <div className="flex items-center gap-1 bg-slate-100/90 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
-                <button
-                  onClick={onExportExcel}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 hover:shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                  title="Exportar Matriz em Excel (.xlsx)"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Excel</span>
-                </button>
-
-                <button
-                  onClick={onExportPDF}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 hover:shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                  title="Gerar PDF do Pedido de Compra Oficial (Via Fornecedor)"
-                >
-                  <FileText className="w-3.5 h-3.5 text-rose-500" />
-                  <span>PDF</span>
-                </button>
-              </div>
+              {/* Botão de Exportação: Gerar Proposta Comercial (PDF) */}
+              <button
+                onClick={onExportPDF}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-rose-400 hover:text-rose-700 dark:hover:text-rose-400 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Gerar PDF da Proposta Comercial Oficial (Via Fornecedor)"
+              >
+                <FileText className="w-3.5 h-3.5 text-rose-500" />
+                <span>Gerar proposta comercial</span>
+              </button>
 
               {/* Subgrupo: Ações Principais (Salvar & Fechar Pedido) */}
               <div className="flex items-center gap-1.5">
@@ -450,7 +439,7 @@ export const Header: React.FC<HeaderProps> = ({
                   title="Salvar alterações e manter pedido em espera/rascunho"
                 >
                   <Save className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Salvar</span>
+                  <span>Salvar pedido</span>
                 </button>
 
                 {onCloseOrder && (
@@ -460,7 +449,7 @@ export const Header: React.FC<HeaderProps> = ({
                     title="Fechar pedido e enviar para a separação do depósito"
                   >
                     <PackageCheck className="w-3.5 h-3.5" />
-                    <span>Fechar Pedido</span>
+                    <span>Fechar pedido</span>
                   </button>
                 )}
               </div>
@@ -471,14 +460,16 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Grupo 3: Ações Específicas da Tela de Separação */}
           {activeNav === 'separation' && viewMode === 'desktop' && (
             <div className="flex items-center gap-1 bg-slate-100/90 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
-              <button
-                onClick={onExportExcel}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 hover:shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                title="Exportar Romaneio em Excel"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Excel</span>
-              </button>
+              {onExportExcel && (
+                <button
+                  onClick={onExportExcel}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-900 hover:shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  title="Exportar Romaneio em Excel"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Excel</span>
+                </button>
+              )}
 
               <button
                 onClick={onExportPDF}

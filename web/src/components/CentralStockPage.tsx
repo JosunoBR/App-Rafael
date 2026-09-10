@@ -119,6 +119,28 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   // Total selecionado para transferência
   const selectedCount = Object.keys(selectedTransferItems).length;
   const totalUnidadesTransferencia = Object.values(selectedTransferItems).reduce((sum, val) => sum + (Number(val) || 0), 0);
+  const [selectionWarning, setSelectionWarning] = useState<string | null>(null);
+
+  // Itens com saldo positivo que podem ser selecionados
+  const selectableItems = useMemo(() => {
+    return filteredStock.filter(it => (it.saldoUnidades || 0) > 0);
+  }, [filteredStock]);
+
+  const allSelected = selectableItems.length > 0 && selectableItems.every(it => selectedTransferItems[it.id] !== undefined);
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedTransferItems({});
+      setSelectionWarning(null);
+    } else {
+      const next: Record<string, number> = {};
+      selectableItems.forEach(it => {
+        next[it.id] = Math.min(Math.max(1, it.saldoUnidades || 1), 50);
+      });
+      setSelectedTransferItems(next);
+      setSelectionWarning(null);
+    }
+  };
 
   // Handlers de Seleção e Transferência
   const toggleItemSelection = (item: CentralStockItem) => {
@@ -131,6 +153,16 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
       }
       return next;
     });
+    setSelectionWarning(null);
+  };
+
+  const handleOpenTransferModal = () => {
+    if (selectedCount === 0) {
+      setSelectionWarning('Selecione ao menos 1 produto na tabela (marcando o checkbox na linha ou clicando em "+ Romaneio") para transferir às lojas.');
+      return;
+    }
+    setSelectionWarning(null);
+    setIsTransferModalOpen(true);
   };
 
   const handleTransferUnitsChange = (stockId: string, units: number, maxUnits: number) => {
@@ -209,17 +241,9 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             <Warehouse className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                Estoque do Depósito Central (CD Matriz)
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800">
-                {metrics.totalItens} Itens Estocados
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Gerencie saldos em peças/unidades no galpão, endereçamento e crie ordens de separação para distribuição às lojas
-            </p>
+            <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+              Estoque Matriz
+            </h1>
           </div>
         </div>
 
@@ -232,25 +256,53 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             <span>+ Dar Entrada / Novo Item</span>
           </button>
 
-          {selectedCount > 0 ? (
-            <button
-              onClick={() => setIsTransferModalOpen(true)}
-              className="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer animate-pulse hover:scale-102"
-            >
-              <Send className="w-4 h-4" />
-              <span>Gerar Romaneio ({selectedCount} itens • {totalUnidadesTransferencia.toLocaleString('pt-BR')} un)</span>
-            </button>
-          ) : (
-            <button
-              onClick={onNavigateToSeparation}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <PackageCheck className="w-4 h-4" />
-              <span>Ver Fila de Separação Doca</span>
-            </button>
-          )}
+          {/* Botão Gerar Romaneio de Transferência - Sempre visível */}
+          <button
+            onClick={handleOpenTransferModal}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+              selectedCount > 0
+                ? 'text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 animate-pulse hover:scale-102'
+                : 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+            }`}
+            title={selectedCount > 0 ? "Abrir conferência do romaneio para as 20 lojas" : "Clique para gerar romaneio dos produtos selecionados"}
+          >
+            <Send className="w-4 h-4" />
+            <span>
+              {selectedCount > 0
+                ? `Gerar Romaneio (${selectedCount} itens • ${totalUnidadesTransferencia.toLocaleString('pt-BR')} un)`
+                : 'Gerar Romaneio de Transferência'
+              }
+            </span>
+          </button>
+
+          {/* Botão Fila de Separação da Doca */}
+          <button
+            onClick={onNavigateToSeparation}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
+            title="Ir para a fila de separação da Doca"
+          >
+            <PackageCheck className="w-4 h-4 text-teal-500" />
+            <span>Ver Fila de Separação Doca</span>
+          </button>
         </div>
       </div>
+
+      {/* Alerta contextual se o usuário tentar gerar sem itens selecionados */}
+      {selectionWarning && (
+        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex items-center justify-between gap-3 text-xs animate-in fade-in duration-200 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span><strong>Atenção:</strong> {selectionWarning}</span>
+          </div>
+          <button 
+            type="button"
+            onClick={toggleSelectAll} 
+            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition cursor-pointer shrink-0 shadow-xs"
+          >
+            Selecionar Todos ({selectableItems.length})
+          </button>
+        </div>
+      )}
 
       {/* 2. Cards de Métricas de Patrimônio e Volume (Formato Horizontal Limpo Conforme Imagem 2) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -364,7 +416,14 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
                 <th className="py-3 px-3.5 text-center w-12">
-                  <span className="sr-only">Seleção</span>
+                  <input
+                    type="checkbox"
+                    title={allSelected ? "Desmarcar todos os produtos" : "Selecionar todos os produtos com saldo"}
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    disabled={selectableItems.length === 0}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                  />
                 </th>
                 <th className="py-3 px-2 w-14 text-center">FOTO</th>
                 <th className="py-3 px-3 min-w-[120px] whitespace-nowrap">CÓD. INTERNO</th>
@@ -519,6 +578,43 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Barra de Ação Fixa quando há produtos selecionados para Romaneio */}
+      {selectedCount > 0 && (
+        <div className="sticky bottom-4 z-30 bg-slate-900/95 dark:bg-slate-950/95 text-white p-4 rounded-2xl shadow-2xl backdrop-blur-md border border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+              <Send className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-xs font-black">
+                {selectedCount} {selectedCount === 1 ? 'produto selecionado' : 'produtos selecionados'} para transferência
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Volume total a ratear: <strong className="text-emerald-400 font-mono">{totalUnidadesTransferencia.toLocaleString('pt-BR')} unidades</strong> entre as 20 lojas
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setSelectedTransferItems({})}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            >
+              Desmarcar Todos
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsTransferModalOpen(true)}
+              className="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer hover:scale-102"
+            >
+              <Send className="w-4 h-4" />
+              <span>Conferir e Gerar Romaneio</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 5. MODAL DE CONFIRMAÇÃO DO ROMANEIO DE TRANSFERÊNCIA */}
       {isTransferModalOpen && (

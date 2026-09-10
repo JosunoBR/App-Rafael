@@ -137,7 +137,6 @@ import {
   fetchHealth,
   duplicateOrderInDb
 } from './utils/api';
-import { exportOrderToExcel } from './utils/excelExporter';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
 import { calculateOrderNetTotal, calculateOrderMerchandiseTotal, generateOrderInstallments } from './utils/installments';
 import { calculateItemFiscal, normalizeRateToDecimal } from './shared/fiscalEngine';
@@ -1346,11 +1345,6 @@ export function App() {
     }
   };
 
-  const handleExportExcel = () => {
-    exportOrderToExcel(order, storeConfigs, fiscalConfig);
-    showToast('Planilha Excel (.xlsx) gerada!', 'success');
-  };
-
   const handleExportCommercialPDF = () => {
     exportCommercialOrderPDF(order);
     showToast('Pedido Comercial PDF (Proposta para Fornecedor) gerado com sucesso!', 'success');
@@ -1722,7 +1716,6 @@ export function App() {
           onCloseOrder={handleCloseOrder}
           onDuplicateOrder={handleDuplicateCurrentOrder}
           onDiscardDraft={handleDiscardDraft}
-          onExportExcel={handleExportExcel}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
           onSelectNav={setActiveNav}
         />
@@ -1739,7 +1732,6 @@ export function App() {
               fiscalConfig={fiscalConfig}
               onUpdateOrder={setOrder}
               onExportPDF={handleExportCommercialPDF}
-              onExportExcel={handleExportExcel}
               onSaveOrder={handleSaveDraftOrder}
               onNewOrder={handleNewOrder}
               onOpenSeparationModal={(item) => setSelectedSeparationItem(item)}
@@ -1869,7 +1861,6 @@ export function App() {
                   presets={separationPresets}
                   currentUser={currentUser}
                   onExportPDF={handleExportSeparationPDF}
-                  onExportExcel={handleExportExcel}
                   onNavigateToOrders={() => setActiveNav('orders')}
                   onNavigateToHistory={() => setActiveNav('separationHistory')}
                   onChangeOrder={setOrder}

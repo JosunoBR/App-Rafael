@@ -191,14 +191,13 @@ export function parseDateFlexible(dateStr: string): Date | null {
  */
 export function addDaysToDate(dateStr: string, days: number): string {
   try {
-    const isBrFormat = String(dateStr).includes('/');
     const dt = parseDateFlexible(dateStr);
     if (!dt) return dateStr;
     dt.setUTCDate(dt.getUTCDate() + days);
     const y = dt.getUTCFullYear();
     const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
     const d = String(dt.getUTCDate()).padStart(2, '0');
-    return isBrFormat ? `${d}/${m}/${y}` : `${y}-${m}-${d}`;
+    return `${y}-${m}-${d}`;
   } catch {
     return dateStr;
   }
@@ -258,8 +257,8 @@ export function generateOrderInstallments(
   const customDates = order.header.datasVencimentoPersonalizadas;
 
   // A primeira parcela a prazo é contada a partir da data de entrega da mercadoria
-  const baseDeliveryDate = order.header.dataEntregaPrevista || order.header.dataPedido || new Date().toISOString().split('T')[0];
-  const orderDate = order.header.dataPedido || new Date().toISOString().split('T')[0];
+  const baseDeliveryDate = addDaysToDate(order.header.dataEntregaPrevista || order.header.dataPedido || new Date().toISOString().split('T')[0], 0);
+  const orderDate = addDaysToDate(order.header.dataPedido || new Date().toISOString().split('T')[0], 0);
 
   const existingMap = new Map<number, PaymentInstallment>();
   if (preserveExistingEdits && Array.isArray(order.installments)) {
@@ -284,7 +283,8 @@ export function generateOrderInstallments(
     // 1. Parcela de Entrada (À Vista)
     const existingEntrada = existingMap.get(1);
     const customEntradaDate = customDates?.['1'];
-    const dataVencEntrada = customEntradaDate || existingEntrada?.dataVencimento || orderDate;
+    const rawDataVencEntrada = customEntradaDate || existingEntrada?.dataVencimento || orderDate;
+    const dataVencEntrada = addDaysToDate(rawDataVencEntrada, 0);
     const valorEntradaFinal = existingEntrada?.valor !== undefined ? existingEntrada.valor : valorEntrada;
     const statusEntrada = existingEntrada?.status || getInstallmentStatus(dataVencEntrada, existingEntrada?.dataPagamento);
 
@@ -324,7 +324,8 @@ export function generateOrderInstallments(
 
       const customSaldoDate = customDates?.[String(numParcela)];
       const valorFinal = existing?.valor !== undefined ? existing.valor : originalProportionalVal;
-      const dataVencimentoFinal = customSaldoDate || existing?.dataVencimento || calculatedDueDate;
+      const rawDueDate = customSaldoDate || existing?.dataVencimento || calculatedDueDate;
+      const dataVencimentoFinal = addDaysToDate(rawDueDate, 0);
       const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
 
       list.push({
@@ -368,7 +369,8 @@ export function generateOrderInstallments(
 
       const customDate = customDates?.[String(i)];
       const valorFinal = existing?.valor !== undefined ? existing.valor : originalProportionalVal;
-      const dataVencimentoFinal = customDate || existing?.dataVencimento || calculatedDueDate;
+      const rawDueDate = customDate || existing?.dataVencimento || calculatedDueDate;
+      const dataVencimentoFinal = addDaysToDate(rawDueDate, 0);
       const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
 
       list.push({
@@ -404,7 +406,8 @@ export function generateOrderInstallments(
     const customFreteDate = customDates?.['frete'] || customDates?.[String(nextParcelaNum)];
 
     const valorFreteFinal = existingFrete?.valor !== undefined ? existingFrete.valor : valorFrete;
-    const dataVencFrete = customFreteDate || existingFrete?.dataVencimento || freteDueDate;
+    const rawFreteDate = customFreteDate || existingFrete?.dataVencimento || freteDueDate;
+    const dataVencFrete = addDaysToDate(rawFreteDate, 0);
     const statusFrete = existingFrete?.status || getInstallmentStatus(dataVencFrete, existingFrete?.dataPagamento);
 
     list.push({

@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder, PaymentInstallment, Supplier } from '../shared/types';
 import { generateOrderInstallments, calculateOrderNetTotal, getInstallmentStatus } from '../utils/installments';
-import { toBrDate } from '../utils/masks';
+import { toBrDate, toIsoDate } from '../utils/masks';
 import { MonthlyPurchasesMatrixView } from './MonthlyPurchasesMatrixView';
 import * as XLSX from 'xlsx';
 
@@ -181,7 +181,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     setEditingInstallment({ order, installment: inst });
     setModalForm({
       valor: inst.valor,
-      dataVencimento: inst.dataVencimento,
+      dataVencimento: toIsoDate(inst.dataVencimento),
       status: inst.status,
       dataPagamento: inst.dataPagamento || '',
       observacao: inst.observacao || '',
@@ -787,7 +787,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                   </label>
                   <input
                     type="date"
-                    value={modalForm.dataVencimento}
+                    value={toIsoDate(modalForm.dataVencimento)}
                     onChange={(e) => setModalForm(prev => ({ ...prev, dataVencimento: e.target.value }))}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
                   />

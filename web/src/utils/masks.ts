@@ -167,10 +167,19 @@ export function toBrDate(val?: string | null): string {
 export function toIsoDate(val?: string | null): string {
   if (!val) return '';
   const trimmed = String(val).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    return trimmed.split('T')[0].slice(0, 10);
+  }
   if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
     const [d, m, y] = trimmed.split('/');
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  const dt = new Date(trimmed);
+  if (!isNaN(dt.getTime())) {
+    const y = dt.getUTCFullYear();
+    const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(dt.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
   return trimmed;
 }

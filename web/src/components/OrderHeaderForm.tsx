@@ -263,8 +263,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   };
 
   // Previsão dinâmica das datas das parcelas a partir da data de entrega da mercadoria
-  const baseDate = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
-  const orderDate = header.dataPedido || new Date().toISOString().split('T')[0];
+  const rawBase = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
+  const baseDate = addDaysToDate(rawBase, 0);
+  const rawOrderDate = header.dataPedido || new Date().toISOString().split('T')[0];
+  const orderDate = addDaysToDate(rawOrderDate, 0);
   const customDates = header.datasVencimentoPersonalizadas;
 
   const previewInstallments = isEntradaMista
@@ -272,7 +274,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         {
           numeroParcela: 1,
           rotulo: 'Entrada À Vista',
-          dataVencimento: customDates?.['1'] || orderDate,
+          dataVencimento: (customDates?.['1'] ? addDaysToDate(customDates['1'], 0) : null) || orderDate,
           valor: valorEntrada,
           isEntrada: true,
           isFrete: false
@@ -283,7 +285,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           const interval = Number(saldoPrazo) || 30;
           const dueDays = num * interval;
           const defaultDate = addDaysToDate(baseDate, dueDays);
-          const customDate = customDates?.[String(numeroParcela)];
+          const rawCustom = customDates?.[String(numeroParcela)];
+          const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
           return {
             numeroParcela,
             rotulo: `Saldo ${num}/${saldoParcelas}`,
@@ -299,7 +302,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         const interval = Number(currentPrazo) || 30;
         const dueDays = currentPrazo === 'vista' ? 0 : num * interval;
         const defaultDate = addDaysToDate(baseDate, dueDays);
-        const customDate = customDates?.[String(num)];
+        const rawCustom = customDates?.[String(num)];
+        const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
         return {
           numeroParcela: num,
           rotulo: currentPrazo === 'vista' ? 'À Vista' : `${num}ª Parcela`,
@@ -314,7 +318,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   if (valorFreteNum > 0) {
     const defaultDateFrete = addDaysToDate(baseDate, 10);
     const freteNum = previewInstallments.length + 1;
-    const customDateFrete = customDates?.['frete'] || customDates?.[String(freteNum)];
+    const rawFreteCustom = customDates?.['frete'] || customDates?.[String(freteNum)];
+    const customDateFrete = rawFreteCustom ? addDaysToDate(rawFreteCustom, 0) : undefined;
     previewInstallments.push({
       numeroParcela: freteNum,
       rotulo: 'Boleto Frete (10d)',
@@ -331,31 +336,33 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const handleInstallmentDateChange = (numeroParcela: number, newDate: string, isFrete: boolean) => {
     if (!newDate) return;
 
+    const isoNewDate = toIsoDate(newDate);
+
     const currentMap: Record<string, string> = {};
     previewInstallments.forEach(item => {
       const key = item.isFrete ? 'frete' : String(item.numeroParcela);
-      currentMap[key] = item.dataVencimento;
+      currentMap[key] = toIsoDate(item.dataVencimento);
     });
 
     const targetKey = isFrete ? 'frete' : String(numeroParcela);
     const oldDate = currentMap[targetKey];
-    if (!oldDate || oldDate === newDate) return;
+    if (!oldDate || oldDate === isoNewDate) return;
 
-    const diffDays = getDaysDifference(oldDate, newDate);
+    const diffDays = getDaysDifference(oldDate, isoNewDate);
 
     const updatedCustomDates: Record<string, string> = {
       ...(header.datasVencimentoPersonalizadas || {}),
       ...currentMap
     };
 
-    updatedCustomDates[targetKey] = newDate;
+    updatedCustomDates[targetKey] = isoNewDate;
 
     // Se NÃO for frete, ajusta automaticamente todas as parcelas seguintes
     if (!isFrete) {
       previewInstallments.forEach(item => {
         if (!item.isFrete && item.numeroParcela > numeroParcela) {
           const key = String(item.numeroParcela);
-          const curD = currentMap[key] || item.dataVencimento;
+          const curD = currentMap[key] || toIsoDate(item.dataVencimento);
           updatedCustomDates[key] = addDaysToDate(curD, diffDays);
         }
       });
@@ -1106,7 +1113,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                               <Calendar className="w-3 h-3 text-slate-400 shrink-0 pointer-events-none" />
                               <input
                                 type="date"
-                                value={inst.dataVencimento}
+                                value={toIsoDate(inst.dataVencimento)}
                                 onChange={(e) => handleInstallmentDateChange(inst.numeroParcela, e.target.value, Boolean(isFreteItem))}
                                 className="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-[11px] font-bold outline-hidden cursor-pointer"
                                 title="Clique para editar a data (as datas seguintes serão ajustadas automaticamente)"

@@ -46,6 +46,10 @@ class OrderRepository {
       totalPecas += (Number(item.qtdTotalUnidades || 0));
     });
 
+    const today = new Date().toISOString().split('T')[0];
+    const dataPedido = order.header.dataPedido || order.header.dataEmissao || today;
+    const dataEmissao = order.header.dataEmissao || order.header.dataPedido || today;
+
     if (existing) {
       const targetId = existing.id;
       const sql = `
@@ -53,7 +57,7 @@ class OrderRepository {
           numeroPedido = ?, fornecedor = ?, supplierId = ?, aliquotaSt = ?,
           vendedor = ?, contatoVendedor = ?, condicaoPagamento = ?, formaPagamento = ?,
           previsaoPagamento = ?, tipoFrete = ?, valorFrete = ?, descontoComercialTotal = ?,
-          descontoComercialTipo = ?, isDraft = ?, dataEmissao = ?, dataEntregaPrevista = ?,
+          descontoComercialTipo = ?, isDraft = ?, dataPedido = ?, dataEmissao = ?, dataEntregaPrevista = ?,
           percentualDescontoOff = ?, percentualNota = ?, observacoes = ?, status = ?,
           separationStatus = ?, totalLiquido = ?, totalPecas = ?, installmentsJson = ?,
           fiscalConfigJson = ?, aliquotaIpi = ?, aliquotaFrete = ?, aliquotaIcmsEntrada = ?,
@@ -76,7 +80,8 @@ class OrderRepository {
         Number(order.header.descontoComercialTotal) || 0,
         order.header.descontoComercialTipo || '%',
         order.header.isDraft ? 1 : 0,
-        order.header.dataEmissao || '',
+        dataPedido,
+        dataEmissao,
         order.header.dataEntregaPrevista || '',
         Number(order.header.percentualDescontoOff) || 0,
         order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
@@ -104,13 +109,13 @@ class OrderRepository {
           id, numeroPedido, fornecedor, supplierId, aliquotaSt, vendedor,
           contatoVendedor, condicaoPagamento, formaPagamento, previsaoPagamento,
           tipoFrete, valorFrete, descontoComercialTotal, descontoComercialTipo,
-          isDraft, dataEmissao, dataEntregaPrevista, percentualDescontoOff,
+          isDraft, dataPedido, dataEmissao, dataEntregaPrevista, percentualDescontoOff,
           percentualNota, observacoes, status, separationStatus, totalLiquido,
           totalPecas, installmentsJson, fiscalConfigJson, aliquotaIpi,
           aliquotaFrete, aliquotaIcmsEntrada, aliquotaCustoFixo, aliquotaIcmsSaida,
           aliquotaPisCofinsIr, itemsJson, separationDistributionJson,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await execute(sql, [
         order.header.id,
@@ -128,7 +133,8 @@ class OrderRepository {
         Number(order.header.descontoComercialTotal) || 0,
         order.header.descontoComercialTipo || '%',
         order.header.isDraft ? 1 : 0,
-        order.header.dataEmissao || '',
+        dataPedido,
+        dataEmissao,
         order.header.dataEntregaPrevista || '',
         Number(order.header.percentualDescontoOff) || 0,
         order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
@@ -441,7 +447,8 @@ class OrderRepository {
         descontoComercialTotal: r.descontoComercialTotal || 0,
         descontoComercialTipo: r.descontoComercialTipo || '%',
         isDraft: r.isDraft === 1,
-        dataEmissao: r.dataEmissao,
+        dataPedido: r.dataPedido || r.dataEmissao || (r.createdAt ? r.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+        dataEmissao: r.dataEmissao || r.dataPedido || (r.createdAt ? r.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
         dataEntregaPrevista: r.dataEntregaPrevista,
         percentualDescontoOff: r.percentualDescontoOff,
         percentualNota: r.percentualNota !== undefined ? r.percentualNota : 100,

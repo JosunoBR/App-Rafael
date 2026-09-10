@@ -240,6 +240,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     });
   };
 
+  // Garante que o campo dataPedido esteja sempre preenchido com a data atual caso esteja em branco
+  useEffect(() => {
+    if (!header.dataPedido || header.dataPedido.trim() === '') {
+      const today = new Date().toISOString().split('T')[0];
+      onChange({
+        ...header,
+        dataPedido: today,
+        dataEmissao: header.dataEmissao || today
+      });
+    }
+  }, [header.dataPedido]);
+
   // Condição de Pagamento estruturada (Dropdown Duplo & Entrada Mista)
   const parsedPayment = parsePaymentConditionString(header.condicaoPagamento);
   const currentParcelas = header.parcelasCount ?? parsedPayment.parcelas;
@@ -953,7 +965,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               <div className="relative flex items-center">
                 <input
                   type="text"
-                  value={toBrDate(header.dataPedido)}
+                  value={toBrDate(header.dataPedido || header.dataEmissao || new Date().toISOString().split('T')[0])}
                   onChange={(e) => handleFieldChange('dataPedido', maskDate(e.target.value))}
                   placeholder="DD/MM/AAAA"
                   maxLength={10}
@@ -961,7 +973,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 />
                 <input
                   type="date"
-                  value={toIsoDate(header.dataPedido)}
+                  value={toIsoDate(header.dataPedido || header.dataEmissao || new Date().toISOString().split('T')[0])}
                   onChange={(e) => handleFieldChange('dataPedido', toBrDate(e.target.value))}
                   className="absolute right-1 w-7 h-7 opacity-0 cursor-pointer z-10"
                   tabIndex={-1}
@@ -1208,22 +1220,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           <div className="space-y-2.5">
                             {/* Valor Total do Depósito */}
                             <div>
-                              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                                <span>Valor Total Depósito (R$)</span>
-                                {valorBaseMercadoria > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    {[10, 20, 30, 50].map((pct) => (
-                                      <button
-                                        key={pct}
-                                        type="button"
-                                        onClick={() => handleEntradaChange(Number((valorBaseMercadoria * (pct / 100)).toFixed(2)))}
-                                        className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 transition cursor-pointer border border-indigo-200/60"
-                                      >
-                                        {pct}%
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
+                              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                Valor Total Depósito (R$)
                               </label>
                               <input
                                 type="text"

@@ -1458,6 +1458,15 @@ export function loadCurrentOrder(): PurchaseOrder | null {
     if (ord.header?.observacoesDescarga && LEGACY_DEFAULT_OBSERVACOES.includes(ord.header.observacoesDescarga.trim())) {
       ord.header.observacoesDescarga = '';
     }
+    if (ord.header) {
+      const today = new Date().toISOString().split('T')[0];
+      if (!ord.header.dataPedido || ord.header.dataPedido.trim() === '') {
+        ord.header.dataPedido = ord.header.dataEmissao || today;
+      }
+      if (!ord.header.dataEmissao || ord.header.dataEmissao.trim() === '') {
+        ord.header.dataEmissao = ord.header.dataPedido || today;
+      }
+    }
     return ord;
   } catch {
     return null;

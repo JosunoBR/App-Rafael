@@ -195,9 +195,15 @@ export function App() {
     const saved = loadCurrentOrder();
     const initFiscal = getInitialFiscalConfig();
     const initStores = getInitialStoresConfig();
+    const today = new Date().toISOString().split('T')[0];
     if (saved) {
       return {
         ...saved,
+        header: {
+          ...saved.header,
+          dataPedido: saved.header.dataPedido || saved.header.dataEmissao || today,
+          dataEmissao: saved.header.dataEmissao || saved.header.dataPedido || today
+        },
         items: ensureTrailingBlankItem(saved.items || [], initFiscal, initStores)
       };
     }
@@ -873,11 +879,16 @@ export function App() {
 
     await autoRegisterProductsFromOrder(validItems);
 
+    const today = new Date().toISOString().split('T')[0];
+    const targetDate = targetOrder.header.dataPedido || targetOrder.header.dataEmissao || today;
+
     const orderToSave: PurchaseOrder = {
       ...targetOrder,
       items: validItems,
       header: {
         ...targetOrder.header,
+        dataPedido: targetDate,
+        dataEmissao: targetOrder.header.dataEmissao || targetDate,
         isDraft: true,
         status: targetOrder.header.status === 'Em Separação' || targetOrder.header.status === 'Finalizado' ? targetOrder.header.status : 'Em Cotação',
         updatedAt: new Date().toISOString()
@@ -906,8 +917,15 @@ export function App() {
         showToast(`Pedido ${order.header.numeroPedido} salvo automaticamente em espera.`, 'info');
       }
     }
+    const today = new Date().toISOString().split('T')[0];
+    const targetDate = selected.header.dataPedido || selected.header.dataEmissao || today;
     setOrder({
       ...selected,
+      header: {
+        ...selected.header,
+        dataPedido: targetDate,
+        dataEmissao: selected.header.dataEmissao || targetDate
+      },
       items: ensureTrailingBlankItem(selected.items || [], fiscalConfig, storeConfigs)
     });
     if (activeNav !== destinationTab) {
@@ -926,11 +944,16 @@ export function App() {
 
     await autoRegisterProductsFromOrder(validItems);
 
+    const today = new Date().toISOString().split('T')[0];
+    const targetDate = order.header.dataPedido || order.header.dataEmissao || today;
+
     const orderToSave: PurchaseOrder = {
       ...order,
       items: validItems,
       header: {
         ...order.header,
+        dataPedido: targetDate,
+        dataEmissao: order.header.dataEmissao || targetDate,
         isDraft: true,
         status: order.header.status === 'Em Separação' || order.header.status === 'Finalizado' ? order.header.status : 'Em Cotação',
         updatedAt: new Date().toISOString()
@@ -982,11 +1005,16 @@ export function App() {
 
     await autoRegisterProductsFromOrder(validItems);
 
+    const today = new Date().toISOString().split('T')[0];
+    const orderDate = order.header.dataPedido || order.header.dataEmissao || today;
+
     const closedOrder: PurchaseOrder = {
       ...order,
       items: validItems,
       header: {
         ...order.header,
+        dataPedido: orderDate,
+        dataEmissao: order.header.dataEmissao || orderDate,
         status: 'Em Separação',
         separationStatus: 'Pendente',
         isDraft: false,

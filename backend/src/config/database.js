@@ -99,6 +99,7 @@ async function getDatabase() {
       vendedor TEXT,
       contatoVendedor TEXT,
       condicaoPagamento TEXT,
+      dataPedido TEXT,
       dataEmissao TEXT,
       dataEntregaPrevista TEXT,
       percentualDescontoOff REAL DEFAULT 0,
@@ -276,6 +277,7 @@ async function getDatabase() {
     if (tableInfo[0]) {
       const colNames = tableInfo[0].values.map(v => v[1]);
       const requiredCols = {
+        dataPedido: "TEXT",
         dataEmissao: "TEXT",
         dataEntregaPrevista: "TEXT",
         totalLiquido: "REAL DEFAULT 0",
@@ -358,6 +360,8 @@ async function getDatabase() {
     if (orderItemsTableInfo[0]) {
       const colNames = orderItemsTableInfo[0].values.map(v => v[1]);
       const requiredItemCols = {
+        codigoInterno: "TEXT",
+        codigoFornecedor: "TEXT",
         percentualDesconto: "REAL DEFAULT 0",
         valorDescontoItem: "REAL DEFAULT 0",
         valorTotalLiquido: "REAL DEFAULT 0",

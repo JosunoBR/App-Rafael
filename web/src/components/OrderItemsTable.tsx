@@ -82,20 +82,20 @@ export interface ColumnMeta {
 
 const ALL_COLUMNS: ColumnMeta[] = [
   { key: 'foto', label: 'FOTO', thClass: 'text-center', defaultWidth: 50, minWidth: 46 },
-  { key: 'codigoInterno', label: 'CÓD. INTERNO', thClass: 'text-center', defaultWidth: 115, minWidth: 105 },
-  { key: 'codigoBarras', label: 'CÓD. BARRAS', thClass: 'text-center', title: 'Código de Barras EAN-13', defaultWidth: 125, minWidth: 110 },
-  { key: 'codigoFornecedor', label: 'REF. FÁBRICA', thClass: 'text-center', title: 'Referência de Fábrica / Cód. Fornecedor', defaultWidth: 115, minWidth: 105 },
-  { key: 'descricao', label: 'DESCRIÇÃO DO ITEM', thClass: 'text-left', defaultWidth: 320, minWidth: 180 },
-  { key: 'qtdNoPacote', label: 'QTD NO PAC', thClass: 'text-center', title: 'Quantidade por Embalagem (Caixa, Fardo, Display)', defaultWidth: 100, minWidth: 92 },
-  { key: 'qtdPacotes', label: 'QTD DE PAC', thClass: 'text-center', title: 'Quantidade de Pacotes ou Caixas Compradas', defaultWidth: 100, minWidth: 92 },
-  { key: 'qtdTotalUnidades', label: 'TOTAL PEÇAS', thClass: 'text-center', title: 'Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)', defaultWidth: 110, minWidth: 98 },
-  { key: 'precoUnitario', label: 'VALOR', thClass: 'text-right', title: 'Valor unitário do produto (R$)', defaultWidth: 95, minWidth: 80 },
-  { key: 'valorTotalLiquido', label: 'TOTAL (R$)', thClass: 'text-right', defaultWidth: 115, minWidth: 95 },
-  { key: 'pdvAlvo', label: 'PDV', thClass: 'text-center', defaultWidth: 75, minWidth: 65 },
-  { key: 'custoLoja', label: 'CUSTO LOJA', thClass: 'text-right', title: 'Custo Total da Loja (conforme modelo da planilha)', defaultWidth: 110, minWidth: 98 },
-  { key: 'custoFornecedor', label: 'CUSTO FORN.', thClass: 'text-right', title: 'Custo Real Fornecedor (Produto com Desconto Comercial + IPI + ST + Frete)', defaultWidth: 115, minWidth: 102 },
-  { key: 'margem', label: 'MARGEM', thClass: 'text-center', defaultWidth: 105, minWidth: 88 },
-  { key: 'acoes', label: 'AÇÕES', thClass: 'text-center', defaultWidth: 90, minWidth: 78 },
+  { key: 'codigoInterno', label: 'CÓD. INTERNO', thClass: 'text-center', defaultWidth: 115, minWidth: 70 },
+  { key: 'codigoBarras', label: 'CÓD. BARRAS', thClass: 'text-center', title: 'Código de Barras EAN-13', defaultWidth: 125, minWidth: 75 },
+  { key: 'codigoFornecedor', label: 'REF. FÁBRICA', thClass: 'text-center', title: 'Referência de Fábrica / Cód. Fornecedor', defaultWidth: 115, minWidth: 70 },
+  { key: 'descricao', label: 'DESCRIÇÃO DO ITEM', thClass: 'text-left', defaultWidth: 320, minWidth: 120 },
+  { key: 'qtdNoPacote', label: 'QTD NO PAC', thClass: 'text-center', title: 'Quantidade por Embalagem (Caixa, Fardo, Display)', defaultWidth: 100, minWidth: 60 },
+  { key: 'qtdPacotes', label: 'QTD DE PAC', thClass: 'text-center', title: 'Quantidade de Pacotes ou Caixas Compradas', defaultWidth: 100, minWidth: 60 },
+  { key: 'qtdTotalUnidades', label: 'TOTAL PEÇAS', thClass: 'text-center', title: 'Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)', defaultWidth: 110, minWidth: 65 },
+  { key: 'precoUnitario', label: 'VALOR', thClass: 'text-right', title: 'Valor unitário do produto (R$)', defaultWidth: 95, minWidth: 60 },
+  { key: 'valorTotalLiquido', label: 'TOTAL (R$)', thClass: 'text-right', defaultWidth: 115, minWidth: 65 },
+  { key: 'pdvAlvo', label: 'PDV', thClass: 'text-center', defaultWidth: 75, minWidth: 48 },
+  { key: 'custoLoja', label: 'CUSTO LOJA', thClass: 'text-right', title: 'Custo Total da Loja (conforme modelo da planilha)', defaultWidth: 110, minWidth: 65 },
+  { key: 'custoFornecedor', label: 'CUSTO FORN.', thClass: 'text-right', title: 'Custo Real Fornecedor (Produto com Desconto Comercial + IPI + ST + Frete)', defaultWidth: 115, minWidth: 65 },
+  { key: 'margem', label: 'MARGEM', thClass: 'text-center', defaultWidth: 105, minWidth: 65 },
+  { key: 'acoes', label: 'AÇÕES', thClass: 'text-center', defaultWidth: 90, minWidth: 60 },
 ];
 
 // Helper para destacar os caracteres digitados no texto
@@ -1527,7 +1527,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             })}
           </colgroup>
           <thead>
-            <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-100/90 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider select-none whitespace-nowrap">
+            <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-100/90 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider select-none">
               {/* Coluna # com Dropdown para escolha de colunas visíveis */}
               <th 
                 style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}
@@ -1646,7 +1646,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     onDrop={(e) => handleDrop(e, col.key)}
                     onDragEnd={handleDragEnd}
                     style={{ width: `${colWidth}px`, minWidth: `${minWidth}px`, maxWidth: `${colWidth}px` }}
-                    className={`py-2 px-2.5 border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none transition-colors relative text-center ${
+                    className={`py-2 px-1.5 border-r border-slate-200 dark:border-slate-700 select-none transition-colors relative text-center align-middle ${
                       canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
                     } ${
                       isDragOver ? 'bg-emerald-100/90 dark:bg-emerald-950/90 ring-2 ring-emerald-500' : ''
@@ -1655,8 +1655,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     }`}
                     title="Arraste para mover a posição da coluna • Arraste a divisória direita para ajustar a largura"
                   >
-                    <div className="flex items-center justify-center w-full pointer-events-none">
-                      <span className="font-bold tracking-tight text-[11px] text-slate-700 dark:text-slate-200 text-center truncate">
+                    <div className="flex items-center justify-center w-full min-h-[28px] pointer-events-none text-center">
+                      <span className="font-bold tracking-tight text-[11px] text-slate-700 dark:text-slate-200 text-center whitespace-normal break-words leading-tight">
                         {col.label}
                       </span>
                     </div>

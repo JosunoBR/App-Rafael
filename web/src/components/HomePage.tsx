@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder, User, Supplier, StoreConfig } from '../shared/types';
 import { ActiveNavTab } from './Sidebar';
+import { toBrDate } from '../utils/masks';
 
 interface HomePageProps {
   currentUser: User;
@@ -609,7 +610,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                         {ord.header.fornecedor || 'Fornecedor não informado'}
                       </td>
                       <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
-                        {ord.header.dataPedido ? new Date(ord.header.dataPedido + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                        {toBrDate(ord.header.dataPedido) || '-'}
                       </td>
                       <td className="py-3 px-4 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
                         {ord.items?.length || 0}

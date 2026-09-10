@@ -46,6 +46,9 @@ import {
 import { 
   SupplierModal 
 } from './components/SupplierModal';
+import {
+  OrderImportModal
+} from './modules/excelImporter';
 import { 
   OrderHistoryPage 
 } from './components/OrderHistoryPage';
@@ -222,6 +225,7 @@ export function App() {
   const [selectedSupplierToEdit, setSelectedSupplierToEdit] = useState<string | null>(null);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState<boolean>(false);
   const [supplierModalEditTarget, setSupplierModalEditTarget] = useState<Supplier | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
 
   // Lista consolidada de pedidos (o pedido em edição em memória sobrepõe a versão antiga salva)
   const effectiveOrders = useMemo(() => {
@@ -259,8 +263,24 @@ export function App() {
       ]);
 
       if (dbSuppliers !== null) {
-        setSuppliers(dbSuppliers);
-        saveSuppliersList(dbSuppliers);
+        const supMap = new Map<string, Supplier>();
+        dbSuppliers.forEach(s => supMap.set(s.id, s));
+        if (dbProducts) {
+          dbProducts.forEach(p => {
+            if (p.supplierId && !supMap.has(p.supplierId)) {
+              supMap.set(p.supplierId, {
+                id: p.supplierId,
+                razaoSocial: p.nomeFornecedor || 'Fornecedor',
+                nomeFantasia: p.nomeFornecedor || 'Fornecedor',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              });
+            }
+          });
+        }
+        const consolidatedSuppliers = Array.from(supMap.values());
+        setSuppliers(consolidatedSuppliers);
+        saveSuppliersList(consolidatedSuppliers);
       }
 
       if (dbProducts !== null) {
@@ -780,19 +800,22 @@ export function App() {
     if (itemsToAutoRegister.length === 0) return;
 
     const newProdsToRegister: Product[] = [];
+    const prodsToUpdate: Product[] = [];
     let currentProds = [...products];
 
     for (const it of itemsToAutoRegister) {
-      const existing = currentProds.find(p => {
-        const pDesc = (p.descricao || '').trim().toLowerCase();
-        const pCodInt = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
-        const itCodInt = (it.codigoInterno || it.codigo || '').trim().toLowerCase();
-        const itDesc = (it.descricao || '').trim().toLowerCase();
-        return (itCodInt && pCodInt && itCodInt === pCodInt) || (itDesc && pDesc && itDesc === pDesc);
-      });
+      const cleanDesc = it.descricao.trim().toLowerCase();
+      const code = (it.codigo || it.codigoInterno || '').trim().toLowerCase();
+      const existing = currentProds.find(p => 
+        (p.descricao && p.descricao.trim().toLowerCase() === cleanDesc) ||
+        (code && ((p.codigo && p.codigo.trim().toLowerCase() === code) || (p.codigoInterno && p.codigoInterno.trim().toLowerCase() === code)))
+      );
+      const fallbackSupplier = suppliers[0];
+      const assignedSupplierId = order.header.supplierId || fallbackSupplier?.id || '';
+      const assignedSupplierNome = order.header.fornecedor || fallbackSupplier?.razaoSocial || '';
 
       if (!existing) {
-        const codInterno = it.codigoInterno || it.codigo || generateNextProductCode(currentProds);
+        const codInterno = it.codigoInterno || it.codigo || `PRD-${String(currentProds.length + 1).padStart(3, '0')}`;
         const newProd: Product = {
           id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
           codigoInterno: codInterno,
@@ -806,26 +829,32 @@ export function App() {
           precoUnitarioPadrao: it.precoUnitario || 0,
           pdvSugerido: it.pdvAlvo || 12.00,
           ncm: '',
-          supplierId: order.header.supplierId || '',
-          nomeFornecedor: order.header.fornecedor || '',
+          supplierId: assignedSupplierId,
+          nomeFornecedor: assignedSupplierNome,
           ativo: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         newProdsToRegister.push(newProd);
         currentProds.push(newProd);
+      } else if (!existing.supplierId || !existing.nomeFornecedor) {
+        existing.supplierId = assignedSupplierId;
+        existing.nomeFornecedor = assignedSupplierNome;
+        existing.updatedAt = new Date().toISOString();
+        prodsToUpdate.push(existing);
       }
     }
 
-    if (newProdsToRegister.length > 0) {
+    const prodsToSync = [...newProdsToRegister, ...prodsToUpdate];
+    if (prodsToSync.length > 0) {
       try {
-        await saveProductsBatchToDb(newProdsToRegister);
+        await saveProductsBatchToDb(prodsToSync);
       } catch {
-        for (const p of newProdsToRegister) {
+        for (const p of prodsToSync) {
           await saveProductToDb(p).catch(() => {});
         }
       }
-      saveBatchProductsToStorage(newProdsToRegister);
+      saveBatchProductsToStorage(prodsToSync);
       const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
       setProducts(refreshed);
     }
@@ -1144,7 +1173,11 @@ export function App() {
     const validItems = (updatedOrder.items || []).filter(it => !isOrderItemBlank(it) && it.descricao && it.descricao.trim().length > 0);
     if (validItems.length > 0) {
       const newProdsToRegister: Product[] = [];
+      const prodsToUpdate: Product[] = [];
       let currentProds = [...products];
+      const fallbackSupplier = suppliers[0];
+      const assignedSupplierId = updatedOrder.header.supplierId || fallbackSupplier?.id || '';
+      const assignedSupplierNome = updatedOrder.header.fornecedor || fallbackSupplier?.razaoSocial || '';
 
       for (const it of validItems) {
         const existing = currentProds.find(p => {
@@ -1170,26 +1203,32 @@ export function App() {
             precoUnitarioPadrao: it.precoUnitario || 0,
             pdvSugerido: it.pdvAlvo || 12.00,
             ncm: '',
-            supplierId: updatedOrder.header.supplierId || '',
-            nomeFornecedor: updatedOrder.header.fornecedor || '',
+            supplierId: assignedSupplierId,
+            nomeFornecedor: assignedSupplierNome,
             ativo: true,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           };
           newProdsToRegister.push(newProd);
           currentProds.push(newProd);
+        } else if (!existing.supplierId || !existing.nomeFornecedor) {
+          existing.supplierId = assignedSupplierId;
+          existing.nomeFornecedor = assignedSupplierNome;
+          existing.updatedAt = new Date().toISOString();
+          prodsToUpdate.push(existing);
         }
       }
 
-      if (newProdsToRegister.length > 0) {
+      const prodsToSync = [...newProdsToRegister, ...prodsToUpdate];
+      if (prodsToSync.length > 0) {
         try {
-          await saveProductsBatchToDb(newProdsToRegister);
+          await saveProductsBatchToDb(prodsToSync);
         } catch {
-          for (const p of newProdsToRegister) {
+          for (const p of prodsToSync) {
             await saveProductToDb(p).catch(() => {});
           }
         }
-        saveBatchProductsToStorage(newProdsToRegister);
+        saveBatchProductsToStorage(prodsToSync);
         const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
         setProducts(refreshed);
       }
@@ -1345,6 +1384,31 @@ export function App() {
     }
   };
 
+  const handleOrderImported = async (importedOrder: PurchaseOrder, updatedProducts: Product[]) => {
+    setProducts(updatedProducts);
+    
+    // Salva o pedido como ativo e em cotação (rascunho ativo, nunca fechado)
+    setOrder(importedOrder);
+    saveCurrentOrder(importedOrder);
+    saveOrderToHistory(importedOrder);
+
+    try {
+      await saveOrderToDb(importedOrder);
+      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(updatedOrders);
+    } catch {
+      setSavedOrders(prev => {
+        const filtered = prev.filter(o => o.header.id !== importedOrder.header.id && o.header.numeroPedido !== importedOrder.header.numeroPedido);
+        return [importedOrder, ...filtered];
+      });
+    }
+
+    setActiveNav('orders');
+    setViewMode('desktop');
+    confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
+    showToast(`Pedido ${importedOrder.header.numeroPedido} importado com sucesso! (Salvo em cotação)`, 'success');
+  };
+
   const handleExportCommercialPDF = () => {
     exportCommercialOrderPDF(order);
     showToast('Pedido Comercial PDF (Proposta para Fornecedor) gerado com sucesso!', 'success');
@@ -1482,7 +1546,9 @@ export function App() {
         aliquotaSt: sup.aliquotaStPadrao !== undefined ? sup.aliquotaStPadrao : prev.header.aliquotaSt,
         percentualDescontoOff: sup.descontoOffPadrao !== undefined ? sup.descontoOffPadrao : prev.header.percentualDescontoOff,
         percentualNota: sup.percentualNotaPadrao !== undefined ? sup.percentualNotaPadrao : (prev.header.percentualNota ?? 100),
-        observacoesDescarga: sup.observacoesDescarga || prev.header.observacoesDescarga
+        // A descrição do pedido é independente do fornecedor
+        observacoesDescarga: prev.header.observacoesDescarga || prev.header.observacoes || '',
+        observacoes: prev.header.observacoes || prev.header.observacoesDescarga || ''
       }
     }));
     setActiveNav('orders');
@@ -1717,6 +1783,7 @@ export function App() {
           onDuplicateOrder={handleDuplicateCurrentOrder}
           onDiscardDraft={handleDiscardDraft}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
+          onImportExcel={() => setIsImportModalOpen(true)}
           onSelectNav={setActiveNav}
         />
 
@@ -2032,6 +2099,20 @@ export function App() {
           setSupplierModalEditTarget(null);
         }}
       />
+
+      {/* Modal Inteligente de Importação de Pedidos Excel (.xlsx) */}
+      {isImportModalOpen && (
+        <OrderImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          suppliers={suppliers}
+          products={products}
+          stores={storeConfigs}
+          fiscalConfig={fiscalConfig}
+          onSaveSupplier={handleSaveSupplier}
+          onOrderImported={handleOrderImported}
+        />
+      )}
 
     </div>
   );

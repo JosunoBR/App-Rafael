@@ -134,3 +134,44 @@ export function maskCEP(value: string | undefined | null): string {
   if (digits.length <= 5) return digits;
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
+
+/**
+ * Aplica máscara de data no padrão brasileiro (DD/MM/AAAA)
+ */
+export function maskDate(value: string | undefined | null): string {
+  if (!value) return '';
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (!digits) return '';
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+}
+
+/**
+ * Converte data para padrão brasileiro (DD/MM/AAAA)
+ */
+export function toBrDate(val?: string | null): string {
+  if (!val) return '';
+  const trimmed = String(val).trim();
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) return trimmed;
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('T')[0].split('-');
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return trimmed;
+}
+
+/**
+ * Converte data para padrão ISO (AAAA-MM-DD) para compatibilidade com inputs do tipo date
+ */
+export function toIsoDate(val?: string | null): string {
+  if (!val) return '';
+  const trimmed = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
+    const [d, m, y] = trimmed.split('/');
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  return trimmed;
+}
+

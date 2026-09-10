@@ -137,7 +137,9 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
         condicaoPagamento: sup.condicaoPagamentoPadrao || order.header.condicaoPagamento,
         aliquotaSt: sup.aliquotaStPadrao !== undefined ? sup.aliquotaStPadrao : order.header.aliquotaSt,
         percentualDescontoOff: sup.descontoOffPadrao !== undefined ? sup.descontoOffPadrao : order.header.percentualDescontoOff,
-        observacoesDescarga: sup.observacoesDescarga || order.header.observacoesDescarga
+        // A descrição do pedido é independente do fornecedor
+        observacoesDescarga: order.header.observacoesDescarga || order.header.observacoes || '',
+        observacoes: order.header.observacoes || order.header.observacoesDescarga || ''
       }
     });
     setSupplierSearchOpen(false);

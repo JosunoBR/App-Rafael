@@ -48,6 +48,7 @@ interface HeaderProps {
   onDiscardDraft: () => void;
   onExportExcel?: () => void;
   onExportPDF: () => void;
+  onImportExcel?: () => void;
   onSelectNav?: (tab: ActiveNavTab) => void;
 }
 
@@ -68,6 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
   onDiscardDraft,
   onExportExcel,
   onExportPDF,
+  onImportExcel,
   onSelectNav
 }) => {
   const [isOrdersDropdownOpen, setIsOrdersDropdownOpen] = useState(false);
@@ -430,6 +432,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <FileText className="w-3.5 h-3.5 text-rose-500" />
                 <span>Gerar proposta comercial</span>
               </button>
+
+              {/* Botão de Importação: Importar Pedido Excel (.xlsx) */}
+              {onImportExcel && (
+                <button
+                  onClick={onImportExcel}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  title="Importar pedido a partir de planilha Excel (.xlsx / .xls)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Importar pedido</span>
+                </button>
+              )}
 
               {/* Subgrupo: Ações Principais (Salvar & Fechar Pedido) */}
               <div className="flex items-center gap-1.5">

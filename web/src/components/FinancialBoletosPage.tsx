@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder, PaymentInstallment, Supplier } from '../shared/types';
 import { generateOrderInstallments, calculateOrderNetTotal, getInstallmentStatus } from '../utils/installments';
+import { toBrDate } from '../utils/masks';
 import { MonthlyPurchasesMatrixView } from './MonthlyPurchasesMatrixView';
 import * as XLSX from 'xlsx';
 
@@ -590,7 +591,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                           <ExternalLink className="w-3 h-3 opacity-60" />
                         </button>
                         <div className="text-[10px] text-slate-400 dark:text-slate-500">
-                          Emissão: {order.header.dataPedido || '-'}
+                          Data do pedido: {toBrDate(order.header.dataPedido) || '-'}
                         </div>
                       </td>
 

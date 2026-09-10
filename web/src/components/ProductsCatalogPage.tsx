@@ -88,8 +88,7 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
 
       let matchSupplier = true;
       if (selectedSupplier !== 'all') {
-        const supObj = suppliers.find(sup => sup.id === selectedSupplier);
-        matchSupplier = p.supplierId === selectedSupplier || (Boolean(supObj) && p.nomeFornecedor === supObj?.razaoSocial);
+        matchSupplier = p.supplierId === selectedSupplier;
       }
 
       return matchSearch && matchCategory && matchSupplier;
@@ -155,6 +154,10 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
     const codForn = editingProduct.codigoFornecedor?.trim() || '';
     const codBarras = editingProduct.codigoBarras?.trim() || editingProduct.eanBarcode?.trim() || '';
 
+    const targetSupplier = suppliers.find(s => s.id === editingProduct.supplierId) || suppliers[0];
+    const finalSupplierId = editingProduct.supplierId || targetSupplier?.id || '';
+    const finalSupplierNome = editingProduct.nomeFornecedor || targetSupplier?.razaoSocial || targetSupplier?.nomeFantasia || '';
+
     const fullProduct: Product = {
       id: editingProduct.id || 'prod_' + Date.now(),
       codigoInterno: codInterno,
@@ -169,8 +172,8 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
       precoUnitarioPadrao: Math.max(0, Number(editingProduct.precoUnitarioPadrao) || 0),
       pdvSugerido: editingProduct.pdvSugerido !== undefined ? Number(editingProduct.pdvSugerido) : 12.00,
       ncm: editingProduct.ncm?.trim() || '',
-      supplierId: editingProduct.supplierId || '',
-      nomeFornecedor: editingProduct.nomeFornecedor || '',
+      supplierId: finalSupplierId,
+      nomeFornecedor: finalSupplierNome,
       ativo: editingProduct.ativo !== undefined ? editingProduct.ativo : true,
       createdAt: editingProduct.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -758,19 +761,25 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                   Fornecedor
                 </label>
                 <select
-                  value={editingProduct.supplierId || ''}
+                  value={editingProduct.supplierId || (suppliers[0]?.id || '')}
+                  required
                   onChange={(e) => {
                     const sId = e.target.value;
                     const sObj = suppliers.find(s => s.id === sId);
                     setEditingProduct(prev => prev ? { 
                       ...prev, 
                       supplierId: sId,
-                      nomeFornecedor: sObj ? sObj.razaoSocial : ''
+                      nomeFornecedor: sObj ? (sObj.razaoSocial || sObj.nomeFantasia || '') : (prev.nomeFornecedor || '')
                     } : null);
                   }}
                   className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                 >
-                  <option value="">Sem fornecedor fixo (Catálogo Geral)</option>
+                  {/* Salvaguarda: Se o fornecedor do produto não estiver na lista de suppliers, inclui como opção válida para não forçar outro fornecedor */}
+                  {editingProduct.supplierId && !suppliers.some(s => s.id === editingProduct.supplierId) && (
+                    <option value={editingProduct.supplierId}>
+                      {editingProduct.nomeFornecedor || 'Fornecedor Atual'}
+                    </option>
+                  )}
                   {suppliers.map(sup => (
                     <option key={sup.id} value={sup.id}>
                       {sup.razaoSocial} {sup.nomeFantasia ? `(${sup.nomeFantasia})` : ''} {sup.cnpj ? `• ${sup.cnpj}` : ''}

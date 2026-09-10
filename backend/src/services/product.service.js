@@ -1,4 +1,5 @@
 const productRepository = require('../repositories/productRepository');
+const supplierRepository = require('../repositories/supplierRepository');
 
 class ProductService {
   async listProducts() {
@@ -22,11 +23,33 @@ class ProductService {
       throw err;
     }
 
+    let supplierId = (productData.supplierId || productData.fornecedorPadraoId || '').trim();
+    let nomeFornecedor = (productData.nomeFornecedor || productData.fornecedorPadraoNome || '').trim();
+
+    // REGRA DE NEGÓCIO CRÍTICA: Nenhum produto pode ficar sem fornecedor
+    if (!supplierId || !nomeFornecedor) {
+      if (supplierId) {
+        const sup = await supplierRepository.findById(supplierId);
+        if (sup) {
+          nomeFornecedor = sup.razaoSocial || sup.nomeFantasia || '';
+        }
+      }
+      if (!supplierId) {
+        const sups = await supplierRepository.findAll();
+        if (sups.length > 0) {
+          supplierId = sups[0].id;
+          nomeFornecedor = sups[0].razaoSocial || sups[0].nomeFantasia || '';
+        }
+      }
+    }
+
     const payload = {
       ...productData,
       id: productData.id || ('prod_' + Date.now()),
       codigo: productData.codigo.trim().toUpperCase(),
-      descricao: productData.descricao.trim()
+      descricao: productData.descricao.trim(),
+      supplierId,
+      nomeFornecedor
     };
 
     const saved = await productRepository.upsert(payload);
@@ -47,19 +70,40 @@ class ProductService {
     if (!Array.isArray(productsList) || productsList.length === 0) {
       return { success: true, count: 0, products: [] };
     }
+
+    const allSups = await supplierRepository.findAll();
+    const defaultSup = allSups.length > 0 ? allSups[0] : null;
+
     const savedList = [];
     for (const prod of productsList) {
       if (!prod || !prod.descricao || prod.descricao.trim().length === 0) continue;
       const cod = (prod.codigoInterno || prod.codigo || '').trim().toUpperCase();
       if (!cod) continue;
 
+      let supplierId = (prod.supplierId || prod.fornecedorPadraoId || '').trim();
+      let nomeFornecedor = (prod.nomeFornecedor || prod.fornecedorPadraoNome || '').trim();
+
+      // Garantir fornecedor vinculado
+      if (!supplierId && defaultSup) {
+        supplierId = defaultSup.id;
+        nomeFornecedor = defaultSup.razaoSocial || defaultSup.nomeFantasia || '';
+      } else if (supplierId && !nomeFornecedor) {
+        const matched = allSups.find(s => s.id === supplierId);
+        if (matched) {
+          nomeFornecedor = matched.razaoSocial || matched.nomeFantasia || '';
+        }
+      }
+
       const payload = {
         ...prod,
         id: prod.id || ('prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
         codigo: cod,
         codigoInterno: cod,
-        descricao: prod.descricao.trim()
+        descricao: prod.descricao.trim(),
+        supplierId,
+        nomeFornecedor
       };
+
       try {
         const saved = await productRepository.upsert(payload);
         if (saved) savedList.push(saved);

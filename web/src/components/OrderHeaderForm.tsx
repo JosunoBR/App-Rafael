@@ -25,7 +25,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { OrderHeader, Supplier } from '../shared/types';
-import { handleCurrencyInput, formatCurrency, maskPhone } from '../utils/masks';
+import { handleCurrencyInput, formatCurrency, maskPhone, maskDate, toBrDate, toIsoDate } from '../utils/masks';
 import { LEGACY_DEFAULT_OBSERVACOES } from '../utils/storage';
 import { 
   PARCELAS_OPTIONS, 
@@ -391,7 +391,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       aliquotaSt: supplier.aliquotaStPadrao || 0,
       percentualDescontoOff: supplier.descontoOffPadrao !== undefined ? supplier.descontoOffPadrao : 0,
       percentualNota: supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : (header.percentualNota ?? 100),
-      observacoesDescarga: supplier.observacoesDescarga || ''
+      observacoesDescarga: supplier.observacoesDescarga || header.observacoesDescarga || header.observacoes || ''
     });
     setIsDropdownOpen(false);
   };
@@ -719,14 +719,27 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                Data de Emissão
+                Data do pedido
               </label>
-              <input
-                type="date"
-                value={header.dataPedido}
-                onChange={(e) => handleFieldChange('dataPedido', e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  value={toBrDate(header.dataPedido)}
+                  onChange={(e) => handleFieldChange('dataPedido', maskDate(e.target.value))}
+                  placeholder="DD/MM/AAAA"
+                  maxLength={10}
+                  className="w-full px-3 py-2 pr-8 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-medium"
+                />
+                <input
+                  type="date"
+                  value={toIsoDate(header.dataPedido)}
+                  onChange={(e) => handleFieldChange('dataPedido', toBrDate(e.target.value))}
+                  className="absolute right-1 w-7 h-7 opacity-0 cursor-pointer z-10"
+                  tabIndex={-1}
+                  title="Selecionar no calendário"
+                />
+                <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 pointer-events-none" />
+              </div>
             </div>
 
             {/* 7. Data Entrega Prevista */}
@@ -735,12 +748,25 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 <Truck className="w-3.5 h-3.5 text-slate-400" />
                 Previsão de Entrega
               </label>
-              <input
-                type="date"
-                value={header.dataEntregaPrevista}
-                onChange={(e) => handleFieldChange('dataEntregaPrevista', e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  value={toBrDate(header.dataEntregaPrevista)}
+                  onChange={(e) => handleFieldChange('dataEntregaPrevista', maskDate(e.target.value))}
+                  placeholder="DD/MM/AAAA"
+                  maxLength={10}
+                  className="w-full px-3 py-2 pr-8 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-medium"
+                />
+                <input
+                  type="date"
+                  value={toIsoDate(header.dataEntregaPrevista)}
+                  onChange={(e) => handleFieldChange('dataEntregaPrevista', toBrDate(e.target.value))}
+                  className="absolute right-1 w-7 h-7 opacity-0 cursor-pointer z-10"
+                  tabIndex={-1}
+                  title="Selecionar no calendário"
+                />
+                <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 pointer-events-none" />
+              </div>
             </div>
 
           </div>
@@ -1126,10 +1152,13 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               </label>
               <input
                 type="text"
-                value={header.observacoesDescarga || ''}
-                onChange={(e) => handleFieldChange('observacoesDescarga', e.target.value)}
+                value={header.observacoesDescarga || header.observacoes || ''}
+                onChange={(e) => {
+                  handleFieldChange('observacoesDescarga', e.target.value);
+                  handleFieldChange('observacoes', e.target.value);
+                }}
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                placeholder=""
+                placeholder="Observações do pedido"
               />
             </div>
           </div>

@@ -65,6 +65,22 @@ const DEFAULT_SUPPLIERS = [
     aliquotaIpiPadrao: 5.0,
     descontoOffPadrao: 8.0,
     observacoesDescarga: ''
+  },
+  {
+    id: 'sup_1789049601430',
+    razaoSocial: 'CONECTA',
+    nomeFantasia: 'CONECTA',
+    cnpj: '37.144.240/0001-70',
+    vendedorPadrao: 'Bruna',
+    contatoVendedor: '(55) 9. 3618-5609',
+    condicaoPagamentoPadrao: '30/60/90 Dias',
+    aliquotaStPadrao: 0,
+    aliquotaIpiPadrao: 0,
+    descontoOffPadrao: 50.0,
+    percentualNotaPadrao: 100,
+    telefoneEmpresa: '(42) 9 9136-5009',
+    email: 'als.conecta@gmail.com',
+    observacoesDescarga: ''
   }
 ];
 

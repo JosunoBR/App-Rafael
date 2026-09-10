@@ -64,6 +64,7 @@ async function getDatabase() {
       descontoOffPadrao REAL DEFAULT 0,
       telefoneEmpresa TEXT,
       endereco TEXT,
+      email TEXT,
       observacoesDescarga TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
@@ -341,7 +342,8 @@ async function getDatabase() {
         percentualNotaPadrao: "REAL DEFAULT 100",
         observacoes: "TEXT",
         telefoneEmpresa: "TEXT",
-        endereco: "TEXT"
+        endereco: "TEXT",
+        email: "TEXT"
       };
 
       Object.entries(requiredSupCols).forEach(([col, def]) => {

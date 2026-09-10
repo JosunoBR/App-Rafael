@@ -155,31 +155,63 @@ export function parsePaymentConditionString(cond?: string): { parcelas: number; 
 }
 
 /**
- * Adiciona dias a uma data no formato YYYY-MM-DD
+ * Converte com segurança datas em formato DD/MM/YYYY ou YYYY-MM-DD em objeto Date UTC
+ */
+export function parseDateFlexible(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const str = String(dateStr).trim();
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    if (parts.length === 3) {
+      const d = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      let y = parseInt(parts[2], 10);
+      if (y < 100) y += y > 50 ? 1900 : 2000;
+      const dt = new Date(Date.UTC(y, m, d));
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+  } else if (str.includes('-')) {
+    const parts = str.split('T')[0].split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        const dt = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
+        return isNaN(dt.getTime()) ? null : dt;
+      } else {
+        const dt = new Date(Date.UTC(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0])));
+        return isNaN(dt.getTime()) ? null : dt;
+      }
+    }
+  }
+  const fallback = new Date(str);
+  return isNaN(fallback.getTime()) ? null : fallback;
+}
+
+/**
+ * Adiciona dias a uma data suportando formato DD/MM/YYYY e YYYY-MM-DD
  */
 export function addDaysToDate(dateStr: string, days: number): string {
   try {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    const d = new Date(Date.UTC(year, month - 1, day));
-    d.setUTCDate(d.getUTCDate() + days);
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const dayFormatted = String(d.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${dayFormatted}`;
+    const isBrFormat = String(dateStr).includes('/');
+    const dt = parseDateFlexible(dateStr);
+    if (!dt) return dateStr;
+    dt.setUTCDate(dt.getUTCDate() + days);
+    const y = dt.getUTCFullYear();
+    const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(dt.getUTCDate()).padStart(2, '0');
+    return isBrFormat ? `${d}/${m}/${y}` : `${y}-${m}-${d}`;
   } catch {
     return dateStr;
   }
 }
 
 /**
- * Calcula a diferença em dias exatos entre duas datas no formato YYYY-MM-DD
+ * Calcula a diferença em dias exatos entre duas datas (DD/MM/YYYY ou YYYY-MM-DD)
  */
 export function getDaysDifference(d1: string, d2: string): number {
   try {
-    const [y1, m1, day1] = d1.split('-').map(Number);
-    const [y2, m2, day2] = d2.split('-').map(Number);
-    const dt1 = new Date(Date.UTC(y1, m1 - 1, day1));
-    const dt2 = new Date(Date.UTC(y2, m2 - 1, day2));
+    const dt1 = parseDateFlexible(d1);
+    const dt2 = parseDateFlexible(d2);
+    if (!dt1 || !dt2) return 0;
     const diffMs = dt2.getTime() - dt1.getTime();
     return Math.round(diffMs / (1000 * 60 * 60 * 24));
   } catch {

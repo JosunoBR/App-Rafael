@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { exportOrderToExcel } from '../utils/excelExporter';
+import { toBrDate } from '../utils/masks';
 
 interface OrderHistoryPageProps {
   orders: PurchaseOrder[];
@@ -288,7 +289,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       </td>
 
                       <td className="py-3.5 px-3 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
-                        {ord.header.dataPedido || ord.header.createdAt?.split('T')[0]}
+                        {toBrDate(ord.header.dataPedido || ord.header.createdAt)}
                       </td>
 
                       <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">

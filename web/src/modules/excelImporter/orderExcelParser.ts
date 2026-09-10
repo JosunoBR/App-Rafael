@@ -92,6 +92,36 @@ function findCommercialSheet(workbook: XLSX.WorkBook): string {
 
 /**
  * Extrai os dados do cabeçalho da matriz de células da planilha comercial.
+/**
+ * Verifica se um valor de célula pertence aos dados cadastrais e de contato da nossa empresa compradora
+ * (Mega 12 / ALS Conecta), que devem ser ignorados para evitar que sejam atribuídos ao fornecedor ou vendedor.
+ */
+function isBuyerCompanyData(val: any): boolean {
+  if (val === null || val === undefined) return false;
+  const str = String(val).trim();
+  if (!str) return false;
+
+  // CNPJ da nossa empresa (Mega 12 / ALS Conecta)
+  if (str.includes('37.144.240/0001-70') || str.replace(/\D/g, '') === '37144240000170') return true;
+
+  // E-mails da nossa empresa
+  if (/als\.conecta@gmail\.com/i.test(str) || /@mega12\./i.test(str)) return true;
+
+  // Telefones institucionais da nossa empresa
+  if (str.includes('9136-5009') || str.replace(/\D/g, '').includes('42991365009')) return true;
+
+  // Contatos da equipe interna compradora (ex: Rafael (55) 9. 9659-6315, Bruna (55) 9. 3618-5609)
+  if (/^Rafael\s*\(?55\)?/i.test(str) || str.includes('9659-6315') || str.replace(/\D/g, '').includes('55996596315')) return true;
+  if (/^Bruna\s*\(?55\)?/i.test(str) || str.includes('3618-5609') || str.replace(/\D/g, '').includes('55936185609')) return true;
+
+  // Cabeçalhos institucionais do pedido da empresa
+  if (/^PEDIDO DE COMPRA/i.test(str)) return true;
+
+  return false;
+}
+
+/**
+ * Extrai os dados do cabeçalho da matriz de células da planilha comercial.
  */
 function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
   let numeroPedido = '';
@@ -109,48 +139,66 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
   const observacoesList: string[] = [];
   let tipoFrete: 'CIF' | 'FOB' | 'Retira' = 'Retira';
 
-  // 1. Extração prioritária por linhas específicas conhecidas da planilha padrão
-  // Linha 3 do Excel (índice 2): FORNECEDOR, DATA ENTREGA, E-mail e Telefone da Empresa
+  // Determinar onde inicia a tabela de itens para limitar a varredura do cabeçalho
+  let tableHeaderRowIndex = -1;
+  for (let r = 0; r < Math.min(matrix.length, 20); r++) {
+    const row = matrix[r] || [];
+    const rowText = row.map(c => String(c).toUpperCase().trim());
+    if (rowText.includes('CODIGO') || rowText.includes('CÓDIGO') || rowText.includes('DESCRICAO') || rowText.includes('DESCRIÇÃO') || rowText.some(t => t.includes('REFER'))) {
+      tableHeaderRowIndex = r;
+      break;
+    }
+  }
+  const maxHeaderRow = tableHeaderRowIndex !== -1 ? tableHeaderRowIndex : 7;
+
+  // 1. Linha 3 do Excel (índice 2): FORNECEDOR (Col A/B), DATA ENTREGA (Col H/I)
   const rowExcel3 = matrix[2] || [];
-  for (let c = 0; c < rowExcel3.length; c++) {
-    const val = String(rowExcel3[c] || '').trim();
-    if (!val) continue;
+  const cellA3 = String(rowExcel3[0] || '').trim();
+  if (cellA3.toUpperCase().startsWith('FORNECEDOR:')) {
+    const ext = cellA3.replace(/^FORNECEDOR:\s*/i, '').trim();
+    if (ext) fornecedorNome = ext;
+    else if (rowExcel3[1]) fornecedorNome = String(rowExcel3[1]).trim();
+  }
 
-    if (val.toUpperCase().startsWith('FORNECEDOR:')) {
-      const ext = val.replace(/^FORNECEDOR:\s*/i, '').trim();
-      if (ext) fornecedorNome = ext;
-      else if (rowExcel3[c + 1]) fornecedorNome = String(rowExcel3[c + 1]).trim();
-    }
-
-    if (val.includes('@') && !email) {
-      const emailMatch = val.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
-      if (emailMatch) email = emailMatch[0];
-    }
-
-    const phoneMatch = val.match(/\(?\d{2}\)?\s*9?\.?\s*\d{4,5}[-\s]?\d{4}/);
-    if (phoneMatch && !telefoneEmpresa) {
-      telefoneEmpresa = phoneMatch[0].trim();
+  // Contato do fornecedor em Col E..G (índices 4..6)
+  for (let c = 4; c <= 6; c++) {
+    const contactVal = String(rowExcel3[c] || '').trim();
+    if (contactVal && !isBuyerCompanyData(contactVal)) {
+      if (contactVal.includes('@')) email = contactVal;
+      else telefoneEmpresa = contactVal;
+      break;
     }
   }
 
-  // Linha 5 do Excel (índice 4): PROGRAMAÇÃO com nome do vendedor e contato
+  // 2. Linha 4 do Excel (índice 3): VENDEDOR (Col A/B) e CONTATO DO VENDEDOR (Col E..G)
+  const rowExcel4 = matrix[3] || [];
+  const cellA4 = String(rowExcel4[0] || '').trim();
+  if (cellA4.toUpperCase().startsWith('VENDEDOR:')) {
+    const ext = cellA4.replace(/^VENDEDOR:\s*/i, '').trim();
+    if (ext) vendedor = ext;
+    else if (rowExcel4[1]) vendedor = String(rowExcel4[1]).trim();
+  }
+
+  // Contato do vendedor na Linha 4 (sob CONTATO, Col E..G)
+  for (let c = 4; c <= 6; c++) {
+    const contactVal = String(rowExcel4[c] || '').trim();
+    if (contactVal && !isBuyerCompanyData(contactVal)) {
+      telefoneVendedor = contactVal;
+      break;
+    }
+  }
+
+  // 3. Linha 5 do Excel (índice 4): COND. PAG. (Col A/B)
   const rowExcel5 = matrix[4] || [];
-  for (let c = 0; c < rowExcel5.length; c++) {
-    const val = String(rowExcel5[c] || '').trim();
-    if (!val) continue;
-
-    const phoneMatch = val.match(/(\(?\d{2}\)?\s*9?\.?\s*\d{4,5}[-\s]?\d{4})/);
-    if (phoneMatch) {
-      telefoneVendedor = phoneMatch[0].trim();
-      const namePart = val.replace(phoneMatch[0], '').replace(/[()\-:]/g, '').trim();
-      if (namePart && !vendedor) {
-        vendedor = namePart;
-      }
-    }
+  const cellA5 = String(rowExcel5[0] || '').trim();
+  if (cellA5.toUpperCase().startsWith('COND. PAG.')) {
+    const ext = cellA5.replace(/^COND\.\s*PAG\.\s*:?\s*/i, '').trim();
+    if (ext) condicaoPagamento = ext;
+    else if (rowExcel5[1]) condicaoPagamento = String(rowExcel5[1]).trim();
   }
 
-  // 2. Varredura geral das primeiras 12 linhas para consolidar campos ou capturar em layouts variantes
-  for (let r = 0; r < Math.min(matrix.length, 12); r++) {
+  // 4. Varredura geral das linhas do cabeçalho (antes da grade de produtos)
+  for (let r = 0; r < maxHeaderRow; r++) {
     const row = matrix[r] || [];
     for (let c = 0; c < row.length; c++) {
       const cellVal = String(row[c] || '').trim();
@@ -158,15 +206,29 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
 
       const upper = cellVal.toUpperCase();
 
+      // Se estiver nas colunas de Observações (Colunas >= 9 ou cabeçalho OBSERVAÇÕES)
+      if (c >= 9) {
+        // NUNCA processa colunas >= 9 como dados do fornecedor (são da nossa empresa)
+        if (!isBuyerCompanyData(cellVal)) {
+          // Ignora rótulo do cabeçalho
+          if (!upper.startsWith('OBSERVAÇÕES') && !upper.startsWith('OBSERVACOES') && !upper.startsWith('VALOR TOTAL')) {
+            if (!observacoesList.includes(cellVal)) {
+              observacoesList.push(cellVal);
+            }
+          }
+        }
+        continue; // Não permite extração de CNPJ, email ou vendedor desta área
+      }
+
       // N° PEDIDO
       if (upper.includes('N° PEDIDO') || upper.includes('NUMERO PEDIDO') || upper.includes('Nº PEDIDO')) {
         const nextCell = String(row[c + 1] || '').trim();
-        if (nextCell && !nextCell.toUpperCase().includes('FORNECEDOR')) {
+        if (nextCell && !nextCell.toUpperCase().includes('FORNECEDOR') && !nextCell.toUpperCase().includes('CONTATO')) {
           numeroPedido = nextCell;
         }
       }
 
-      // FORNECEDOR (se ainda não capturado)
+      // FORNECEDOR (caso não esteja fixo na célula A3)
       if (!fornecedorNome && upper.startsWith('FORNECEDOR:')) {
         const extracted = cellVal.replace(/^FORNECEDOR:\s*/i, '').trim();
         if (extracted) {
@@ -176,20 +238,18 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
         }
       }
 
-      // VENDEDOR / PROGRAMAÇÃO (se não capturado na linha 5)
-      if (!vendedor && (upper.startsWith('PROGRAMAÇÃO') || upper.startsWith('PROGRAMACAO') || upper.startsWith('VENDEDOR:'))) {
-        const raw = cellVal.replace(/^(PROGRAMA[ÇC][ÃA]O|VENDEDOR):\s*/i, '').trim() || String(row[c + 1] || '').trim() || String(row[c + 2] || '').trim();
-        const phoneMatch = raw.match(/(\(?\d{2}\)?\s*9?\.?\s*\d{4,5}[-\s]?\d{4})/);
-        if (phoneMatch) {
-          telefoneVendedor = phoneMatch[1].trim();
-          vendedor = raw.replace(phoneMatch[0], '').replace(/[()\-:]/g, '').trim();
-        } else if (raw) {
-          vendedor = raw;
+      // VENDEDOR (caso não esteja fixo na célula A4)
+      if (!vendedor && upper.startsWith('VENDEDOR:')) {
+        const extracted = cellVal.replace(/^VENDEDOR:\s*/i, '').trim();
+        if (extracted) {
+          vendedor = extracted;
+        } else if (row[c + 1]) {
+          vendedor = String(row[c + 1]).trim();
         }
       }
 
       // COND. PAG.
-      if (upper.startsWith('COND. PAG.') || upper.startsWith('CONDICAO PAG') || upper.startsWith('COND. PAGAMENTO')) {
+      if (!condicaoPagamento && (upper.startsWith('COND. PAG.') || upper.startsWith('CONDICAO PAG') || upper.startsWith('COND. PAGAMENTO'))) {
         let extracted = cellVal.replace(/^COND\.\s*PAG\.\s*:?\s*/i, '').trim();
         if (!extracted && row[c + 1]) {
           extracted = String(row[c + 1]).trim();
@@ -212,24 +272,16 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
 
       // DATA PEDIDO
       if (upper.includes('DATA PEDIDO')) {
-        const nextRowVal = matrix[r + 1]?.[c];
         const nextColVal = row[c + 1];
-        dataPedidoVal = nextRowVal !== undefined && nextRowVal !== '' ? nextRowVal : nextColVal;
+        const nextRowVal = matrix[r + 1]?.[c];
+        dataPedidoVal = (nextColVal !== undefined && nextColVal !== '') ? nextColVal : nextRowVal;
       }
 
       // DATA ENTREGA
       if (upper.includes('DATA ENTREGA')) {
-        const nextRowVal = matrix[r + 1]?.[c];
         const nextColVal = row[c + 1];
-        dataEntregaVal = nextRowVal !== undefined && nextRowVal !== '' ? nextRowVal : nextColVal;
-      }
-
-      // OBSERVAÇÃO
-      if (upper.startsWith('OBSERVAÇÃO:') || upper.startsWith('OBSERVACAO:')) {
-        const obs = cellVal.replace(/^OBSERVA[ÇC][ÃA]O:\s*/i, '').trim() || String(row[c + 1] || '').trim();
-        if (obs && !observacoesList.includes(obs)) {
-          observacoesList.push(obs);
-        }
+        const nextRowVal = matrix[r + 1]?.[c];
+        dataEntregaVal = (nextColVal !== undefined && nextColVal !== '') ? nextColVal : nextRowVal;
       }
 
       // FRETE
@@ -240,25 +292,25 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
         else tipoFrete = 'Retira';
       }
 
-      // CNPJ na célula (formato XX.XXX.XXX/XXXX-XX)
+      // CNPJ na coluna do fornecedor (que não seja da nossa empresa)
       const cnpjMatch = cellVal.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
-      if (cnpjMatch && !cnpj) {
+      if (cnpjMatch && !cnpj && !isBuyerCompanyData(cnpjMatch[0])) {
         cnpj = cnpjMatch[0];
       }
 
-      // Email na célula (se não achou)
+      // Email do fornecedor (que não seja da nossa empresa)
       const emailMatch = cellVal.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
-      if (emailMatch && !email) {
+      if (emailMatch && !email && !isBuyerCompanyData(emailMatch[0])) {
         email = emailMatch[0];
       }
 
-      // Telefone da empresa
+      // Telefone da empresa fornecedora
       const phoneMatch = cellVal.match(/\(?\d{2}\)?\s*9?\.?\s*\d{4,5}[-\s]?\d{4}/);
-      if (phoneMatch && !telefoneEmpresa && phoneMatch[0] !== telefoneVendedor) {
+      if (phoneMatch && !telefoneEmpresa && !isBuyerCompanyData(phoneMatch[0]) && phoneMatch[0] !== telefoneVendedor) {
         telefoneEmpresa = phoneMatch[0].trim();
       }
 
-      // Textos adicionais como observação operacional
+      // Textos operacionais na área do pedido
       if (upper.includes('DESCARREGAMENTO') || upper.includes('DESCARGA') || upper.includes('PALETE') || upper.includes('BOLETOS E PEDIDOS')) {
         if (!observacoesList.includes(cellVal)) {
           observacoesList.push(cellVal);

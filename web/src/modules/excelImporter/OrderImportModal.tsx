@@ -123,6 +123,10 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
 
       // Vincular fornecedor correspondente ou sugerir cadastro
       let matchedSupplier = suppliers.find(s => {
+        // Ignora fornecedor caso possua dados da própria empresa compradora
+        if (s.cnpj && s.cnpj.replace(/\D/g, '') === '37144240000170') return false;
+        if (s.razaoSocial && s.razaoSocial.toUpperCase() === 'CONECTA') return false;
+
         if (parsed.header.cnpj && s.cnpj) {
           const clean1 = s.cnpj.replace(/\D/g, '');
           const clean2 = parsed.header.cnpj.replace(/\D/g, '');
@@ -525,11 +529,11 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                     )}
                   </div>
 
-                  {/* E-mail da Empresa (Linha 3) */}
+                  {/* E-mail da Empresa Fornecedora */}
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
                     <span className="text-slate-400 block text-[10px] uppercase font-bold flex items-center gap-1">
                       <Mail className="w-3 h-3 text-emerald-600" />
-                      E-mail (Linha 3)
+                      E-mail Fornecedor
                     </span>
                     <strong className="text-slate-900 dark:text-white block mt-0.5 truncate" title={selectedSupplier.email || 'Não informado'}>
                       {selectedSupplier.email || 'Não informado'}
@@ -537,11 +541,11 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                     <span className="block text-[10px] text-slate-400 mt-0.5">Institucional / Pedidos</span>
                   </div>
 
-                  {/* Telefone Empresa (Linha 3) */}
+                  {/* Telefone Empresa Fornecedora */}
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
                     <span className="text-slate-400 block text-[10px] uppercase font-bold flex items-center gap-1">
                       <Phone className="w-3 h-3 text-emerald-600" />
-                      Telefone (Linha 3)
+                      Telefone Fornecedor
                     </span>
                     <strong className="text-slate-900 dark:text-white block font-mono mt-0.5">
                       {selectedSupplier.telefoneEmpresa || 'Não informado'}
@@ -549,11 +553,11 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                     <span className="block text-[10px] text-slate-400 mt-0.5">Contato da Empresa</span>
                   </div>
 
-                  {/* Vendedor & Contato (Linha 5) */}
+                  {/* Vendedor & Contato (Linha 4) */}
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
                     <span className="text-slate-400 block text-[10px] uppercase font-bold flex items-center gap-1">
                       <User className="w-3 h-3 text-indigo-600" />
-                      Vendedor (Linha 5)
+                      Vendedor (Linha 4)
                     </span>
                     <strong className="text-slate-900 dark:text-white block mt-0.5">
                       {selectedSupplier.vendedorPadrao || 'Não informado'}
@@ -561,7 +565,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                     {selectedSupplier.contatoVendedor ? (
                       <span className="block text-[11px] text-indigo-600 dark:text-indigo-400 font-mono mt-0.5">{selectedSupplier.contatoVendedor}</span>
                     ) : (
-                      <span className="block text-[10px] text-slate-400 mt-0.5">Sem telefone</span>
+                      <span className="block text-[10px] text-slate-400 mt-0.5">Contato do Vendedor</span>
                     )}
                   </div>
 

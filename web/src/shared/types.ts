@@ -179,6 +179,7 @@ export interface OrderItem {
   separacaoLojas?: Record<string, number>;
   separacaoManual?: boolean;    // Se foi editado manualmente
   qtdReservaEstoque?: number;   // Quantidade retida no Estoque Central / Matriz / CD
+  ruptura?: boolean;            // Item em ruptura (não será entregue pelo fornecedor - descontado de todos os cálculos do pedido)
 }
 
 export type OrderStatus = 'Em Cotação' | 'Aprovado' | 'Em Separação' | 'Finalizado';

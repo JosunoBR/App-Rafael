@@ -163,8 +163,8 @@ class OrderRepository {
             qtdNoPacote, qtdPacotes, qtdTotalUnidades, precoUnitario, valorTotalBruto,
             percentualDesconto, valorDescontoItem, valorTotalLiquido,
             pdvAlvo, custoLoja, custoFornecedor, despesasPdvUnit, creditoIcmsUnit, custoRealEfetivo, margemRealUnit, margemPercentual,
-            qtdReservaEstoque, separacaoManual, separacaoLojasJson, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            qtdReservaEstoque, separacaoManual, separacaoLojasJson, ruptura, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           itemId,
           order.header.id,
@@ -193,6 +193,7 @@ class OrderRepository {
           Number(item.qtdReservaEstoque) || 0,
           item.separacaoManual ? 1 : 0,
           JSON.stringify(item.separacaoLojas || {}),
+          item.ruptura ? 1 : 0,
           now,
           now
         ]);
@@ -344,7 +345,8 @@ class OrderRepository {
           margemPercentual: it.margemPercentual,
           qtdReservaEstoque: it.qtdReservaEstoque,
           separacaoManual: it.separacaoManual === 1,
-          separacaoLojas: it.separacaoLojasJson ? JSON.parse(it.separacaoLojasJson) : {}
+          separacaoLojas: it.separacaoLojasJson ? JSON.parse(it.separacaoLojasJson) : {},
+          ruptura: it.ruptura === 1 || it.ruptura === true
         }));
       } else if (r.itemsJson) {
         items = JSON.parse(r.itemsJson);

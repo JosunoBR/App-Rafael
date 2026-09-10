@@ -15,18 +15,21 @@ interface OrderSummaryCardsProps {
 }
 
 export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) => {
-  const totalUnidades = order.items.reduce((acc, i) => acc + (i.qtdTotalUnidades || 0), 0);
-  const totalBrutoCompra = order.items.reduce((acc, i) => acc + (i.valorTotalBruto || (i.qtdTotalUnidades * i.precoUnitario) || 0), 0);
+  const activeItems = (order.items || []).filter(i => !i.ruptura);
+  const rupturasCount = (order.items || []).filter(i => Boolean(i.ruptura)).length;
+
+  const totalUnidades = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades || 0), 0);
+  const totalBrutoCompra = activeItems.reduce((acc, i) => acc + (i.valorTotalBruto || (i.qtdTotalUnidades * i.precoUnitario) || 0), 0);
   
   // Desconto calculado por cada produto ou pelo OFF geral negociado
   const offGlobal = Math.max(0, Math.min(100, Number(order.header?.percentualDescontoOff) || 0));
-  const hasItemDiscounts = order.items.some(it => (it.percentualDesconto && it.percentualDesconto > 0) || (it.valorTotalLiquido !== undefined && it.valorTotalLiquido < (it.valorTotalBruto || 0)));
+  const hasItemDiscounts = activeItems.some(it => (it.percentualDesconto && it.percentualDesconto > 0) || (it.valorTotalLiquido !== undefined && it.valorTotalLiquido < (it.valorTotalBruto || 0)));
 
   let valorDesconto = 0;
   let subtotalAposDesconto = 0;
 
   if (hasItemDiscounts) {
-    valorDesconto = order.items.reduce((acc, it) => {
+    valorDesconto = activeItems.reduce((acc, it) => {
       const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
       const descPct = (it.percentualDesconto !== undefined && it.percentualDesconto > 0)
         ? it.percentualDesconto
@@ -52,8 +55,8 @@ export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) =
   const totalCompraLiquido = subtotalAposDesconto + valorSt + (order.header.valorFreteGlobal || 0) + (order.header.valorOutrasDespesasGlobal || 0);
 
   // Faturamento e Margem Projetados
-  const faturamentoPdvProjetado = order.items.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.pdvAlvo || 0)), 0);
-  const custoRealEfetivoTotal = order.items.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.custoRealEfetivo || 0)), 0);
+  const faturamentoPdvProjetado = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.pdvAlvo || 0)), 0);
+  const custoRealEfetivoTotal = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.custoRealEfetivo || 0)), 0);
   const lucroEstimadoTotal = faturamentoPdvProjetado - custoRealEfetivoTotal - valorSt;
   const margemPercentualMedia = faturamentoPdvProjetado > 0 ? (lucroEstimadoTotal / faturamentoPdvProjetado) * 100 : 0;
 
@@ -150,8 +153,13 @@ export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) =
         <div className="text-base font-bold text-slate-900 dark:text-white truncate">
           {totalUnidades.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">unidades</span>
         </div>
-        <div className="text-[10px] text-slate-400">
-          {order.items.length} {order.items.length === 1 ? 'produto' : 'produtos'} no pedido
+        <div className="text-[10px] text-slate-400 flex items-center justify-between">
+          <span>{activeItems.length} {activeItems.length === 1 ? 'ativo' : 'ativos'}</span>
+          {rupturasCount > 0 && (
+            <span className="text-rose-600 dark:text-rose-400 font-bold">
+              ({rupturasCount} em ruptura)
+            </span>
+          )}
         </div>
       </div>
 

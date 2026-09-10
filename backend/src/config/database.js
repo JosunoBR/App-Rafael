@@ -150,6 +150,7 @@ async function getDatabase() {
       qtdReservaEstoque INTEGER DEFAULT 0,
       separacaoManual INTEGER DEFAULT 0,
       separacaoLojasJson TEXT,
+      ruptura INTEGER DEFAULT 0,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE CASCADE
@@ -364,7 +365,8 @@ async function getDatabase() {
         qtdPacotes: "REAL DEFAULT 0",
         codigoBarras: "TEXT",
         custoLoja: "REAL DEFAULT 0",
-        custoFornecedor: "REAL DEFAULT 0"
+        custoFornecedor: "REAL DEFAULT 0",
+        ruptura: "INTEGER DEFAULT 0"
       };
 
       Object.entries(requiredItemCols).forEach(([col, def]) => {

@@ -54,6 +54,7 @@ interface OrderItemsTableProps {
 }
 
 export type ColumnKey =
+  | 'ruptura'
   | 'foto'
   | 'codigoInterno'
   | 'codigoBarras'
@@ -81,6 +82,7 @@ export interface ColumnMeta {
 }
 
 const ALL_COLUMNS: ColumnMeta[] = [
+  { key: 'ruptura', label: 'RUPTURA', thClass: 'text-center', title: 'Marcar item como Ruptura (item mantido, mas não influencia nos cálculos do pedido)', defaultWidth: 72, minWidth: 60 },
   { key: 'foto', label: 'FOTO', thClass: 'text-center', defaultWidth: 50, minWidth: 46 },
   { key: 'codigoInterno', label: 'CÓD. INTERNO', thClass: 'text-center', defaultWidth: 115, minWidth: 70 },
   { key: 'codigoBarras', label: 'CÓD. BARRAS', thClass: 'text-center', title: 'Código de Barras EAN-13', defaultWidth: 125, minWidth: 75 },
@@ -241,6 +243,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         validKeys.forEach(k => {
           if (!filtered.includes(k)) filtered.push(k);
         });
+        // Garantir que a coluna de Ruptura fique no início visível da tabela
+        const rIdx = filtered.indexOf('ruptura');
+        if (rIdx > 1) {
+          filtered.splice(rIdx, 1);
+          filtered.unshift('ruptura');
+        } else if (rIdx === -1) {
+          filtered.unshift('ruptura');
+        }
         return filtered;
       }
     } catch (e) {}
@@ -729,8 +739,13 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     let desconto = 0;
     let liquido = 0;
     let pecas = 0;
+    let rupturasCount = 0;
     items.forEach(it => {
       if (isOrderItemBlank(it)) return;
+      if (it.ruptura) {
+        rupturasCount++;
+        return;
+      }
       const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
       const d = it.valorDescontoItem !== undefined ? it.valorDescontoItem : (b * ((it.percentualDesconto || 0) / 100));
       const l = it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : (b - d);
@@ -740,7 +755,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       pecas += (it.qtdTotalUnidades || 0);
     });
     const precoMedio = pecas > 0 ? (liquido / pecas) : 0;
-    return { bruto, desconto, liquido, pecas, precoMedio };
+    return { bruto, desconto, liquido, pecas, precoMedio, rupturasCount };
   }, [items]);
 
   // Navegação por teclado estilo planilha Excel (Enter para descer de linha, Setas Cima/Baixo)
@@ -961,6 +976,25 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     };
 
     switch (colKey) {
+      case 'ruptura':
+        return (
+          <td key="ruptura" style={cellStyle} className="py-1 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
+            <div className="flex items-center justify-center">
+              <label 
+                className="inline-flex items-center justify-center cursor-pointer p-1.5 rounded-lg hover:bg-rose-100/60 dark:hover:bg-rose-950/40 transition group" 
+                title="Marcar item em ruptura (o item não é excluído, mas seu valor é descontado de todos os cálculos do pedido)"
+              >
+                <input
+                  type="checkbox"
+                  checked={!!item.ruptura}
+                  onChange={(e) => handleFieldChange(item, 'ruptura', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-rose-600 focus:ring-rose-500 dark:bg-slate-800 cursor-pointer accent-rose-600 transition"
+                />
+              </label>
+            </div>
+          </td>
+        );
+
       case 'foto':
         return (
           <td key="foto" style={cellStyle} className="py-1 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/20 whitespace-nowrap">
@@ -1073,30 +1107,41 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       case 'descricao':
         return (
           <td key="descricao" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 relative">
-            <input
-              type="text"
-              data-excel-row={index}
-              data-excel-field="descricao"
-              value={item.descricao}
-              onKeyDown={(e) => handleExcelKeyDown(e, index, 'descricao')}
-              onChange={(e) => {
-                handleFieldChange(item, 'descricao', e.target.value);
-                activeInputRef.current = e.currentTarget;
-                updateDropdownPosition(e.currentTarget);
-                setActiveAutocompleteItemId(item.id);
-                setActiveAutocompleteField('descricao');
-                setAutocompleteQuery(e.target.value);
-              }}
-              onFocus={(e) => {
-                activeInputRef.current = e.currentTarget;
-                updateDropdownPosition(e.currentTarget);
-                setActiveAutocompleteItemId(item.id);
-                setActiveAutocompleteField('descricao');
-                setAutocompleteQuery(e.target.value);
-              }}
-              placeholder="Digite o nome ou código do produto..."
-              className="w-full h-full min-h-[38px] px-3 py-1.5 text-xs text-slate-900 dark:text-white font-medium bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors"
-            />
+            <div className="relative flex items-center w-full h-full">
+              <input
+                type="text"
+                data-excel-row={index}
+                data-excel-field="descricao"
+                value={item.descricao}
+                onKeyDown={(e) => handleExcelKeyDown(e, index, 'descricao')}
+                onChange={(e) => {
+                  handleFieldChange(item, 'descricao', e.target.value);
+                  activeInputRef.current = e.currentTarget;
+                  updateDropdownPosition(e.currentTarget);
+                  setActiveAutocompleteItemId(item.id);
+                  setActiveAutocompleteField('descricao');
+                  setAutocompleteQuery(e.target.value);
+                }}
+                onFocus={(e) => {
+                  activeInputRef.current = e.currentTarget;
+                  updateDropdownPosition(e.currentTarget);
+                  setActiveAutocompleteItemId(item.id);
+                  setActiveAutocompleteField('descricao');
+                  setAutocompleteQuery(e.target.value);
+                }}
+                placeholder="Digite o nome ou código do produto..."
+                className={`w-full h-full min-h-[38px] px-3 py-1.5 text-xs font-medium bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset ${
+                  item.ruptura
+                    ? 'text-rose-600 dark:text-rose-400 font-bold focus:ring-rose-500 pr-20'
+                    : 'text-slate-900 dark:text-white focus:ring-emerald-500'
+                } transition-colors`}
+              />
+              {item.ruptura && (
+                <span className="absolute right-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 dark:bg-rose-950/90 dark:text-rose-300 border border-rose-300 dark:border-rose-800 rounded pointer-events-none select-none">
+                  RUPTURA
+                </span>
+              )}
+            </div>
           </td>
         );
 
@@ -1701,7 +1746,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               return (
                 <tr 
                   key={item.id}
-                  className="hover:bg-emerald-50/20 dark:hover:bg-slate-800/40 transition-colors group whitespace-nowrap"
+                  className={`${
+                    item.ruptura 
+                      ? 'bg-rose-50/60 dark:bg-rose-950/25 hover:bg-rose-100/60 dark:hover:bg-rose-950/40' 
+                      : 'hover:bg-emerald-50/20 dark:hover:bg-slate-800/40'
+                  } transition-colors group whitespace-nowrap`}
                 >
                   {/* Index / Linha fixa */}
                   <td 
@@ -1726,6 +1775,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           <div className="text-slate-500 dark:text-slate-400">
             Itens: <strong className="text-slate-900 dark:text-white font-bold">{validItemsCount}</strong> ({totals.pecas.toLocaleString('pt-BR')} un)
           </div>
+          {totals.rupturasCount > 0 && (
+            <div className="text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/60 px-2.5 py-1 rounded-lg border border-rose-200 dark:border-rose-800 flex items-center gap-1">
+              <span>🚫 {totals.rupturasCount} em ruptura (descontados)</span>
+            </div>
+          )}
           <div className="text-slate-500 dark:text-slate-400">
             Bruto: <strong className="text-slate-700 dark:text-slate-300 font-bold">R$ {totals.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
           </div>

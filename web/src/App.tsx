@@ -526,11 +526,15 @@ export function App() {
       const updatedItems = prev.items.map(item => item.id === itemId ? { ...item, ...updatedFields } : item);
       const cleanItems = ensureTrailingBlankItem(updatedItems, fiscalConfig, storeConfigs);
       const synced = syncOrderFreteAndItems(prev, cleanItems);
-      return {
+      const newOrder: PurchaseOrder = {
         ...prev,
         header: synced.header,
         items: synced.items
       };
+      if (updatedFields.ruptura !== undefined) {
+        newOrder.installments = generateOrderInstallments(newOrder);
+      }
+      return newOrder;
     });
   };
 

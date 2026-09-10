@@ -96,17 +96,18 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     order.fiscalConfig
   );
 
-  // Resumo financeiro executivo da carga completa
-  const totalCaixas = order.items.reduce((acc, i) => acc + (i.qtdPacotes || 0), 0);
-  const totalUnidades = order.items.reduce((acc, i) => acc + (i.qtdTotalUnidades || 0), 0);
-  const totalBrutoCompra = order.items.reduce((acc, i) => acc + (i.valorTotalBruto || (i.qtdTotalUnidades * i.precoUnitario) || 0), 0);
+  // Resumo financeiro executivo da carga completa (desconsiderando itens em ruptura)
+  const activeItems = order.items.filter(i => !i.ruptura);
+  const totalCaixas = activeItems.reduce((acc, i) => acc + (i.qtdPacotes || 0), 0);
+  const totalUnidades = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades || 0), 0);
+  const totalBrutoCompra = activeItems.reduce((acc, i) => acc + (i.valorTotalBruto || (i.qtdTotalUnidades * i.precoUnitario) || 0), 0);
   
-  const hasItemDiscounts = order.items.some(it => (it.percentualDesconto && it.percentualDesconto > 0) || (it.valorTotalLiquido !== undefined && it.valorTotalLiquido < (it.valorTotalBruto || 0)));
+  const hasItemDiscounts = activeItems.some(it => (it.percentualDesconto && it.percentualDesconto > 0) || (it.valorTotalLiquido !== undefined && it.valorTotalLiquido < (it.valorTotalBruto || 0)));
   let valorDesconto = 0;
   let subtotalAposDesconto = 0;
 
   if (hasItemDiscounts) {
-    valorDesconto = order.items.reduce((acc, it) => {
+    valorDesconto = activeItems.reduce((acc, it) => {
       const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
       const d = it.valorDescontoItem !== undefined ? it.valorDescontoItem : (b * ((it.percentualDesconto || 0) / 100));
       return acc + d;
@@ -119,8 +120,8 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
   const valorSt = (subtotalAposDesconto * (order.header.aliquotaSt || 0)) / 100;
   const totalCompraLiquido = subtotalAposDesconto + valorSt + (order.header.valorFreteGlobal || 0);
 
-  const faturamentoPdvProjetado = order.items.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.pdvAlvo || 0)), 0);
-  const custoRealEfetivoTotal = order.items.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.custoRealEfetivo || 0)), 0);
+  const faturamentoPdvProjetado = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.pdvAlvo || 0)), 0);
+  const custoRealEfetivoTotal = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.custoRealEfetivo || 0)), 0);
   const totalMargemBrutaReais = faturamentoPdvProjetado - custoRealEfetivoTotal - valorSt;
   const margemMediaPercentual = faturamentoPdvProjetado > 0 ? (totalMargemBrutaReais / faturamentoPdvProjetado) * 100 : 0;
 
@@ -326,6 +327,11 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
       };
     });
 
+    onUpdateOrder({ ...order, items: updatedItems });
+  };
+
+  const handleToggleRuptura = (itemId: string, ruptura: boolean) => {
+    const updatedItems = order.items.map(i => i.id === itemId ? { ...i, ruptura } : i);
     onUpdateOrder({ ...order, items: updatedItems });
   };
 
@@ -871,17 +877,26 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
           order.items.map((item, idx) => (
             <div 
               key={item.id}
-              className={`p-4 bg-white dark:bg-slate-800/90 rounded-3xl border transition shadow-xs space-y-3 ${
-                editingItemId === item.id 
-                  ? 'border-amber-400 ring-2 ring-amber-400/20' 
-                  : 'border-slate-200 dark:border-slate-700'
+              className={`p-4 rounded-3xl border transition shadow-xs space-y-3 ${
+                item.ruptura 
+                  ? 'bg-rose-50/50 dark:bg-rose-950/25 border-rose-300 dark:border-rose-900' 
+                  : editingItemId === item.id 
+                  ? 'bg-white dark:bg-slate-800/90 border-amber-400 ring-2 ring-amber-400/20' 
+                  : 'bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700'
               }`}
             >
               {/* Linha 1: Título e Badges */}
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-extrabold text-xs text-slate-900 dark:text-white line-clamp-2">
-                    {idx + 1}. {item.descricao}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className={`font-extrabold text-xs line-clamp-2 ${item.ruptura ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                      {idx + 1}. {item.descricao}
+                    </div>
+                    {item.ruptura && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 dark:bg-rose-950/90 dark:text-rose-300 border border-rose-300 dark:border-rose-800 rounded shrink-0 select-none">
+                        RUPTURA
+                      </span>
+                    )}
                   </div>
                   <div className="text-[10px] font-mono flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <span className="text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.2 rounded border border-indigo-200 dark:border-indigo-800" title="Código Interno">
@@ -967,18 +982,38 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
               </div>
 
               {/* Linha 4: Barra de Botões Touch do Card */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700/60 text-xs">
-                {/* Botão para Matriz de Separação das 20 Lojas */}
-                {onOpenSeparationModal && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenSeparationModal(item)}
-                    className="px-2.5 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 font-bold text-[11px] flex items-center gap-1.5 transition cursor-pointer"
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700/60 text-xs gap-2">
+                <div className="flex items-center gap-2">
+                  {/* Botão para Matriz de Separação das 20 Lojas */}
+                  {onOpenSeparationModal && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenSeparationModal(item)}
+                      className="px-2.5 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 font-bold text-[11px] flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Store className="w-3.5 h-3.5" />
+                      <span>20 Lojas</span>
+                    </button>
+                  )}
+
+                  {/* Toggle de Ruptura */}
+                  <label 
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer transition select-none ${
+                      item.ruptura
+                        ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                        : 'bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/30'
+                    }`}
+                    title="Marcar produto em ruptura (descontado do total do pedido)"
                   >
-                    <Store className="w-3.5 h-3.5" />
-                    <span>Rateio 20 Lojas</span>
-                  </button>
-                )}
+                    <input
+                      type="checkbox"
+                      checked={!!item.ruptura}
+                      onChange={(e) => handleToggleRuptura(item.id, e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-rose-600 focus:ring-rose-500 accent-rose-600 cursor-pointer"
+                    />
+                    <span>Ruptura</span>
+                  </label>
+                </div>
 
                 <div className="flex items-center gap-1 ml-auto">
                   <button

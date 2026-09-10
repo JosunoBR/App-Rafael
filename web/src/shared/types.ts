@@ -217,10 +217,12 @@ export interface OrderHeader {
   diaVencimentoPersonalizado?: string; // Data inicial ou dia base
   datasVencimentoPersonalizadas?: Record<string, string>; // Mapeamento de parcela/frete -> data YYYY-MM-DD customizada
   
-  // Negociação com Entrada À Vista + Saldo Parcelado
-  valorEntradaAVista?: number;       // Valor em R$ pago à vista / sinal
-  saldoParcelasCount?: number;       // Quantidade de parcelas do saldo restante (ex: 1x, 2x, 3x...)
-  saldoPrazoDias?: number | string;  // Intervalo de vencimento do saldo (ex: 30, 28, 15...)
+  // Negociação Mista: Depósito/PIX Parcelado + Saldo em Boleto Parcelado
+  valorEntradaAVista?: number;       // Valor total em Depósito/PIX (R$)
+  depositoParcelasCount?: number;    // Quantidade de parcelas do depósito (ex: 1x, 2x, 3x, 4x...)
+  depositoPrazoDias?: number | string; // Intervalo do depósito (ex: 'vista', 7, 10, 15, 30...)
+  saldoParcelasCount?: number;       // Quantidade de parcelas do saldo em boleto (ex: 1x, 2x, 3x, 4x, 10x...)
+  saldoPrazoDias?: number | string;  // Intervalo de vencimento do saldo em boleto (ex: 10, 15, 28, 30...)
 
   // Esteira Operacional & Auditoria
   status: OrderStatus | 'Rascunho';
@@ -253,6 +255,7 @@ export interface PaymentInstallment {
   documentoRef?: string; // Código de barras / Boleto / NF
   isBoletoFrete?: boolean; // Identificador de boleto de frete (gerado 10 dias após entrega)
   tipoTitulo?: 'mercadoria' | 'frete';
+  metodoPagamento?: 'Boleto' | 'Depósito' | 'Cheque' | 'PIX' | string;
   updatedAt?: string;
 }
 

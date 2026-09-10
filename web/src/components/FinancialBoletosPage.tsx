@@ -611,7 +611,11 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                       <td className="py-3.5 px-4 text-center">
                         {installment.isBoletoFrete || installment.tipoTitulo === 'frete' ? (
                           <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-sky-100 dark:bg-sky-950/80 text-sky-800 dark:text-sky-300 font-mono border border-sky-300 dark:border-sky-800">
-                            Frete (10d)
+                            🚚 Frete (10d)
+                          </span>
+                        ) : installment.metodoPagamento === 'Depósito' || installment.observacao?.toLowerCase().includes('depósito') ? (
+                          <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 font-mono border border-indigo-300 dark:border-indigo-800">
+                            🏦 {installment.observacao || `${installment.numeroParcela}/${installment.totalParcelas} (Depósito)`}
                           </span>
                         ) : installment.observacao?.toLowerCase().includes('entrada') ? (
                           <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-mono border border-emerald-300 dark:border-emerald-800">

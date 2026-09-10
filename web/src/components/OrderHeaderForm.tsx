@@ -31,6 +31,7 @@ import {
   PARCELAS_OPTIONS, 
   PRAZO_OPTIONS, 
   SALDO_PRAZO_OPTIONS,
+  DEPOSITO_PRAZO_OPTIONS,
   parsePaymentConditionString, 
   formatPaymentConditionString,
   addDaysToDate,
@@ -158,6 +159,66 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       });
       return;
     }
+    if (field === 'percentualNota') {
+      const pctVal = parseFloat(value) || 0;
+      if (isEntradaMista && valorBaseMercadoria > 0 && pctVal > 0 && pctVal <= 100) {
+        const pctBoleto = pctVal;
+        const pctDeposito = Math.max(0, 100 - pctBoleto);
+        const newValorEntrada = Number((valorBaseMercadoria * (pctDeposito / 100)).toFixed(2));
+        const newCondString = formatPaymentConditionString(
+          currentParcelas,
+          currentPrazo,
+          newValorEntrada,
+          saldoParcelas,
+          saldoPrazo,
+          depositoParcelas,
+          depositoPrazo
+        );
+        onChange({
+          ...header,
+          percentualNota: pctVal,
+          valorEntradaAVista: newValorEntrada,
+          condicaoPagamento: newCondString,
+          datasVencimentoPersonalizadas: undefined
+        });
+        return;
+      }
+    }
+    if (field === 'formaPagamento' && value === 'Boleto / Depósito') {
+      const pctBoleto = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
+        ? header.percentualNota
+        : 50;
+      const pctDeposito = Math.max(0, 100 - pctBoleto);
+      const initEntrada = header.valorEntradaAVista !== undefined 
+        ? header.valorEntradaAVista 
+        : (valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (pctDeposito / 100)).toFixed(2)) : 0);
+      const initDepParc = header.depositoParcelasCount || 2;
+      const initDepPrazo = header.depositoPrazoDias || '30';
+      const initSaldoParc = header.saldoParcelasCount || 2;
+      const initSaldoPrazo = header.saldoPrazoDias || '30';
+      const newCondString = formatPaymentConditionString(
+        currentParcelas, 
+        'deposito_e_boleto', 
+        initEntrada, 
+        initSaldoParc, 
+        initSaldoPrazo, 
+        initDepParc, 
+        initDepPrazo
+      );
+      onChange({
+        ...header,
+        formaPagamento: value,
+        prazoDias: 'deposito_e_boleto',
+        valorEntradaAVista: initEntrada,
+        depositoParcelasCount: initDepParc,
+        depositoPrazoDias: initDepPrazo,
+        saldoParcelasCount: initSaldoParc,
+        saldoPrazoDias: initSaldoPrazo,
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: undefined
+      });
+      return;
+    }
     onChange({
       ...header,
       [field]: value
@@ -169,24 +230,42 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const currentParcelas = header.parcelasCount ?? parsedPayment.parcelas;
   const currentPrazo = String(header.prazoDias ?? parsedPayment.prazo);
 
-  const isEntradaMista = currentPrazo === 'entrada_com_parcelamento';
+  const isDepositoEBoleto = currentPrazo === 'deposito_e_boleto' || header.formaPagamento === 'Boleto / Depósito';
+  const isEntradaMista = currentPrazo === 'entrada_com_parcelamento' || isDepositoEBoleto;
   const isVistaIntegral = currentPrazo === 'vista';
 
   const valorTotalPedido = orderTotal || 0;
   const valorFreteNum = Number(header.valorFrete ?? header.valorFreteGlobal) || 0;
   const valorBaseMercadoria = Math.max(0, valorTotalPedido - valorFreteNum);
 
+  const hasCustomOff = header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100;
+  const pctBoletoFromOff = hasCustomOff ? header.percentualNota! : (isDepositoEBoleto ? 50 : 70);
+  const pctDepositoFromOff = Math.max(0, 100 - pctBoletoFromOff);
+
   const valorEntrada = header.valorEntradaAVista !== undefined 
     ? header.valorEntradaAVista 
-    : (valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * 0.3).toFixed(2)) : 0);
-  const saldoParcelas = header.saldoParcelasCount || 2;
+    : (valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (pctDepositoFromOff / 100)).toFixed(2)) : 0);
+
+  const depositoParcelas = Math.max(1, header.depositoParcelasCount || (currentPrazo === 'deposito_e_boleto' ? 2 : 1));
+  const depositoPrazo = String(header.depositoPrazoDias || (currentPrazo === 'entrada_com_parcelamento' ? 'vista' : '30'));
+  const valorPorParcelaDeposito = depositoParcelas > 0 ? (valorEntrada / depositoParcelas) : 0;
+
+  const saldoParcelas = Math.max(1, header.saldoParcelasCount || 2);
   const saldoPrazo = String(header.saldoPrazoDias || '30');
 
   const saldoRestante = Math.max(0, valorBaseMercadoria - valorEntrada);
   const valorPorParcelaSaldo = saldoParcelas > 0 ? (saldoRestante / saldoParcelas) : 0;
 
   const handlePaymentParcelasChange = (newParcelas: number) => {
-    const newCondString = formatPaymentConditionString(newParcelas, currentPrazo, valorEntrada, saldoParcelas, saldoPrazo);
+    const newCondString = formatPaymentConditionString(
+      newParcelas, 
+      currentPrazo, 
+      valorEntrada, 
+      saldoParcelas, 
+      saldoPrazo, 
+      depositoParcelas, 
+      depositoPrazo
+    );
     onChange({
       ...header,
       parcelasCount: newParcelas,
@@ -196,17 +275,62 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   };
 
   const handlePaymentPrazoChange = (newPrazo: string) => {
-    if (newPrazo === 'entrada_com_parcelamento') {
+    if (newPrazo === 'deposito_e_boleto') {
+      const pctBoleto = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
+        ? header.percentualNota
+        : 50;
+      const pctDeposito = Math.max(0, 100 - pctBoleto);
       const initEntrada = header.valorEntradaAVista !== undefined 
         ? header.valorEntradaAVista 
-        : (valorTotalPedido > 0 ? Number((valorTotalPedido * 0.3).toFixed(2)) : 0);
+        : (valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (pctDeposito / 100)).toFixed(2)) : 0);
+      const initDepParc = header.depositoParcelasCount || 2;
+      const initDepPrazo = header.depositoPrazoDias || '30';
       const initSaldoParc = header.saldoParcelasCount || 2;
       const initSaldoPrazo = header.saldoPrazoDias || '30';
-      const newCondString = formatPaymentConditionString(currentParcelas, newPrazo, initEntrada, initSaldoParc, initSaldoPrazo);
+      const newCondString = formatPaymentConditionString(
+        currentParcelas, 
+        newPrazo, 
+        initEntrada, 
+        initSaldoParc, 
+        initSaldoPrazo, 
+        initDepParc, 
+        initDepPrazo
+      );
+      onChange({
+        ...header,
+        formaPagamento: 'Boleto / Depósito',
+        prazoDias: newPrazo,
+        valorEntradaAVista: initEntrada,
+        depositoParcelasCount: initDepParc,
+        depositoPrazoDias: initDepPrazo,
+        saldoParcelasCount: initSaldoParc,
+        saldoPrazoDias: initSaldoPrazo,
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: undefined
+      });
+    } else if (newPrazo === 'entrada_com_parcelamento') {
+      const initEntrada = header.valorEntradaAVista !== undefined 
+        ? header.valorEntradaAVista 
+        : (valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * 0.3).toFixed(2)) : 0);
+      const initDepParc = 1;
+      const initDepPrazo = 'vista';
+      const initSaldoParc = header.saldoParcelasCount || 2;
+      const initSaldoPrazo = header.saldoPrazoDias || '30';
+      const newCondString = formatPaymentConditionString(
+        currentParcelas, 
+        newPrazo, 
+        initEntrada, 
+        initSaldoParc, 
+        initSaldoPrazo, 
+        initDepParc, 
+        initDepPrazo
+      );
       onChange({
         ...header,
         prazoDias: newPrazo,
         valorEntradaAVista: initEntrada,
+        depositoParcelasCount: initDepParc,
+        depositoPrazoDias: initDepPrazo,
         saldoParcelasCount: initSaldoParc,
         saldoPrazoDias: initSaldoPrazo,
         condicaoPagamento: newCondString,
@@ -233,8 +357,16 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   };
 
   const handleEntradaChange = (val: number) => {
-    const valFinal = Math.max(0, Math.min(valorTotalPedido, val));
-    const newCondString = formatPaymentConditionString(currentParcelas, currentPrazo, valFinal, saldoParcelas, saldoPrazo);
+    const valFinal = Math.max(0, Math.min(valorBaseMercadoria, val));
+    const newCondString = formatPaymentConditionString(
+      currentParcelas, 
+      currentPrazo, 
+      valFinal, 
+      saldoParcelas, 
+      saldoPrazo, 
+      depositoParcelas, 
+      depositoPrazo
+    );
     onChange({
       ...header,
       valorEntradaAVista: valFinal,
@@ -242,8 +374,52 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     });
   };
 
+  const handleDepositoParcelasChange = (newDepParc: number) => {
+    const newCondString = formatPaymentConditionString(
+      currentParcelas, 
+      currentPrazo, 
+      valorEntrada, 
+      saldoParcelas, 
+      saldoPrazo, 
+      newDepParc, 
+      depositoPrazo
+    );
+    onChange({
+      ...header,
+      depositoParcelasCount: newDepParc,
+      condicaoPagamento: newCondString,
+      datasVencimentoPersonalizadas: undefined
+    });
+  };
+
+  const handleDepositoPrazoChange = (newDepPrazo: string) => {
+    const newCondString = formatPaymentConditionString(
+      currentParcelas, 
+      currentPrazo, 
+      valorEntrada, 
+      saldoParcelas, 
+      saldoPrazo, 
+      depositoParcelas, 
+      newDepPrazo
+    );
+    onChange({
+      ...header,
+      depositoPrazoDias: newDepPrazo,
+      condicaoPagamento: newCondString,
+      datasVencimentoPersonalizadas: undefined
+    });
+  };
+
   const handleSaldoParcelasChange = (newSaldoParc: number) => {
-    const newCondString = formatPaymentConditionString(currentParcelas, currentPrazo, valorEntrada, newSaldoParc, saldoPrazo);
+    const newCondString = formatPaymentConditionString(
+      currentParcelas, 
+      currentPrazo, 
+      valorEntrada, 
+      newSaldoParc, 
+      saldoPrazo, 
+      depositoParcelas, 
+      depositoPrazo
+    );
     onChange({
       ...header,
       saldoParcelasCount: newSaldoParc,
@@ -253,7 +429,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   };
 
   const handleSaldoPrazoChange = (newSaldoPrazo: string) => {
-    const newCondString = formatPaymentConditionString(currentParcelas, currentPrazo, valorEntrada, saldoParcelas, newSaldoPrazo);
+    const newCondString = formatPaymentConditionString(
+      currentParcelas, 
+      currentPrazo, 
+      valorEntrada, 
+      saldoParcelas, 
+      newSaldoPrazo, 
+      depositoParcelas, 
+      depositoPrazo
+    );
     onChange({
       ...header,
       saldoPrazoDias: newSaldoPrazo,
@@ -271,28 +455,45 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
   const previewInstallments = isEntradaMista
     ? [
-        {
-          numeroParcela: 1,
-          rotulo: 'Entrada À Vista',
-          dataVencimento: (customDates?.['1'] ? addDaysToDate(customDates['1'], 0) : null) || orderDate,
-          valor: valorEntrada,
-          isEntrada: true,
-          isFrete: false
-        },
+        // 1. Parcelas de Depósito / PIX
+        ...Array.from({ length: depositoParcelas }, (_, idx) => {
+          const d = idx + 1;
+          let dueDays = 0;
+          if (depositoPrazo === 'vista') {
+            dueDays = 0;
+          } else {
+            const interval = Number(depositoPrazo) || 30;
+            dueDays = (d - 1) * interval;
+          }
+          const defaultDate = addDaysToDate(orderDate, dueDays);
+          const rawCustom = customDates?.[String(d)];
+          const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
+          return {
+            numeroParcela: d,
+            rotulo: depositoParcelas === 1 ? 'Entrada (Depósito / PIX)' : `${d}º Depósito (${dueDays}d)`,
+            dataVencimento: customDate || defaultDate,
+            valor: valorPorParcelaDeposito,
+            isEntrada: true,
+            metodoPagamento: 'Depósito',
+            isFrete: false
+          };
+        }),
+        // 2. Parcelas do Saldo em Boleto
         ...Array.from({ length: saldoParcelas }, (_, idx) => {
-          const num = idx + 1;
-          const numeroParcela = num + 1;
+          const b = idx + 1;
+          const numeroParcela = depositoParcelas + b;
           const interval = Number(saldoPrazo) || 30;
-          const dueDays = num * interval;
+          const dueDays = b * interval;
           const defaultDate = addDaysToDate(baseDate, dueDays);
           const rawCustom = customDates?.[String(numeroParcela)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
           return {
             numeroParcela,
-            rotulo: `Saldo ${num}/${saldoParcelas}`,
+            rotulo: `${b}º Boleto Saldo (${dueDays}d)`,
             dataVencimento: customDate || defaultDate,
             valor: valorPorParcelaSaldo,
             isEntrada: false,
+            metodoPagamento: 'Boleto',
             isFrete: false
           };
         })
@@ -310,6 +511,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           dataVencimento: customDate || defaultDate,
           valor: currentParcelas > 0 ? valorBaseMercadoria / currentParcelas : valorBaseMercadoria,
           isEntrada: currentPrazo === 'vista',
+          metodoPagamento: header.formaPagamento || 'Boleto',
           isFrete: false
         };
       });
@@ -326,6 +528,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       dataVencimento: customDateFrete || defaultDateFrete,
       valor: valorFreteNum,
       isEntrada: false,
+      metodoPagamento: 'Boleto',
       isFrete: true
     });
   }
@@ -854,7 +1057,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       <span>3. Qtd Parcelas</span>
                     </label>
                     <select
-                      value={isVistaIntegral ? 1 : isEntradaMista ? (1 + saldoParcelas) : currentParcelas}
+                      value={isVistaIntegral ? 1 : isEntradaMista ? (depositoParcelas + saldoParcelas) : currentParcelas}
                       disabled={isVistaIntegral || isEntradaMista}
                       onChange={(e) => handlePaymentParcelasChange(Number(e.target.value))}
                       className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
@@ -862,7 +1065,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       {isVistaIntegral ? (
                         <option value="1">1x (À Vista ou 1 Parcela)</option>
                       ) : isEntradaMista ? (
-                        <option value={1 + saldoParcelas}>1x Entrada + {saldoParcelas}x Saldo ({1 + saldoParcelas}x Total)</option>
+                        <option value={depositoParcelas + saldoParcelas}>
+                          {depositoParcelas}x Depósito + {saldoParcelas}x Boleto ({depositoParcelas + saldoParcelas}x Total)
+                        </option>
                       ) : (
                         PARCELAS_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value}>
@@ -950,104 +1155,195 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
                 {/* LINHA 2 INSERIDA DINAMICAMENTE: NEGOCIAÇÃO DE ENTRADA À VISTA + SALDO PARCELADO */}
                 {isEntradaMista && (
-                  <div className="mt-3.5 pt-3.5 border-t border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20 p-3 rounded-xl border">
-                    <div className="text-[11px] font-extrabold text-emerald-800 dark:text-emerald-300 mb-2.5 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Detalhamento da Negociação: Entrada À Vista + Parcelas do Saldo</span>
+                  <div className="mt-3.5 pt-3.5 border-t border-emerald-200 dark:border-emerald-900/60 bg-gradient-to-br from-emerald-50/70 via-slate-50/60 to-indigo-50/70 dark:from-emerald-950/20 dark:via-slate-900/40 dark:to-indigo-950/20 p-3.5 rounded-2xl border">
+                    <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1 rounded-lg bg-emerald-600 text-white shadow-xs">
+                          <Sparkles className="w-3.5 h-3.5" />
+                        </span>
+                        <span>Detalhamento da Negociação: Depósito Parcelado + Saldo em Boleto</span>
                       </div>
-                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono">
-                        Saldo a Parcelar: R$ {saldoRestante.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
+                      <div className="flex items-center gap-2 text-[10px] font-mono">
+                        <span className="px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800">
+                          Depósito: R$ {valorEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800">
+                          Saldo Boleto: R$ {saldoRestante.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      {/* 1. Valor da Entrada À Vista */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                          <span>Valor Entrada À Vista (R$)</span>
-                          <span className="text-[9px] font-mono text-emerald-600">
-                            {valorTotalPedido > 0 ? `${((valorEntrada / valorTotalPedido) * 100).toFixed(0)}% do Pedido` : ''}
-                          </span>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={valorEntrada > 0 ? formatCurrency(valorEntrada, false) : ''}
-                            placeholder="0,00"
-                            onFocus={(e) => e.target.select()}
-                            onChange={(e) => {
-                              const { value } = handleCurrencyInput(e.target.value, true);
-                              handleEntradaChange(Math.min(valorTotalPedido, value));
-                            }}
-                            className="w-full px-3 py-1.5 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold font-mono focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                          />
-                        </div>
-                        {/* Botões de porcentagem rápida */}
-                        {valorTotalPedido > 0 && (
-                          <div className="flex items-center gap-1 mt-1.5">
-                            {[10, 20, 30, 50].map((pct) => (
-                              <button
-                                key={pct}
-                                type="button"
-                                onClick={() => handleEntradaChange(Number((valorTotalPedido * (pct / 100)).toFixed(2)))}
-                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/60 dark:hover:bg-emerald-800 text-emerald-800 dark:text-emerald-200 transition cursor-pointer"
-                              >
-                                {pct}%
-                              </button>
-                            ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* BLOCO 1: DEPÓSITO / PIX PARCELADO */}
+                      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs p-3 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 shadow-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-900 dark:text-indigo-300">
+                              <span>🏦 1ª Etapa: Depósito / PIX</span>
+                            </div>
+                            <span className="text-[9px] font-bold font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-900">
+                              {valorBaseMercadoria > 0 ? `${((valorEntrada / valorBaseMercadoria) * 100).toFixed(0)}% do Pedido` : '0%'}
+                            </span>
                           </div>
-                        )}
-                      </div>
 
-                      {/* 2. Parcelas do Saldo Restante */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                          Qtd Parcelas do Saldo
-                        </label>
-                        <select
-                          value={saldoParcelas}
-                          onChange={(e) => handleSaldoParcelasChange(Number(e.target.value))}
-                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-                        >
-                          {PARCELAS_OPTIONS.filter(o => o.value > 0).map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.value}x Parcela{opt.value > 1 ? 's' : ''} do Saldo
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                          <div className="space-y-2.5">
+                            {/* Valor Total do Depósito */}
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                                <span>Valor Total Depósito (R$)</span>
+                                {valorBaseMercadoria > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    {[10, 20, 30, 50].map((pct) => (
+                                      <button
+                                        key={pct}
+                                        type="button"
+                                        onClick={() => handleEntradaChange(Number((valorBaseMercadoria * (pct / 100)).toFixed(2)))}
+                                        className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 transition cursor-pointer border border-indigo-200/60"
+                                      >
+                                        {pct}%
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={valorEntrada > 0 ? formatCurrency(valorEntrada, false) : ''}
+                                placeholder="0,00"
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => {
+                                  const { value } = handleCurrencyInput(e.target.value, true);
+                                  handleEntradaChange(Math.min(valorBaseMercadoria, value));
+                                }}
+                                className="w-full px-3 py-1.5 text-xs rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold font-mono focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                              />
+                            </div>
 
-                      {/* 3. Intervalo de Vencimento do Saldo */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                          Vencimento do Saldo (pós-entrega)
-                        </label>
-                        <select
-                          value={saldoPrazo}
-                          onChange={(e) => handleSaldoPrazoChange(e.target.value)}
-                          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-                        >
-                          {SALDO_PRAZO_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                            {/* Parcelas e Prazo do Depósito */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                  Qtd Parcelas Depósito
+                                </label>
+                                <select
+                                  value={depositoParcelas}
+                                  onChange={(e) => handleDepositoParcelasChange(Number(e.target.value))}
+                                  className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-indigo-500 outline-hidden cursor-pointer"
+                                >
+                                  {PARCELAS_OPTIONS.filter(o => o.value > 0).map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.value === 1 ? '1x (À Vista no Pedido)' : `${opt.value}x Parcelas`}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
 
-                      {/* 4. Resumo de Boletos do Saldo */}
-                      <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-emerald-200/80 dark:border-emerald-800 flex flex-col justify-center">
-                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                          Boletos do Saldo a Prazo:
-                        </span>
-                        <div className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
-                          {saldoParcelas}x de R$ {valorPorParcelaSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                  Intervalo Depósito
+                                </label>
+                                <select
+                                  value={depositoPrazo}
+                                  onChange={(e) => handleDepositoPrazoChange(e.target.value)}
+                                  className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-indigo-500 outline-hidden cursor-pointer"
+                                >
+                                  {DEPOSITO_PRAZO_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <span className="text-[9px] text-slate-400 mt-0.5">
-                          Contados a partir da data de entrega
-                        </span>
+
+                        {/* Resumo do Depósito */}
+                        <div className="mt-3 bg-indigo-50/70 dark:bg-indigo-950/40 p-2 rounded-lg border border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-between">
+                          <span className="text-[10px] font-semibold text-indigo-900 dark:text-indigo-300">
+                            Parcelamento Depósito:
+                          </span>
+                          <span className="text-xs font-black text-indigo-700 dark:text-indigo-300 font-mono">
+                            {depositoParcelas}x de R$ {valorPorParcelaDeposito.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* BLOCO 2: SALDO EM BOLETO PARCELADO */}
+                      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs p-3 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 shadow-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                              <span>📄 2ª Etapa: Saldo em Boleto</span>
+                            </div>
+                            <span className="text-[9px] font-bold font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
+                              {valorBaseMercadoria > 0 ? `${((saldoRestante / valorBaseMercadoria) * 100).toFixed(0)}% do Pedido` : '0%'}
+                            </span>
+                          </div>
+
+                          <div className="space-y-2.5">
+                            {/* Saldo Restante */}
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                Saldo Restante a Parcelar em Boleto (R$)
+                              </label>
+                              <input
+                                type="text"
+                                readOnly
+                                value={`R$ ${saldoRestante.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-emerald-700 dark:text-emerald-400 font-black font-mono cursor-default outline-hidden"
+                              />
+                            </div>
+
+                            {/* Parcelas e Prazo do Saldo */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                  Qtd Parcelas Boleto
+                                </label>
+                                <select
+                                  value={saldoParcelas}
+                                  onChange={(e) => handleSaldoParcelasChange(Number(e.target.value))}
+                                  className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
+                                >
+                                  {PARCELAS_OPTIONS.filter(o => o.value > 0).map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.value}x Parcela{opt.value > 1 ? 's' : ''} Saldo
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                  Prazo Saldo (pós-entrega)
+                                </label>
+                                <select
+                                  value={saldoPrazo}
+                                  onChange={(e) => handleSaldoPrazoChange(e.target.value)}
+                                  className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
+                                >
+                                  {SALDO_PRAZO_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Resumo dos Boletos */}
+                        <div className="mt-3 bg-emerald-50/70 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-between">
+                          <span className="text-[10px] font-semibold text-emerald-900 dark:text-emerald-300">
+                            Parcelamento Boleto:
+                          </span>
+                          <span className="text-xs font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                            {saldoParcelas}x de R$ {valorPorParcelaSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1059,7 +1355,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-emerald-500" />
-                        <span>Previsão de Vencimento dos Boletos ({previewInstallments.length}x):</span>
+                        <span>Previsão de Vencimento dos Títulos ({previewInstallments.length}x):</span>
                       </div>
                       {hasCustomDates && (
                         <button
@@ -1077,6 +1373,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       {previewInstallments.map((inst) => {
                         const isFreteItem = (inst as any).isFrete;
                         const isEntradaItem = inst.isEntrada;
+                        const metodo = (inst as any).metodoPagamento || (isEntradaItem ? 'Depósito' : isFreteItem ? 'Boleto' : 'Boleto');
+                        const isDeposito = metodo === 'Depósito' || isEntradaItem;
 
                         return (
                           <div 
@@ -1084,25 +1382,28 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                             className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 shadow-xs transition-all ${
                               isFreteItem
                                 ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-300 dark:border-sky-800 text-sky-900 dark:text-sky-200'
-                                : isEntradaItem
-                                ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                                : isDeposito
+                                ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200'
                                 : (inst.valor > LIMITE_MAXIMO_BOLETO)
                                 ? 'bg-rose-50/90 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800'
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                                : 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
                             }`}
                           >
-                            <span className="font-bold text-slate-600 dark:text-slate-300 shrink-0">
-                              {inst.rotulo}:
+                            <span className="font-bold shrink-0 flex items-center gap-1">
+                              <span>{isFreteItem ? '🚚' : isDeposito ? '🏦' : '📄'}</span>
+                              <span className={isFreteItem ? 'text-sky-900 dark:text-sky-200' : isDeposito ? 'text-indigo-950 dark:text-indigo-200' : 'text-emerald-950 dark:text-emerald-200'}>
+                                {inst.rotulo}:
+                              </span>
                             </span>
                             {valorTotalPedido > 0 || isFreteItem ? (
                               <span className={`font-extrabold font-mono shrink-0 ${
                                 isFreteItem
                                   ? 'text-sky-700 dark:text-sky-300'
-                                  : isEntradaItem 
-                                  ? 'text-emerald-700 dark:text-emerald-300' 
+                                  : isDeposito 
+                                  ? 'text-indigo-700 dark:text-indigo-300' 
                                   : (inst.valor > LIMITE_MAXIMO_BOLETO) 
                                   ? 'text-rose-600 dark:text-rose-400' 
-                                  : 'text-slate-900 dark:text-white'
+                                  : 'text-emerald-700 dark:text-emerald-300'
                               }`}>
                                 R$ {inst.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>

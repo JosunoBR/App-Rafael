@@ -22,11 +22,22 @@ export const PRAZO_OPTIONS = [
   { value: '28', label: 'A cada 28 dias (28/56/84...)' },
   { value: '30', label: 'A cada 30 dias (30/60/90...)' },
   { value: 'vista', label: '100% À Vista Integral (TED / PIX)' },
+  { value: 'deposito_e_boleto', label: '🏦 Depósito Parcelado + 📄 Boleto Parcelado' },
   { value: 'entrada_com_parcelamento', label: 'Entrada À Vista + Saldo Parcelado' },
 ];
 
+export const DEPOSITO_PRAZO_OPTIONS = [
+  { value: 'vista', label: 'À Vista no Pedido (TED / PIX)' },
+  { value: '7', label: 'A cada 7 dias (7/14/21...)' },
+  { value: '10', label: 'A cada 10 dias (10/20/30...)' },
+  { value: '15', label: 'A cada 15 dias (15/30/45...)' },
+  { value: '21', label: 'A cada 21 dias (21/42/63...)' },
+  { value: '28', label: 'A cada 28 dias (28/56/84...)' },
+  { value: '30', label: 'A cada 30 dias (30/60/90...)' },
+];
+
 export const SALDO_PRAZO_OPTIONS = PRAZO_OPTIONS.filter(
-  (opt) => !['vista', 'entrada_com_parcelamento'].includes(opt.value)
+  (opt) => !['vista', 'entrada_com_parcelamento', 'deposito_e_boleto'].includes(opt.value)
 );
 
 /**
@@ -69,26 +80,39 @@ export function calculateOrderNetTotal(order: PurchaseOrder): number {
 }
 
 /**
- * Formata a string de condição de pagamento (ex: "3x (30/60/90 Dias)" ou "Entrada R$ 5.000 + 2x (30/60 Dias)")
+ * Formata a string de condição de pagamento (ex: "Depósito 2x (R$ 5.000) + Boleto 3x (30/60/90 Dias)")
  */
 export function formatPaymentConditionString(
   parcelas: number, 
   prazo: string | number,
   valorEntrada?: number,
   saldoParcelas?: number,
-  saldoPrazo?: string | number
+  saldoPrazo?: string | number,
+  depositoParcelas?: number,
+  depositoPrazo?: string | number
 ): string {
   if (prazo === 'vista' || (parcelas === 1 && prazo === 'vista')) {
     return '100% À Vista (TED/PIX)';
   }
-  if (prazo === 'entrada_com_parcelamento') {
-    const entradaStr = valorEntrada && valorEntrada > 0 
-      ? `Entrada R$ ${valorEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
-      : 'Entrada À Vista';
+  if (prazo === 'entrada_com_parcelamento' || prazo === 'deposito_e_boleto') {
+    const dParc = depositoParcelas || 1;
     const sParc = saldoParcelas || 2;
     const sPrazo = saldoPrazo || '30';
     const sPrazoStr = formatPaymentConditionString(sParc, sPrazo);
-    return `${entradaStr} + ${sPrazoStr}`;
+
+    if (dParc > 1) {
+      const dPrazo = depositoPrazo || '30';
+      const dPrazoStr = formatPaymentConditionString(dParc, dPrazo);
+      const valStr = valorEntrada && valorEntrada > 0 
+        ? ` (R$ ${valorEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
+        : '';
+      return `Depósito ${dPrazoStr}${valStr} + Boleto ${sPrazoStr}`;
+    }
+
+    const entradaStr = valorEntrada && valorEntrada > 0 
+      ? `Depósito R$ ${valorEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
+      : 'Entrada À Vista';
+    return `${entradaStr} + Boleto ${sPrazoStr}`;
   }
   const intervalo = Number(prazo);
   if (!isNaN(intervalo) && intervalo > 0) {
@@ -115,6 +139,12 @@ export function parsePaymentConditionString(cond?: string): { parcelas: number; 
     return { parcelas: 3, prazo: '30' };
   }
   const lower = cond.toLowerCase();
+  if (lower.includes('depósito') && lower.includes('boleto')) {
+    return { parcelas: 3, prazo: 'deposito_e_boleto' };
+  }
+  if (lower.includes('deposito') && lower.includes('boleto')) {
+    return { parcelas: 3, prazo: 'deposito_e_boleto' };
+  }
   if (lower.includes('entrada') && (lower.includes('+') || lower.includes('saldo') || lower.includes('dias') || lower.includes('x'))) {
     return { parcelas: 3, prazo: 'entrada_com_parcelamento' };
   }
@@ -272,47 +302,66 @@ export function generateOrderInstallments(
   // As parcelas de mercadoria do fornecedor dividem o valor líquido sem o frete (pois o frete possui boleto próprio)
   const valorBaseMercadoria = Math.max(0, netTotal - valorFrete);
 
-  // CENÁRIO A: ENTRADA À VISTA + SALDO PARCELADO A PRAZO
-  if (prazo === 'entrada_com_parcelamento') {
-    const valorEntrada = Math.min(valorBaseMercadoria, Math.max(0, order.header.valorEntradaAVista || 0));
-    const saldoRestante = Math.max(0, valorBaseMercadoria - valorEntrada);
+  // CENÁRIO A: NEGOCIAÇÃO MISTA (DEPÓSITO PARCELADO + SALDO EM BOLETO PARCELADO)
+  if (prazo === 'entrada_com_parcelamento' || prazo === 'deposito_e_boleto' || order.header.formaPagamento === 'Boleto / Depósito') {
+    const totalParcelasDeposito = Math.max(1, order.header.depositoParcelasCount || (prazo === 'deposito_e_boleto' ? 2 : 1));
+    const depositoPrazo = String(order.header.depositoPrazoDias || (totalParcelasDeposito === 1 ? 'vista' : '30'));
+    const valorTotalDeposito = Math.min(valorBaseMercadoria, Math.max(0, order.header.valorEntradaAVista || 0));
+    const saldoRestante = Math.max(0, valorBaseMercadoria - valorTotalDeposito);
     const totalParcelasSaldo = Math.max(1, order.header.saldoParcelasCount || 2);
     const saldoPrazo = String(order.header.saldoPrazoDias || '30');
-    const totalParcelasGeral = 1 + totalParcelasSaldo;
+    const totalParcelasGeral = totalParcelasDeposito + totalParcelasSaldo;
 
-    // 1. Parcela de Entrada (À Vista)
-    const existingEntrada = existingMap.get(1);
-    const customEntradaDate = customDates?.['1'];
-    const rawDataVencEntrada = customEntradaDate || existingEntrada?.dataVencimento || orderDate;
-    const dataVencEntrada = addDaysToDate(rawDataVencEntrada, 0);
-    const valorEntradaFinal = existingEntrada?.valor !== undefined ? existingEntrada.valor : valorEntrada;
-    const statusEntrada = existingEntrada?.status || getInstallmentStatus(dataVencEntrada, existingEntrada?.dataPagamento);
+    // 1. Parcelas de Depósito / PIX
+    const depBaseValue = totalParcelasDeposito > 0 ? Number((valorTotalDeposito / totalParcelasDeposito).toFixed(2)) : valorTotalDeposito;
+    const depRemainder = totalParcelasDeposito > 0 ? Number((valorTotalDeposito - depBaseValue * totalParcelasDeposito).toFixed(2)) : 0;
 
-    list.push({
-      id: existingEntrada?.id || `inst_${order.header.id || 'ord'}_1_${Date.now()}`,
-      orderId: order.header.id,
-      numeroPedido: order.header.numeroPedido,
-      fornecedor: order.header.fornecedor,
-      numeroParcela: 1,
-      totalParcelas: totalParcelasGeral,
-      dataVencimento: dataVencEntrada,
-      valor: valorEntradaFinal,
-      valorOriginal: existingEntrada?.valorOriginal ?? valorEntrada,
-      status: statusEntrada,
-      dataPagamento: existingEntrada?.dataPagamento,
-      observacao: existingEntrada?.observacao || 'Entrada / Sinal À Vista (TED/PIX)',
-      documentoRef: existingEntrada?.documentoRef,
-      tipoTitulo: 'mercadoria',
-      isBoletoFrete: false,
-      updatedAt: new Date().toISOString()
-    });
+    for (let d = 1; d <= totalParcelasDeposito; d++) {
+      const existingDep = existingMap.get(d);
+      const customDepDate = customDates?.[String(d)];
 
-    // 2. Parcelas do Saldo a Prazo (Contadas a partir da entrega)
+      let dueDays = 0;
+      if (depositoPrazo === 'vista') {
+        dueDays = 0;
+      } else {
+        const interval = Number(depositoPrazo) || 30;
+        dueDays = (d - 1) * interval;
+      }
+
+      const calculatedDueDate = addDaysToDate(orderDate, dueDays);
+      const origVal = d === 1 ? Number((depBaseValue + depRemainder).toFixed(2)) : depBaseValue;
+      const valorFinal = existingDep?.valor !== undefined ? existingDep.valor : origVal;
+      const rawDataVenc = customDepDate || existingDep?.dataVencimento || calculatedDueDate;
+      const dataVencFinal = addDaysToDate(rawDataVenc, 0);
+      const statusFinal = existingDep?.status || getInstallmentStatus(dataVencFinal, existingDep?.dataPagamento);
+
+      list.push({
+        id: existingDep?.id || `inst_${order.header.id || 'ord'}_dep_${d}_${Date.now()}`,
+        orderId: order.header.id,
+        numeroPedido: order.header.numeroPedido,
+        fornecedor: order.header.fornecedor,
+        numeroParcela: d,
+        totalParcelas: totalParcelasGeral,
+        dataVencimento: dataVencFinal,
+        valor: valorFinal,
+        valorOriginal: existingDep?.valorOriginal ?? origVal,
+        status: statusFinal,
+        dataPagamento: existingDep?.dataPagamento,
+        observacao: existingDep?.observacao || (totalParcelasDeposito === 1 ? 'Entrada / Sinal À Vista (TED/PIX)' : `Depósito ${d}/${totalParcelasDeposito} (${dueDays}d)`),
+        documentoRef: existingDep?.documentoRef,
+        tipoTitulo: 'mercadoria',
+        metodoPagamento: 'Depósito',
+        isBoletoFrete: false,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    // 2. Parcelas do Saldo em Boleto (Contadas a partir da entrega)
     const saldoBaseValue = totalParcelasSaldo > 0 ? Number((saldoRestante / totalParcelasSaldo).toFixed(2)) : saldoRestante;
     const saldoRemainder = totalParcelasSaldo > 0 ? Number((saldoRestante - saldoBaseValue * totalParcelasSaldo).toFixed(2)) : 0;
 
     for (let j = 1; j <= totalParcelasSaldo; j++) {
-      const numParcela = j + 1;
+      const numParcela = totalParcelasDeposito + j;
       const existing = existingMap.get(numParcela);
 
       let dueDays = 0;
@@ -329,7 +378,7 @@ export function generateOrderInstallments(
       const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
 
       list.push({
-        id: existing?.id || `inst_${order.header.id || 'ord'}_${numParcela}_${Date.now()}`,
+        id: existing?.id || `inst_${order.header.id || 'ord'}_bol_${j}_${Date.now()}`,
         orderId: order.header.id,
         numeroPedido: order.header.numeroPedido,
         fornecedor: order.header.fornecedor,
@@ -340,9 +389,10 @@ export function generateOrderInstallments(
         valorOriginal: existing?.valorOriginal ?? originalProportionalVal,
         status: statusFinal,
         dataPagamento: existing?.dataPagamento,
-        observacao: existing?.observacao || `Saldo ${j}/${totalParcelasSaldo} (${dueDays}d da Entrega)`,
+        observacao: existing?.observacao || `Boleto ${j}/${totalParcelasSaldo} (${dueDays}d da Entrega)`,
         documentoRef: existing?.documentoRef,
         tipoTitulo: 'mercadoria',
+        metodoPagamento: 'Boleto',
         isBoletoFrete: false,
         updatedAt: new Date().toISOString()
       });

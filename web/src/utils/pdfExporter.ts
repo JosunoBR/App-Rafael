@@ -1,6 +1,5 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { API_BASE_URL } from './config';
 import { PurchaseOrder, StoreConfig } from '../shared/types';
 import { DEFAULT_STORES } from '../shared/constants';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
@@ -415,34 +414,7 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
   const cleanFornecedor = (order.header?.fornecedor || 'Fornecedor').replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = `Romaneio_${numeroPedido}_${cleanFornecedor}.pdf`;
 
-  // 1. Download via Backend
-  try {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `${API_BASE_URL}/export/pdf?type=separation`;
-    form.target = '_self';
-
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'payload';
-    input.value = JSON.stringify({ order, stores: fallbackStores, type: 'separation' });
-
-    form.appendChild(input);
-    document.body.appendChild(form);
-    form.submit();
-
-    setTimeout(() => {
-      if (document.body.contains(form)) {
-        document.body.removeChild(form);
-      }
-    }, 1500);
-
-    return true;
-  } catch (backendErr) {
-    console.warn('Fallback para download PDF de separação local:', backendErr);
-  }
-
-  // 2. Fallback de Contingência Local via jsPDF
+  // Geração Local Direta via jsPDF em Paisagem (20 Lojas)
   try {
     const doc = new jsPDF({
       orientation: 'landscape',

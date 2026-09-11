@@ -234,14 +234,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Boolean(hasActiveDraft)
             )}
 
-            {/* Depósito / Estoque Central */}
-            {canAccessStock && renderItem(
-              'stock',
-              'Depósito / Estoque CD',
-              <Warehouse className={`w-4 h-4 ${activeNav === 'stock' ? 'text-white' : 'text-emerald-500'}`} />,
-              activeNav === 'stock'
-            )}
-
             {/* Separação e Distribuição por Lojas */}
             {canAccessSeparation && renderItem(
               'separation',
@@ -256,6 +248,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Boxes className={`w-4 h-4 ${activeNav === 'separation' ? 'text-white' : 'text-blue-500'}`} />
               ),
               activeNav === 'separation'
+            )}
+
+            {/* Depósito / Estoque Central */}
+            {canAccessStock && renderItem(
+              'stock',
+              'Depósito / Estoque CD',
+              <Warehouse className={`w-4 h-4 ${activeNav === 'stock' ? 'text-white' : 'text-emerald-500'}`} />,
+              activeNav === 'stock'
             )}
           </div>
 

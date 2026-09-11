@@ -42,11 +42,18 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
     ativo: 1
   });
 
+  const isRootUser = (u: User) => {
+    const email = (u.email || '').toLowerCase().trim();
+    const nome = (u.nome || '').toLowerCase().trim();
+    const id = (u.id || '').toLowerCase().trim();
+    return id === 'usr_root' || email === 'root' || nome === 'root';
+  };
+
   const loadUsers = async () => {
     try {
       const data = await fetchUsersFromDb();
       if (Array.isArray(data)) {
-        setUsers(data);
+        setUsers(data.filter(u => !isRootUser(u)));
       }
     } catch (err) {
       console.error('Erro ao carregar usuários:', err);
@@ -58,6 +65,8 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
   }, []);
 
   const filteredUsers = users.filter(u => {
+    if (isRootUser(u)) return false;
+
     const matchSearch = 
       u.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||

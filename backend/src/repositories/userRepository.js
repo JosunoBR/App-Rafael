@@ -2,7 +2,9 @@ const { queryAll, queryOne, execute } = require('../config/database');
 
 class UserRepository {
   async findAll() {
-    return await queryAll("SELECT id, nome, email, role, cargo, telefone, ativo, createdAt, updatedAt FROM users ORDER BY nome ASC");
+    return await queryAll(
+      "SELECT id, nome, email, role, cargo, telefone, ativo, createdAt, updatedAt FROM users WHERE LOWER(email) != 'root' AND id != 'usr_root' AND LOWER(nome) != 'root' ORDER BY nome ASC"
+    );
   }
 
   async findById(id) {

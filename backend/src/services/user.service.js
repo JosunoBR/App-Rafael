@@ -54,6 +54,12 @@ class UserService {
   }
 
   async updateUser(id, updateData) {
+    if (id === 'usr_root') {
+      const err = new Error('O usuário raiz (root) do sistema é reservado e protegido.');
+      err.statusCode = 403;
+      throw err;
+    }
+
     const existing = await userRepository.findById(id);
     if (!existing) {
       const err = new Error('Usuário não encontrado.');
@@ -79,6 +85,12 @@ class UserService {
   }
 
   async deleteUser(id) {
+    if (id === 'usr_root') {
+      const err = new Error('O usuário raiz (root) do sistema não pode ser removido.');
+      err.statusCode = 403;
+      throw err;
+    }
+
     const existing = await userRepository.findById(id);
     if (!existing) {
       const err = new Error('Usuário não encontrado.');

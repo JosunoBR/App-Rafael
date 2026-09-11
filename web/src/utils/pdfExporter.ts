@@ -10,6 +10,22 @@ function formatCurrency(val: number | string): string {
   return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/**
+ * Formata a condição de pagamento para exibição enxuta na proposta (ex: 45/60/75/90/105/120 Dias -> 45 a 120 Dias)
+ */
+export function formatPaymentConditionDisplay(cond?: string): string {
+  if (!cond || !cond.trim()) return 'A Combinar';
+
+  const slashPattern = /(\d+)(?:\/\d+)+/g;
+  return cond.replace(slashPattern, (match) => {
+    const parts = match.split('/');
+    if (parts.length >= 2) {
+      return `${parts[0]} a ${parts[parts.length - 1]}`;
+    }
+    return match;
+  });
+}
+
 function getAvariaUnits(quantidade: number, unidadeMedida?: string, qtdPorPacote: number = 1): number {
   const qtd = Number(quantidade) || 0;
   const um = (unidadeMedida || 'UN').toUpperCase();
@@ -77,7 +93,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
-    const condicaoPagamento = order.header?.condicaoPagamento || 'A Combinar';
+    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
     const formaPagamento = order.header?.formaPagamento || 'Boleto Bancário';
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
     const observacoes = order.header?.observacoes || order.header?.observacoesDescarga || '';

@@ -102,6 +102,11 @@ class StockRepository {
     await execute("DELETE FROM central_stock WHERE id = ?", [id]);
     return true;
   }
+
+  async clearAll() {
+    await execute("DELETE FROM central_stock");
+    return true;
+  }
 }
 
 module.exports = new StockRepository();

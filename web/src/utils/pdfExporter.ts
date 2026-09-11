@@ -117,12 +117,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
 
     doc.setTextColor(5, 150, 105); // Emerald-600
     doc.setFontSize(8);
-    doc.text('ALS 10 BAZAR E BRINQUEDOS LTDA  •  AUTORIZAÇÃO OFICIAL DE FORNECIMENTO', 33, 17.5);
-
-    doc.setTextColor(100, 116, 139); // Slate-500
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text('Documento oficial para faturamento, separação e expedição de mercadorias', 33, 22);
+    doc.text('ALS 10 BAZAR E BRINQUEDOS LTDA  •  AUTORIZAÇÃO OFICIAL DE FORNECIMENTO', 33, 18.5);
 
     // Badge do Pedido (Canto Superior Direito)
     doc.setFillColor(15, 23, 42);
@@ -368,13 +363,10 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.text('3. Pagamento de Parte Especial exclusivamente via depósitos bancários autorizados.', 13, finalY + 15.6);
     doc.text('4. Os pedidos seguem espelho oficial da empresa. Favor conferir e avisar imediatamente se houver desacordo.', 13, finalY + 19.4);
     doc.text('5. Descarregamento no local de entrega sob responsabilidade do fornecedor / transportadora.', 13, finalY + 23.2);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(185, 28, 28);
-    doc.text('6. AGENDAMENTO OBRIGATÓRIO DE ENTREGA COM ROBERTA: (42) 9 9136-5009', 13, finalY + 27);
     if (observacoes) {
       doc.setTextColor(71, 85, 105);
       doc.setFont('helvetica', 'italic');
-      doc.text(`Obs: ${observacoes.substring(0, 115)}`, 13, finalY + 30.2);
+      doc.text(`Obs: ${observacoes.substring(0, 115)}`, 13, finalY + 27.2);
     }
 
     // Bloco Direito: Resumo Financeiro & Assinaturas

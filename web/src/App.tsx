@@ -130,6 +130,7 @@ import {
   saveStockItemToDb,
   updateStockBalanceInDb,
   deleteStockItemFromDb,
+  clearAllStockFromDb,
   fetchSeparationPresetsFromDb,
   saveSeparationPresetToDb,
   deleteSeparationPresetFromDb,
@@ -304,7 +305,7 @@ export function App() {
         saveFiscalConfig(dbFiscal);
       }
 
-      if (dbStock && dbStock.length > 0) {
+      if (dbStock !== null) {
         setCentralStock(dbStock);
         saveCentralStock(dbStock);
       }
@@ -1361,6 +1362,35 @@ export function App() {
     }
   };
 
+  const handleDeleteStockItem = async (stockId: string) => {
+    try {
+      await deleteStockItemFromDb(stockId);
+      const updatedList = await fetchStockFromDb();
+      setCentralStock(updatedList);
+      saveCentralStock(updatedList);
+      showToast('Item excluído do estoque central.', 'success');
+    } catch {
+      const current = loadCentralStock();
+      const updated = current.filter(s => s.id !== stockId);
+      saveCentralStock(updated);
+      setCentralStock(updated);
+      showToast('Item excluído localmente.', 'info');
+    }
+  };
+
+  const handleClearAllStock = async () => {
+    try {
+      await clearAllStockFromDb();
+      setCentralStock([]);
+      saveCentralStock([]);
+      showToast('Todo o estoque da matriz foi limpo com sucesso!', 'success');
+    } catch (err: any) {
+      saveCentralStock([]);
+      setCentralStock([]);
+      showToast('Estoque limpo localmente.', 'info');
+    }
+  };
+
   const handleGenerateStockSeparation = (itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>) => {
     const transfOrder = createStockTransferOrder(itemsToTransfer, storeConfigs, fiscalConfig);
     saveOrderToHistory(transfOrder);
@@ -2001,6 +2031,8 @@ export function App() {
                   onSaveNewStockItem={handleSaveNewStockItem}
                   onGenerateStockSeparation={handleGenerateStockSeparation}
                   onNavigateToSeparation={() => setActiveNav('separation')}
+                  onClearAllStock={handleClearAllStock}
+                  onDeleteStockItem={handleDeleteStockItem}
                 />
               )}
 

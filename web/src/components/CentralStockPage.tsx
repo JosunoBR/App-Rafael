@@ -34,6 +34,8 @@ interface CentralStockPageProps {
   onSaveNewStockItem: (item: CentralStockItem) => void;
   onGenerateStockSeparation: (itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>) => void;
   onNavigateToSeparation: () => void;
+  onClearAllStock?: () => void;
+  onDeleteStockItem?: (stockId: string) => void;
 }
 
 export const CentralStockPage: React.FC<CentralStockPageProps> = ({
@@ -45,7 +47,9 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   onUpdateStockBalance,
   onSaveNewStockItem,
   onGenerateStockSeparation,
-  onNavigateToSeparation
+  onNavigateToSeparation,
+  onClearAllStock,
+  onDeleteStockItem
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -255,6 +259,22 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             <PlusCircle className="w-4 h-4 text-emerald-500" />
             <span>+ Dar Entrada / Novo Item</span>
           </button>
+
+          {/* Botão temporário para Limpar Todo o Estoque */}
+          {stockItems.length > 0 && onClearAllStock && (
+            <button
+              onClick={() => {
+                if (window.confirm('⚠️ ATENÇÃO: Deseja realmente excluir TODOS os itens do estoque da matriz?\n\nEsta ação limpará permanentemente todos os produtos cadastrados no estoque do banco de dados.')) {
+                  onClearAllStock();
+                }
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              title="Excluir permanentemente todos os itens do estoque"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Limpar Todo o Estoque</span>
+            </button>
+          )}
 
           {/* Botão Gerar Romaneio de Transferência - Sempre visível */}
           <button
@@ -556,6 +576,20 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
+
+                          {onDeleteStockItem && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Deseja excluir "${item.descricao || item.codigo || item.codigoInterno || 'item'}" do estoque?`)) {
+                                  onDeleteStockItem(item.id);
+                                }
+                              }}
+                              className="px-2 py-1 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition cursor-pointer"
+                              title="Excluir este item do estoque"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
                           <button
                             onClick={() => toggleItemSelection(item)}

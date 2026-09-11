@@ -1659,157 +1659,19 @@ export function saveOrderToHistory(order: PurchaseOrder): void {
 // 📦 MÓDULO DE GESTÃO DO DEPÓSITO CENTRAL (CD)
 // ==========================================
 
-export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [
-  {
-    id: 'stock_1',
-    productId: 'prod_1',
-    codigo: 'PRD-001',
-    descricao: 'Garrafa Térmica Inox 1L com Termômetro Digital',
-    categoria: 'Utilidades Térmicas',
-    fotoUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=300&auto=format&fit=crop&q=80',
-    qtdPorPacote: 12,
-    saldoCaixas: 45,
-    saldoUnidades: 45 * 12, // 540 un
-    precoUnitario: 5.50,
-    pdvSugerido: 12.00,
-    localizacaoGalpao: 'Rua A - Palete 04',
-    fornecedorOrigem: 'Brasil Plásticos',
-    dataUltimaEntrada: '2026-08-15',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'stock_2',
-    productId: 'prod_2',
-    codigo: 'PRD-002',
-    descricao: 'Conjunto 6 Taças de Cristal Lapidado 320ml',
-    categoria: 'Vidros & Cristais',
-    fotoUrl: 'https://images.unsplash.com/photo-1574053415387-a25475d4088d?w=300&auto=format&fit=crop&q=80',
-    qtdPorPacote: 6,
-    saldoCaixas: 30,
-    saldoUnidades: 30 * 6, // 180 un
-    precoUnitario: 5.80,
-    pdvSugerido: 12.00,
-    localizacaoGalpao: 'Rua A - Palete 12',
-    fornecedorOrigem: 'Paraná Bazar',
-    dataUltimaEntrada: '2026-08-18',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'stock_3',
-    productId: 'prod_4',
-    codigo: 'PRD-004',
-    descricao: 'Difusor de Aromas Elétrico Ultrassônico Madeira 300ml',
-    categoria: 'Aromaterapia & Casa',
-    fotoUrl: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=300&auto=format&fit=crop&q=80',
-    qtdPorPacote: 6,
-    saldoCaixas: 25,
-    saldoUnidades: 25 * 6, // 150 un
-    precoUnitario: 4.50,
-    pdvSugerido: 12.00,
-    localizacaoGalpao: 'Rua B - Palete 02',
-    fornecedorOrigem: 'Paraná Bazar',
-    dataUltimaEntrada: '2026-08-10',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'stock_4',
-    productId: 'prod_5',
-    codigo: 'PRD-005',
-    descricao: 'Vela Aromática Premium Pote Vidro Fosco Baunilha & Âmbar 200g',
-    categoria: 'Aromaterapia & Casa',
-    fotoUrl: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=300&auto=format&fit=crop&q=80',
-    qtdPorPacote: 12,
-    saldoCaixas: 60,
-    saldoUnidades: 60 * 12, // 720 un
-    precoUnitario: 4.20,
-    pdvSugerido: 12.00,
-    localizacaoGalpao: 'Rua B - Palete 08',
-    fornecedorOrigem: 'Paraná Bazar',
-    dataUltimaEntrada: '2026-08-20',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'stock_5',
-    productId: 'prod_7',
-    codigo: 'PRD-007',
-    descricao: 'Copo Térmico Parede Dupla Inox com Tampa e Abridor 473ml',
-    categoria: 'Utilidades Térmicas',
-    fotoUrl: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=300&auto=format&fit=crop&q=80',
-    qtdPorPacote: 12,
-    saldoCaixas: 50,
-    saldoUnidades: 50 * 12, // 600 un
-    precoUnitario: 5.10,
-    pdvSugerido: 12.00,
-    localizacaoGalpao: 'Rua C - Palete 01',
-    fornecedorOrigem: 'Brasil Plásticos',
-    dataUltimaEntrada: '2026-08-22',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'stock_6',
-    productId: 'prod_8',
-    codigo: 'PRD-008',
-    descricao: 'Luminária de Mesa Articulada LED Touch com Porta-Canetas',
-    categoria: 'Decoração & Iluminação',
-    fotoUrl: 'https://images.unsplash.com/photo-1534353436294-0dbd4bdac845?w=300&auto=format&fit=crop&q=80',
-    qtdPorPacote: 8,
-    saldoCaixas: 35,
-    saldoUnidades: 35 * 8, // 280 un
-    precoUnitario: 4.20,
-    pdvSugerido: 12.00,
-    localizacaoGalpao: 'Rua C - Palete 10',
-    fornecedorOrigem: 'Importadora Oriente',
-    dataUltimaEntrada: '2026-08-12',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'stock_7',
-    productId: 'prod_10',
-    codigo: 'PRD-010',
-    descricao: 'Organizador Giratório Acrílico Multiuso 360 Graus 28cm',
-    categoria: 'Organizadores',
-    fotoUrl: 'https://images.unsplash.com/photo-1584990347449-399a9a3b6fcf?w=300&auto=format&fit=crop&q=80',
-    qtdPorPacote: 12,
-    saldoCaixas: 40,
-    saldoUnidades: 40 * 12, // 480 un
-    precoUnitario: 4.80,
-    pdvSugerido: 12.00,
-    localizacaoGalpao: 'Rua D - Palete 05',
-    fornecedorOrigem: 'Brasil Plásticos',
-    dataUltimaEntrada: '2026-08-16',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'stock_8',
-    productId: 'prod_14',
-    codigo: 'PRD-014',
-    descricao: 'Conjunto Assadeiras de Alumínio Polido com Grelha 3 Peças',
-    categoria: 'Panelas & Assadeiras',
-    fotoUrl: 'https://images.unsplash.com/photo-1584990347449-a2927236d654?w=300&auto=format&fit=crop&q=80',
-    qtdPorPacote: 6,
-    saldoCaixas: 20,
-    saldoUnidades: 20 * 6, // 120 un
-    precoUnitario: 5.00,
-    pdvSugerido: 12.00,
-    localizacaoGalpao: 'Rua D - Palete 14',
-    fornecedorOrigem: 'Alumínios União',
-    dataUltimaEntrada: '2026-08-05',
-    updatedAt: new Date().toISOString()
-  }
-];
+export const INITIAL_CENTRAL_STOCK: CentralStockItem[] = [];
 
 export function getInitialCentralStock(): CentralStockItem[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.CENTRAL_STOCK);
-    if (saved) {
+    if (saved !== null) {
       const parsed: CentralStockItem[] = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed.map(s => ({ ...s, pdvSugerido: 12.00 }));
       }
     }
   } catch {}
-  localStorage.setItem(STORAGE_KEYS.CENTRAL_STOCK, JSON.stringify(INITIAL_CENTRAL_STOCK));
-  return INITIAL_CENTRAL_STOCK;
+  return [];
 }
 
 export function loadCentralStock(): CentralStockItem[] {

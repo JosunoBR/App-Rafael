@@ -257,6 +257,12 @@ export async function deleteStockItemFromDb(id: string): Promise<void> {
   });
 }
 
+export async function clearAllStockFromDb(): Promise<void> {
+  await apiFetch('/stock/clear/all', {
+    method: 'DELETE'
+  });
+}
+
 export async function fetchFiscalConfigFromDb(): Promise<FiscalConfig> {
   try {
     const res = await apiFetch('/config/fiscal');

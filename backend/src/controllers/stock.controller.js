@@ -47,6 +47,15 @@ class StockController {
       next(err);
     }
   }
+
+  async clearAll(req, res, next) {
+    try {
+      await stockRepository.clearAll();
+      return res.json({ success: true, message: 'Todos os itens do estoque central foram removidos.' });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new StockController();

@@ -2166,7 +2166,7 @@ export function App() {
               {/* PÁGINA 4: DASHBOARD EXECUTIVO & BI */}
               {activeNav === 'dashboard' && (
                 <DashboardView
-                  orders={savedOrders.length > 0 ? savedOrders : [order]}
+                  orders={savedOrders}
                   suppliers={suppliers}
                   onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
                   onNavigateToOrders={() => setActiveNav('orders')}

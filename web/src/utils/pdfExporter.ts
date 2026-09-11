@@ -164,15 +164,49 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setFontSize(7.2);
     doc.text('DADOS DA EMPRESA COMPRADORA & FATURAMENTO:', 13, cardY + 3.8);
 
+    // Cálculo do Desconto Comercial
+    const offValue = Number(order.header?.percentualDescontoOff || 0);
+    let totalBrutoMercadorias = 0;
+    let totalDescontoItens = 0;
+    (order.items || []).forEach(item => {
+      const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
+      const pacotes = Number(item.qtdPacotes) || 0;
+      const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
+      const precoUnit = Number(item.precoUnitario) || 0;
+      const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const valorLiquido = Number(item.valorTotalLiquido) || valorBruto;
+      totalBrutoMercadorias += valorBruto;
+      if (item.valorDescontoItem !== undefined && Number(item.valorDescontoItem) > 0) {
+        totalDescontoItens += Number(item.valorDescontoItem);
+      } else if (valorBruto > valorLiquido) {
+        totalDescontoItens += (valorBruto - valorLiquido);
+      }
+    });
+
+    let descontoComercialTexto = 'R$ 0,00';
+    if (order.header?.descontoComercialTotal !== undefined && Number(order.header.descontoComercialTotal) > 0) {
+      if (order.header.descontoComercialTipo === '%') {
+        const valR = (totalBrutoMercadorias * Number(order.header.descontoComercialTotal)) / 100;
+        descontoComercialTexto = `${Number(order.header.descontoComercialTotal)}% (${formatCurrency(valR)})`;
+      } else {
+        descontoComercialTexto = formatCurrency(Number(order.header.descontoComercialTotal));
+      }
+    } else if (totalDescontoItens > 0) {
+      descontoComercialTexto = formatCurrency(totalDescontoItens);
+    } else if (offValue > 0 && totalBrutoMercadorias > 0) {
+      const valOff = (totalBrutoMercadorias * offValue) / 100;
+      descontoComercialTexto = formatCurrency(valOff);
+    }
+
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text('Razão Social: ALS 10 BAZAR E BRINQUEDOS LTDA', 13, cardY + 8.5);
-    doc.text('CNPJ: 37.144.240/0001-70       IE: 90847822-35', 13, cardY + 12.1);
-    doc.text('End. Entrega: Av. José Galiciolli, 152 – BR153 – Centro – Irati – PR (CEP: 84500-009)', 13, cardY + 15.7);
-    doc.text('E-mail para Boletos e XML: als.conecta@gmail.com', 13, cardY + 19.3);
-    doc.text('Compras: (55) 9 9659-6315 (Rafael)  |  Faturamento: (55) 9 99691-0247 (Ketlyn)', 13, cardY + 22.9);
-    doc.text('Financeiro: (55) 9 3618-5609 (Bruna)', 13, cardY + 26.5);
+    doc.text('Razão Social: ALS 10 BAZAR E BRINQUEDOS LTDA', 13, cardY + 7.8);
+    doc.text('CNPJ: 37.144.240/0001-70       IE: 90847822-35', 13, cardY + 11.3);
+    doc.text('End. Entrega: Av. José Galiciolli, 152 – BR153 – Centro – Irati – PR (CEP: 84500-009)', 13, cardY + 14.8);
+    doc.text('E-mail para Boletos e XML: als.conecta@gmail.com', 13, cardY + 18.3);
+    doc.text('Compras: (55) 9 9659-6315 (Rafael)  |  Faturamento: (55) 9 99691-0247 (Ketlyn)', 13, cardY + 21.8);
+    doc.text('Financeiro: (55) 9 3618-5609 (Bruna)', 13, cardY + 25.3);
 
     // Card 2: Fornecedor & Comercial (Direita)
     const card2X = 151;
@@ -190,16 +224,22 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 8.5);
-    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 12.1);
+    doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 7.8);
+    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 10.9);
 
-    // Porcentagem OFF posicionada entre Vendedor e Condição de Pagamento
-    const offValue = Number(order.header?.percentualDescontoOff || 0);
-    doc.text(`% OFF (Desconto Negociado): ${offValue}%`, card2X + 3, cardY + 15.7);
+    // Porcentagem OFF posicionada entre Vendedor e Desconto Comercial
+    doc.text(`% OFF (Desconto Negociado): ${offValue}%`, card2X + 3, cardY + 14.0);
 
-    doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 19.3);
-    doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 22.9);
-    doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 26.5);
+    // Desconto Comercial posicionado abaixo do OFF
+    doc.setTextColor(5, 150, 105); // Emerald-600
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Desconto Comercial: ${descontoComercialTexto}`, card2X + 3, cardY + 17.1);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 20.2);
+    doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 23.3);
+    doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 26.4);
 
     // =========================================================================
     // 4. TABELA DE ITENS (SEM Código Interno e SEM Desconto)
@@ -556,13 +596,12 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     doc.text('! ATENÇÃO OBRIGATÓRIA: AGENDAR ENTREGA COM ROBERTA: (42) 9 9136-5009  |  DESCARREGAMENTO POR CONTA DO FORNECEDOR', 14, 31.5);
 
     // =========================================================================
-    // 3. CARDS DE DADOS: COMPRADOR & FORNECEDOR (Lado a Lado)
+    // 3. CARD DE DADOS: FORNECEDOR & CONDIÇÕES COMERCIAIS
     // =========================================================================
     const cardY = 35.5;
-    const cardH = 28.5;
-    const cardW = 136;
+    const cardH = 20;
+    const cardW = 277;
 
-    // Card 1: Comprador / Faturamento (Esquerda)
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(203, 213, 225);
     doc.roundedRect(10, cardY, cardW, cardH, 1.5, 1.5, 'FD');
@@ -572,44 +611,23 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.2);
-    doc.text('DADOS DA EMPRESA COMPRADORA & FATURAMENTO:', 13, cardY + 3.8);
+    doc.text('DADOS DO FORNECEDOR & CONDIÇÕES COMERCIAIS:', 13, cardY + 3.8);
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text('Razão Social: ALS 10 BAZAR E BRINQUEDOS LTDA', 13, cardY + 8.5);
-    doc.text('CNPJ: 37.144.240/0001-70       IE: 90847822-35', 13, cardY + 12.1);
-    doc.text('End. Entrega: Av. José Galiciolli, 152 – BR153 – Centro – Irati – PR (CEP: 84500-009)', 13, cardY + 15.7);
-    doc.text('E-mail para Boletos e XML: als.conecta@gmail.com', 13, cardY + 19.3);
-    doc.text('Compras: (55) 9 9659-6315 (Rafael)  |  Faturamento: (55) 9 99691-0247 (Ketlyn)', 13, cardY + 22.9);
-    doc.text('Financeiro: (55) 9 3618-5609 (Bruna)', 13, cardY + 26.5);
 
-    // Card 2: Fornecedor & Comercial (Direita)
-    const card2X = 151;
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(card2X, cardY, cardW, cardH, 1.5, 1.5, 'FD');
-
-    doc.setFillColor(241, 245, 249);
-    doc.rect(card2X + 0.2, cardY + 0.2, cardW - 0.4, 5, 'F');
-    doc.setTextColor(30, 41, 59);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.2);
-    doc.text('DADOS DO FORNECEDOR & CONDIÇÕES COMERCIAIS:', card2X + 3, cardY + 3.8);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 8.5);
-    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 12.1);
-
-    // Porcentagem OFF posicionada entre Vendedor e Condição de Pagamento
+    // Coluna 1 (Esquerda)
     const offValue = Number(order.header?.percentualDescontoOff || 0);
-    doc.text(`% OFF (Desconto Negociado): ${offValue}%`, card2X + 3, cardY + 15.7);
+    doc.text(`Fornecedor: ${fornecedorNome}`, 13, cardY + 8.5);
+    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, 13, cardY + 12.3);
+    doc.text(`% OFF (Desconto Negociado): ${offValue}%`, 13, cardY + 16.1);
 
-    doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 19.3);
-    doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 22.9);
-    doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 26.5);
+    // Coluna 2 (Direita)
+    const col2X = 150;
+    doc.text(`Condição de Pagto: ${condicaoPagamento}`, col2X, cardY + 8.5);
+    doc.text(`Forma de Pagto: ${formaPagamento}`, col2X, cardY + 12.3);
+    doc.text(`Tipo de Frete: ${tipoFrete}`, col2X, cardY + 16.1);
 
     // =========================================================================
     // 4. TABELA DE SEPARAÇÃO (20 LOJAS)
@@ -676,7 +694,7 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     ];
 
     autoTable(doc, {
-      startY: 66,
+      startY: 58,
       margin: { left: 10, right: 10, bottom: 14, top: 12 },
       head: [headCols],
       body: [...bodyRows, footerRow],

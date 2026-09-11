@@ -1623,7 +1623,10 @@ export function loadSavedOrdersList(): PurchaseOrder[] {
         const num = ord.header.numeroPedido.trim().toUpperCase();
         map.set(num, {
           ...ord,
-          items: (ord.items || []).map(it => ({ ...it, pdvAlvo: 12.00 }))
+          items: (ord.items || []).map(it => ({ 
+            ...it, 
+            pdvAlvo: it.pdvAlvo !== undefined && it.pdvAlvo !== null && !isNaN(Number(it.pdvAlvo)) ? Number(it.pdvAlvo) : 12.00 
+          }))
         });
       }
     });
@@ -1644,7 +1647,10 @@ export function saveOrderToHistory(order: PurchaseOrder): void {
   
   const updatedOrder = { 
     ...order, 
-    items: (order.items || []).map(it => ({ ...it, pdvAlvo: 12.00 })),
+    items: (order.items || []).map(it => ({ 
+      ...it, 
+      pdvAlvo: it.pdvAlvo !== undefined && it.pdvAlvo !== null && !isNaN(Number(it.pdvAlvo)) ? Number(it.pdvAlvo) : 12.00 
+    })),
     header: { ...order.header, updatedAt: new Date().toISOString() } 
   };
   

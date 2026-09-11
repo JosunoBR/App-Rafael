@@ -22,14 +22,15 @@ import {
   Lightbulb,
   Handshake,
   Target,
-  ArrowDownRight
+  ArrowDownRight,
+  Plus
 } from 'lucide-react';
 import { PurchaseOrder, Supplier } from '../shared/types';
 import { 
   DashboardFilter, 
   calculateDashboardMetrics, 
-  generateSeedOrders,
-  MonthlyChartData 
+  MonthlyChartData,
+  getOrderDate
 } from '../utils/dashboardAnalytics';
 
 interface DashboardViewProps {
@@ -45,13 +46,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectOrder,
   onNavigateToOrders
 }) => {
-  // Combina com seed demo para mostrar gráficos vivos
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+
+  // Considera estritamente pedidos reais com itens válidos registrados
   const allOrdersForDashboard = useMemo(() => {
-    if (orders.length >= 4) return orders;
-    const seed = generateSeedOrders();
-    const userIds = new Set(orders.map(o => o.header.id));
-    const uniqueSeed = seed.filter(s => !userIds.has(s.header.id));
-    return [...orders, ...uniqueSeed];
+    return (orders || []).filter(o => 
+      o && 
+      o.header && 
+      Array.isArray(o.items) && 
+      o.items.some(i => (Number(i.qtdTotalUnidades) || 0) > 0 || (Number(i.valorTotalBruto) || 0) > 0)
+    );
   }, [orders]);
 
   // Filtros do Dashboard
@@ -84,18 +88,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return metrics.topSuppliers.length > 0 ? metrics.topSuppliers[0].totalInvestimento : 1;
   }, [metrics.topSuppliers]);
 
+  // Porcentagens dinâmicas de alocação por cluster
+  const totalClusterPecas = metrics.clusterAllocation.total;
+  const pctA = totalClusterPecas > 0 ? (metrics.clusterAllocation.A / totalClusterPecas) * 100 : 0;
+  const pctB = totalClusterPecas > 0 ? (metrics.clusterAllocation.B / totalClusterPecas) * 100 : 0;
+  const pctC = totalClusterPecas > 0 ? (metrics.clusterAllocation.C / totalClusterPecas) * 100 : 0;
+
   // Dados filtrados de barganha para o fornecedor selecionado
   const selectedSupplierObj = useMemo(() => {
     if (barganhaSupplierId === 'all') return null;
-    return suppliers.find(s => s.id === barganhaSupplierId) || null;
+    const cleanTarget = barganhaSupplierId.trim().toLowerCase();
+    return suppliers.find(s => 
+      s.id === barganhaSupplierId || 
+      s.razaoSocial.trim().toLowerCase() === cleanTarget ||
+      (s.nomeFantasia && s.nomeFantasia.trim().toLowerCase() === cleanTarget)
+    ) || null;
   }, [barganhaSupplierId, suppliers]);
 
   const supplierOrders = useMemo(() => {
     if (barganhaSupplierId === 'all') return allOrdersForDashboard;
-    return allOrdersForDashboard.filter(o => 
-      o.header.supplierId === barganhaSupplierId || 
-      (selectedSupplierObj && o.header.fornecedor?.toLowerCase() === selectedSupplierObj.razaoSocial.toLowerCase())
-    );
+    const cleanTarget = barganhaSupplierId.trim().toLowerCase();
+    return allOrdersForDashboard.filter(o => {
+      if (o.header.supplierId === barganhaSupplierId) return true;
+      const fornName = (o.header.fornecedor || '').trim().toLowerCase();
+      if (fornName === cleanTarget) return true;
+      if (selectedSupplierObj) {
+        if (fornName === selectedSupplierObj.razaoSocial.trim().toLowerCase()) return true;
+        if (selectedSupplierObj.nomeFantasia && fornName === selectedSupplierObj.nomeFantasia.trim().toLowerCase()) return true;
+      }
+      return false;
+    });
   }, [allOrdersForDashboard, barganhaSupplierId, selectedSupplierObj]);
 
   const supplierBargainMetrics = useMemo(() => {
@@ -111,49 +133,51 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const itemsMap = new Map<string, { codigo: string; descricao: string; pecas: number; caixas: number; invest: number; lucro: number }>();
 
     supplierOrders.forEach(ord => {
-      let mesIdx = 0;
-      if (ord.header.dataPedido) {
-        const d = new Date(ord.header.dataPedido);
-        if (!isNaN(d.getTime())) mesIdx = d.getMonth();
-      }
+      const d = getOrderDate(ord);
+      const mesIdx = d.getMonth();
+      const items = ord.items || [];
 
-      ord.items.forEach(item => {
-        const investItem = item.valorTotalBruto || 0;
-        const fatItem = (item.qtdTotalUnidades || 0) * (item.pdvAlvo || 0);
-        const custoRealItem = (item.qtdTotalUnidades || 0) * (item.custoRealEfetivo || item.precoUnitario || 0);
+      items.forEach(item => {
+        if (!item || !item.descricao || item.descricao.trim() === '') return;
+        const qtdTotal = Number(item.qtdTotalUnidades) || 0;
+        const investItem = Number(item.valorTotalBruto) || 0;
+        if (qtdTotal <= 0 && investItem <= 0) return;
+
+        const fatItem = qtdTotal * (Number(item.pdvAlvo) || 0);
+        const custoRealItem = qtdTotal * (Number(item.custoRealEfetivo) || Number(item.precoUnitario) || 0);
         const lucroItem = fatItem - custoRealItem;
 
         totalInvestido += investItem;
-        totalPecas += item.qtdTotalUnidades || 0;
+        totalPecas += qtdTotal;
         faturamentoPdv += fatItem;
         lucroReal += lucroItem;
 
         monthlyMap[mesIdx].invest += investItem;
         monthlyMap[mesIdx].fat += fatItem;
-        monthlyMap[mesIdx].pecas += item.qtdTotalUnidades || 0;
+        monthlyMap[mesIdx].pecas += qtdTotal;
         monthlyMap[mesIdx].lucro += lucroItem;
 
-        const key = item.codigo || item.descricao;
+        const key = (item.codigo && item.codigo.trim() !== '') ? item.codigo.trim().toUpperCase() : item.descricao.trim().toLowerCase();
         const curr = itemsMap.get(key) || { codigo: item.codigo || '', descricao: item.descricao, pecas: 0, caixas: 0, invest: 0, lucro: 0 };
-        curr.pecas += item.qtdTotalUnidades || 0;
-        curr.caixas += item.qtdPacotes || 0;
+        curr.pecas += qtdTotal;
+        curr.caixas += (Number(item.qtdPacotes) || 0);
         curr.invest += investItem;
         curr.lucro += lucroItem;
         itemsMap.set(key, curr);
       });
 
-      if (ord.inspection?.possuiAvarias && ord.inspection?.avarias) {
+      if (ord.inspection?.possuiAvarias && Array.isArray(ord.inspection?.avarias)) {
         ord.inspection.avarias.forEach(av => {
           totalAvariasPecas += Number(av.quantidade) || 0;
         });
       }
     });
 
-    const monthsLabels = ['Jan/26', 'Fev/26', 'Mar/26', 'Abr/26', 'Mai/26', 'Jun/26', 'Jul/26', 'Ago/26', 'Set/26', 'Out/26', 'Nov/26', 'Dez/26'];
-    const monthlyList: MonthlyChartData[] = monthsLabels.map((mesLabel, idx) => ({
-      mesLabel,
+    const monthShortNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const monthlyList: MonthlyChartData[] = monthShortNames.map((mesLabel, idx) => ({
+      mesLabel: `${mesLabel}/${String(currentYear).slice(2)}`,
       mesIndex: idx,
-      ano: 2026,
+      ano: currentYear,
       investimentoCompra: monthlyMap[idx].invest,
       faturamentoPdv: monthlyMap[idx].fat,
       lucroReal: monthlyMap[idx].lucro,
@@ -185,7 +209,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       monthlyList,
       topSupplierItems
     };
-  }, [supplierOrders]);
+  }, [supplierOrders, selectedSupplierObj, currentYear]);
 
   const maxSupplierMonthlyVal = useMemo(() => {
     return Math.max(...supplierBargainMetrics.monthlyList.map(m => m.investimentoCompra), 100);
@@ -256,7 +280,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Ano 2026
+              Ano {currentYear}
             </button>
             <button
               onClick={() => setFilter(prev => ({ ...prev, periodPreset: 'tudo' }))}
@@ -320,8 +344,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 2. Cards Executivos de Resumo com Valores em Linha Única */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
+      {allOrdersForDashboard.length === 0 ? (
+        <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-12 text-center shadow-xs">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center mb-4 shadow-inner">
+            <BarChart3 className="w-8 h-8" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            Nenhum Pedido de Compra Registrado
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-2 leading-relaxed">
+            O Painel Executivo e BI consolida dados em tempo real a partir dos pedidos salvos no banco de dados. Cadastre seu primeiro pedido de compra para visualizar indicadores financeiros, evolução de faturamento PDV, curva de itens e inteligência de barganha.
+          </p>
+          {onNavigateToOrders && (
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={onNavigateToOrders}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 transition shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Criar Novo Pedido de Compra
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* 2. Cards Executivos de Resumo com Valores em Linha Única */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
         
         {/* Total Compras */}
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
@@ -428,7 +477,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-emerald-500" />
-                    Evolução Mensal de Compras vs Faturamento PDV (2026)
+                    Evolução Mensal de Compras vs Faturamento PDV ({currentYear})
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Volume financeiro investido x receita gerada na ponta por mês
@@ -547,11 +596,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="font-bold text-blue-600 dark:text-blue-400">Cluster A (8 Lojas Grandes • 20 Pts)</span>
                       <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                        {metrics.clusterAllocation.A.toLocaleString('pt-BR')} un (51.3%)
+                        {metrics.clusterAllocation.A.toLocaleString('pt-BR')} un ({pctA.toFixed(1)}%)
                       </span>
                     </div>
                     <div className="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                      <div style={{ width: '51.3%' }} className="h-full bg-blue-500 rounded-full" />
+                      <div style={{ width: `${pctA}%` }} className="h-full bg-blue-500 rounded-full transition-all duration-300" />
                     </div>
                   </div>
 
@@ -559,11 +608,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="font-bold text-slate-600 dark:text-slate-300">Cluster B (8 Lojas Médias • 14 Pts)</span>
                       <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                        {metrics.clusterAllocation.B.toLocaleString('pt-BR')} un (35.9%)
+                        {metrics.clusterAllocation.B.toLocaleString('pt-BR')} un ({pctB.toFixed(1)}%)
                       </span>
                     </div>
                     <div className="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                      <div style={{ width: '35.9%' }} className="h-full bg-slate-400 rounded-full" />
+                      <div style={{ width: `${pctB}%` }} className="h-full bg-slate-400 rounded-full transition-all duration-300" />
                     </div>
                   </div>
 
@@ -571,11 +620,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="font-bold text-teal-600 dark:text-teal-400">Cluster C (4 Lojas/CD • 5 Pts)</span>
                       <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                        {metrics.clusterAllocation.C.toLocaleString('pt-BR')} un (12.8%)
+                        {metrics.clusterAllocation.C.toLocaleString('pt-BR')} un ({pctC.toFixed(1)}%)
                       </span>
                     </div>
                     <div className="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                      <div style={{ width: '12.8%' }} className="h-full bg-teal-500 rounded-full" />
+                      <div style={{ width: `${pctC}%` }} className="h-full bg-teal-500 rounded-full transition-all duration-300" />
                     </div>
                   </div>
                 </div>
@@ -695,7 +744,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-1">
                   <Sparkles className="w-4 h-4" />
-                  Fechamento Anual Consolidado (2026)
+                  Fechamento Anual Consolidado ({currentYear})
                 </span>
                 <h4 className="text-2xl font-extrabold text-white mt-1">
                   R$ {metrics.faturamentoPdv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -823,6 +872,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </tr>
                   );
                 })}
+                {metrics.topItems.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                      Nenhum produto encontrado para os filtros selecionados.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -965,7 +1021,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div>
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-emerald-500" />
-                      Evolução Mensal de Compras com {selectedSupplierObj.razaoSocial} (2026)
+                      Evolução Mensal de Compras com {selectedSupplierObj.razaoSocial} ({currentYear})
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       Histórico mês a mês do volume financeiro investido na fábrica / distribuidora
@@ -1121,6 +1177,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           </td>
                         </tr>
                       ))}
+                      {supplierBargainMetrics.topSupplierItems.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
+                            Nenhum item registrado para este fornecedor.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1210,6 +1273,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </tr>
                       );
                     })}
+                    {metrics.topSuppliers.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="py-8 text-center text-slate-400 text-xs">
+                          Nenhum fornecedor registrado para os filtros selecionados.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1217,6 +1287,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
 
         </div>
+      )}
+        </>
       )}
 
     </div>

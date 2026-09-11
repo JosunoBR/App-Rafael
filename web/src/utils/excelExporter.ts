@@ -210,6 +210,38 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   }
   ws.getRow(7).height = 20;
 
+  // Cálculo do Desconto Comercial
+  let totalBrutoMercadorias = 0;
+  let totalDescontoItens = 0;
+  filteredItems.forEach(item => {
+    const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
+    const pacotes = Number(item.qtdPacotes) || 0;
+    const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
+    const precoUnit = Number(item.precoUnitario) || 0;
+    const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
+    const valorLiquido = Number(item.valorTotalLiquido) || valorBruto;
+    totalBrutoMercadorias += valorBruto;
+    if (item.valorDescontoItem !== undefined && Number(item.valorDescontoItem) > 0) {
+      totalDescontoItens += Number(item.valorDescontoItem);
+    } else if (valorBruto > valorLiquido) {
+      totalDescontoItens += (valorBruto - valorLiquido);
+    }
+  });
+
+  let descontoComercialTexto = 'R$ 0,00';
+  if (order.header?.descontoComercialTotal !== undefined && Number(order.header.descontoComercialTotal) > 0) {
+    if (order.header.descontoComercialTipo === '%') {
+      const valR = (totalBrutoMercadorias * Number(order.header.descontoComercialTotal)) / 100;
+      descontoComercialTexto = `${Number(order.header.descontoComercialTotal)}% (${formatCurrency(valR)})`;
+    } else {
+      descontoComercialTexto = formatCurrency(Number(order.header.descontoComercialTotal));
+    }
+  } else if (totalDescontoItens > 0) {
+    descontoComercialTexto = formatCurrency(totalDescontoItens);
+  } else if (percentualOff > 0 && totalBrutoMercadorias > 0) {
+    descontoComercialTexto = formatCurrency((totalBrutoMercadorias * percentualOff) / 100);
+  }
+
   // Linhas de dados dos dois cards
   const cardRows = [
     {
@@ -226,14 +258,18 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     },
     {
       c1Label: 'E-mail Boletos / XML:', c1Val: 'als.conecta@gmail.com', c1Bold: true, c1Color: 'FF059669',
-      c2Label: 'Condição de Pagto:', c2Val: condicaoPagamento, c2Bold: true
+      c2Label: 'Desconto Comercial:', c2Val: descontoComercialTexto, c2Bold: true, c2Color: 'FF059669'
     },
     {
       c1Label: 'Compras / Faturamento:', c1Val: '(55) 9 9659-6315 (Rafael)  |  (55) 9 99691-0247 (Ketlyn)', c1Bold: false,
-      c2Label: 'Forma de Pagto:', c2Val: formaPagamento, c2Bold: false
+      c2Label: 'Condição de Pagto:', c2Val: condicaoPagamento, c2Bold: true
     },
     {
       c1Label: 'Financeiro:', c1Val: '(55) 9 3618-5609 (Bruna)', c1Bold: false,
+      c2Label: 'Forma de Pagto:', c2Val: formaPagamento, c2Bold: false
+    },
+    {
+      c1Label: '', c1Val: '', c1Bold: false,
       c2Label: 'Tipo de Frete:', c2Val: tipoFrete, c2Bold: false
     },
   ];
@@ -274,7 +310,8 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     }
   });
 
-  ws.getRow(14).height = 10; // Espaçador
+  const spacerRowNum = 8 + cardRows.length;
+  ws.getRow(spacerRowNum).height = 10; // Espaçador
 
   // ===========================================================================
   // 4. TABELA DE ITENS (9 Colunas com Cabeçalho Escuro #0F172A)
@@ -291,7 +328,8 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     'Valor Total'
   ];
 
-  const tableHeaderRow = ws.getRow(15);
+  const tableHeaderRowNum = spacerRowNum + 1;
+  const tableHeaderRow = ws.getRow(tableHeaderRowNum);
   tableHeaderRow.height = 24;
   headers.forEach((h, idx) => {
     const cell = tableHeaderRow.getCell(idx + 1);
@@ -312,7 +350,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   });
 
   // Linhas de Produtos com Cores Alternadas e Formatação
-  let currentRowNum = 16;
+  let currentRowNum = tableHeaderRowNum + 1;
   itemRowsData.forEach((it, idx) => {
     const row = ws.getRow(currentRowNum);
     row.height = 20;

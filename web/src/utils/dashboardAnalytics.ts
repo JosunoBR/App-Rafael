@@ -1,7 +1,5 @@
 import { PurchaseOrder, OrderItem, Supplier } from '../shared/types';
-import { DEFAULT_FISCAL_CONFIG, DEFAULT_STORES } from '../shared/constants';
-import { calculateItemFiscal } from '../shared/fiscalEngine';
-import { calculateAutomaticSeparation } from '../shared/separationEngine';
+import { toIsoDate } from './masks';
 
 export interface DashboardFilter {
   periodPreset: '30d' | 'trimestre' | 'semestre' | 'ano' | 'tudo' | 'custom';
@@ -69,118 +67,47 @@ export interface DashboardMetrics {
 }
 
 /**
- * Cria pedidos de demonstração históricos caso o usuário queira ver o dashboard preenchido com dados ricos de 2026.
+ * Converte qualquer string de data de pedido (ISO, DD/MM/AAAA, etc.) para Date válida de forma determinística
  */
-export function generateSeedOrders(): PurchaseOrder[] {
-  const fiscal = DEFAULT_FISCAL_CONFIG;
-  const stores = DEFAULT_STORES;
+export function parseOrderDate(dateStr?: string | null): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
 
-  const mockItemsPool = [
-    { codigo: 'BAZ-001', descricao: 'Pote Hermético Quadrado 1.5L', qtdPorPacote: 12, qtdPacotes: 100, preco: 4.85, pdv: 12.00 },
-    { codigo: 'BAZ-002', descricao: 'Organizador Multiuso Acrílico', qtdPorPacote: 24, qtdPacotes: 60, preco: 6.50, pdv: 16.90 },
-    { codigo: 'ALU-101', descricao: 'Conjunto Panelas Antiaderente 5 Peças', qtdPorPacote: 4, qtdPacotes: 80, preco: 68.00, pdv: 149.90 },
-    { codigo: 'BAZ-003', descricao: 'Cesto Organizador Trançado Médio', qtdPorPacote: 18, qtdPacotes: 90, preco: 8.20, pdv: 19.90 },
-    { codigo: 'VID-040', descricao: 'Jogo de Copos Vidro Diamond 6un', qtdPorPacote: 6, qtdPacotes: 150, preco: 14.50, pdv: 34.90 },
-    { codigo: 'BAZ-004', descricao: 'Cabide de Veludo Slim Preto 10un', qtdPorPacote: 20, qtdPacotes: 120, preco: 12.80, pdv: 29.90 },
-    { codigo: 'BAZ-005', descricao: 'Garrafa Térmica Inox 1L', qtdPorPacote: 12, qtdPacotes: 75, preco: 22.00, pdv: 49.90 },
-    { codigo: 'LIM-010', descricao: 'Mop Giratório com Balde 13L', qtdPorPacote: 4, qtdPacotes: 110, preco: 38.50, pdv: 89.90 }
-  ];
+  // Se já for ISO com T (ex: 2026-03-15T12:00:00.000Z)
+  if (trimmed.includes('T')) {
+    const dt = new Date(trimmed);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
 
-  const seedOrders: PurchaseOrder[] = [
-    // Trimestre 1 / 2026 (Jan/Fev/Mar)
-    createMockOrder('PED-0001', 'Plásticos & Utilidades do Brasil Ltda', 'Carlos Andrade', '2026-01-15', 5.0, 0, [
-      mockItemsPool[0], mockItemsPool[1], mockItemsPool[3]
-    ]),
-    createMockOrder('PED-0002', 'Indústria Metalúrgica Alumínios União Ltda', 'Roberto Lima', '2026-02-10', 8.0, 12.0, [
-      mockItemsPool[2], mockItemsPool[6]
-    ]),
-    createMockOrder('PED-0003', 'Distribuidora Paranaense de Bazar S/A', 'Mariana Souza', '2026-03-20', 3.0, 7.5, [
-      mockItemsPool[4], mockItemsPool[5]
-    ]),
+  // Tenta converter formato BR (DD/MM/AAAA) ou AAAA-MM-DD para ISO YYYY-MM-DD
+  const iso = toIsoDate(trimmed);
+  if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d, 12, 0, 0);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
 
-    // Trimestre 2 / 2026 (Abr/Mai/Jun)
-    createMockOrder('PED-0004', 'Plásticos & Utilidades do Brasil Ltda', 'Carlos Andrade', '2026-04-18', 6.0, 0, [
-      mockItemsPool[0], mockItemsPool[3], mockItemsPool[7]
-    ]),
-    createMockOrder('PED-0005', 'Distribuidora Paranaense de Bazar S/A', 'Mariana Souza', '2026-05-22', 4.0, 7.5, [
-      mockItemsPool[1], mockItemsPool[4], mockItemsPool[5]
-    ]),
-    createMockOrder('PED-0006', 'Indústria Metalúrgica Alumínios União Ltda', 'Roberto Lima', '2026-06-14', 5.0, 12.0, [
-      mockItemsPool[2], mockItemsPool[6]
-    ]),
-
-    // Trimestre 3 / 2026 (Jul/Ago)
-    createMockOrder('PED-0007', 'Plásticos & Utilidades do Brasil Ltda', 'Carlos Andrade', '2026-07-10', 5.0, 0, [
-      mockItemsPool[0], mockItemsPool[1], mockItemsPool[7]
-    ]),
-    createMockOrder('PED-0008', 'Distribuidora Paranaense de Bazar S/A', 'Mariana Souza', '2026-08-15', 5.0, 7.5, [
-      mockItemsPool[3], mockItemsPool[4], mockItemsPool[5]
-    ])
-  ];
-
-  return seedOrders;
+  const fallback = new Date(trimmed);
+  return isNaN(fallback.getTime()) ? null : fallback;
 }
 
-function createMockOrder(
-  numeroPedido: string, 
-  fornecedor: string, 
-  vendedor: string, 
-  dataPedido: string, 
-  descontoOff: number, 
-  stAliquota: number,
-  rawItems: any[]
-): PurchaseOrder {
-  const fiscal = DEFAULT_FISCAL_CONFIG;
-  const stores = DEFAULT_STORES;
+/**
+ * Obtém a data oficial do pedido considerando dataPedido, dataEmissao, createdAt ou updatedAt
+ */
+export function getOrderDate(order: PurchaseOrder): Date {
+  const parsed = parseOrderDate(order.header?.dataPedido) 
+    || parseOrderDate(order.header?.dataEmissao) 
+    || parseOrderDate(order.header?.createdAt) 
+    || parseOrderDate(order.header?.updatedAt);
+  return parsed || new Date();
+}
 
-  const items: OrderItem[] = rawItems.map((raw, idx) => {
-    const qtdTotalUnidades = raw.qtdPorPacote * raw.qtdPacotes;
-    const valorTotalBruto = qtdTotalUnidades * raw.preco;
-    const fiscalRes = calculateItemFiscal(raw.preco, raw.pdv, fiscal);
-    const sep = calculateAutomaticSeparation(qtdTotalUnidades, stores);
-
-    return {
-      id: `item_${numeroPedido}_${idx}`,
-      codigo: raw.codigo,
-      descricao: raw.descricao,
-      qtdPorPacote: raw.qtdPorPacote,
-      qtdPacotes: raw.qtdPacotes,
-      qtdTotalUnidades,
-      precoUnitario: raw.preco,
-      valorTotalBruto,
-      pdvAlvo: raw.pdv,
-      despesasPdvUnit: fiscalRes.despesasPdvUnit,
-      creditoIcmsUnit: fiscalRes.creditoIcmsUnit,
-      custoRealEfetivo: fiscalRes.custoRealEfetivo,
-      margemRealUnit: fiscalRes.margemRealUnit,
-      margemPercentual: fiscalRes.margemPercentual,
-      separacaoLojas: sep.allocations,
-      separacaoManual: false
-    };
-  });
-
-  return {
-    header: {
-      id: 'order_' + numeroPedido,
-      numeroPedido,
-      fornecedor,
-      vendedor,
-      condicaoPagamento: '30/60/90 Dias',
-      dataPedido,
-      dataEntregaPrevista: dataPedido,
-      percentualDescontoOff: descontoOff,
-      aliquotaSt: stAliquota,
-      observacoesDescarga: 'Descarga no CD.',
-      valorFreteGlobal: 0,
-      valorOutrasDespesasGlobal: 0,
-      status: 'Aprovado',
-      createdAt: dataPedido + 'T12:00:00.000Z',
-      updatedAt: dataPedido + 'T12:00:00.000Z'
-    },
-    items,
-    fiscalConfig: fiscal,
-    storeConfigs: stores
-  };
+/**
+ * Depreciado: Retorna array vazio para garantir que dados fictícios jamais poluam o BI oficial.
+ */
+export function generateSeedOrders(): PurchaseOrder[] {
+  return [];
 }
 
 /**
@@ -195,15 +122,17 @@ export function calculateDashboardMetrics(
 
   // 1. Filtrar pedidos por data e fornecedor
   const filteredOrders = allOrders.filter(order => {
+    if (!order || !order.header) return false;
+
     // Filtro de fornecedor
     if (filter.supplierId && filter.supplierId !== 'all') {
-      const matchSup = order.header.supplierId === filter.supplierId || 
-        order.header.fornecedor.toLowerCase().includes(filter.supplierId.toLowerCase());
+      const fornName = (order.header.fornecedor || '').toLowerCase();
+      const target = filter.supplierId.toLowerCase();
+      const matchSup = order.header.supplierId === filter.supplierId || fornName.includes(target);
       if (!matchSup) return false;
     }
 
-    const orderDate = new Date(order.header.dataPedido || order.header.createdAt);
-    if (isNaN(orderDate.getTime())) return true;
+    const orderDate = getOrderDate(order);
 
     if (filter.periodPreset === '30d') {
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
@@ -227,8 +156,8 @@ export function calculateDashboardMetrics(
     }
 
     if (filter.periodPreset === 'custom' && filter.startDate && filter.endDate) {
-      const start = new Date(filter.startDate);
-      const end = new Date(filter.endDate + 'T23:59:59');
+      const start = parseOrderDate(filter.startDate) || new Date(filter.startDate);
+      const end = parseOrderDate(filter.endDate) || new Date(filter.endDate + 'T23:59:59');
       return orderDate >= start && orderDate <= end;
     }
 
@@ -248,18 +177,19 @@ export function calculateDashboardMetrics(
 
   // 3. Processar cada pedido
   filteredOrders.forEach(order => {
-    const totalBrutoPedido = order.items.reduce((a, b) => a + (b.valorTotalBruto || 0), 0);
-    const descontoOff = (totalBrutoPedido * (order.header.percentualDescontoOff || 0)) / 100;
+    const items = order.items || [];
+    const totalBrutoPedido = items.reduce((a, b) => a + (Number(b.valorTotalBruto) || 0), 0);
+    const descontoOff = (totalBrutoPedido * (Number(order.header.percentualDescontoOff) || 0)) / 100;
     const subtotalAposDesconto = totalBrutoPedido - descontoOff;
-    const stAliquota = order.header.aliquotaSt || 0;
+    const stAliquota = Number(order.header.aliquotaSt) || 0;
     const stValorPedido = (subtotalAposDesconto * stAliquota) / 100;
-    const pedidoInvestimentoLiquido = subtotalAposDesconto + stValorPedido + (order.header.valorFreteGlobal || 0);
+    const pedidoInvestimentoLiquido = subtotalAposDesconto + stValorPedido + (Number(order.header.valorFreteGlobal) || 0);
 
     totalInvestido += pedidoInvestimentoLiquido;
     totalStValor += stValorPedido;
 
     // Fornecedor ranking
-    const supKey = order.header.fornecedor || 'Não identificado';
+    const supKey = order.header.fornecedor ? order.header.fornecedor.trim() : 'Não identificado';
     if (!suppliersMap[supKey]) {
       suppliersMap[supKey] = {
         id: order.header.supplierId || supKey,
@@ -275,18 +205,30 @@ export function calculateDashboardMetrics(
     suppliersMap[supKey].totalInvestimento += pedidoInvestimentoLiquido;
 
     // Itens
-    order.items.forEach(item => {
-      totalPecas += item.qtdTotalUnidades || 0;
-      const itemFaturamento = (item.qtdTotalUnidades || 0) * (item.pdvAlvo || 0);
-      const itemCustoReal = (item.qtdTotalUnidades || 0) * (item.custoRealEfetivo || 0);
+    items.forEach(item => {
+      if (!item || !item.descricao || item.descricao.trim() === '') return;
+      const qtdTotal = Number(item.qtdTotalUnidades) || 0;
+      const valorBruto = Number(item.valorTotalBruto) || 0;
+      if (qtdTotal <= 0 && valorBruto <= 0) return;
+
+      const pdvAlvo = Number(item.pdvAlvo) || 0;
+      const custoRealUnit = Number(item.custoRealEfetivo) || Number(item.precoUnitario) || 0;
+      const itemFaturamento = qtdTotal * pdvAlvo;
+      const itemCustoReal = qtdTotal * custoRealUnit;
+      const itemLucro = itemFaturamento - itemCustoReal;
+
+      totalPecas += qtdTotal;
       faturamentoPdv += itemFaturamento;
       custoRealTotal += itemCustoReal;
 
-      suppliersMap[supKey].totalPecas += item.qtdTotalUnidades || 0;
-      suppliersMap[supKey].totalLucro += (itemFaturamento - itemCustoReal);
+      suppliersMap[supKey].totalPecas += qtdTotal;
+      suppliersMap[supKey].totalLucro += itemLucro;
 
       // Agregação de item
-      const itemKey = item.descricao.trim().toLowerCase();
+      const itemKey = (item.codigo && item.codigo.trim() !== '') 
+        ? item.codigo.trim().toUpperCase() 
+        : item.descricao.trim().toLowerCase();
+
       if (!itemsMap[itemKey]) {
         itemsMap[itemKey] = {
           codigo: item.codigo,
@@ -299,16 +241,16 @@ export function calculateDashboardMetrics(
           pedidosCount: 0
         };
       }
-      itemsMap[itemKey].totalPecas += item.qtdTotalUnidades;
-      itemsMap[itemKey].totalInvestimento += item.valorTotalBruto;
+      itemsMap[itemKey].totalPecas += qtdTotal;
+      itemsMap[itemKey].totalInvestimento += valorBruto;
       itemsMap[itemKey].faturamentoPdv += itemFaturamento;
-      itemsMap[itemKey].lucroReal += (itemFaturamento - itemCustoReal);
+      itemsMap[itemKey].lucroReal += itemLucro;
       itemsMap[itemKey].pedidosCount += 1;
 
       // Clusters
-      if (item.separacaoLojas) {
-        order.storeConfigs?.forEach(store => {
-          const qtd = item.separacaoLojas?.[store.id] || 0;
+      if (item.separacaoLojas && Array.isArray(order.storeConfigs)) {
+        order.storeConfigs.forEach(store => {
+          const qtd = Number(item.separacaoLojas?.[store.id]) || 0;
           if (store.cluster === 'A') clusterAllocation.A += qtd;
           if (store.cluster === 'B') clusterAllocation.B += qtd;
           if (store.cluster === 'C') clusterAllocation.C += qtd;
@@ -334,8 +276,9 @@ export function calculateDashboardMetrics(
 
   // 4. Agregações por Trimestre, Semestre e Anual (de todos os pedidos do ano analisado)
   const baseYearOrders = allOrders.filter(o => {
-    const d = new Date(o.header.dataPedido || o.header.createdAt);
-    return !isNaN(d.getTime()) && d.getFullYear() === currentYear;
+    if (!o || !o.header) return false;
+    const d = getOrderDate(o);
+    return d.getFullYear() === currentYear;
   });
 
   const quarters = [
@@ -347,7 +290,7 @@ export function calculateDashboardMetrics(
 
   const quarterlySummary: PeriodSummary[] = quarters.map(q => {
     const qOrders = baseYearOrders.filter(o => {
-      const d = new Date(o.header.dataPedido || o.header.createdAt);
+      const d = getOrderDate(o);
       return q.months.includes(d.getMonth());
     });
     return summarizeOrdersGroup(q.label, qOrders);
@@ -360,7 +303,7 @@ export function calculateDashboardMetrics(
 
   const semesterSummary: PeriodSummary[] = semesters.map(s => {
     const sOrders = baseYearOrders.filter(o => {
-      const d = new Date(o.header.dataPedido || o.header.createdAt);
+      const d = getOrderDate(o);
       return s.months.includes(d.getMonth());
     });
     return summarizeOrdersGroup(s.label, sOrders);
@@ -374,7 +317,7 @@ export function calculateDashboardMetrics(
   const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   const monthlyData: MonthlyChartData[] = monthNames.map((mesLabel, mesIndex) => {
     const mOrders = baseYearOrders.filter(o => {
-      const d = new Date(o.header.dataPedido || o.header.createdAt);
+      const d = getOrderDate(o);
       return d.getMonth() === mesIndex;
     });
 
@@ -384,15 +327,18 @@ export function calculateDashboardMetrics(
     let mPecas = 0;
 
     mOrders.forEach(o => {
-      const bruto = o.items.reduce((a, b) => a + (b.valorTotalBruto || 0), 0);
-      const desc = (bruto * (o.header.percentualDescontoOff || 0)) / 100;
-      const stVal = ((bruto - desc) * (o.header.aliquotaSt || 0)) / 100;
-      mInvest += (bruto - desc + stVal + (o.header.valorFreteGlobal || 0));
+      const items = o.items || [];
+      const bruto = items.reduce((a, b) => a + (Number(b.valorTotalBruto) || 0), 0);
+      const desc = (bruto * (Number(o.header.percentualDescontoOff) || 0)) / 100;
+      const stVal = ((bruto - desc) * (Number(o.header.aliquotaSt) || 0)) / 100;
+      mInvest += (bruto - desc + stVal + (Number(o.header.valorFreteGlobal) || 0));
 
-      o.items.forEach(i => {
-        mPecas += i.qtdTotalUnidades || 0;
-        mFat += (i.qtdTotalUnidades || 0) * (i.pdvAlvo || 0);
-        mCusto += (i.qtdTotalUnidades || 0) * (i.custoRealEfetivo || 0);
+      items.forEach(i => {
+        if (!i || !i.descricao || i.descricao.trim() === '') return;
+        const q = Number(i.qtdTotalUnidades) || 0;
+        mPecas += q;
+        mFat += q * (Number(i.pdvAlvo) || 0);
+        mCusto += q * (Number(i.custoRealEfetivo) || Number(i.precoUnitario) || 0);
       });
     });
 
@@ -433,16 +379,19 @@ function summarizeOrdersGroup(label: string, orders: PurchaseOrder[]): PeriodSum
   let stVal = 0;
 
   orders.forEach(o => {
-    const bruto = o.items.reduce((a, b) => a + (b.valorTotalBruto || 0), 0);
-    const desc = (bruto * (o.header.percentualDescontoOff || 0)) / 100;
-    const st = ((bruto - desc) * (o.header.aliquotaSt || 0)) / 100;
+    const items = o.items || [];
+    const bruto = items.reduce((a, b) => a + (Number(b.valorTotalBruto) || 0), 0);
+    const desc = (bruto * (Number(o.header?.percentualDescontoOff) || 0)) / 100;
+    const st = ((bruto - desc) * (Number(o.header?.aliquotaSt) || 0)) / 100;
     stVal += st;
-    invest += (bruto - desc + st + (o.header.valorFreteGlobal || 0));
+    invest += (bruto - desc + st + (Number(o.header?.valorFreteGlobal) || 0));
 
-    o.items.forEach(i => {
-      pecas += i.qtdTotalUnidades || 0;
-      fat += (i.qtdTotalUnidades || 0) * (i.pdvAlvo || 0);
-      custo += (i.qtdTotalUnidades || 0) * (i.custoRealEfetivo || 0);
+    items.forEach(i => {
+      if (!i || !i.descricao || i.descricao.trim() === '') return;
+      const q = Number(i.qtdTotalUnidades) || 0;
+      pecas += q;
+      fat += q * (Number(i.pdvAlvo) || 0);
+      custo += q * (Number(i.custoRealEfetivo) || Number(i.precoUnitario) || 0);
     });
   });
 

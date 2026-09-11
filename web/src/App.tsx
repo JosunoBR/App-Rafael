@@ -790,7 +790,7 @@ export function App() {
         contatoVendedor: targetSup.contatoVendedor || prev.header.contatoVendedor,
         condicaoPagamento: template.condicaoPagamento || targetSup.condicaoPagamentoPadrao || prev.header.condicaoPagamento,
         aliquotaSt: template.aliquotaSt !== undefined ? template.aliquotaSt : (targetSup.aliquotaStPadrao || 0),
-        percentualDescontoOff: template.descontoOff !== undefined ? template.descontoOff : (targetSup.descontoOffPadrao || 0),
+        percentualDescontoOff: template.descontoOff !== undefined ? template.descontoOff : 0,
         percentualNota: template.percentualNota !== undefined ? template.percentualNota : (targetSup.percentualNotaPadrao || 100),
         observacoesDescarga: template.observacoes || prev.header.observacoesDescarga
       };
@@ -1612,7 +1612,7 @@ export function App() {
         contatoVendedor: sup.contatoVendedor || prev.header.contatoVendedor,
         condicaoPagamento: sup.condicaoPagamentoPadrao || prev.header.condicaoPagamento,
         aliquotaSt: sup.aliquotaStPadrao !== undefined ? sup.aliquotaStPadrao : prev.header.aliquotaSt,
-        percentualDescontoOff: sup.descontoOffPadrao !== undefined ? sup.descontoOffPadrao : prev.header.percentualDescontoOff,
+        percentualDescontoOff: 0,
         percentualNota: sup.percentualNotaPadrao !== undefined ? sup.percentualNotaPadrao : (prev.header.percentualNota ?? 100),
         // A descrição do pedido é independente do fornecedor
         observacoesDescarga: prev.header.observacoesDescarga || prev.header.observacoes || '',

@@ -137,7 +137,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
         contatoVendedor: sup.contatoVendedor || order.header.contatoVendedor,
         condicaoPagamento: sup.condicaoPagamentoPadrao || order.header.condicaoPagamento,
         aliquotaSt: sup.aliquotaStPadrao !== undefined ? sup.aliquotaStPadrao : order.header.aliquotaSt,
-        percentualDescontoOff: sup.descontoOffPadrao !== undefined ? sup.descontoOffPadrao : order.header.percentualDescontoOff,
+        percentualDescontoOff: 0,
         // A descrição do pedido é independente do fornecedor
         observacoesDescarga: order.header.observacoesDescarga || order.header.observacoes || '',
         observacoes: order.header.observacoes || order.header.observacoesDescarga || ''

@@ -241,9 +241,6 @@ class ExportService {
     doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 16.1);
     doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 19.9);
     doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 23.7);
-    doc.setTextColor(5, 150, 105);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Previsão de Entrega: ${dataEntrega}`, card2X + 3, cardY + 27.2);
 
     // =========================================================================
     // 4. TABELA DE ITENS (SEM Código Interno e SEM Desconto)

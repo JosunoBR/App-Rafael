@@ -87,14 +87,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     (s.nomeFantasia && s.nomeFantasia.toLowerCase() === (header.fornecedor || '').toLowerCase())
   );
 
-  // Alíquota de ST, Desconto OFF e Percentual de Nota do cadastro do fornecedor ou do header
+  // Alíquota de ST e Percentual de Nota do cadastro do fornecedor ou do header
   const aliquotaStCadastrada = currentSupplier?.aliquotaStPadrao !== undefined 
     ? currentSupplier.aliquotaStPadrao 
     : (header.aliquotaSt ?? 0);
-
-  const offCadastrado = currentSupplier?.descontoOffPadrao !== undefined
-    ? currentSupplier.descontoOffPadrao
-    : (header.percentualDescontoOff ?? 0);
 
   const notaCadastrada = currentSupplier?.percentualNotaPadrao !== undefined
     ? currentSupplier.percentualNotaPadrao
@@ -114,11 +110,6 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
     if (currentSupplier.aliquotaStPadrao !== undefined && header.aliquotaSt !== currentSupplier.aliquotaStPadrao) {
       updatedHeader.aliquotaSt = currentSupplier.aliquotaStPadrao;
-      needsUpdate = true;
-    }
-
-    if (currentSupplier.descontoOffPadrao !== undefined && header.percentualDescontoOff !== currentSupplier.descontoOffPadrao) {
-      updatedHeader.percentualDescontoOff = currentSupplier.descontoOffPadrao;
       needsUpdate = true;
     }
 
@@ -630,7 +621,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       parcelasCount: supParsed.parcelas,
       prazoDias: supParsed.prazo,
       aliquotaSt: supplier.aliquotaStPadrao || 0,
-      percentualDescontoOff: supplier.descontoOffPadrao !== undefined ? supplier.descontoOffPadrao : 0,
+      percentualDescontoOff: 0,
       percentualNota: supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : (header.percentualNota ?? 100),
       observacoesDescarga: supplier.observacoesDescarga || header.observacoesDescarga || header.observacoes || ''
     });

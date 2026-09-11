@@ -218,12 +218,12 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     let subtotalGeral = 0;
 
     const filteredItems = (order.items || []).filter(it =>
-      Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoFornecedor?.trim() || it.referencia?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0)
+      Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoFornecedor?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0)
     );
 
     const bodyRows = filteredItems.map((item, idx) => {
-      const codBarras = item.codigoBarras || item.eanBarcode || '-';
-      const refFornec = item.codigoFornecedor || item.referencia || item.codigo || '-';
+      const codBarras = item.codigoBarras || (item as any).eanBarcode || '-';
+      const refFornec = item.codigoFornecedor || (item as any).referencia || item.codigo || '-';
       const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
       const pacotes = Number(item.qtdPacotes) || 0;
       const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
@@ -395,7 +395,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     // =========================================================================
     // 6. RODAPÉ DE PÁGINA EM TODAS AS PÁGINAS
     // =========================================================================
-    const totalPages = doc.internal.getNumberOfPages();
+    const totalPages = (doc.internal as any).getNumberOfPages ? (doc.internal as any).getNumberOfPages() : ((doc as any).getNumberOfPages ? (doc as any).getNumberOfPages() : 1);
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
       doc.setDrawColor(226, 232, 240);

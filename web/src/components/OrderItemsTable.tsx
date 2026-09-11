@@ -775,14 +775,21 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
   // Navegação completa por teclado estilo planilha Excel (Setas Cima, Baixo, Esquerda, Direita e Enter)
   const handleExcelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, field: string) => {
-    if (activeAutocompleteItemId) {
-      if (e.key === 'Escape') {
+    const isDown = e.key === 'ArrowDown' || e.key === 'Down';
+    const isUp = e.key === 'ArrowUp' || e.key === 'Up';
+    const isRight = e.key === 'ArrowRight' || e.key === 'Right';
+    const isLeft = e.key === 'ArrowLeft' || e.key === 'Left';
+    const isEnter = e.key === 'Enter';
+
+    if (e.key === 'Escape' && activeAutocompleteItemId) {
+      setActiveAutocompleteItemId(null);
+      return;
+    }
+
+    // Se for uma das teclas de navegação, fecha o autocomplete para liberar a navegação entre células
+    if (isDown || isUp || isRight || isLeft || isEnter) {
+      if (activeAutocompleteItemId) {
         setActiveAutocompleteItemId(null);
-        return;
-      }
-      // Se autocomplete estiver aberto na busca, permite setas cima/baixo para navegar opções do dropdown
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        return;
       }
     }
 
@@ -799,7 +806,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       );
       if (nextInput) {
         nextInput.focus();
-        nextInput.select();
+        try {
+          nextInput.select();
+        } catch (_) {}
         return true;
       }
       return false;
@@ -812,7 +821,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
     try {
       const input = e.currentTarget;
-      if (input.type === 'number') {
+      // Para campos numéricos ou códigos, a navegação horizontal com setas é imediata
+      const isNumericOrCode = input.type === 'number' || ['qtdNoPacote', 'qtdPacotes', 'qtdTotalUnidades', 'precoUnitario', 'pdvAlvo', 'codigoBarras'].includes(field);
+      if (isNumericOrCode) {
         isAtStart = true;
         isAtEnd = true;
         isAllSelected = true;
@@ -831,21 +842,21 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     }
 
     // 1. SETA PARA BAIXO (↓)
-    if (e.key === 'ArrowDown' && !e.altKey) {
+    if (isDown && !e.altKey) {
       e.preventDefault();
       focusCell(rowIndex + 1, field);
       return;
     }
 
     // 2. SETA PARA CIMA (↑)
-    if (e.key === 'ArrowUp' && !e.altKey && rowIndex > 0) {
+    if (isUp && !e.altKey && rowIndex > 0) {
       e.preventDefault();
       focusCell(rowIndex - 1, field);
       return;
     }
 
     // 3. SETA PARA DIREITA (→)
-    if (e.key === 'ArrowRight' && !e.altKey && isAtEnd) {
+    if (isRight && !e.altKey && isAtEnd) {
       e.preventDefault();
       if (currentColIdx >= 0 && currentColIdx < visibleEditableCols.length - 1) {
         // Próxima coluna na mesma linha
@@ -858,7 +869,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     }
 
     // 4. SETA PARA ESQUERDA (←)
-    if (e.key === 'ArrowLeft' && !e.altKey && isAtStart) {
+    if (isLeft && !e.altKey && isAtStart) {
       e.preventDefault();
       if (currentColIdx > 0) {
         // Coluna anterior na mesma linha
@@ -871,7 +882,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     }
 
     // 5. ENTER
-    if (e.key === 'Enter') {
+    if (isEnter) {
       e.preventDefault();
       if (e.shiftKey) {
         // Shift+Enter sobe de linha

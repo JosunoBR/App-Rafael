@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Calculator, 
   ChevronDown, 
@@ -70,15 +70,37 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
     ? valorFreteHeader
     : (totalMercadorias > 0 && fretePct > 0 ? Number((totalMercadorias * (fretePct / 100)).toFixed(2)) : 0);
 
-  // Handler para campos de porcentagem usando handleOneDecimalInput (1 casa decimal)
-  const handleRateChange = (
+  // Controle de edição com limpeza instantânea ao clicar/focar
+  const [activeField, setActiveField] = useState<string | null>(null);
+  const [activeInputText, setActiveInputText] = useState<string>('');
+  const [presetInputValue, setPresetInputValue] = useState<string>('Padrão Rede (Supermercado)');
+  const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState(false);
+
+  const [activeSimPreco, setActiveSimPreco] = useState(false);
+  const [tempSimPreco, setTempSimPreco] = useState('');
+
+  const handleFieldFocus = (fieldKey: string) => {
+    setActiveField(fieldKey);
+    setActiveInputText(''); // Limpa a caixa de texto ao clicar/focar para digitar livremente
+  };
+
+  const handleFieldBlur = () => {
+    setActiveField(null);
+    setActiveInputText('');
+  };
+
+  const handleFieldInputChange = (
     field: keyof FiscalConfig,
-    inputValue: string,
+    rawText: string,
     isST: boolean = false
   ) => {
-    const { value } = handleOneDecimalInput(inputValue);
-    const decimalValue = Number((value / 100).toFixed(4));
-    
+    // Permite digitação livre de números, vírgula e ponto
+    const sanitized = rawText.replace(/[^0-9,\.]/g, '');
+    setActiveInputText(sanitized);
+
+    const parsedNum = parseFloat(sanitized.replace(',', '.')) || 0;
+    const decimalValue = Number((parsedNum / 100).toFixed(4));
+
     const updated: FiscalConfig = {
       ...fiscalConfig,
       [field]: decimalValue
@@ -86,17 +108,33 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
 
     if (isST) {
       updated.aliquotaSt = decimalValue;
-      if (onUpdateHeaderSt) {
-        onUpdateHeaderSt(value); // sincroniza o header
-      }
-    }
-
-    if (field === 'freteAliquota' && onUpdateHeaderFrete) {
-      const calcFrete = totalMercadorias > 0 ? Number((totalMercadorias * decimalValue).toFixed(2)) : 0;
-      onUpdateHeaderFrete(calcFrete);
     }
 
     onChangeFiscalConfig(updated);
+  };
+
+  const getDisplayValue = (fieldKey: string, currentPct: number) => {
+    if (activeField === fieldKey) {
+      return activeInputText;
+    }
+    return currentPct > 0 ? currentPct.toFixed(1).replace('.', ',') : '0,0';
+  };
+
+  const handleSimPrecoFocus = () => {
+    setActiveSimPreco(true);
+    setTempSimPreco(''); // Limpa o campo de simulação ao clicar
+  };
+
+  const handleSimPrecoChange = (raw: string) => {
+    const sanitized = raw.replace(/[^0-9,\.]/g, '');
+    setTempSimPreco(sanitized);
+    const parsed = parseFloat(sanitized.replace(',', '.')) || 0;
+    setSimPreco(parsed);
+  };
+
+  const handleSimPrecoBlur = () => {
+    setActiveSimPreco(false);
+    setTempSimPreco('');
   };
 
   // Cálculo da simulação em tempo real
@@ -111,47 +149,63 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
   }, [fiscalPresets]);
 
   const [selectedPresetId, setSelectedPresetId] = useState<string>('preset_fiscal_padrao');
-  const [presetInputValue, setPresetInputValue] = useState<string>('Padrão Geral');
-  const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  // Sincroniza o valor do campo com o nome do modelo selecionado
+  useEffect(() => {
+    const cur = presetsList.find(p => p.id === selectedPresetId);
+    if (cur && !isPresetDropdownOpen && (!presetInputValue || presetInputValue === '')) {
+      setPresetInputValue(cur.name);
+    }
+  }, [presetsList, selectedPresetId, isPresetDropdownOpen]);
 
   const showFeedback = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setActionFeedback({ text, type });
     setTimeout(() => setActionFeedback(null), 3500);
   };
 
+  // Ao focar/clicar no campo do dropdown, limpa o texto para digitar livremente e abre as opções
+  const handlePresetInputFocus = () => {
+    setPresetInputValue('');
+    setIsPresetDropdownOpen(true);
+  };
+
+  // Ao perder o foco, se o campo estiver vazio, restaura o nome do modelo ativo
+  const handlePresetInputBlur = () => {
+    setTimeout(() => {
+      if (!presetInputValue.trim()) {
+        const cur = presetsList.find(p => p.id === selectedPresetId) || presetsList[0];
+        if (cur) {
+          setPresetInputValue(cur.name);
+        }
+      }
+    }, 250);
+  };
+
   // Aplicar modelo fiscal ao pedido atual
   const handleApplyPreset = (targetPreset: FiscalPreset) => {
     const updated: FiscalConfig = {
-      ipiAliquota: targetPreset.ipiAliquota,
-      aliquotaSt: targetPreset.aliquotaSt,
-      freteAliquota: targetPreset.freteAliquota,
-      creditoEntradaICMS: targetPreset.creditoEntradaICMS,
-      custosFixos: targetPreset.custosFixos,
-      icmsAliquota: targetPreset.icmsAliquota,
-      pisCofinsAliquota: targetPreset.pisCofinsAliquota
+      ipiAliquota: normalizeRateToDecimal(targetPreset.ipiAliquota, 0),
+      aliquotaSt: normalizeRateToDecimal(targetPreset.aliquotaSt, 0),
+      freteAliquota: normalizeRateToDecimal(targetPreset.freteAliquota, 0),
+      creditoEntradaICMS: normalizeRateToDecimal(targetPreset.creditoEntradaICMS, 0.12),
+      custosFixos: normalizeRateToDecimal(targetPreset.custosFixos, 0.26),
+      icmsAliquota: normalizeRateToDecimal(targetPreset.icmsAliquota, 0.195),
+      pisCofinsAliquota: normalizeRateToDecimal(targetPreset.pisCofinsAliquota, 0.06)
     };
 
+    // Aplica diretamente todas as alíquotas ao pedido
     onChangeFiscalConfig(updated);
-
-    if (onUpdateHeaderSt) {
-      const stPerc = Number(((targetPreset.aliquotaSt || 0) * 100).toFixed(1));
-      onUpdateHeaderSt(stPerc);
-    }
-
-    if (onUpdateHeaderFrete) {
-      const fretePerc = targetPreset.freteAliquota || 0;
-      const calcFrete = totalMercadorias > 0 ? Number((totalMercadorias * fretePerc).toFixed(2)) : 0;
-      onUpdateHeaderFrete(calcFrete);
-    }
 
     setSelectedPresetId(targetPreset.id);
     setPresetInputValue(targetPreset.name);
     setIsPresetDropdownOpen(false);
+    setActiveField(null);
+    setActiveInputText('');
     showFeedback(`Modelo fiscal "${targetPreset.name}" aplicado ao pedido!`, 'success');
   };
 
-  // Salvar alíquotas atualmente configuradas como um modelo no banco
+  // Salvar alíquotas atualmente configuradas diretamente pelo nome digitado no campo
   const handleSaveCurrentPreset = async () => {
     const name = presetInputValue.trim();
     if (!name) {
@@ -183,7 +237,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
       setSelectedPresetId(newPreset.id);
       setPresetInputValue(newPreset.name);
       setIsPresetDropdownOpen(false);
-      showFeedback(`⭐ Modelo fiscal "${newPreset.name}" salvo no banco com sucesso!`, 'success');
+      showFeedback(`⭐ Modelo fiscal "${newPreset.name}" salvo com sucesso!`, 'success');
     } catch (err: any) {
       showFeedback(`Erro ao salvar modelo: ${err.message}`, 'error');
     }
@@ -196,29 +250,16 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
 
     try {
       await onDeleteFiscalPreset(presetId);
-      const defaultP = presetsList.find(p => p.isDefault) || presetsList[0];
+      const defaultP = presetsList.find(p => p.isDefault && p.id !== presetId) || presetsList.find(p => p.id !== presetId) || presetsList[0];
       if (defaultP) {
         setSelectedPresetId(defaultP.id);
         setPresetInputValue(defaultP.name);
+        handleApplyPreset(defaultP);
       }
       showFeedback(`Modelo fiscal "${presetName}" excluído com sucesso.`, 'info');
     } catch (err: any) {
       showFeedback(`Erro ao excluir modelo: ${err.message}`, 'error');
     }
-  };
-
-  // Excluir modelo customizado atualmente selecionado
-  const handleDeleteSelectedPreset = async () => {
-    const targetPreset = presetsList.find(p => p.id === selectedPresetId || p.name.trim().toLowerCase() === presetInputValue.trim().toLowerCase());
-    if (!targetPreset) {
-      showFeedback('Nenhum modelo selecionado para exclusão.', 'info');
-      return;
-    }
-    if (targetPreset.isDefault) {
-      showFeedback('O modelo oficial "Padrão Geral" não pode ser excluído.', 'info');
-      return;
-    }
-    await handleDeletePresetDirect(targetPreset.id, targetPreset.name);
   };
 
   return (
@@ -313,32 +354,44 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
               </div>
             </div>
 
-            {/* Direita: Seletor de Modelo, Dropdown, Aplicar, Salvar e Excluir */}
+            {/* Direita: Seletor de Modelo Único (Combobox), Aplicar e Salvar */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Modelo:</span>
-              <div className="relative min-w-[200px] sm:w-56">
-                <div className="flex items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                Modelo:
+              </label>
+
+              <div className="relative min-w-[220px] sm:w-64">
+                <div className="flex items-center rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-xs focus-within:ring-2 focus-within:ring-emerald-500">
                   <input
                     type="text"
                     value={presetInputValue}
+                    onFocus={handlePresetInputFocus}
+                    onClick={handlePresetInputFocus}
+                    onBlur={handlePresetInputBlur}
                     onChange={(e) => {
                       setPresetInputValue(e.target.value);
                       setIsPresetDropdownOpen(true);
                     }}
-                    onFocus={() => setIsPresetDropdownOpen(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && presetInputValue.trim()) {
+                        e.preventDefault();
+                        handleSaveCurrentPreset();
+                      }
+                    }}
                     placeholder="Nome do modelo..."
-                    className="w-full text-xs font-bold px-2.5 py-1.5 bg-transparent text-slate-900 dark:text-white outline-hidden truncate"
+                    className="w-full text-xs font-bold px-3 py-1.5 bg-transparent text-slate-900 dark:text-white outline-hidden truncate cursor-text"
                   />
                   <button
                     type="button"
                     onClick={() => setIsPresetDropdownOpen(!isPresetDropdownOpen)}
                     className="p-1.5 text-slate-400 hover:text-emerald-600 transition cursor-pointer shrink-0"
+                    title="Ver opções de modelos"
                   >
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isPresetDropdownOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 transition-transform ${isPresetDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
                 </div>
 
-                {/* Dropdown de Modelos com Botão de Lixeira para Cada Item Salvo */}
+                {/* Dropdown de Modelos com Opção de Aplicar e Excluir */}
                 {isPresetDropdownOpen && (
                   <>
                     <div className="fixed inset-0 z-20" onClick={() => setIsPresetDropdownOpen(false)} />
@@ -353,11 +406,14 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                           }`}
                         >
                           <div 
-                            onClick={() => handleApplyPreset(p)}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleApplyPreset(p);
+                            }}
                             className="flex-1 truncate cursor-pointer mr-2"
                             title="Clique para aplicar este modelo"
                           >
-                            <span>{p.name}</span>
+                            <span>{p.isDefault ? `⭐ ${p.name}` : p.name}</span>
                             {p.description && (
                               <span className="block text-[10px] font-normal text-slate-400 truncate">
                                 {p.description}
@@ -367,14 +423,15 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
 
                           {p.isDefault ? (
                             <span className="text-[10px] text-amber-500 font-extrabold ml-2 shrink-0 select-none">
-                              ⭐ Padrão Rede
+                              Padrão
                             </span>
                           ) : (
                             onDeleteFiscalPreset && (
                               <button
                                 type="button"
-                                onClick={(e) => {
+                                onMouseDown={(e) => {
                                   e.stopPropagation();
+                                  e.preventDefault();
                                   handleDeletePresetDirect(p.id, p.name);
                                 }}
                                 className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer shrink-0 ml-1"
@@ -391,48 +448,18 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 )}
               </div>
 
-              {/* Botão Aplicar */}
-              <button
-                type="button"
-                onClick={() => {
-                  const target = presetsList.find(p => p.id === selectedPresetId || p.name.trim().toLowerCase() === presetInputValue.trim().toLowerCase());
-                  if (target) {
-                    handleApplyPreset(target);
-                  } else {
-                    showFeedback('Selecione um modelo da lista para aplicar.', 'info');
-                  }
-                }}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
-                title="Aplicar modelo selecionado ao pedido atual"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Aplicar</span>
-              </button>
 
-              {/* Botão Salvar no Banco SQLite */}
+              {/* Botão Salvar (Salva diretamente com o nome do campo) */}
               {onSaveFiscalPreset && (
                 <button
                   type="button"
                   onClick={handleSaveCurrentPreset}
                   disabled={!presetInputValue.trim()}
-                  className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition cursor-pointer disabled:opacity-50"
-                  title="Salvar alíquotas configuradas neste card como um modelo no banco de dados"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition cursor-pointer disabled:opacity-50 shadow-xs"
+                  title="Salvar alíquotas configuradas com o nome digitado no campo"
                 >
                   <Bookmark className="w-3.5 h-3.5" />
                   <span>Salvar</span>
-                </button>
-              )}
-
-              {/* Botão Excluir Visível */}
-              {onDeleteFiscalPreset && !Boolean(presetsList.find(p => (p.id === selectedPresetId || p.name.trim().toLowerCase() === presetInputValue.trim().toLowerCase()) && p.isDefault)) && (
-                <button
-                  type="button"
-                  onClick={handleDeleteSelectedPreset}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 transition cursor-pointer shadow-xs"
-                  title="Excluir o modelo customizado selecionado"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Excluir</span>
                 </button>
               )}
             </div>
@@ -460,7 +487,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 </span>
               </div>
 
-              {/* INPUTS DE ENTRADA */}
+              {/* INPUTS DE ENTRADA (Limpam automaticamente ao clicar) */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -469,8 +496,12 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={ipiPct > 0 ? ipiPct.toFixed(1).replace('.', ',') : '0,0'}
-                      onChange={(e) => handleRateChange('ipiAliquota', e.target.value)}
+                      value={getDisplayValue('ipiAliquota', ipiPct)}
+                      onFocus={() => handleFieldFocus('ipiAliquota')}
+                      onClick={() => handleFieldFocus('ipiAliquota')}
+                      onBlur={handleFieldBlur}
+                      onChange={(e) => handleFieldInputChange('ipiAliquota', e.target.value)}
+                      placeholder="0,0"
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
@@ -484,8 +515,12 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={stPct > 0 ? stPct.toFixed(1).replace('.', ',') : '0,0'}
-                      onChange={(e) => handleRateChange('aliquotaSt', e.target.value, true)}
+                      value={getDisplayValue('aliquotaSt', stPct)}
+                      onFocus={() => handleFieldFocus('aliquotaSt')}
+                      onClick={() => handleFieldFocus('aliquotaSt')}
+                      onBlur={handleFieldBlur}
+                      onChange={(e) => handleFieldInputChange('aliquotaSt', e.target.value, true)}
+                      placeholder="0,0"
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
@@ -506,8 +541,12 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={fretePct > 0 ? fretePct.toFixed(1).replace('.', ',') : '0,0'}
-                      onChange={(e) => handleRateChange('freteAliquota', e.target.value)}
+                      value={getDisplayValue('freteAliquota', fretePct)}
+                      onFocus={() => handleFieldFocus('freteAliquota')}
+                      onClick={() => handleFieldFocus('freteAliquota')}
+                      onBlur={handleFieldBlur}
+                      onChange={(e) => handleFieldInputChange('freteAliquota', e.target.value)}
+                      placeholder="0,0"
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
@@ -525,11 +564,14 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="flex items-center gap-1 font-mono text-[11px]">
                     <span className="text-slate-500">VALOR PRODUTO:</span>
                     <input
-                      type="number"
-                      step="0.10"
-                      value={simPreco}
-                      onChange={(e) => setSimPreco(parseFloat(e.target.value) || 0)}
-                      className="w-16 px-1 py-0.5 text-right font-bold text-emerald-600 bg-slate-50 dark:bg-slate-800 border rounded"
+                      type="text"
+                      value={activeSimPreco ? tempSimPreco : (simPreco > 0 ? simPreco.toFixed(2).replace('.', ',') : '0,00')}
+                      onFocus={handleSimPrecoFocus}
+                      onClick={handleSimPrecoFocus}
+                      onBlur={handleSimPrecoBlur}
+                      onChange={(e) => handleSimPrecoChange(e.target.value)}
+                      placeholder="0,00"
+                      className="w-16 px-1 py-0.5 text-right font-bold text-emerald-600 bg-slate-50 dark:bg-slate-800 border rounded outline-hidden"
                     />
                   </div>
                 </div>
@@ -586,7 +628,7 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 </span>
               </div>
 
-              {/* INPUTS DE SAÍDA */}
+              {/* INPUTS DE SAÍDA (Limpam automaticamente ao clicar) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1" title="Crédito de ICMS de Entrada a descontar do produto">
@@ -595,8 +637,12 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={icmsEntradaPct > 0 ? icmsEntradaPct.toFixed(1).replace('.', ',') : '0,0'}
-                      onChange={(e) => handleRateChange('creditoEntradaICMS', e.target.value)}
+                      value={getDisplayValue('creditoEntradaICMS', icmsEntradaPct)}
+                      onFocus={() => handleFieldFocus('creditoEntradaICMS')}
+                      onClick={() => handleFieldFocus('creditoEntradaICMS')}
+                      onBlur={handleFieldBlur}
+                      onChange={(e) => handleFieldInputChange('creditoEntradaICMS', e.target.value)}
+                      placeholder="0,0"
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
@@ -613,8 +659,12 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={custoFixoPct > 0 ? custoFixoPct.toFixed(1).replace('.', ',') : '0,0'}
-                      onChange={(e) => handleRateChange('custosFixos', e.target.value)}
+                      value={getDisplayValue('custosFixos', custoFixoPct)}
+                      onFocus={() => handleFieldFocus('custosFixos')}
+                      onClick={() => handleFieldFocus('custosFixos')}
+                      onBlur={handleFieldBlur}
+                      onChange={(e) => handleFieldInputChange('custosFixos', e.target.value)}
+                      placeholder="0,0"
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
@@ -631,8 +681,12 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={icmsSaidaPct > 0 ? icmsSaidaPct.toFixed(1).replace('.', ',') : '0,0'}
-                      onChange={(e) => handleRateChange('icmsAliquota', e.target.value)}
+                      value={getDisplayValue('icmsAliquota', icmsSaidaPct)}
+                      onFocus={() => handleFieldFocus('icmsAliquota')}
+                      onClick={() => handleFieldFocus('icmsAliquota')}
+                      onBlur={handleFieldBlur}
+                      onChange={(e) => handleFieldInputChange('icmsAliquota', e.target.value)}
+                      placeholder="0,0"
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
@@ -649,8 +703,12 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <div className="relative">
                     <input
                       type="text"
-                      value={pisCofinsPct > 0 ? pisCofinsPct.toFixed(1).replace('.', ',') : '0,0'}
-                      onChange={(e) => handleRateChange('pisCofinsAliquota', e.target.value)}
+                      value={getDisplayValue('pisCofinsAliquota', pisCofinsPct)}
+                      onFocus={() => handleFieldFocus('pisCofinsAliquota')}
+                      onClick={() => handleFieldFocus('pisCofinsAliquota')}
+                      onBlur={handleFieldBlur}
+                      onChange={(e) => handleFieldInputChange('pisCofinsAliquota', e.target.value)}
+                      placeholder="0,0"
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
                     <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>

@@ -1363,17 +1363,20 @@ export function App() {
   };
 
   const handleDeleteStockItem = async (stockId: string) => {
+    // Atualização otimista imediata na UI e storage local
+    setCentralStock(prev => {
+      const updated = prev.filter(s => s.id !== stockId);
+      saveCentralStock(updated);
+      return updated;
+    });
+
     try {
       await deleteStockItemFromDb(stockId);
       const updatedList = await fetchStockFromDb();
       setCentralStock(updatedList);
       saveCentralStock(updatedList);
-      showToast('Item excluído do estoque central.', 'success');
+      showToast('Item excluído do estoque central!', 'success');
     } catch {
-      const current = loadCentralStock();
-      const updated = current.filter(s => s.id !== stockId);
-      saveCentralStock(updated);
-      setCentralStock(updated);
       showToast('Item excluído localmente.', 'info');
     }
   };
@@ -2031,7 +2034,6 @@ export function App() {
                   onSaveNewStockItem={handleSaveNewStockItem}
                   onGenerateStockSeparation={handleGenerateStockSeparation}
                   onNavigateToSeparation={() => setActiveNav('separation')}
-                  onClearAllStock={handleClearAllStock}
                   onDeleteStockItem={handleDeleteStockItem}
                 />
               )}

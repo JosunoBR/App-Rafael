@@ -34,7 +34,6 @@ interface CentralStockPageProps {
   onSaveNewStockItem: (item: CentralStockItem) => void;
   onGenerateStockSeparation: (itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>) => void;
   onNavigateToSeparation: () => void;
-  onClearAllStock?: () => void;
   onDeleteStockItem?: (stockId: string) => void;
 }
 
@@ -48,7 +47,6 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   onSaveNewStockItem,
   onGenerateStockSeparation,
   onNavigateToSeparation,
-  onClearAllStock,
   onDeleteStockItem
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -260,22 +258,6 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             <span>+ Dar Entrada / Novo Item</span>
           </button>
 
-          {/* Botão temporário para Limpar Todo o Estoque */}
-          {stockItems.length > 0 && onClearAllStock && (
-            <button
-              onClick={() => {
-                if (window.confirm('⚠️ ATENÇÃO: Deseja realmente excluir TODOS os itens do estoque da matriz?\n\nEsta ação limpará permanentemente todos os produtos cadastrados no estoque do banco de dados.')) {
-                  onClearAllStock();
-                }
-              }}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-              title="Excluir permanentemente todos os itens do estoque"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Limpar Todo o Estoque</span>
-            </button>
-          )}
-
           {/* Botão Gerar Romaneio de Transferência - Sempre visível */}
           <button
             onClick={handleOpenTransferModal}
@@ -455,7 +437,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 </th>
                 <th className="py-3 px-3 text-right min-w-[110px] whitespace-nowrap">CUSTO UNIT.</th>
                 <th className="py-3 px-3 text-right min-w-[130px] whitespace-nowrap font-bold">VALOR TOTAL</th>
-                <th className="py-3 px-3 text-center min-w-[130px] whitespace-nowrap">AÇÕES</th>
+                <th className="py-3 px-3 text-center min-w-[210px] whitespace-nowrap sticky right-0 bg-slate-100 dark:bg-slate-800 shadow-sm border-l border-slate-200 dark:border-slate-700 z-10">AÇÕES</th>
               </tr>
             </thead>
 
@@ -562,38 +544,41 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                         R$ {valorTotalItem.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
 
-                      {/* Ações */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                      {/* Ações com coluna Sticky e botão de exclusão em destaque */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap sticky right-0 bg-white dark:bg-slate-900 shadow-sm border-l border-slate-200/80 dark:border-slate-800 z-10">
                         <div className="flex items-center justify-center gap-1.5">
+                          {onDeleteStockItem && (
+                            <button
+                              onClick={() => {
+                                const nome = item.descricao || item.codigo || item.codigoInterno || 'este item';
+                                if (window.confirm(`⚠️ Deseja realmente excluir o item "${nome}" do estoque da matriz?`)) {
+                                  onDeleteStockItem(item.id);
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 shadow-sm transition flex items-center gap-1 cursor-pointer"
+                              title="Excluir este item do estoque"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Excluir</span>
+                            </button>
+                          )}
+
                           <button
                             onClick={() => {
                               setEditingStockItem(item);
                               setAdjustUnidadesDelta('50');
                               setAdjustLocation(item.localizacaoGalpao || '');
                             }}
-                            className="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"
                             title="Ajustar saldo de unidades ou localização"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Ajustar</span>
                           </button>
-
-                          {onDeleteStockItem && (
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Deseja excluir "${item.descricao || item.codigo || item.codigoInterno || 'item'}" do estoque?`)) {
-                                  onDeleteStockItem(item.id);
-                                }
-                              }}
-                              className="px-2 py-1 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition cursor-pointer"
-                              title="Excluir este item do estoque"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
 
                           <button
                             onClick={() => toggleItemSelection(item)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
                               isSelected
                                 ? 'bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-950 dark:text-rose-300'
                                 : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
@@ -851,21 +836,40 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setEditingStockItem(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveStockAdjustment}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition cursor-pointer"
-              >
-                Salvar Ajuste
-              </button>
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              {onDeleteStockItem && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nome = editingStockItem.descricao || editingStockItem.codigo || 'este item';
+                    if (window.confirm(`⚠️ Deseja realmente excluir permanentemente "${nome}" do estoque?`)) {
+                      onDeleteStockItem(editingStockItem.id);
+                      setEditingStockItem(null);
+                    }
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir do Estoque</span>
+                </button>
+              )}
+
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setEditingStockItem(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveStockAdjustment}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition cursor-pointer"
+                >
+                  Salvar Ajuste
+                </button>
+              </div>
             </div>
           </div>
         </div>

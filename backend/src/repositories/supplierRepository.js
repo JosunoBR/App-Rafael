@@ -1,17 +1,45 @@
 const { queryAll, queryOne, execute } = require('../config/database');
 
+function formatPhone(value) {
+  if (!value) return '';
+  let digits = String(value).replace(/\D/g, '');
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    digits = digits.slice(2);
+  }
+  digits = digits.slice(0, 11);
+  if (!digits) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
+function normalizeSupplier(sup) {
+  if (!sup) return sup;
+  return {
+    ...sup,
+    contatoVendedor: sup.contatoVendedor ? formatPhone(sup.contatoVendedor) : (sup.contatoVendedor || ''),
+    telefoneEmpresa: sup.telefoneEmpresa ? formatPhone(sup.telefoneEmpresa) : (sup.telefoneEmpresa || '')
+  };
+}
+
 class SupplierRepository {
   async findAll() {
-    return await queryAll("SELECT * FROM suppliers ORDER BY razaoSocial ASC");
+    const rows = await queryAll("SELECT * FROM suppliers ORDER BY razaoSocial ASC");
+    return rows.map(normalizeSupplier);
   }
 
   async findById(id) {
-    return await queryOne("SELECT * FROM suppliers WHERE id = ?", [id]);
+    const row = await queryOne("SELECT * FROM suppliers WHERE id = ?", [id]);
+    return normalizeSupplier(row);
   }
 
   async findByCnpj(cnpj) {
     if (!cnpj) return null;
-    return await queryOne("SELECT * FROM suppliers WHERE cnpj = ?", [cnpj]);
+    const row = await queryOne("SELECT * FROM suppliers WHERE cnpj = ?", [cnpj]);
+    return normalizeSupplier(row);
   }
 
   async upsert(supplier) {
@@ -37,13 +65,13 @@ class SupplierRepository {
         supplier.nomeFantasia || '',
         supplier.cnpj || '',
         supplier.vendedorPadrao || '',
-        supplier.contatoVendedor || '',
+        formatPhone(supplier.contatoVendedor),
         supplier.condicaoPagamentoPadrao || '30/60/90 Dias',
         Number(supplier.aliquotaStPadrao) || 0,
         Number(supplier.aliquotaIpiPadrao) || 0,
         Number(supplier.descontoOffPadrao) || 0,
         Number(supplier.percentualNotaPadrao) || 100,
-        supplier.telefoneEmpresa || '',
+        formatPhone(supplier.telefoneEmpresa),
         supplier.endereco || '',
         supplier.email || '',
         supplier.observacoesDescarga || '',
@@ -66,13 +94,13 @@ class SupplierRepository {
         supplier.nomeFantasia || '',
         supplier.cnpj || '',
         supplier.vendedorPadrao || '',
-        supplier.contatoVendedor || '',
+        formatPhone(supplier.contatoVendedor),
         supplier.condicaoPagamentoPadrao || '30/60/90 Dias',
         Number(supplier.aliquotaStPadrao) || 0,
         Number(supplier.aliquotaIpiPadrao) || 0,
         Number(supplier.descontoOffPadrao) || 0,
         Number(supplier.percentualNotaPadrao) || 100,
-        supplier.telefoneEmpresa || '',
+        formatPhone(supplier.telefoneEmpresa),
         supplier.endereco || '',
         supplier.email || '',
         supplier.observacoesDescarga || '',

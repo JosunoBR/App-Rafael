@@ -157,6 +157,8 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
   const handleStartEdit = (sup: Supplier) => {
     setFormData({ 
       ...sup,
+      contatoVendedor: maskPhone(sup.contatoVendedor || ''),
+      telefoneEmpresa: maskPhone(sup.telefoneEmpresa || ''),
       percentualNotaPadrao: sup.percentualNotaPadrao !== undefined ? sup.percentualNotaPadrao : 100
     });
     setEditingSupplier(sup);
@@ -379,9 +381,8 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               </label>
               <input
                 type="text"
-                value={formData.contatoVendedor}
+                value={maskPhone(formData.contatoVendedor || '')}
                 onChange={(e) => setFormData(prev => ({ ...prev, contatoVendedor: maskPhone(e.target.value) }))}
-                placeholder="(42) 99999-8888"
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono"
               />
             </div>
@@ -416,9 +417,8 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               </label>
               <input
                 type="text"
-                value={formData.telefoneEmpresa || ''}
+                value={maskPhone(formData.telefoneEmpresa || '')}
                 onChange={(e) => setFormData(prev => ({ ...prev, telefoneEmpresa: maskPhone(e.target.value) }))}
-                placeholder="(00) 0000-0000"
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono"
               />
             </div>

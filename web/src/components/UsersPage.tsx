@@ -21,6 +21,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { User, UserRole } from '../shared/types';
+import { maskPhone } from '../utils/masks';
 
 interface UsersPageProps {
   currentUser: User;
@@ -389,10 +390,9 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                   <label className="font-bold text-slate-700 dark:text-slate-300">Telefone / WhatsApp</label>
                   <input
                     type="text"
-                    value={editingUser.telefone || ''}
-                    onChange={(e) => setEditingUser(prev => ({ ...prev, telefone: e.target.value }))}
-                    placeholder="(42) 99999-9999"
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    value={maskPhone(editingUser.telefone || '')}
+                    onChange={(e) => setEditingUser(prev => ({ ...prev, telefone: maskPhone(e.target.value) }))}
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
                   />
                 </div>
               </div>

@@ -946,13 +946,12 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               </label>
               <input
                 type="text"
-                value={header.contatoVendedor || ''}
+                value={header.contatoVendedor?.includes('@') ? header.contatoVendedor : maskPhone(header.contatoVendedor || '')}
                 onChange={(e) => {
                   const val = e.target.value;
                   handleFieldChange('contatoVendedor', val.includes('@') ? val : maskPhone(val));
                 }}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                placeholder="(42) 99988-7766"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono"
               />
             </div>
 

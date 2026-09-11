@@ -2,6 +2,7 @@ import { PurchaseOrder, FiscalConfig, FiscalPreset, StoreConfig, Supplier, Produ
 import { DEFAULT_FISCAL_CONFIG, DEFAULT_FISCAL_PRESETS, DEFAULT_STORES } from '../shared/constants';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
+import { maskPhone } from './masks';
 
 const STORAGE_KEYS = {
   CURRENT_ORDER: 'mega12_current_order_v1',
@@ -1072,9 +1073,9 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     nomeFantasia: 'CONECTA',
     cnpj: '37.144.240/0001-70',
     email: 'als.conecta@gmail.com',
-    telefoneEmpresa: '(42) 9 9136-5009',
+    telefoneEmpresa: '(42) 99136-5009',
     vendedorPadrao: 'Bruna',
-    contatoVendedor: '(55) 9. 3618-5609',
+    contatoVendedor: '(55) 93618-5609',
     condicaoPagamentoPadrao: '30/60/90 Dias',
     aliquotaStPadrao: 0,
     aliquotaIpiPadrao: 0,
@@ -1140,6 +1141,8 @@ export function getSuppliersList(): Supplier[] {
       }
       return {
         ...s,
+        contatoVendedor: s.contatoVendedor ? maskPhone(s.contatoVendedor) : s.contatoVendedor,
+        telefoneEmpresa: s.telefoneEmpresa ? maskPhone(s.telefoneEmpresa) : s.telefoneEmpresa,
         observacoesDescarga: obs,
         pedidoPadrao: parsedPadrao
       };

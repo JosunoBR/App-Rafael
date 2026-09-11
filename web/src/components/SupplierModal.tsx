@@ -50,8 +50,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   const [nomeFantasia, setNomeFantasia] = useState(initialEditSupplier?.nomeFantasia || '');
   const [cnpj, setCnpj] = useState(initialEditSupplier?.cnpj || '');
   const [vendedorPadrao, setVendedorPadrao] = useState(initialEditSupplier?.vendedorPadrao || '');
-  const [contatoVendedor, setContatoVendedor] = useState(initialEditSupplier?.contatoVendedor || '');
-  const [telefoneEmpresa, setTelefoneEmpresa] = useState(initialEditSupplier?.telefoneEmpresa || '');
+  const [contatoVendedor, setContatoVendedor] = useState(maskPhone(initialEditSupplier?.contatoVendedor || ''));
+  const [telefoneEmpresa, setTelefoneEmpresa] = useState(maskPhone(initialEditSupplier?.telefoneEmpresa || ''));
   const [email, setEmail] = useState(initialEditSupplier?.email || '');
   const [endereco, setEndereco] = useState(initialEditSupplier?.endereco || '');
   const [condicaoPagamentoPadrao, setCondicaoPagamentoPadrao] = useState(initialEditSupplier?.condicaoPagamentoPadrao || '30/60/90 Dias');
@@ -86,8 +86,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     setNomeFantasia(sup.nomeFantasia || '');
     setCnpj(sup.cnpj || '');
     setVendedorPadrao(sup.vendedorPadrao || '');
-    setContatoVendedor(sup.contatoVendedor || '');
-    setTelefoneEmpresa(sup.telefoneEmpresa || '');
+    setContatoVendedor(maskPhone(sup.contatoVendedor || ''));
+    setTelefoneEmpresa(maskPhone(sup.telefoneEmpresa || ''));
     setEmail(sup.email || '');
     setEndereco(sup.endereco || '');
     setCondicaoPagamentoPadrao(sup.condicaoPagamentoPadrao || '30/60/90 Dias');
@@ -273,10 +273,9 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={contatoVendedor}
+                    value={maskPhone(contatoVendedor)}
                     onChange={(e) => setContatoVendedor(maskPhone(e.target.value))}
-                    placeholder="(42) 99999-9999"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono"
                   />
                 </div>
 
@@ -310,9 +309,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={telefoneEmpresa}
+                    value={maskPhone(telefoneEmpresa)}
                     onChange={(e) => setTelefoneEmpresa(maskPhone(e.target.value))}
-                    placeholder="(00) 0000-0000"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono"
                   />
                 </div>

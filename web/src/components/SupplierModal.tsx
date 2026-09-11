@@ -280,11 +280,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                   />
                 </div>
 
-                {/* % Nota Fiscal Padrão */}
+                {/* OFF % */}
                 <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/50">
                   <label className="block text-xs font-bold text-blue-900 dark:text-blue-300 mb-1 flex items-center gap-1">
                     <Percent className="w-3.5 h-3.5 text-blue-600" />
-                    % Nota Fiscal Padrão
+                    OFF %
                   </label>
                   <input
                     type="number"
@@ -298,7 +298,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-900 text-blue-900 dark:text-blue-300 font-bold"
                   />
                   <span className="text-[10px] text-blue-700 dark:text-blue-400 mt-1 block">
-                    Define o percentual da Nota no pedido
+                    Define o percentual de OFF no pedido
                   </span>
                 </div>
 
@@ -407,7 +407,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                         )}
                         {sup.percentualNotaPadrao !== undefined && (
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">
-                            Nota: {sup.percentualNotaPadrao}%
+                            OFF: {sup.percentualNotaPadrao}%
                           </span>
                         )}
                       </div>

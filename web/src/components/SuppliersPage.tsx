@@ -386,10 +386,10 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               />
             </div>
 
-            {/* % Nota Fiscal Padrão */}
+            {/* OFF % */}
             <div>
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                % Nota Fiscal Padrão
+                OFF %
               </label>
               <div className="relative">
                 <input
@@ -405,7 +405,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                 />
                 <span className="absolute right-3 top-2 text-xs text-blue-400 font-bold">%</span>
               </div>
-              <span className="text-[10px] text-slate-400 mt-1 block">Define o percentual da Nota no pedido</span>
+              <span className="text-[10px] text-slate-400 mt-1 block">Define o percentual de OFF no pedido</span>
             </div>
 
             {/* Telefone da Empresa */}
@@ -516,7 +516,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                 <th className="py-3 px-3">Representante & Contato</th>
                 <th className="py-3 px-3 text-center">Catálogo de Produtos</th>
                 <th className="py-3 px-3">Pagamento</th>
-                <th className="py-3 px-3 text-center">% Nota</th>
+                <th className="py-3 px-3 text-center">OFF %</th>
                 <th className="py-3 px-3 text-center">Ações</th>
               </tr>
             </thead>

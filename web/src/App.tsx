@@ -1186,8 +1186,76 @@ export function App() {
     }
   };
 
-  // Handler para Liberação do Depósito para a Doca (Depósito -> Separação Doca)
+  // Handler para Liberação da Distribuição para a Doca com Entrada Automática no Estoque Central
   const handleReleaseToSeparation = async (orderToRelease: PurchaseOrder) => {
+    // 1. Dar entrada automática no Estoque Central para itens com reserva no CD (qtdReservaEstoque > 0)
+    let totalPecasEstoqueEntrada = 0;
+    try {
+      const currentStock = await fetchStockFromDb().catch(() => loadCentralStock());
+
+      for (const it of orderToRelease.items) {
+        const qtdEntrada = it.qtdReservaEstoque || 0;
+        if (qtdEntrada > 0 && it.descricao && it.descricao.trim().length > 0) {
+          totalPecasEstoqueEntrada += qtdEntrada;
+
+          // Verifica se o produto já existe no Estoque Central
+          const existingStock = currentStock.find(s => 
+            (s.codigo && it.codigo && s.codigo.trim().toLowerCase() === it.codigo.trim().toLowerCase()) ||
+            (s.codigoInterno && it.codigoInterno && s.codigoInterno.trim().toLowerCase() === it.codigoInterno.trim().toLowerCase()) ||
+            (s.descricao && it.descricao && s.descricao.trim().toLowerCase() === it.descricao.trim().toLowerCase()) ||
+            (s.productId && it.id && s.productId === it.id)
+          );
+
+          if (existingStock) {
+            // Incrementa o saldo no SQLite
+            try {
+              await updateStockBalanceInDb(existingStock.id, qtdEntrada);
+            } catch {
+              updateStockBalance(existingStock.id, qtdEntrada);
+            }
+          } else {
+            // Cria o novo item no Estoque Matriz
+            const pack = it.qtdPorPacote || it.qtdNoPacote || 1;
+            const newStockItem: CentralStockItem = {
+              id: 'stock_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+              productId: it.id,
+              codigoInterno: it.codigoInterno || it.codigo || '',
+              codigoFornecedor: it.codigoFornecedor || '',
+              codigoBarras: it.codigoBarras || '',
+              codigo: it.codigo || it.codigoInterno || '',
+              descricao: it.descricao.trim(),
+              categoria: 'Geral',
+              fotoUrl: it.fotoUrl || '',
+              qtdPorPacote: pack,
+              saldoUnidades: qtdEntrada,
+              saldoCaixas: Math.floor(qtdEntrada / pack),
+              precoUnitario: it.precoUnitario || 0,
+              pdvSugerido: it.pdvAlvo || 12.00,
+              localizacaoGalpao: `Entrada Pedido ${orderToRelease.header.numeroPedido}`,
+              fornecedorOrigem: orderToRelease.header.fornecedor || '',
+              dataUltimaEntrada: new Date().toISOString().split('T')[0],
+              updatedAt: new Date().toISOString()
+            };
+
+            try {
+              await saveStockItemToDb(newStockItem);
+            } catch {
+              const current = loadCentralStock();
+              saveCentralStock([newStockItem, ...current]);
+            }
+          }
+        }
+      }
+
+      // Atualiza o estado central de estoque imediatamente
+      const refreshedStock = await fetchStockFromDb().catch(() => loadCentralStock());
+      setCentralStock(refreshedStock);
+      saveCentralStock(refreshedStock);
+    } catch (stockErr) {
+      console.warn('Erro ao registrar entrada automática no estoque central:', stockErr);
+    }
+
+    // 2. Atualizar o status do pedido para 'Em Separação'
     const updated: PurchaseOrder = {
       ...orderToRelease,
       header: {
@@ -1205,7 +1273,11 @@ export function App() {
       setSavedOrders(loadSavedOrdersList());
       setOrder(updated);
       confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
-      showToast(`Distribuição confirmada! Pedido ${updated.header.numeroPedido} LIBERADO para separação física na doca!`, 'success');
+      if (totalPecasEstoqueEntrada > 0) {
+        showToast(`Distribuição confirmada! Entrada de ${totalPecasEstoqueEntrada.toLocaleString('pt-BR')} un registrada no Estoque Matriz e romaneio liberado para Separação na Doca!`, 'success');
+      } else {
+        showToast(`Distribuição confirmada! Pedido ${updated.header.numeroPedido} liberado para separação na doca!`, 'success');
+      }
     } catch (err: any) {
       saveOrderToHistory(updated);
       setSavedOrders(loadSavedOrdersList());

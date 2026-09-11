@@ -182,7 +182,7 @@ export interface OrderItem {
   ruptura?: boolean;            // Item em ruptura (não será entregue pelo fornecedor - descontado de todos os cálculos do pedido)
 }
 
-export type OrderStatus = 'Em Cotação' | 'Aprovado' | 'Em Separação' | 'Finalizado';
+export type OrderStatus = 'Em Cotação' | 'Aprovado' | 'Em Distribuição' | 'Em Separação' | 'Finalizado';
 
 export interface OrderHeader {
   id: string;

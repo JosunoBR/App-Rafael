@@ -75,6 +75,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     todos: orders.length,
     'Em Cotação': orders.filter(o => (o.header.status || 'Em Cotação') === 'Em Cotação').length,
     'Aprovado': orders.filter(o => o.header.status === 'Aprovado').length,
+    'Em Distribuição': orders.filter(o => o.header.status === 'Em Distribuição').length,
     'Em Separação': orders.filter(o => o.header.status === 'Em Separação').length,
     'Finalizado': orders.filter(o => o.header.status === 'Finalizado').length
   };
@@ -85,6 +86,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
       case 'Em Separação':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-800';
+      case 'Em Distribuição':
+        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800';
       case 'Aprovado':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300 dark:border-blue-800';
       case 'Em Cotação':
@@ -169,9 +172,23 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-50'
           }`}
         >
-          <span>🔵 2. Aprovados (Depósito CD)</span>
+          <span>🔵 2. Aprovados</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Aprovado']}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSelectedStatusTab('Em Distribuição')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+            selectedStatusTab === 'Em Distribuição'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-50'
+          }`}
+        >
+          <span>🟣 3. Em Distribuição (CD)</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+            {countByStatus['Em Distribuição']}
           </span>
         </button>
 
@@ -183,7 +200,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50'
           }`}
         >
-          <span>🟣 3. Em Separação (Doca)</span>
+          <span>📦 4. Em Separação (Doca)</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Em Separação']}
           </span>
@@ -197,7 +214,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-50'
           }`}
         >
-          <span>🟢 4. Finalizados</span>
+          <span>🟢 5. Finalizados</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Finalizado']}
           </span>
@@ -300,11 +317,11 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             <ArrowRight className="w-3 h-3" />
                           </button>
                         )}
-                        {statusAtual === 'Aprovado' && (
+                        {(statusAtual === 'Aprovado' || statusAtual === 'Em Distribuição') && (
                           <button
                             onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
-                            className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 mx-auto"
-                            title="Abrir a matriz de distribuição do Depósito para ratear nas 20 lojas e liberar para a doca"
+                            className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 mx-auto"
+                            title="Abrir a matriz de distribuição do Depósito para ratear nas 20 lojas e dar entrada no estoque"
                           >
                             <Boxes className="w-3.5 h-3.5" />
                             <span>Distribuir CD</span>

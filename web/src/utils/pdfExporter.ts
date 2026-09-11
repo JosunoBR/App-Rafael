@@ -37,7 +37,7 @@ function getAvariaUnits(quantidade: number, unidadeMedida?: string, qtdPorPacote
 
 // =========================================================================
 // 1. EXPORTAÇÃO DO PEDIDO DE COMPRA COMERCIAL (PROPOSTA PARA FORNECEDOR)
-// Formato: A4 Retrato (Portrait) | SEM NENHUMA LOJA | Foco Comercial Puro
+// Formato: A4 Paisagem (Landscape) | Layout Oficial (Imagem 2)
 // =========================================================================
 export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
   const order: PurchaseOrder = {
@@ -49,34 +49,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
   const cleanFornecedor = (order.header?.fornecedor || 'Fornecedor').replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = `Pedido_${numeroPedido}_${cleanFornecedor}.pdf`;
 
-  // 1. Download via Backend
-  try {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `${API_BASE_URL}/export/pdf?type=order`;
-    form.target = '_self';
-
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'payload';
-    input.value = JSON.stringify({ order, type: 'order' });
-
-    form.appendChild(input);
-    document.body.appendChild(form);
-    form.submit();
-
-    setTimeout(() => {
-      if (document.body.contains(form)) {
-        document.body.removeChild(form);
-      }
-    }, 1500);
-
-    return true;
-  } catch (backendErr) {
-    console.warn('Fallback para download PDF local do pedido:', backendErr);
-  }
-
-  // 2. Geração Local via jsPDF (Fallback Completo em Paisagem)
+  // Geração Local Direta via jsPDF em Paisagem (Layout Oficial Mega 12)
   try {
     const doc = new jsPDF({
       orientation: 'landscape',

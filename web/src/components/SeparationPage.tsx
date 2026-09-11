@@ -210,9 +210,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     }
   };
 
-  // Filtrar pedidos que estão com status Aprovados ou Em Separação para o depósito
+  // Filtrar pedidos que estão com status Aprovados, Em Distribuição ou Em Separação para o depósito
   const availableDepositOrders = useMemo(() => {
-    const list = orders.filter(o => o.header.status === 'Aprovado' || o.header.status === 'Em Separação');
+    const list = orders.filter(o => o.header.status === 'Aprovado' || o.header.status === 'Em Distribuição' || o.header.status === 'Em Separação');
     const currentId = order.header.id || order.header.numeroPedido;
     if (currentId && !list.some(o => (o.header.id || o.header.numeroPedido) === currentId)) {
       return [order, ...list];
@@ -1338,13 +1338,30 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" /> Este pedido já foi finalizado e conferido.
               </span>
+            ) : (order.header.status === 'Aprovado' || order.header.status === 'Em Distribuição') ? (
+              <span>
+                <b>Etapa 3 - Distribuição:</b> Ao confirmar, <b>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} unidades</b> darão entrada automática no <b>Estoque Central (Matriz)</b> e a lista das lojas será enviada para <b>Separação na Doca</b>.
+              </span>
             ) : (
-              <span>Ao clicar em finalizar, o status do pedido mudará para <b>Finalizado</b> e a conferência será arquivada.</span>
+              <span><b>Etapa 4 - Separação na Doca:</b> Ao clicar em finalizar, o status mudará para <b>Finalizado</b> e a conferência será arquivada.</span>
             )}
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            {order.header.status !== 'Finalizado' && (
+            {/* Botão para Etapa 3: Confirmar Distribuição & Dar Entrada no Estoque */}
+            {(order.header.status === 'Aprovado' || order.header.status === 'Em Distribuição') && onReleaseToSeparation && (
+              <button
+                type="button"
+                onClick={() => onReleaseToSeparation(order)}
+                className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer hover:scale-102"
+              >
+                <Boxes className="w-4 h-4" />
+                <span>Confirmar Distribuição & Dar Entrada no Estoque</span>
+              </button>
+            )}
+
+            {/* Botão para Etapa 4: Finalizar Separação na Doca */}
+            {order.header.status === 'Em Separação' && (
               <button
                 type="button"
                 onClick={() => {

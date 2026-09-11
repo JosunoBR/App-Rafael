@@ -231,6 +231,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
   // Estado para controlar digitação da coluna de preço garantindo sempre 2 casas decimais (R$)
   const [editingPriceMap, setEditingPriceMap] = useState<Record<string, string>>({});
+  // Estado para digitação livre do campo PDV com limpeza ao focar
+  const [editingPdvMap, setEditingPdvMap] = useState<Record<string, string>>({});
 
   // Estado para visibilidade e ordem das colunas (Personalização do Usuário)
   const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(() => {
@@ -706,10 +708,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
     // Auto-cálculo do limite de preço e custo real efetivo com preço efetivo com desconto
     const precoCompraEfetivo = precoBruto * (1 - descPct / 100);
-    const pdv = 12.00;
+    const pdvNumber = field === 'pdvAlvo' ? Number(value) : (Number(updatedItem.pdvAlvo) || 12.00);
+    const pdv = pdvNumber > 0 ? pdvNumber : 12.00;
     const fiscal = calculateItemFiscal(precoCompraEfetivo, pdv, globalFiscal, updatedItem.fiscalOverride);
 
-    updatedItem.pdvAlvo = 12.00;
+    updatedItem.pdvAlvo = pdv;
     updatedItem.custoLoja = fiscal.custoLoja;
     updatedItem.custoFornecedor = fiscal.custoFornecedor;
     updatedItem.despesasPdvUnit = fiscal.despesasPdvUnit;
@@ -1256,17 +1259,56 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           </td>
         );
 
-      case 'pdvAlvo':
+      case 'pdvAlvo': {
+        const pdvVal = item.pdvAlvo !== undefined && item.pdvAlvo !== null && item.pdvAlvo > 0 ? item.pdvAlvo : 12.00;
+        const isEditing = item.id in editingPdvMap;
+        const formattedPdv = pdvVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const displayVal = isEditing ? editingPdvMap[item.id] : formattedPdv;
+
         return (
-          <td key="pdvAlvo" style={cellStyle} className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
-            <span 
-              className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 whitespace-nowrap"
-              title="Preço de Venda Padrão R$ 12,00"
-            >
-              R$ 12
-            </span>
+          <td key="pdvAlvo" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
+            <input
+              type="text"
+              inputMode="decimal"
+              data-excel-row={index}
+              data-excel-field="pdvAlvo"
+              value={displayVal}
+              placeholder="12,00"
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'pdvAlvo')}
+              onFocus={() => {
+                setEditingPdvMap(prev => ({
+                  ...prev,
+                  [item.id]: ''
+                }));
+              }}
+              onClick={() => {
+                setEditingPdvMap(prev => ({
+                  ...prev,
+                  [item.id]: ''
+                }));
+              }}
+              onBlur={() => {
+                if (!item.pdvAlvo || item.pdvAlvo <= 0) {
+                  handleFieldChange(item, 'pdvAlvo', 12.00);
+                }
+                setEditingPdvMap(prev => {
+                  const next = { ...prev };
+                  delete next[item.id];
+                  return next;
+                });
+              }}
+              onChange={(e) => {
+                const sanitized = e.target.value.replace(/[^0-9,\.]/g, '');
+                setEditingPdvMap(prev => ({ ...prev, [item.id]: sanitized }));
+                const parsed = parseFloat(sanitized.replace(',', '.')) || 0;
+                handleFieldChange(item, 'pdvAlvo', parsed);
+              }}
+              className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
+              title="Preço de Venda (PDV) - Clique para editar livremente"
+            />
           </td>
         );
+      }
 
       case 'custoLoja':
       case 'custoReal': {

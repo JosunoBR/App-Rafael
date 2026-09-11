@@ -1186,20 +1186,30 @@ export function saveSupplier(supplier: Supplier): Supplier[] {
 }
 
 export function deleteSupplier(supplierId: string): Supplier[] {
-  const list = getSuppliersList().filter(s => s.id !== supplierId);
+  const currentSuppliers = getSuppliersList();
+  const targetSupplier = currentSuppliers.find(s => s.id === supplierId);
+  const razaoSocial = targetSupplier?.razaoSocial;
+
+  // 1. Remove o fornecedor
+  const list = currentSuppliers.filter(s => s.id !== supplierId);
   saveSuppliersList(list);
+
+  // 2. Remove produtos vinculados a este fornecedor do catálogo
+  // (produtos vinculados a outros fornecedores e histórico de pedidos são preservados)
+  const currentProducts = getProductsList();
+  const remainingProducts = currentProducts.filter(p => {
+    const belongsToSupplier = p.supplierId === supplierId || (razaoSocial && p.nomeFornecedor === razaoSocial);
+    return !belongsToSupplier;
+  });
+  saveProductsList(remainingProducts);
+
   return list;
 }
 
 export function getProductsList(): Product[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    let list: Product[] = saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
-    const existingIds = new Set(list.map(p => p.id));
-    const missing = INITIAL_PRODUCTS.filter(p => !existingIds.has(p.id));
-    if (missing.length > 0) {
-      list = [...list, ...missing];
-    }
+    let list: Product[] = saved !== null ? JSON.parse(saved) : INITIAL_PRODUCTS;
     // Normalizar campos de código e travar PDV Sugerido na regra de negócio da Rede Mega 12 (R$ 12,00 Fixo)
     return list.map(p => {
       const codigoInterno = p.codigoInterno || p.codigo || 'PRD-000';

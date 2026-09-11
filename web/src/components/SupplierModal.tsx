@@ -457,9 +457,14 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
 
                       {suppliers.length > 1 && (
                         <button
-                          onClick={() => onDeleteSupplier(sup.id)}
+                          onClick={() => {
+                            const msg = `Deseja realmente excluir o fornecedor "${sup.razaoSocial}"?\n\n⚠️ ATENÇÃO: Os produtos vinculados a este fornecedor também serão excluídos do catálogo.\n(Produtos de outros fornecedores e o histórico de compras anteriores serão mantidos).`;
+                            if (confirm(msg)) {
+                              onDeleteSupplier(sup.id);
+                            }
+                          }}
                           className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition"
-                          title="Excluir fornecedor"
+                          title="Excluir fornecedor e produtos vinculados"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

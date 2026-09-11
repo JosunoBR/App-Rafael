@@ -1,4 +1,5 @@
 const supplierRepository = require('../repositories/supplierRepository');
+const productRepository = require('../repositories/productRepository');
 
 class SupplierService {
   async listSuppliers() {
@@ -44,8 +45,17 @@ class SupplierService {
       throw err;
     }
 
+    // 1. Excluir produtos do catálogo vinculados a este fornecedor
+    // (Produtos cadastrados para outros fornecedores e histórico de compras anteriores são preservados)
+    await productRepository.deleteBySupplierId(id, existing.razaoSocial);
+
+    // 2. Excluir o cadastro do fornecedor
     await supplierRepository.delete(id);
-    return { success: true, message: `Fornecedor "${existing.razaoSocial}" excluído com sucesso.` };
+
+    return { 
+      success: true, 
+      message: `Fornecedor "${existing.razaoSocial}" e seus produtos vinculados foram excluídos com sucesso.` 
+    };
   }
 }
 

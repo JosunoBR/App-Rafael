@@ -640,12 +640,15 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
 
                         <button
                           onClick={() => {
-                            if (confirm(`Deseja realmente excluir o fornecedor "${sup.razaoSocial}"?`)) {
+                            const msg = supProductsCount > 0
+                              ? `Deseja realmente excluir o fornecedor "${sup.razaoSocial}"?\n\n⚠️ ATENÇÃO: ${supProductsCount} produto(s) exclusivo(s) deste fornecedor também serão excluídos do catálogo.\n(Produtos de outros fornecedores e o histórico de compras anteriores serão mantidos).`
+                              : `Deseja realmente excluir o fornecedor "${sup.razaoSocial}"?`;
+                            if (confirm(msg)) {
                               onDeleteSupplier(sup.id);
                             }
                           }}
                           className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition"
-                          title="Excluir fornecedor"
+                          title="Excluir fornecedor e produtos vinculados"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

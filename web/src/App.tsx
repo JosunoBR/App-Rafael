@@ -1512,17 +1512,23 @@ export function App() {
   const handleDeleteSupplier = async (id: string) => {
     try {
       await deleteSupplierFromDb(id);
-      const updated = await fetchSuppliersFromDb();
-      setSuppliers(updated);
+      const [updatedSuppliers, updatedProducts] = await Promise.all([
+        fetchSuppliersFromDb(),
+        fetchProductsFromDb()
+      ]);
+      setSuppliers(updatedSuppliers);
+      setProducts(updatedProducts);
       deleteSupplier(id);
-      saveSuppliersList(updated);
-      showToast('Fornecedor removido do Banco de Dados.', 'info');
+      saveSuppliersList(updatedSuppliers);
+      saveProductsList(updatedProducts);
+      showToast('Fornecedor e produtos vinculados excluídos com sucesso!', 'info');
     } catch (err: any) {
       console.error('Erro ao remover fornecedor:', err);
       if (isOfflineError(err)) {
         deleteSupplier(id);
         setSuppliers(getSuppliersList());
-        showToast('Sem conexão: fornecedor removido localmente.', 'info');
+        setProducts(getProductsList());
+        showToast('Sem conexão: fornecedor e produtos vinculados removidos localmente.', 'info');
         return;
       }
       showToast(err.message || 'Erro ao remover fornecedor do Banco de Dados.', 'error');

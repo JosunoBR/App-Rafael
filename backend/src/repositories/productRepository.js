@@ -97,6 +97,15 @@ class ProductRepository {
     await execute("DELETE FROM products WHERE id = ?", [id]);
     return true;
   }
+
+  async deleteBySupplierId(supplierId, razaoSocial) {
+    if (razaoSocial) {
+      await execute("DELETE FROM products WHERE supplierId = ? OR nomeFornecedor = ?", [supplierId, razaoSocial]);
+    } else {
+      await execute("DELETE FROM products WHERE supplierId = ?", [supplierId]);
+    }
+    return true;
+  }
 }
 
 module.exports = new ProductRepository();

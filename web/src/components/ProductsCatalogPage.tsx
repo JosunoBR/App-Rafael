@@ -23,7 +23,6 @@ import {
   Package
 } from 'lucide-react';
 import { Product, Supplier } from '../shared/types';
-import { INITIAL_PRODUCTS } from '../utils/storage';
 import { handleCurrencyInput, formatCurrency } from '../utils/masks';
 
 interface ProductsCatalogPageProps {

@@ -149,20 +149,10 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     // 3. CARDS DE DADOS: COMPRADOR & FORNECEDOR (Lado a Lado)
     // =========================================================================
     const cardY = 35.5;
-    const cardH = 28.5;
     const cardW = 136;
-
-    // Card 1: Comprador / Faturamento (Esquerda)
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(10, cardY, cardW, cardH, 1.5, 1.5, 'FD');
-
-    doc.setFillColor(241, 245, 249);
-    doc.rect(10.2, cardY + 0.2, cardW - 0.4, 5, 'F');
-    doc.setTextColor(30, 41, 59);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.2);
-    doc.text('DADOS DA EMPRESA COMPRADORA & FATURAMENTO:', 13, cardY + 3.8);
+    const card2X = 151;
+    const maxCardTextW = cardW - 6; // 130 mm (3mm margem esquerda + 3mm margem direita)
+    const baseCardH = 28.5;
 
     // Cálculo do Desconto Comercial
     const offValue = Number(order.header?.percentualDescontoOff || 0);
@@ -198,6 +188,50 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       descontoComercialTexto = formatCurrency(valOff);
     }
 
+    // Medir e quebrar linhas do Card 2 com quebra automática caso qualquer campo seja longo
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(15, 23, 42);
+
+    const card2Fields = [
+      `Fornecedor: ${fornecedorNome}`,
+      `Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`,
+      `% OFF (Desconto Negociado): ${offValue}%`,
+      `Desconto Comercial: ${descontoComercialTexto}`,
+      `Condição de Pagto: ${condicaoPagamento}`,
+      `Forma de Pagto: ${formaPagamento}`,
+      `Tipo de Frete: ${tipoFrete}`
+    ];
+
+    const card2Lines: string[] = [];
+    card2Fields.forEach(field => {
+      const split = doc.splitTextToSize(field, maxCardTextW);
+      if (Array.isArray(split)) {
+        split.forEach((s: string, idx: number) => {
+          card2Lines.push(idx > 0 ? `  ${s.trim()}` : s.trim());
+        });
+      } else if (split) {
+        card2Lines.push(split);
+      }
+    });
+
+    // Altura calculada e espaçamento vertical entre linhas dinâmico
+    const card2LineStep = card2Lines.length > 7 ? 2.85 : 3.1;
+    const neededCard2H = 7.8 + (card2Lines.length - 1) * card2LineStep + 2.1;
+    const cardH = Math.max(baseCardH, neededCard2H);
+
+    // Card 1: Comprador / Faturamento (Esquerda)
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(10, cardY, cardW, cardH, 1.5, 1.5, 'FD');
+
+    doc.setFillColor(241, 245, 249);
+    doc.rect(10.2, cardY + 0.2, cardW - 0.4, 5, 'F');
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.text('DADOS DA EMPRESA COMPRADORA & FATURAMENTO:', 13, cardY + 3.8);
+
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
@@ -209,7 +243,6 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.text('Financeiro: (55) 9 3618-5609 (Bruna)', 13, cardY + 25.3);
 
     // Card 2: Fornecedor & Comercial (Direita)
-    const card2X = 151;
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(203, 213, 225);
     doc.roundedRect(card2X, cardY, cardW, cardH, 1.5, 1.5, 'FD');
@@ -224,22 +257,9 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 7.8);
-    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 10.9);
-
-    // Porcentagem OFF posicionada entre Vendedor e Desconto Comercial
-    doc.text(`% OFF (Desconto Negociado): ${offValue}%`, card2X + 3, cardY + 14.0);
-
-    // Desconto Comercial posicionado abaixo do OFF
-    doc.setTextColor(5, 150, 105); // Emerald-600
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Desconto Comercial: ${descontoComercialTexto}`, card2X + 3, cardY + 17.1);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 20.2);
-    doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 23.3);
-    doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 26.4);
+    card2Lines.forEach((lineText, idx) => {
+      doc.text(lineText, card2X + 3, cardY + 7.8 + idx * card2LineStep);
+    });
 
     // =========================================================================
     // 4. TABELA DE ITENS (SEM Código Interno e SEM Desconto)
@@ -348,7 +368,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     ];
 
     autoTable(doc, {
-      startY: 66,
+      startY: cardY + cardH + 2.0,
       head: [headCols],
       body: [...bodyRows, footerRow],
       theme: 'grid',
@@ -599,8 +619,54 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     // 3. CARD DE DADOS: FORNECEDOR & CONDIÇÕES COMERCIAIS
     // =========================================================================
     const cardY = 35.5;
-    const cardH = 20;
     const cardW = 277;
+    const baseCardH = 20;
+
+    // Coluna 1 (Esquerda) e Coluna 2 (Direita)
+    const offValue = Number(order.header?.percentualDescontoOff || 0);
+    const col1X = 13;
+    const col2X = 150;
+    const col1MaxW = col2X - col1X - 4; // ~133 mm
+    const col2MaxW = cardW + 10 - col2X - 3; // ~134 mm
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(15, 23, 42);
+
+    const col1Fields = [
+      `Fornecedor: ${fornecedorNome}`,
+      `Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`,
+      `% OFF (Desconto Negociado): ${offValue}%`
+    ];
+    const col1Lines: string[] = [];
+    col1Fields.forEach(f => {
+      const split = doc.splitTextToSize(f, col1MaxW);
+      if (Array.isArray(split)) {
+        split.forEach((s: string, idx: number) => col1Lines.push(idx > 0 ? `  ${s.trim()}` : s.trim()));
+      } else if (split) {
+        col1Lines.push(split);
+      }
+    });
+
+    const col2Fields = [
+      `Condição de Pagto: ${condicaoPagamento}`,
+      `Forma de Pagto: ${formaPagamento}`,
+      `Tipo de Frete: ${tipoFrete}`
+    ];
+    const col2Lines: string[] = [];
+    col2Fields.forEach(f => {
+      const split = doc.splitTextToSize(f, col2MaxW);
+      if (Array.isArray(split)) {
+        split.forEach((s: string, idx: number) => col2Lines.push(idx > 0 ? `  ${s.trim()}` : s.trim()));
+      } else if (split) {
+        col2Lines.push(split);
+      }
+    });
+
+    const maxRomaneioLines = Math.max(3, col1Lines.length, col2Lines.length);
+    const romaneioLineStep = maxRomaneioLines > 3 ? 3.2 : 3.8;
+    const neededRomaneioH = 8.5 + (maxRomaneioLines - 1) * romaneioLineStep + 2.3;
+    const cardH = Math.max(baseCardH, neededRomaneioH);
 
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(203, 213, 225);
@@ -617,17 +683,13 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
 
-    // Coluna 1 (Esquerda)
-    const offValue = Number(order.header?.percentualDescontoOff || 0);
-    doc.text(`Fornecedor: ${fornecedorNome}`, 13, cardY + 8.5);
-    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, 13, cardY + 12.3);
-    doc.text(`% OFF (Desconto Negociado): ${offValue}%`, 13, cardY + 16.1);
+    col1Lines.forEach((lineText, idx) => {
+      doc.text(lineText, col1X, cardY + 8.5 + idx * romaneioLineStep);
+    });
 
-    // Coluna 2 (Direita)
-    const col2X = 150;
-    doc.text(`Condição de Pagto: ${condicaoPagamento}`, col2X, cardY + 8.5);
-    doc.text(`Forma de Pagto: ${formaPagamento}`, col2X, cardY + 12.3);
-    doc.text(`Tipo de Frete: ${tipoFrete}`, col2X, cardY + 16.1);
+    col2Lines.forEach((lineText, idx) => {
+      doc.text(lineText, col2X, cardY + 8.5 + idx * romaneioLineStep);
+    });
 
     // =========================================================================
     // 4. TABELA DE SEPARAÇÃO (20 LOJAS)
@@ -694,7 +756,7 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     ];
 
     autoTable(doc, {
-      startY: 58,
+      startY: cardY + cardH + 2.5,
       margin: { left: 10, right: 10, bottom: 14, top: 12 },
       head: [headCols],
       body: [...bodyRows, footerRow],

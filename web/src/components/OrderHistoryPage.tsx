@@ -18,6 +18,7 @@ import {
 import { PurchaseOrder } from '../shared/types';
 import { exportOrderToExcel } from '../utils/excelExporter';
 import { toBrDate } from '../utils/masks';
+import { PurchaseControlCard } from './PurchaseControlCard';
 
 interface OrderHistoryPageProps {
   orders: PurchaseOrder[];
@@ -38,8 +39,16 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('todos');
+  const [controlFilterIds, setControlFilterIds] = useState<Set<string> | null>(null);
 
   const filteredOrders = orders.filter(o => {
+    if (controlFilterIds !== null) {
+      const orderId = o.id || o.header?.id;
+      if (orderId && !controlFilterIds.has(orderId)) {
+        return false;
+      }
+    }
+
     const matchesSearch = 
       o.header.numeroPedido.toLowerCase().includes(searchTerm.toLowerCase()) ||
       o.header.fornecedor.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -115,43 +124,12 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         </button>
       </div>
 
-      {/* 2. Cards de Resumo do Arquivo */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        
-        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Volume Total Comprado</span>
-            <Boxes className="w-4 h-4 text-emerald-500" />
-          </div>
-          <div className="text-xl font-extrabold text-slate-900 dark:text-white font-mono">
-            {totalPecasGeral.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400">unidades</span>
-          </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">Distribuídas pelas 20 filiais</span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Investimento Acumulado</span>
-            <DollarSign className="w-4 h-4 text-blue-500" />
-          </div>
-          <div className="text-xl font-extrabold text-blue-600 dark:text-blue-400 font-mono">
-            R$ {totalInvestidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">Total bruto negociado em compras</span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-            <span>Ticket Médio por Pedido</span>
-            <Sparkles className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="text-xl font-extrabold text-slate-900 dark:text-white font-mono">
-            R$ {(totalPedidos > 0 ? totalInvestidoGeral / totalPedidos : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">Média financeira por ordem</span>
-        </div>
-
-      </div>
+      {/* 2. Card de Controle de Compras (Filtros por Mês, Ano etc., Médias, Extremos e Navegação) */}
+      <PurchaseControlCard
+        orders={orders}
+        onSelectOrder={onSelectOrder}
+        onFilterChange={setControlFilterIds}
+      />
 
       {/* 3. Abas de Status da Esteira Operacional Oficial */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">

@@ -229,6 +229,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     let totalVolumesGeral = 0;
     let totalPecasGeral = 0;
     let subtotalGeral = 0;
+    let somaPrecoUnitario = 0;
 
     const filteredItems = (order.items || []).filter(it =>
       Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoFornecedor?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0)
@@ -246,6 +247,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       totalVolumesGeral += pacotes;
       totalPecasGeral += pecas;
       subtotalGeral += valorTotal;
+      somaPrecoUnitario += precoUnit;
 
       return [
         String(idx + 1),
@@ -259,6 +261,10 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
         formatCurrency(valorTotal)
       ];
     });
+
+    const precoMedioGeral = totalPecasGeral > 0
+      ? (subtotalGeral / totalPecasGeral)
+      : (bodyRows.length > 0 ? (somaPrecoUnitario / bodyRows.length) : 0);
 
     // Linha de Totais da Tabela (com colSpan elegante)
     const footerRow = [
@@ -276,8 +282,8 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
         styles: { halign: 'center', fontStyle: 'bold' }
       },
       {
-        content: '',
-        styles: { halign: 'right' }
+        content: formatCurrency(precoMedioGeral),
+        styles: { halign: 'right', fontStyle: 'bold' }
       },
       {
         content: formatCurrency(subtotalGeral),

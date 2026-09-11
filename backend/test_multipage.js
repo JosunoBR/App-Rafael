@@ -43,21 +43,21 @@ function generateCommercialOrderPdf(order) {
   }
 
   // Título e Identidade da Loja
-  doc.setTextColor(15, 23, 42); // Slate-900
+  doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.text('MEGA 12 • PEDIDO DE COMPRA COMERCIAL', 33, 12);
 
-  doc.setTextColor(5, 150, 105); // Emerald-600
+  doc.setTextColor(5, 150, 105);
   doc.setFontSize(8);
   doc.text('ALS 10 BAZAR E BRINQUEDOS LTDA  •  AUTORIZAÇÃO OFICIAL DE FORNECIMENTO', 33, 17.5);
 
-  doc.setTextColor(100, 116, 139); // Slate-500
+  doc.setTextColor(100, 116, 139);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.text('Documento oficial para faturamento, separação e expedição de mercadorias', 33, 22);
 
-  // Badge do Pedido (Canto Superior Direito)
+  // Badge do Pedido
   doc.setFillColor(15, 23, 42);
   doc.roundedRect(205, 5.5, 82, 20, 1.5, 1.5, 'F');
 
@@ -70,31 +70,31 @@ function generateCommercialOrderPdf(order) {
   doc.setFontSize(7);
   doc.text(`Emissão: ${dataEmissao}  |  Status: ${status}`, 209, 16);
 
-  doc.setTextColor(253, 224, 71); // Yellow-300
+  doc.setTextColor(253, 224, 71);
   doc.setFont('helvetica', 'bold');
   doc.text(`Previsão de Entrega: ${dataEntrega}`, 209, 21);
 
   // =========================================================================
   // 2. BANNER DE ALERTA OBRIGATÓRIO (Âmbar/Amarelo Oficial ALS 10)
   // =========================================================================
-  doc.setFillColor(254, 243, 199); // Amber-100
-  doc.setDrawColor(245, 158, 11); // Amber-500
+  doc.setFillColor(254, 243, 199);
+  doc.setDrawColor(245, 158, 11);
   doc.setLineWidth(0.3);
   doc.roundedRect(10, 27, 277, 6.5, 1, 1, 'FD');
 
-  doc.setTextColor(146, 64, 14); // Amber-800
+  doc.setTextColor(146, 64, 14);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.2);
   doc.text('! ATENÇÃO OBRIGATÓRIA: AGENDAR ENTREGA COM ROBERTA: (42) 9 9136-5009  |  DESCARREGAMENTO POR CONTA DO FORNECEDOR', 14, 31.5);
 
   // =========================================================================
-  // 3. CARDS DE DADOS: COMPRADOR & FORNECEDOR (Lado a Lado)
+  // 3. CARDS DE DADOS: COMPRADOR & FORNECEDOR
   // =========================================================================
   const cardY = 35.5;
   const cardH = 28.5;
   const cardW = 136;
 
-  // Card 1: Comprador / Faturamento (Esquerda)
+  // Card 1: Comprador / Faturamento
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(203, 213, 225);
   doc.roundedRect(10, cardY, cardW, cardH, 1.5, 1.5, 'FD');
@@ -121,7 +121,7 @@ function generateCommercialOrderPdf(order) {
   doc.text('Compras: (55) 9 9659-6315 (Rafael)  |  Faturamento: (55) 9 99691-0247 (Ketlyn)', 13, cardY + 23.7);
   doc.text('Financeiro: (55) 9 3618-5609 (Bruna)', 13, cardY + 27.2);
 
-  // Card 2: Fornecedor & Comercial (Direita)
+  // Card 2: Fornecedor & Comercial
   const card2X = 151;
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(203, 213, 225);
@@ -192,7 +192,6 @@ function generateCommercialOrderPdf(order) {
     ];
   });
 
-  // Linha de Totais da Tabela (com colSpan elegante)
   const footerRow = [
     {
       content: `TOTAIS DO PEDIDO (${bodyRows.length} itens)`,
@@ -253,9 +252,9 @@ function generateCommercialOrderPdf(order) {
     },
     didParseCell: (data) => {
       if (data.row.index === bodyRows.length) {
-        data.cell.styles.fillColor = [209, 250, 229]; // Emerald-100
+        data.cell.styles.fillColor = [209, 250, 229];
         data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.textColor = [6, 78, 59]; // Emerald-900
+        data.cell.styles.textColor = [6, 78, 59];
       }
     },
     margin: { top: 12, bottom: 12, left: 10, right: 10 }
@@ -276,12 +275,12 @@ function generateCommercialOrderPdf(order) {
 
   // Bloco Esquerdo: Instruções Mandatórias da Loja (ALS 10)
   const leftW = 165;
-  doc.setFillColor(254, 242, 242); // Red-50
-  doc.setDrawColor(239, 68, 68); // Red-500
+  doc.setFillColor(254, 242, 242);
+  doc.setDrawColor(239, 68, 68);
   doc.setLineWidth(0.3);
   doc.roundedRect(10, finalY, leftW, bottomCardH, 1.5, 1.5, 'FD');
 
-  doc.setTextColor(153, 27, 27); // Red-800
+  doc.setTextColor(153, 27, 27);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.2);
   doc.text('REGRAS MANDATÓRIAS DE RECEBIMENTO & FATURAMENTO (REDE MEGA 12 / ALS 10):', 13, finalY + 4);
@@ -311,20 +310,18 @@ function generateCommercialOrderPdf(order) {
   doc.setLineWidth(0.3);
   doc.roundedRect(rightX, finalY, rightW, bottomCardH, 1.5, 1.5, 'FD');
 
-  // Destaque do Valor Total
-  doc.setFillColor(5, 150, 105); // Emerald-600
+  doc.setFillColor(5, 150, 105);
   doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
 
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
-  doc.text(`TOTAL GERAL DO PEDIDO (${(order.items || []).length} ITENS | ${totalVolumesGeral} CX | ${totalPecasGeral} UN):`, rightX + 6, finalY + 7);
+  doc.text(`TOTAL GERAL DO PEDIDO (${(order.items || []).length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX | ${totalPecasGeral.toLocaleString('pt-BR')} UN):`, rightX + 6, finalY + 7);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.text(formatCurrency(subtotalGeral), rightX + 6, finalY + 13);
 
-  // Linhas de Assinatura
   const sigY = finalY + 23;
   doc.setDrawColor(148, 163, 184);
   doc.setLineWidth(0.2);
@@ -360,8 +357,8 @@ function generateCommercialOrderPdf(order) {
   return { buffer, filename };
 }
 
-// Executar com dados de exemplo reais baseados nos modelos
-const sampleOrder = {
+// 25 items to test multi-page flow
+const multiPageOrder = {
   header: {
     numeroPedido: '85132909',
     status: 'Aprovado',
@@ -375,20 +372,19 @@ const sampleOrder = {
     tipoFrete: 'CIF (Entrega no Depósito Irati)',
     observacoes: 'CLIENTE PAGA PARTE ESPECIAL SOMENTE POR DEPÓSITOS. BOLETOS NÃO DEVEM EXCEDER O VALOR DE R$ 9.999,00.'
   },
-  items: [
-    { codigoBarras: '7908470605100', codigoFornecedor: 'F5100', descricao: 'GARRAFA 600 ML SPORT PLÁSTICO 7,6 CM X 7,6 CM X 23 CM', qtdNoPacote: 60, qtdPacotes: 12, qtdTotalUnidades: 720, precoUnitario: 6.90, valorTotalLiquido: 4968.00 },
-    { codigoBarras: '7908470605295', codigoFornecedor: 'F5108', descricao: 'GARRAFA 650ML PLÁSTICO E AÇO 7 CM X 7 CM X 25 CM', qtdNoPacote: 60, qtdPacotes: 10, qtdTotalUnidades: 600, precoUnitario: 6.90, valorTotalLiquido: 4140.00 },
-    { codigoBarras: '7908470605899', codigoFornecedor: 'F5159', descricao: 'GARRAFA 600ML PLÁSTICO PP E PET 7,8CM X 7,3CM X 22 CM', qtdNoPacote: 60, qtdPacotes: 10, qtdTotalUnidades: 600, precoUnitario: 6.90, valorTotalLiquido: 4140.00 },
-    { codigoBarras: '7908470606308', codigoFornecedor: 'F5194', descricao: 'GARRAFA 400ML INFANTIL PLÁSTICO PS E PP 6,8CM X 6,8 CM', qtdNoPacote: 60, qtdPacotes: 9, qtdTotalUnidades: 540, precoUnitario: 6.90, valorTotalLiquido: 3726.00 },
-    { codigoBarras: '7908470607112', codigoFornecedor: 'F5319', descricao: 'GARRAFA INFANTIL 340ML PLÁSTICO PET E PP 6.5 CM X 18 CM', qtdNoPacote: 60, qtdPacotes: 8, qtdTotalUnidades: 480, precoUnitario: 5.80, valorTotalLiquido: 2784.00 },
-    { codigoBarras: '7908470608221', codigoFornecedor: 'F5330', descricao: 'GARRAFA INFANTIL 750 ML PLÁSTICO PP 24 CM X 6.5 CM', qtdNoPacote: 60, qtdPacotes: 6, qtdTotalUnidades: 360, precoUnitario: 5.90, valorTotalLiquido: 2124.00 },
-    { codigoBarras: '7908470609334', codigoFornecedor: 'F5336', descricao: 'GARRAFA CAPIVARA 730 ML PLASTICO PP 8,5 CM X 7 CM', qtdNoPacote: 60, qtdPacotes: 9, qtdTotalUnidades: 540, precoUnitario: 5.87, valorTotalLiquido: 3169.80 },
-    { codigoBarras: '7908470610445', codigoFornecedor: 'F5341', descricao: 'GARRAFA CAPIVARA 400 ML PLASTICO PC E PP 6,5 CM X 15 CM', qtdNoPacote: 60, qtdPacotes: 12, qtdTotalUnidades: 720, precoUnitario: 6.72, valorTotalLiquido: 4838.40 },
-    { codigoBarras: '7908470611556', codigoFornecedor: 'F5392', descricao: 'GARRAFA 700 ML PLASTICO PC 6,9 CM X 6,9 CM X 25 CM', qtdNoPacote: 60, qtdPacotes: 18, qtdTotalUnidades: 1080, precoUnitario: 6.76, valorTotalLiquido: 7300.80 }
-  ]
+  items: Array.from({ length: 24 }, (_, i) => ({
+    codigoBarras: '790847060' + String(5000 + i),
+    codigoFornecedor: 'F5' + String(100 + i),
+    descricao: `PRODUTO LINHA UTILIDADES & BAZAR MODELO ESPECIAL ITEM Nº ${i + 1}`,
+    qtdNoPacote: 60,
+    qtdPacotes: 10,
+    qtdTotalUnidades: 600,
+    precoUnitario: 5.50 + (i * 0.15),
+    valorTotalLiquido: 600 * (5.50 + (i * 0.15))
+  }))
 };
 
-const result = generateCommercialOrderPdf(sampleOrder);
-const targetPath = path.join(__dirname, '..', 'PDF', 'exemplo_pedido_mega12.pdf');
-fs.writeFileSync(targetPath, result.buffer);
-console.log('Sample PDF successfully created at:', targetPath, 'Size:', result.buffer.length);
+const res = generateCommercialOrderPdf(multiPageOrder);
+const outPath = path.join(__dirname, '..', 'PDF', 'teste_multipage.pdf');
+fs.writeFileSync(outPath, res.buffer);
+console.log('Multi-page test generated at:', outPath);

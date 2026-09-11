@@ -3,6 +3,12 @@ import autoTable from 'jspdf-autotable';
 import { API_BASE_URL } from './config';
 import { PurchaseOrder, StoreConfig } from '../shared/types';
 import { DEFAULT_STORES } from '../shared/constants';
+import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
+
+function formatCurrency(val: number | string): string {
+  const num = Number(val) || 0;
+  return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 function getAvariaUnits(quantidade: number, unidadeMedida?: string, qtdPorPacote: number = 1): number {
   const qtd = Number(quantidade) || 0;
@@ -54,248 +60,354 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     console.warn('Fallback para download PDF local do pedido:', backendErr);
   }
 
-  // 2. Geração Local via jsPDF (Fallback Completo)
+  // 2. Geração Local via jsPDF (Fallback Completo em Paisagem)
   try {
     const doc = new jsPDF({
-      orientation: 'portrait',
+      orientation: 'landscape',
       unit: 'mm',
       format: 'a4'
     });
 
-    // Cabeçalho Principal (Verde Esmeralda Corporativo)
-    doc.setFillColor(5, 150, 105); // Emerald-600
-    doc.rect(0, 0, 210, 22, 'F');
+    const rawNum = order.header?.numeroPedido || 'PED-0001';
+    const numeroPedido = String(rawNum).replace(/[^a-zA-Z0-9_-]/g, '');
+    const cleanFornecedor = (order.header?.fornecedor || 'Fornecedor').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const status = order.header?.status || 'Aprovado';
+    const dataEmissao = order.header?.dataEmissao || new Date().toLocaleDateString('pt-BR');
+    const dataEntrega = order.header?.dataEntregaPrevista || 'A Combinar';
+    const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
+    const vendedor = order.header?.vendedor || 'N/A';
+    const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
+    const condicaoPagamento = order.header?.condicaoPagamento || 'A Combinar';
+    const formaPagamento = order.header?.formaPagamento || 'Boleto Bancário';
+    const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
+    const observacoes = order.header?.observacoes || order.header?.observacoesDescarga || '';
 
-    doc.setFontSize(14);
+    // =========================================================================
+    // 1. CABEÇALHO SUPERIOR (Logo Oficial + Título + Badge do Pedido)
+    // =========================================================================
+    if (LOGO_MEGA12_BASE64) {
+      try {
+        doc.addImage(LOGO_MEGA12_BASE64, 'PNG', 10, 6, 20, 20);
+      } catch (err) {
+        console.warn('Erro ao inserir logo no PDF comercial local:', err);
+      }
+    }
+
+    // Título e Identidade da Loja
+    doc.setTextColor(15, 23, 42); // Slate-900
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('MEGA 12 • PEDIDO DE COMPRA COMERCIAL', 33, 12);
+
+    doc.setTextColor(5, 150, 105); // Emerald-600
+    doc.setFontSize(8);
+    doc.text('ALS 10 BAZAR E BRINQUEDOS LTDA  •  AUTORIZAÇÃO OFICIAL DE FORNECIMENTO', 33, 17.5);
+
+    doc.setTextColor(100, 116, 139); // Slate-500
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text('Documento oficial para faturamento, separação e expedição de mercadorias', 33, 22);
+
+    // Badge do Pedido (Canto Superior Direito)
+    doc.setFillColor(15, 23, 42);
+    doc.roundedRect(205, 5.5, 82, 20, 1.5, 1.5, 'F');
+
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.text('MEGA 12 - PEDIDO DE COMPRA', 12, 11);
+    doc.setFontSize(11);
+    doc.text(`PEDIDO Nº ${numeroPedido}`, 209, 11.5);
 
-    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text('AUTORIZAÇÃO DE FORNECIMENTO & COMPRA OFICIAL', 12, 17);
+    doc.setFontSize(7);
+    doc.text(`Emissão: ${dataEmissao}  |  Status: ${status}`, 209, 16);
 
-    const now = new Date();
-    doc.text(`Emissão: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 148, 17);
+    doc.setTextColor(253, 224, 71); // Yellow-300
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Previsão de Entrega: ${dataEntrega}`, 209, 21);
 
-    // Box 1: Dados do Comprador / Faturamento (Esquerda)
+    // =========================================================================
+    // 2. BANNER DE ALERTA OBRIGATÓRIO (Âmbar/Amarelo Oficial ALS 10)
+    // =========================================================================
+    doc.setFillColor(254, 243, 199); // Amber-100
+    doc.setDrawColor(245, 158, 11); // Amber-500
+    doc.setLineWidth(0.3);
+    doc.roundedRect(10, 27, 277, 6.5, 1, 1, 'FD');
+
+    doc.setTextColor(146, 64, 14); // Amber-800
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.text('! ATENÇÃO OBRIGATÓRIA: AGENDAR ENTREGA COM ROBERTA: (42) 9 9136-5009  |  DESCARREGAMENTO POR CONTA DO FORNECEDOR', 14, 31.5);
+
+    // =========================================================================
+    // 3. CARDS DE DADOS: COMPRADOR & FORNECEDOR (Lado a Lado)
+    // =========================================================================
+    const cardY = 35.5;
+    const cardH = 28.5;
+    const cardW = 136;
+
+    // Card 1: Comprador / Faturamento (Esquerda)
     doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(12, 26, 90, 38, 2, 2, 'FD');
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(10, cardY, cardW, cardH, 1.5, 1.5, 'FD');
+
+    doc.setFillColor(241, 245, 249);
+    doc.rect(10.2, cardY + 0.2, cardW - 0.4, 5, 'F');
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.text('DADOS DA EMPRESA COMPRADORA & FATURAMENTO:', 13, cardY + 3.8);
 
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
-    doc.text('DADOS DA EMPRESA COMPRADORA:', 15, 31);
-
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ALS 10 Bazar e Brinquedos Ltda', 15, 36);
+    doc.text('Razão Social: ALS 10 BAZAR E BRINQUEDOS LTDA', 13, cardY + 8.5);
     doc.setFont('helvetica', 'normal');
-    doc.text('CNPJ: 37.144.240/0001-70 | IE: 90847822-35', 15, 40.5);
-    doc.text('Av. José Galiciolli, 152 – BR153 – Centro', 15, 45);
-    doc.text('CEP: 84500-009 – Irati – PR', 15, 49.5);
-    doc.text('E-mail: als.conecta@gmail.com', 15, 54);
-    doc.text('Compras: (55) 9 9659-6315 (Rafael)', 15, 58.5);
+    doc.text('CNPJ: 37.144.240/0001-70       IE: 90847822-35', 13, cardY + 12.3);
+    doc.setFont('helvetica', 'bold');
+    doc.text('End. Entrega: Av. José Galiciolli, 152 – BR153 – Centro – Irati – PR (CEP: 84500-009)', 13, cardY + 16.1);
+    doc.setTextColor(5, 150, 105);
+    doc.text('E-mail para Boletos e XML: als.conecta@gmail.com', 13, cardY + 19.9);
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Compras: (55) 9 9659-6315 (Rafael)  |  Faturamento: (55) 9 99691-0247 (Ketlyn)', 13, cardY + 23.7);
+    doc.text('Financeiro: (55) 9 3618-5609 (Bruna)', 13, cardY + 27.2);
 
-    // Box 2: Dados do Pedido e Fornecedor (Direita)
+    // Card 2: Fornecedor & Comercial (Direita)
+    const card2X = 151;
     doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(108, 26, 90, 38, 2, 2, 'FD');
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(card2X, cardY, cardW, cardH, 1.5, 1.5, 'FD');
 
+    doc.setFillColor(241, 245, 249);
+    doc.rect(card2X + 0.2, cardY + 0.2, cardW - 0.4, 5, 'F');
+    doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('DADOS DO PEDIDO & FORNECEDOR:', 111, 31);
+    doc.setFontSize(7.2);
+    doc.text('DADOS DO FORNECEDOR & CONDIÇÕES COMERCIAIS:', card2X + 3, cardY + 3.8);
 
-    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Nº Pedido: ${order.header?.numeroPedido || 'PED-0001'}`, 111, 36);
+    doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 8.5);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Status: ${order.header?.status || 'Aprovado'}`, 160, 36);
-    doc.text(`Fornecedor: ${order.header?.fornecedor || 'Fornecedor'}`, 111, 40.5);
-    doc.text(`Vendedor / Contato: ${order.header?.vendedor || 'N/A'} (${order.header?.contatoVendedor || 'S/ Contato'})`, 111, 45);
-    
-    const formaPg = order.header?.formaPagamento ? ` (${order.header.formaPagamento})` : '';
-    const condPg = order.header?.condicaoPagamento || 'A Combinar';
-    doc.text(`Pagamento: ${condPg}${formaPg}`, 111, 49.5);
+    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 12.3);
+    doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 16.1);
+    doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 19.9);
+    doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 23.7);
+    doc.setTextColor(5, 150, 105);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Previsão de Entrega: ${dataEntrega}`, card2X + 3, cardY + 27.2);
 
-    const freteTipo = order.header?.tipoFrete || 'CIF';
-    const freteVal = Number(order.header?.valorFrete) > 0 ? ` (R$ ${Number(order.header?.valorFrete).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : '';
-    doc.text(`Frete: ${freteTipo}${freteVal} | Entrega: ${order.header?.dataEntregaPrevista || 'A combinar'}`, 111, 54);
-
-    const descOff = Number(order.header?.percentualDescontoOff || order.header?.descontoComercialTotal || 0);
-    const aliqSt = Number(order.header?.aliquotaSt || 0);
-
-    // Tabela de Itens Comercial (SEM PDV ALVO OU MARGENS INTERNAS - PARA FORNECEDOR)
+    // =========================================================================
+    // 4. TABELA DE ITENS (SEM Código Interno e SEM Desconto)
+    // =========================================================================
     const headCols = [
       '#',
-      'Cód. Interno',
-      'Ref. Fornec.',
+      'Cód. Barras (EAN)',
+      'Ref. Fornecedor',
       'Descrição do Produto',
-      'Qtd/Pac',
-      'Qtd Pac',
+      'Qtd/Cx',
+      'Qtd Cx',
       'Total Peças',
       'Preço Unit.',
-      'Desc. (%)',
-      'Total Líq.'
+      'Valor Total'
     ];
 
-    let totalPecasGeral = 0;
     let totalVolumesGeral = 0;
-    let subtotalBrutoGeral = 0;
-    let totalDescontoItens = 0;
+    let totalPecasGeral = 0;
+    let subtotalGeral = 0;
 
-    const bodyRows = (order.items || []).map((item, idx) => {
-      const codInterno = item.codigoInterno || item.codigo || `PRD-${idx + 1}`;
-      const codFornecedor = item.codigoFornecedor || '-';
+    const filteredItems = (order.items || []).filter(it =>
+      Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoFornecedor?.trim() || it.referencia?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0)
+    );
+
+    const bodyRows = filteredItems.map((item, idx) => {
+      const codBarras = item.codigoBarras || item.eanBarcode || '-';
+      const refFornec = item.codigoFornecedor || item.referencia || item.codigo || '-';
       const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
       const pacotes = Number(item.qtdPacotes) || 0;
-      const pecas = Number(item.qtdTotalUnidades) || (pack * pacotes);
+      const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
       const precoUnit = Number(item.precoUnitario) || 0;
-      const descPct = Number(item.percentualDesconto) || 0;
-      const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
-      const valorDesc = item.valorDescontoItem !== undefined ? item.valorDescontoItem : (valorBruto * (descPct / 100));
-      const valorLiquido = item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (valorBruto - valorDesc);
+      const valorTotal = Number(item.valorTotalLiquido) || Number(item.valorTotalBruto) || (pecas * precoUnit);
 
-      totalPecasGeral += pecas;
       totalVolumesGeral += pacotes;
-      subtotalBrutoGeral += valorBruto;
-      totalDescontoItens += valorDesc;
+      totalPecasGeral += pecas;
+      subtotalGeral += valorTotal;
 
       return [
         String(idx + 1),
-        codInterno,
-        codFornecedor,
+        codBarras,
+        refFornec,
         item.descricao || 'Produto sem descrição',
         String(pack),
         pacotes.toLocaleString('pt-BR'),
         pecas.toLocaleString('pt-BR') + ' un',
-        `R$ ${precoUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        descPct > 0 ? `${descPct}%` : '-',
-        `R$ ${valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        formatCurrency(precoUnit),
+        formatCurrency(valorTotal)
       ];
     });
 
-    const valorDescontoTotal = totalDescontoItens > 0 ? totalDescontoItens : (descOff > 0 ? subtotalBrutoGeral * (descOff / 100) : 0);
-    const subtotalAposDesconto = Math.max(0, subtotalBrutoGeral - valorDescontoTotal);
-    const valorStTotal = aliqSt > 0 ? subtotalAposDesconto * (aliqSt / 100) : 0;
-    const subtotalLiquidoGeral = subtotalAposDesconto + valorStTotal;
-
-    doc.text(`Desconto Geral: ${descOff > 0 ? `${descOff}%` : '0%'} | ST: ${aliqSt > 0 ? `${aliqSt}%` : '0%'}`, 111, 58.5);
-
+    // Linha de Totais da Tabela (com colSpan elegante)
     const footerRow = [
-      '',
-      'TOTAL DO PEDIDO',
-      '',
-      `${(order.items || []).length} itens`,
-      '',
-      totalVolumesGeral.toLocaleString('pt-BR') + ' pac',
-      totalPecasGeral.toLocaleString('pt-BR') + ' un',
-      '',
-      valorDescontoTotal > 0 ? `-R$ ${valorDescontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '',
-      `R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      {
+        content: `TOTAIS DO PEDIDO (${bodyRows.length} itens)`,
+        colSpan: 5,
+        styles: { halign: 'left', fontStyle: 'bold' }
+      },
+      {
+        content: totalVolumesGeral.toLocaleString('pt-BR') + ' cx',
+        styles: { halign: 'center', fontStyle: 'bold' }
+      },
+      {
+        content: totalPecasGeral.toLocaleString('pt-BR') + ' un',
+        styles: { halign: 'center', fontStyle: 'bold' }
+      },
+      {
+        content: '',
+        styles: { halign: 'right' }
+      },
+      {
+        content: formatCurrency(subtotalGeral),
+        styles: { halign: 'right', fontStyle: 'bold' }
+      }
     ];
 
     autoTable(doc, {
-      startY: 68,
+      startY: 66,
       head: [headCols],
       body: [...bodyRows, footerRow],
       theme: 'grid',
-      styles: { fontSize: 7, cellPadding: 1.2, halign: 'center', valign: 'middle' },
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.2 },
+      styles: {
+        fontSize: 7,
+        cellPadding: 1.2,
+        halign: 'center',
+        valign: 'middle',
+        lineColor: [226, 232, 240],
+        lineWidth: 0.2
+      },
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 7.2,
+        halign: 'center'
+      },
       columnStyles: {
         0: { cellWidth: 8, halign: 'center' },
-        1: { cellWidth: 18, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
-        2: { cellWidth: 18, halign: 'center', textColor: [100, 116, 139] },
-        3: { cellWidth: 48, halign: 'left', fontStyle: 'bold' },
-        4: { cellWidth: 14, halign: 'center' },
-        5: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
-        6: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
-        7: { cellWidth: 18, halign: 'right' },
-        8: { cellWidth: 14, halign: 'center' },
-        9: { cellWidth: 20, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }
+        1: { cellWidth: 28, halign: 'center', textColor: [71, 85, 105] },
+        2: { cellWidth: 25, halign: 'center', fontStyle: 'bold', textColor: [15, 23, 42] },
+        3: { cellWidth: 110, halign: 'left', fontStyle: 'bold' },
+        4: { cellWidth: 18, halign: 'center' },
+        5: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+        6: { cellWidth: 22, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
+        7: { cellWidth: 22, halign: 'right' },
+        8: { cellWidth: 26, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252]
       },
       didParseCell: (data) => {
         if (data.row.index === bodyRows.length) {
-          data.cell.styles.fillColor = [209, 250, 229];
+          data.cell.styles.fillColor = [209, 250, 229]; // Emerald-100
           data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.textColor = [6, 78, 59];
+          data.cell.styles.textColor = [6, 78, 59]; // Emerald-900
         }
-      }
+      },
+      margin: { top: 12, bottom: 12, left: 10, right: 10 }
     });
 
-    const pageHeight = doc.internal.pageSize.height || 297;
-    let finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 5 : 185;
+    // =========================================================================
+    // 5. BLOCO INFERIOR: REGRAS OPERACIONAIS & RESUMO FINANCEIRO / ASSINATURAS
+    // =========================================================================
+    let finalY = ((doc as any).lastAutoTable?.finalY || 160) + 4;
+    const pageHeight = doc.internal.pageSize.height || 210;
 
-    if (finalY + 70 > pageHeight) {
+    if (finalY + 34 > pageHeight - 12) {
       doc.addPage();
-      finalY = 15;
+      finalY = 12;
     }
 
-    // Box de Resumo Financeiro & Condições
-    doc.setFillColor(241, 245, 249);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(12, finalY, 186, 24, 2, 2, 'FD');
+    const bottomCardH = 32;
 
-    doc.setFontSize(8);
+    // Bloco Esquerdo: Instruções Mandatórias da Loja (ALS 10)
+    const leftW = 165;
+    doc.setFillColor(254, 242, 242); // Red-50
+    doc.setDrawColor(239, 68, 68); // Red-500
+    doc.setLineWidth(0.3);
+    doc.roundedRect(10, finalY, leftW, bottomCardH, 1.5, 1.5, 'FD');
+
+    doc.setTextColor(153, 27, 27); // Red-800
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.text('REGRAS MANDATÓRIAS DE RECEBIMENTO & FATURAMENTO (REDE MEGA 12 / ALS 10):', 13, finalY + 4);
+
     doc.setTextColor(15, 23, 42);
-    doc.setFont('helvetica', 'bold');
-    doc.text('RESUMO FINANCEIRO DO PEDIDO:', 16, finalY + 5.5);
-
-    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
-    doc.text(`• Total de Itens: ${(order.items || []).length}`, 16, finalY + 11);
-    doc.text(`• Volumes (Caixas): ${totalVolumesGeral.toLocaleString('pt-BR')}`, 16, finalY + 16);
-    doc.text(`• Total de Peças: ${totalPecasGeral.toLocaleString('pt-BR')} unidades`, 16, finalY + 21);
-
-    doc.text(`• Subtotal Bruto: R$ ${subtotalBrutoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 75, finalY + 11);
-    doc.text(`• Desconto Comercial (Itens): ${valorDescontoTotal > 0 ? `- R$ ${valorDescontoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}`, 75, finalY + 16);
-    doc.text(`• Impostos / ST: ${valorStTotal > 0 ? `+ R$ ${valorStTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Incluso / Isento'}`, 75, finalY + 21);
-
-    // Destaque do Total Líquido
-    doc.setFillColor(5, 150, 105);
-    doc.roundedRect(138, finalY + 3, 56, 18, 2, 2, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    doc.text('VALOR TOTAL LÍQUIDO:', 142, finalY + 8.5);
-    doc.setFontSize(10.5);
+    doc.setFontSize(6.5);
+    doc.text('1. Boletos NÃO devem exceder o valor de R$ 9.999,00 por título.', 13, finalY + 8);
+    doc.text('2. Boletos e arquivo XML da Nota Fiscal devem ser enviados para: als.conecta@gmail.com.', 13, finalY + 11.8);
+    doc.text('3. Pagamento de Parte Especial exclusivamente via depósitos bancários autorizados.', 13, finalY + 15.6);
+    doc.text('4. Os pedidos seguem espelho oficial da empresa. Favor conferir e avisar imediatamente se houver desacordo.', 13, finalY + 19.4);
+    doc.text('5. Descarregamento no local de entrega sob responsabilidade do fornecedor / transportadora.', 13, finalY + 23.2);
     doc.setFont('helvetica', 'bold');
-    doc.text(`R$ ${subtotalLiquidoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 142, finalY + 16);
-
-    // Box de Instruções de Entrega e Faturamento
-    const noticeY = finalY + 27;
-    doc.setFillColor(254, 242, 242);
-    doc.setDrawColor(239, 68, 68);
-    doc.roundedRect(12, noticeY, 186, 28, 2, 2, 'FD');
-
     doc.setTextColor(185, 28, 28);
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('INSTRUÇÕES IMPORTANTES DE FATURAMENTO & ENTREGA:', 16, noticeY + 5.5);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(6.8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('1. Endereço de Entrega: AV. JOSÉ GALICIOLLI, 152 – BR153 – Centro, Irati – PR (CEP: 84500-009).', 16, noticeY + 10.5);
-    doc.text('2. Descarregamento por conta do fornecedor / transportadora.', 16, noticeY + 14.5);
-    doc.text('3. AGENDAMENTO OBRIGATÓRIO DE ENTREGA com Roberta pelo WhatsApp/Telefone: (42) 9 9136-5009.', 16, noticeY + 18.5);
-    doc.text('4. Boletos NÃO devem exceder R$ 9.999,00 por título e devem ser enviados com o XML para als.conecta@gmail.com.', 16, noticeY + 22.5);
-    if (order.header?.observacoesDescarga) {
-      doc.text(`5. Descrição: ${order.header.observacoesDescarga}`, 16, noticeY + 26.5);
+    doc.text('6. AGENDAMENTO OBRIGATÓRIO DE ENTREGA COM ROBERTA: (42) 9 9136-5009', 13, finalY + 27);
+    if (observacoes) {
+      doc.setTextColor(71, 85, 105);
+      doc.setFont('helvetica', 'italic');
+      doc.text(`Obs: ${observacoes.substring(0, 115)}`, 13, finalY + 30.2);
     }
 
-    // Assinaturas
-    const sigY = noticeY + 34;
-    doc.setDrawColor(148, 163, 184);
-    doc.line(20, sigY + 8, 90, sigY + 8);
-    doc.line(120, sigY + 8, 190, sigY + 8);
+    // Bloco Direito: Resumo Financeiro & Assinaturas
+    const rightX = 179;
+    const rightW = 108;
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(rightX, finalY, rightW, bottomCardH, 1.5, 1.5, 'FD');
 
-    doc.setFontSize(7);
+    // Destaque do Valor Total
+    doc.setFillColor(5, 150, 105); // Emerald-600
+    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.8);
+    doc.text(`TOTAL GERAL DO PEDIDO (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX | ${totalPecasGeral.toLocaleString('pt-BR')} UN):`, rightX + 6, finalY + 7);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text(formatCurrency(subtotalGeral), rightX + 6, finalY + 13);
+
+    // Linhas de Assinatura
+    const sigY = finalY + 23;
+    doc.setDrawColor(148, 163, 184);
+    doc.setLineWidth(0.2);
+    doc.line(rightX + 5, sigY, rightX + 48, sigY);
+    doc.line(rightX + 56, sigY, rightX + 102, sigY);
+
+    doc.setFontSize(6);
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'bold');
-    doc.text('ALS 10 / MEGA 12 (COMPRADOR)', 30, sigY + 12);
-    doc.text('ACEITE DO FORNECEDOR / REPRESENTANTE', 126, sigY + 12);
+    doc.text('ALS 10 / MEGA 12 (COMPRADOR)', rightX + 7, sigY + 3.5);
+    doc.text('ACEITE DO FORNECEDOR', rightX + 61, sigY + 3.5);
+
+    // =========================================================================
+    // 6. RODAPÉ DE PÁGINA EM TODAS AS PÁGINAS
+    // =========================================================================
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.2);
+      doc.line(10, 203, 287, 203);
+
+      doc.setFontSize(6.5);
+      doc.setTextColor(148, 163, 184);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Rede Mega 12 • Sistema de Gestão de Compras (ALS 10 Bazar e Brinquedos Ltda)', 10, 206.5);
+      doc.text(`Pedido: ${numeroPedido}  |  Página ${i} de ${totalPages}`, 250, 206.5);
+    }
 
     doc.save(filename);
     return true;

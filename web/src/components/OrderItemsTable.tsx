@@ -100,6 +100,18 @@ const ALL_COLUMNS: ColumnMeta[] = [
   { key: 'acoes', label: 'AÇÕES', thClass: 'text-center', defaultWidth: 90, minWidth: 60 },
 ];
 
+const EDITABLE_EXCEL_FIELDS: ColumnKey[] = [
+  'codigoInterno',
+  'codigoBarras',
+  'codigoFornecedor',
+  'descricao',
+  'qtdNoPacote',
+  'qtdPacotes',
+  'qtdTotalUnidades',
+  'precoUnitario',
+  'pdvAlvo'
+];
+
 // Helper para destacar os caracteres digitados no texto
 function highlightMatch(text: string, query: string) {
   if (!query || !text || query.trim().length === 0) return text;
@@ -761,36 +773,120 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     return { bruto, desconto, liquido, pecas, precoMedio, rupturasCount };
   }, [items]);
 
-  // Navegação por teclado estilo planilha Excel (Enter para descer de linha, Setas Cima/Baixo)
+  // Navegação completa por teclado estilo planilha Excel (Setas Cima, Baixo, Esquerda, Direita e Enter)
   const handleExcelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, field: string) => {
     if (activeAutocompleteItemId) {
       if (e.key === 'Escape') {
         setActiveAutocompleteItemId(null);
         return;
       }
+      // Se autocomplete estiver aberto na busca, permite setas cima/baixo para navegar opções do dropdown
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        return;
+      }
     }
 
+    // Identifica lista ordenada de colunas editáveis atualmente visíveis na tabela
+    const visibleEditableCols = orderedVisibleColumns
+      .map(c => c.key)
+      .filter(k => EDITABLE_EXCEL_FIELDS.includes(k));
+    
+    const currentColIdx = visibleEditableCols.indexOf(field as ColumnKey);
+
+    const focusCell = (targetRow: number, targetColField: string): boolean => {
+      const nextInput = document.querySelector<HTMLInputElement>(
+        `input[data-excel-row="${targetRow}"][data-excel-field="${targetColField}"]`
+      );
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select();
+        return true;
+      }
+      return false;
+    };
+
+    // Detecção segura de posição do cursor / seleção de texto no input
+    let isAtStart = true;
+    let isAtEnd = true;
+    let isAllSelected = true;
+
+    try {
+      const input = e.currentTarget;
+      if (input.type === 'number') {
+        isAtStart = true;
+        isAtEnd = true;
+        isAllSelected = true;
+      } else {
+        const valLen = input.value.length;
+        const selStart = input.selectionStart ?? 0;
+        const selEnd = input.selectionEnd ?? 0;
+        isAllSelected = (selStart === 0 && selEnd === valLen) || valLen === 0;
+        isAtStart = isAllSelected || selStart === 0;
+        isAtEnd = isAllSelected || selEnd === valLen;
+      }
+    } catch {
+      isAtStart = true;
+      isAtEnd = true;
+      isAllSelected = true;
+    }
+
+    // 1. SETA PARA BAIXO (↓)
+    if (e.key === 'ArrowDown' && !e.altKey) {
+      e.preventDefault();
+      focusCell(rowIndex + 1, field);
+      return;
+    }
+
+    // 2. SETA PARA CIMA (↑)
+    if (e.key === 'ArrowUp' && !e.altKey && rowIndex > 0) {
+      e.preventDefault();
+      focusCell(rowIndex - 1, field);
+      return;
+    }
+
+    // 3. SETA PARA DIREITA (→)
+    if (e.key === 'ArrowRight' && !e.altKey && isAtEnd) {
+      e.preventDefault();
+      if (currentColIdx >= 0 && currentColIdx < visibleEditableCols.length - 1) {
+        // Próxima coluna na mesma linha
+        focusCell(rowIndex, visibleEditableCols[currentColIdx + 1]);
+      } else if (rowIndex < items.length - 1) {
+        // Primeira coluna da próxima linha
+        focusCell(rowIndex + 1, visibleEditableCols[0]);
+      }
+      return;
+    }
+
+    // 4. SETA PARA ESQUERDA (←)
+    if (e.key === 'ArrowLeft' && !e.altKey && isAtStart) {
+      e.preventDefault();
+      if (currentColIdx > 0) {
+        // Coluna anterior na mesma linha
+        focusCell(rowIndex, visibleEditableCols[currentColIdx - 1]);
+      } else if (rowIndex > 0) {
+        // Última coluna da linha anterior
+        focusCell(rowIndex - 1, visibleEditableCols[visibleEditableCols.length - 1]);
+      }
+      return;
+    }
+
+    // 5. ENTER
     if (e.key === 'Enter') {
       e.preventDefault();
-      const nextInput = document.querySelector<HTMLInputElement>(`input[data-excel-row="${rowIndex + 1}"][data-excel-field="${field}"]`);
-      if (nextInput) {
-        nextInput.focus();
-        nextInput.select();
+      if (e.shiftKey) {
+        // Shift+Enter sobe de linha
+        focusCell(rowIndex - 1, field);
+      } else {
+        // Enter desce de linha
+        const moved = focusCell(rowIndex + 1, field);
+        if (!moved && rowIndex === items.length - 1 && onAddItem) {
+          onAddItem();
+          setTimeout(() => {
+            focusCell(rowIndex + 1, field);
+          }, 60);
+        }
       }
-    } else if (e.key === 'ArrowDown' && !e.altKey && !activeAutocompleteItemId) {
-      const nextInput = document.querySelector<HTMLInputElement>(`input[data-excel-row="${rowIndex + 1}"][data-excel-field="${field}"]`);
-      if (nextInput) {
-        e.preventDefault();
-        nextInput.focus();
-        nextInput.select();
-      }
-    } else if (e.key === 'ArrowUp' && !e.altKey && !activeAutocompleteItemId && rowIndex > 0) {
-      const prevInput = document.querySelector<HTMLInputElement>(`input[data-excel-row="${rowIndex - 1}"][data-excel-field="${field}"]`);
-      if (prevInput) {
-        e.preventDefault();
-        prevInput.focus();
-        prevInput.select();
-      }
+      return;
     }
   };
 

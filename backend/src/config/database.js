@@ -10,6 +10,22 @@ if (!fs.existsSync(dbDir)) {
 
 const dbPath = path.join(dbDir, config.DB_FILENAME);
 
+// Reset completo do banco de dados via variável de ambiente RESET_DATABASE=true
+// Quando ativa, o arquivo do banco é excluído antes da inicialização, forçando
+// a criação de um novo banco vazio com as tabelas padrão e seeds iniciais.
+if (process.env.RESET_DATABASE === 'true') {
+  try {
+    if (fs.existsSync(dbPath)) {
+      fs.unlinkSync(dbPath);
+      console.log(`🗑️  RESET_DATABASE=true: banco de dados "${dbPath}" foi excluído. Um novo banco será criado do zero.`);
+    } else {
+      console.log('🗑️  RESET_DATABASE=true: nenhum banco de dados existente foi encontrado. Um novo banco será criado do zero.');
+    }
+  } catch (resetErr) {
+    console.error('Erro ao tentar resetar o banco de dados:', resetErr.message);
+  }
+}
+
 let dbInstance = null;
 
 async function getDatabase() {

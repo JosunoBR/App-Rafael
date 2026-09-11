@@ -63,6 +63,7 @@ export type ColumnKey =
   | 'qtdNoPacote'
   | 'qtdPacotes'
   | 'qtdTotalUnidades'
+  | 'aliquotaIpi'
   | 'precoUnitario'
   | 'valorTotalLiquido'
   | 'pdvAlvo'
@@ -91,6 +92,7 @@ const ALL_COLUMNS: ColumnMeta[] = [
   { key: 'qtdNoPacote', label: 'QTD NO PAC', thClass: 'text-center', title: 'Quantidade por Embalagem (Caixa, Fardo, Display)', defaultWidth: 100, minWidth: 60 },
   { key: 'qtdPacotes', label: 'QTD DE PAC', thClass: 'text-center', title: 'Quantidade de Pacotes ou Caixas Compradas', defaultWidth: 100, minWidth: 60 },
   { key: 'qtdTotalUnidades', label: 'TOTAL PEÇAS', thClass: 'text-center', title: 'Quantidade Total de Peças (Qtd no Pac × Qtd de Pac)', defaultWidth: 110, minWidth: 65 },
+  { key: 'aliquotaIpi', label: 'IPI (%)', thClass: 'text-center', title: 'Alíquota de IPI (%) informada para o item', defaultWidth: 80, minWidth: 55 },
   { key: 'precoUnitario', label: 'VALOR', thClass: 'text-right', title: 'Valor unitário do produto (R$)', defaultWidth: 95, minWidth: 60 },
   { key: 'valorTotalLiquido', label: 'TOTAL (R$)', thClass: 'text-right', defaultWidth: 115, minWidth: 65 },
   { key: 'pdvAlvo', label: 'PDV', thClass: 'text-center', defaultWidth: 75, minWidth: 48 },
@@ -108,6 +110,7 @@ const EDITABLE_EXCEL_FIELDS: ColumnKey[] = [
   'qtdNoPacote',
   'qtdPacotes',
   'qtdTotalUnidades',
+  'aliquotaIpi',
   'precoUnitario',
   'pdvAlvo'
 ];
@@ -264,6 +267,18 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           filtered.unshift('ruptura');
         } else if (rIdx === -1) {
           filtered.unshift('ruptura');
+        }
+        // Garantir que a coluna de IPI fique logo antes do VALOR (precoUnitario)
+        const ipiPos = filtered.indexOf('aliquotaIpi');
+        const precoPos = filtered.indexOf('precoUnitario');
+        if (precoPos !== -1) {
+          if (ipiPos === -1) {
+            filtered.splice(precoPos, 0, 'aliquotaIpi');
+          } else if (ipiPos !== precoPos - 1) {
+            filtered.splice(ipiPos, 1);
+            const newPrecoPos = filtered.indexOf('precoUnitario');
+            filtered.splice(newPrecoPos, 0, 'aliquotaIpi');
+          }
         }
         return filtered;
       }
@@ -447,6 +462,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const valorDesc = Number((totalBruto * (descPct / 100)).toFixed(2));
     const valorLiquido = Number((totalBruto - valorDesc).toFixed(2));
     const precoEfetivo = preco * (1 - descPct / 100);
+    const ipiPct = (prod as any).aliquotaIpi || (prod as any).ipi || 0;
+    const valorIpi = Number((valorLiquido * (ipiPct / 100)).toFixed(2));
+    const ipiUnit = qtdTotal > 0 ? Number((valorIpi / qtdTotal).toFixed(4)) : 0;
 
     const defaultItem: OrderItem = {
       id: 'item_' + Date.now(),
@@ -457,6 +475,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       descricao: prod.descricao,
       fotoUrl: prod.fotoUrl || '',
       qtdTotalUnidades: qtdTotal,
+      aliquotaIpi: ipiPct,
+      valorIpi: valorIpi,
+      ipiUnitario: ipiUnit,
       precoUnitario: preco,
       valorTotalBruto: totalBruto,
       percentualDesconto: descPct,
@@ -482,7 +503,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     };
 
     onAddItem(fullItem);
-    setIsCatalogPickerOpen(false);
+    // Permite que o catálogo continue aberto para ir adicionando outros itens sem fechar
     setQuickSearchText('');
     setIsQuickSearchOpen(false);
   };
@@ -502,6 +523,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const totalLiquido = Number((totalBruto - valorDesc).toFixed(2));
     const precoEfetivo = preco * (1 - descPct / 100);
 
+    const ipiPct = item.aliquotaIpi !== undefined ? item.aliquotaIpi : ((prod as any).aliquotaIpi || (prod as any).ipi || 0);
+    const valorIpi = Number((totalLiquido * (ipiPct / 100)).toFixed(2));
+    const ipiUnit = qtdTotal > 0 ? Number((valorIpi / qtdTotal).toFixed(4)) : 0;
+
     const fiscal = calculateItemFiscal(precoEfetivo, pdv, globalFiscal, item.fiscalOverride);
     const separation = !item.separacaoManual 
       ? calculateAutomaticSeparation(qtdTotal, stores, item.qtdReservaEstoque || 0)
@@ -516,6 +541,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       descricao: prod.descricao,
       fotoUrl: prod.fotoUrl || item.fotoUrl || '',
       qtdTotalUnidades: qtdTotal,
+      aliquotaIpi: ipiPct,
+      valorIpi: valorIpi,
+      ipiUnitario: ipiUnit,
       precoUnitario: preco,
       valorTotalBruto: totalBruto,
       percentualDesconto: descPct,
@@ -577,6 +605,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       descricao: item.descricao.trim(),
       categoria: existing?.categoria || 'Geral',
       fotoUrl: item.fotoUrl || existing?.fotoUrl || '',
+      qtdPorPacote: item.qtdNoPacote || item.qtdPorPacote || existing?.qtdPorPacote || 1,
       precoUnitarioPadrao: item.precoUnitario > 0 ? item.precoUnitario : (existing?.precoUnitarioPadrao || 0),
       pdvSugerido: item.pdvAlvo || existing?.pdvSugerido || 12.00,
       ncm: existing?.ncm || '',
@@ -633,6 +662,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         descricao: photoModalItem.descricao.trim(),
         categoria: existing?.categoria || 'Geral',
         fotoUrl: finalPhoto,
+        qtdPorPacote: photoModalItem.qtdNoPacote || photoModalItem.qtdPorPacote || existing?.qtdPorPacote || 1,
         precoUnitarioPadrao: photoModalItem.precoUnitario > 0 ? photoModalItem.precoUnitario : (existing?.precoUnitarioPadrao || 0),
         pdvSugerido: photoModalItem.pdvAlvo || existing?.pdvSugerido || 12.00,
         ncm: existing?.ncm || '',
@@ -669,10 +699,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
   const handleFieldChange = (item: OrderItem, field: keyof OrderItem, rawValue: any) => {
     let value = rawValue;
-    if (['qtdNoPacote', 'qtdPacotes', 'qtdTotalUnidades', 'precoUnitario', 'percentualDesconto', 'pdvAlvo'].includes(field as string)) {
+    if (['qtdNoPacote', 'qtdPacotes', 'qtdTotalUnidades', 'precoUnitario', 'percentualDesconto', 'pdvAlvo', 'aliquotaIpi'].includes(field as string)) {
       const sanitized = typeof rawValue === 'string' ? rawValue.replace(',', '.') : rawValue;
       value = parseFloat(sanitized) || 0;
-      if (field === 'percentualDesconto') {
+      if (field === 'percentualDesconto' || field === 'aliquotaIpi') {
         value = Math.max(0, Math.min(100, value));
       }
     }
@@ -711,6 +741,16 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     updatedItem.valorDescontoItem = valorDesc;
     updatedItem.valorTotalLiquido = valorLiquido;
 
+    // Cálculo do IPI do item
+    const ipiPct = field === 'aliquotaIpi' 
+      ? Number(value) 
+      : (updatedItem.aliquotaIpi !== undefined ? updatedItem.aliquotaIpi : (updatedItem.fiscalOverride?.ipiAliquota || 0));
+    const valorIpi = Number((valorLiquido * (ipiPct / 100)).toFixed(2));
+    const ipiUnit = qtd > 0 ? Number((valorIpi / qtd).toFixed(4)) : 0;
+    updatedItem.aliquotaIpi = ipiPct;
+    updatedItem.valorIpi = valorIpi;
+    updatedItem.ipiUnitario = ipiUnit;
+
     // Se a separação não for manual, recalcula o rateio automático das 20 lojas
     if (['qtdTotalUnidades', 'qtdNoPacote', 'qtdPacotes'].includes(field as string) && !updatedItem.separacaoManual) {
       const autoSep = calculateAutomaticSeparation(Number(updatedItem.qtdTotalUnidades), stores, updatedItem.qtdReservaEstoque || 0);
@@ -733,8 +773,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     updatedItem.margemRealUnit = fiscal.margemRealUnit;
     updatedItem.margemPercentual = fiscal.margemPercentual;
 
-    // Se o usuário começou a digitar a descrição do produto e o código interno estiver vazio,
-    // gera automaticamente o próximo código sequencial oficial (ex: PRD-051)
+    // Se a descrição for preenchida e o código estiver vazio, gera o código sequencial PRD automaticamente
     if (field === 'descricao' && typeof value === 'string' && value.trim().length > 0) {
       if (!updatedItem.codigoInterno && !updatedItem.codigo) {
         const nextCode = generateNextProductCode(products, items);
@@ -753,6 +792,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     let bruto = 0;
     let desconto = 0;
     let liquido = 0;
+    let totalIpi = 0;
     let pecas = 0;
     let rupturasCount = 0;
     items.forEach(it => {
@@ -764,13 +804,16 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
       const d = it.valorDescontoItem !== undefined ? it.valorDescontoItem : (b * ((it.percentualDesconto || 0) / 100));
       const l = it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : (b - d);
+      const ipiAliq = it.aliquotaIpi !== undefined ? it.aliquotaIpi : (it.fiscalOverride?.ipiAliquota || 0);
+      const ipiVal = it.valorIpi !== undefined ? it.valorIpi : (l * (ipiAliq / 100));
       bruto += b;
       desconto += d;
       liquido += l;
+      totalIpi += ipiVal;
       pecas += (it.qtdTotalUnidades || 0);
     });
     const precoMedio = pecas > 0 ? (liquido / pecas) : 0;
-    return { bruto, desconto, liquido, pecas, precoMedio, rupturasCount };
+    return { bruto, desconto, liquido, totalIpi, pecas, precoMedio, rupturasCount };
   }, [items]);
 
   // Navegação completa por teclado estilo planilha Excel (Setas Cima, Baixo, Esquerda, Direita e Enter)
@@ -1308,6 +1351,26 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               onChange={(e) => handleFieldChange(item, 'qtdTotalUnidades', e.target.value)}
               className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-extrabold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
               title="Total de peças = Qtd no Pac × Qtd de Pac"
+            />
+          </td>
+        );
+
+      case 'aliquotaIpi':
+        return (
+          <td key="aliquotaIpi" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-amber-50/20 dark:bg-amber-950/10">
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              data-excel-row={index}
+              data-excel-field="aliquotaIpi"
+              value={item.aliquotaIpi === 0 || item.aliquotaIpi === undefined ? '' : item.aliquotaIpi}
+              placeholder="0%"
+              onKeyDown={(e) => handleExcelKeyDown(e, index, 'aliquotaIpi')}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => handleFieldChange(item, 'aliquotaIpi', e.target.value)}
+              className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-bold font-mono text-amber-700 dark:text-amber-400 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-amber-500 transition-colors whitespace-nowrap"
+              title={item.valorIpi ? `IPI: ${item.aliquotaIpi || 0}% (R$ ${item.valorIpi.toFixed(2)})` : 'Alíquota de IPI (%)'}
             />
           </td>
         );
@@ -1940,8 +2003,20 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           <div className="text-slate-500 dark:text-slate-400" title="Preço médio por peça/item (Total Líquido ÷ Total de Peças)">
             Preço Médio: <strong className="text-slate-700 dark:text-slate-300 font-bold">R$ {totals.precoMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
           </div>
-          <div className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
-            Total Líquido: R$ {totals.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="flex items-center gap-2.5 bg-emerald-50 dark:bg-emerald-950/60 px-3.5 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-800 shadow-2xs">
+            <div className="text-emerald-900 dark:text-emerald-200 font-extrabold text-xs sm:text-sm border-r border-emerald-300 dark:border-emerald-700 pr-2.5 flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Total IPI:</span>
+              <span className="font-mono">R$ {totals.totalIpi.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Líquido:</span>
+              <span className="font-mono">R$ {totals.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              {totals.totalIpi > 0 && (
+                <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 block sm:inline sm:ml-1">
+                  (c/ IPI: R$ {(totals.liquido + totals.totalIpi).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -2076,6 +2151,20 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   </div>
                 ));
               })()}
+            </div>
+
+            {/* Rodapé do Modal com botão para fechar após selecionar os itens */}
+            <div className="p-3.5 px-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Clique nos produtos para ir adicionando ao pedido. Quando terminar, clique em Concluir.
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsCatalogPickerOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 dark:bg-emerald-600 hover:bg-slate-800 dark:hover:bg-emerald-500 transition cursor-pointer shadow-xs"
+              >
+                Concluir & Fechar
+              </button>
             </div>
 
           </div>

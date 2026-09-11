@@ -16,7 +16,7 @@ import {
   BookmarkPlus
 } from 'lucide-react';
 import { OrderItem, StoreConfig, SeparationPreset } from '../shared/types';
-import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations } from '../shared/separationEngine';
+import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations, adjustSeparationReserveProportionally } from '../shared/separationEngine';
 
 interface SeparationMatrixModalProps {
   item: OrderItem | null;
@@ -90,16 +90,26 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
 
   const handleReservePercent = (percent: number) => {
     const reserveUnits = Math.round((item.qtdTotalUnidades * percent) / 100);
-    const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, reserveUnits);
+    const targetPreset = presets.find(p => p.id === selectedPresetId);
+    const currentItemState = {
+      qtdTotalUnidades: item.qtdTotalUnidades,
+      separacaoLojas: allocations,
+      qtdReservaEstoque: reserveStock
+    };
+    const sep = adjustSeparationReserveProportionally(currentItemState, reserveUnits, stores, targetPreset);
     setReserveStock(sep.reserveStock);
     setAllocations(sep.allocations);
-    setIsManual(false);
+    setIsManual(true);
   };
 
   const handleResetToAutomatic = () => {
-    const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, reserveStock);
+    const targetPreset = presets.find(p => p.id === selectedPresetId);
+    const sep = targetPreset
+      ? applySeparationPreset(item.qtdTotalUnidades, targetPreset, stores)
+      : calculateAutomaticSeparation(item.qtdTotalUnidades, stores, reserveStock);
     setAllocations(sep.allocations);
-    setIsManual(false);
+    setReserveStock(sep.reserveStock);
+    setIsManual(Boolean(targetPreset));
   };
 
   const handleZeroAllStores = () => {

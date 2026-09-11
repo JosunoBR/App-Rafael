@@ -306,3 +306,128 @@ export function extractPresetFromAllocations(
 
   return { storeWeights, reserveStockPercent };
 }
+
+/**
+ * Ajusta a quantidade/percentual de reserva no Estoque Central (CD) de forma estritamente proporcional,
+ * retirando ou adicionando unidades nas lojas conforme as quantidades já distribuídas (respeitando
+ * o padrão/preset carregado ou edições manuais existentes), sem resetar para os pesos padrões do sistema.
+ */
+export function adjustSeparationReserveProportionally(
+  item: { qtdTotalUnidades: number; separacaoLojas?: Record<string, number>; qtdReservaEstoque?: number },
+  targetReserveUnits: number,
+  stores: StoreConfig[] = DEFAULT_STORES,
+  fallbackPreset?: SeparationPreset
+): SeparationResult {
+  const totalQuantity = Number(item.qtdTotalUnidades) || 0;
+  const safeReserve = Math.max(0, Math.min(totalQuantity, Math.round(targetReserveUnits || 0)));
+  const quantityToDistribute = Math.max(0, totalQuantity - safeReserve);
+
+  const emptyAllocations: Record<string, number> = {};
+  stores.forEach(s => { emptyAllocations[s.id] = 0; });
+
+  const clusterTotals = { A: 0, B: 0, C: 0 };
+
+  if (quantityToDistribute <= 0) {
+    return {
+      allocations: emptyAllocations,
+      totalAllocated: 0,
+      reserveStock: totalQuantity,
+      targetTotal: totalQuantity,
+      isBalanced: true,
+      isOverAllocated: false,
+      difference: 0,
+      clusterTotals
+    };
+  }
+
+  const activeStores = stores.filter(s => s.active);
+  const currentAlloc = item.separacaoLojas || {};
+
+  let currentStoreSum = 0;
+  activeStores.forEach(s => {
+    currentStoreSum += Math.max(0, Number(currentAlloc[s.id]) || 0);
+  });
+
+  let totalWeight = 0;
+  activeStores.forEach(store => {
+    let w = 0;
+    if (currentStoreSum > 0) {
+      w = Math.max(0, Number(currentAlloc[store.id]) || 0);
+    } else if (fallbackPreset && fallbackPreset.storeWeights && fallbackPreset.storeWeights[store.id] !== undefined) {
+      w = Math.max(0, Number(fallbackPreset.storeWeights[store.id]) || 0);
+    } else {
+      w = Math.max(0, Number(store.defaultWeight) || 0);
+    }
+    totalWeight += Math.max(0, w);
+  });
+
+  const allocations: Record<string, number> = { ...emptyAllocations };
+  const remainders: { storeId: string; cluster: string; weight: number; remainder: number; originalIndex: number }[] = [];
+  let sumIntegers = 0;
+
+  activeStores.forEach((store, index) => {
+    let w = 0;
+    if (currentStoreSum > 0) {
+      w = Math.max(0, Number(currentAlloc[store.id]) || 0);
+    } else if (fallbackPreset && fallbackPreset.storeWeights && fallbackPreset.storeWeights[store.id] !== undefined) {
+      w = Math.max(0, Number(fallbackPreset.storeWeights[store.id]) || 0);
+    } else {
+      w = Math.max(0, Number(store.defaultWeight) || 0);
+    }
+
+    const exactQuota = totalWeight > 0 ? (w / totalWeight) * quantityToDistribute : 0;
+    const integerPart = Math.floor(exactQuota);
+    const remainder = exactQuota - integerPart;
+
+    allocations[store.id] = integerPart;
+    sumIntegers += integerPart;
+
+    remainders.push({
+      storeId: store.id,
+      cluster: store.cluster,
+      weight: w,
+      remainder,
+      originalIndex: index
+    });
+  });
+
+  let leftover = quantityToDistribute - sumIntegers;
+  const clusterOrder: Record<string, number> = { A: 3, B: 2, C: 1 };
+  remainders.sort((a, b) => {
+    if (Math.abs(b.remainder - a.remainder) > 0.000001) {
+      return b.remainder - a.remainder;
+    }
+    const clusterDiff = (clusterOrder[b.cluster] || 0) - (clusterOrder[a.cluster] || 0);
+    if (clusterDiff !== 0) return clusterDiff;
+    return b.weight - a.weight;
+  });
+
+  let rIdx = 0;
+  while (leftover > 0 && remainders.length > 0) {
+    const itm = remainders[rIdx % remainders.length];
+    allocations[itm.storeId] += 1;
+    leftover -= 1;
+    rIdx++;
+  }
+
+  stores.forEach(s => {
+    const qtd = allocations[s.id] || 0;
+    if (s.cluster === 'A') clusterTotals.A += qtd;
+    if (s.cluster === 'B') clusterTotals.B += qtd;
+    if (s.cluster === 'C') clusterTotals.C += qtd;
+  });
+
+  const totalAllocated = Object.values(allocations).reduce((a, b) => a + b, 0);
+  const reserveStock = Math.max(0, totalQuantity - totalAllocated);
+
+  return {
+    allocations,
+    totalAllocated,
+    reserveStock,
+    targetTotal: totalQuantity,
+    isBalanced: totalAllocated <= totalQuantity,
+    isOverAllocated: totalAllocated > totalQuantity,
+    difference: totalQuantity - totalAllocated,
+    clusterTotals
+  };
+}

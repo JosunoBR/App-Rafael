@@ -510,62 +510,7 @@ function runFullDatabaseSeed(db) {
     });
   }
 
-  // 6. Usuários do Sistema (3 Níveis: Diretoria, Depósito, Separação)
-  try {
-    const bcrypt = require('bcryptjs');
-    const defaultPasswordHash = bcrypt.hashSync('123456', 10);
-
-    // Migração de roles legadas
-    db.run("UPDATE users SET role = 'deposito' WHERE role = 'comprador'");
-    db.run("UPDATE users SET role = 'separacao' WHERE role IN ('conferente', 'motorista')");
-
-    const defaultUsers = [
-      {
-        id: 'usr_diretoria',
-        nome: 'Rafael',
-        email: 'diretoria@mega12.com.br',
-        senha: defaultPasswordHash,
-        role: 'diretoria',
-        cargo: 'Diretoria Executiva',
-        telefone: '(42) 99999-0001'
-      },
-      {
-        id: 'usr_deposito',
-        nome: 'Marcos',
-        email: 'deposito@mega12.com.br',
-        senha: defaultPasswordHash,
-        role: 'deposito',
-        cargo: 'Gestão de Estoque & Depósito',
-        telefone: '(42) 99999-0002'
-      },
-      {
-        id: 'usr_separacao',
-        nome: 'Jorge',
-        email: 'separacao@mega12.com.br',
-        senha: defaultPasswordHash,
-        role: 'separacao',
-        cargo: 'Conferência & Separação Doca',
-        telefone: '(42) 99999-0003'
-      }
-    ];
-
-    defaultUsers.forEach(u => {
-      const check = db.exec(`SELECT id FROM users WHERE LOWER(email) = '${u.email.toLowerCase()}' OR id = '${u.id}'`);
-      if (!check[0] || check[0].values.length === 0) {
-        db.run(`
-          INSERT INTO users (id, nome, email, senha, role, cargo, telefone, ativo, createdAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-        `, [u.id, u.nome, u.email, u.senha, u.role, u.cargo, u.telefone, now, now]);
-      } else {
-        // Atualizar papel e cargo
-        db.run(`
-          UPDATE users SET role = ?, cargo = ?, updatedAt = ? WHERE id = ?
-        `, [u.role, u.cargo, now, u.id]);
-      }
-    });
-  } catch (err) {
-    console.warn('Aviso no seed de usuários:', err.message);
-  }
+  // 6. Usuários do Sistema: gerenciados com o usuário raiz (root) único em database.js
 }
 
 module.exports = {

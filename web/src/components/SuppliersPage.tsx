@@ -827,7 +827,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
               </div>
 
               {/* Categoria, Embalagem & Preços */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     Categoria
@@ -840,9 +840,25 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Qtd no Pacote (un/cx) *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={newProductData.qtdPorPacote !== undefined ? newProductData.qtdPorPacote : 12}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setNewProductData(prev => ({ ...prev, qtdPorPacote: isNaN(val) ? 1 : Math.max(1, val) }));
+                    }}
+                    placeholder="Ex: 12"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <span className="text-[9px] text-slate-400 block mt-0.5">Unidades na embalagem</span>
+                </div>
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">

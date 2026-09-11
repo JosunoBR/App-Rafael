@@ -35,7 +35,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
   const [editingUser, setEditingUser] = useState<Partial<User> & { senha?: string }>({
     nome: '',
     email: '',
-    senha: '123456',
+    senha: '',
     role: 'deposito',
     cargo: '',
     telefone: '',
@@ -71,7 +71,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
     setEditingUser({
       nome: '',
       email: '',
-      senha: '123456',
+      senha: '',
       role: 'deposito',
       cargo: '',
       telefone: '',

@@ -142,6 +142,7 @@ import {
   duplicateOrderInDb
 } from './utils/api';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
+import { exportOrderToExcel } from './utils/excelExporter';
 import { calculateOrderNetTotal, calculateOrderMerchandiseTotal, generateOrderInstallments } from './utils/installments';
 import { calculateItemFiscal, normalizeRateToDecimal } from './shared/fiscalEngine';
 import { DEFAULT_FISCAL_CONFIG } from './shared/constants';
@@ -838,6 +839,7 @@ export function App() {
           descricao: it.descricao.trim(),
           categoria: 'Geral',
           fotoUrl: it.fotoUrl || '',
+          qtdPorPacote: it.qtdNoPacote || it.qtdPorPacote || 1,
           precoUnitarioPadrao: it.precoUnitario || 0,
           pdvSugerido: it.pdvAlvo || 12.00,
           ncm: '',
@@ -1108,26 +1110,24 @@ export function App() {
         };
       }
 
-      // Garantir que a data do pedido seja a data atual (nunca zerada)
+      // 1. Preservar 100% de todos os dados do card de negociação e do cabeçalho comercial original
       duplicated.header = {
-        ...duplicated.header,
+        ...order.header,
+        id: duplicated.header.id,
+        numeroPedido: duplicated.header.numeroPedido,
         dataPedido: today,
         dataEmissao: today,
-        // Garantir que todas as condições de pagamento do pedido original venham exatamente iguais
-        condicaoPagamento: order.header.condicaoPagamento,
-        formaPagamento: order.header.formaPagamento,
-        prazoDias: order.header.prazoDias,
-        parcelasCount: order.header.parcelasCount,
-        percentualDescontoOff: order.header.percentualDescontoOff,
-        valorEntradaAVista: order.header.valorEntradaAVista,
-        depositoParcelasCount: order.header.depositoParcelasCount,
-        depositoPrazoDias: order.header.depositoPrazoDias,
-        saldoParcelasCount: order.header.saldoParcelasCount,
-        saldoPrazoDias: order.header.saldoPrazoDias,
-        diaVencimentoPersonalizado: order.header.diaVencimentoPersonalizado,
-        datasVencimentoPersonalizadas: order.header.datasVencimentoPersonalizadas,
-        previsaoPagamento: order.header.previsaoPagamento
+        status: 'Em Cotação',
+        separationStatus: 'Pendente',
+        isDraft: true,
+        createdAt: duplicated.header.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
+
+      // 2. Preservar 100% da Engenharia Fiscal do pedido original
+      const targetFiscal = order.fiscalConfig || fiscalConfig;
+      duplicated.fiscalConfig = targetFiscal;
+      setFiscalConfig(targetFiscal);
 
       // Gerar as parcelas de pagamento calculadas a partir da nova data do pedido com as condições idênticas
       duplicated.installments = generateOrderInstallments(duplicated, undefined, undefined, false);
@@ -1140,7 +1140,7 @@ export function App() {
       setSavedOrders(updatedOrders);
       setOrder({
         ...duplicated,
-        items: ensureTrailingBlankItem(duplicated.items || [], fiscalConfig, storeConfigs)
+        items: ensureTrailingBlankItem(duplicated.items || [], targetFiscal, storeConfigs)
       });
       showToast(`Pedido duplicado com sucesso: ${duplicated.header.numeroPedido}! Altere os itens e quantidades.`, 'success');
     } catch (err: any) {
@@ -1335,6 +1335,7 @@ export function App() {
             descricao: it.descricao.trim(),
             categoria: 'Geral',
             fotoUrl: it.fotoUrl || '',
+            qtdPorPacote: it.qtdNoPacote || it.qtdPorPacote || 1,
             precoUnitarioPadrao: it.precoUnitario || 0,
             pdvSugerido: it.pdvAlvo || 12.00,
             ncm: '',
@@ -1579,6 +1580,15 @@ export function App() {
   const handleExportCommercialPDF = () => {
     exportCommercialOrderPDF(order);
     showToast('Pedido Comercial PDF (Proposta para Fornecedor) gerado com sucesso!', 'success');
+  };
+
+  const handleExportExcel = () => {
+    try {
+      exportOrderToExcel(order, storeConfigs, fiscalConfig);
+      showToast('Proposta Comercial em Excel (.xlsx) gerada com sucesso!', 'success');
+    } catch (err: any) {
+      showToast(`Erro ao exportar Excel: ${err?.message || err}`, 'error');
+    }
   };
 
   const handleExportSeparationPDF = () => {
@@ -1955,6 +1965,7 @@ export function App() {
           onCloseOrder={handleCloseOrder}
           onDuplicateOrder={handleDuplicateCurrentOrder}
           onDiscardDraft={handleDiscardDraft}
+          onExportExcel={handleExportExcel}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
           onImportExcel={() => setIsImportModalOpen(true)}
           onSelectNav={setActiveNav}

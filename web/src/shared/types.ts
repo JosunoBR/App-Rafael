@@ -102,7 +102,7 @@ export interface Product {
   descricao: string;
   categoria?: string;
   fotoUrl?: string;
-  qtdPorPacote?: number;        // @deprecated — Mantido por retrocompatibilidade
+  qtdPorPacote?: number;        // Quantidade de unidades por pacote / caixa (embalagem fechada)
   precoUnitarioPadrao: number;
   pdvSugerido?: number;
   ncm?: string;
@@ -157,6 +157,8 @@ export interface OrderItem {
   freteUnitario?: number;
   stUnitario?: number;
   ipiUnitario?: number;
+  aliquotaIpi?: number;         // % Alíquota de IPI (ex: 5 para 5%)
+  valorIpi?: number;            // R$ Valor total de IPI calculado deste item
   difalUnitario?: number;
   
   // Limite de Preço / Engenharia Fiscal
@@ -190,6 +192,7 @@ export interface OrderHeader {
   fornecedor: string;
   supplierId?: string;          // Vínculo com cadastro de fornecedor
   aliquotaSt?: number;          // % ST do Fornecedor aplicada no pedido
+  aliquotaIpi?: number;         // % IPI do Fornecedor aplicada no pedido
   vendedor: string;
   contatoVendedor?: string;
   condicaoPagamento: string;

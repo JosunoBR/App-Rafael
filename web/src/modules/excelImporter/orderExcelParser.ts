@@ -365,7 +365,7 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
         else if (clean.includes('DESCRICAO') || clean.includes('DESCRIÇÃO')) colMap['descricao'] = c;
         else if (clean === 'NCM') colMap['ncm'] = c;
         else if (clean === 'EAN' || clean.includes('BARRAS') || clean.includes('BARCODE')) colMap['ean'] = c;
-        else if (clean.includes('EMBALAGEM') || clean.includes('QTD NO PEC') || clean.includes('CX') || clean.includes('QTD/CX') || clean.includes('QTD PACOTE')) colMap['embalagem'] = c;
+        else if (clean.includes('EMBALAGEM') || clean.includes('QTD NO PAC') || clean.includes('QTD NO PEC') || clean.includes('QTD/CX') || clean.includes('QTD PACOTE') || clean.includes('QTD POR PACOTE') || clean.includes('UN/CX') || clean.includes('UN/PAC') || clean === 'EMB' || clean === 'CX') colMap['embalagem'] = c;
         else if (clean.includes('PACOTES') || clean.includes('QTD DE PEC') || clean.includes('QTD CX')) colMap['pacotes'] = c;
         else if (clean.includes('R$ UNIT') || clean === 'UNIT' || clean.includes('PRECO UNIT') || clean.includes('VALOR UNIT')) colMap['unit'] = c;
         else if (clean.includes('TOTAL UNIDADE') || clean.includes('TOTAL UNIDADES') || clean.includes('QTD UNI') || clean === 'UNIDADES') colMap['unidades'] = c;

@@ -163,14 +163,15 @@ class OrderRepository {
       await execute("DELETE FROM order_items WHERE orderId = ?", [order.header.id]);
       for (const item of items) {
         const itemId = item.id || `it_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const packVal = Number(item.qtdNoPacote !== undefined ? item.qtdNoPacote : (item.qtdPorPacote || 1)) || 1;
         await execute(`
           INSERT INTO order_items (
             id, orderId, codigoInterno, codigoFornecedor, codigoBarras, codigo, descricao, fotoUrl,
-            qtdNoPacote, qtdPacotes, qtdTotalUnidades, precoUnitario, valorTotalBruto,
+            qtdNoPacote, qtdPorPacote, qtdPacotes, qtdTotalUnidades, precoUnitario, valorTotalBruto,
             percentualDesconto, valorDescontoItem, valorTotalLiquido,
             pdvAlvo, custoLoja, custoFornecedor, despesasPdvUnit, creditoIcmsUnit, custoRealEfetivo, margemRealUnit, margemPercentual,
             qtdReservaEstoque, separacaoManual, separacaoLojasJson, ruptura, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           itemId,
           order.header.id,
@@ -180,7 +181,8 @@ class OrderRepository {
           item.codigo || item.codigoInterno || '',
           item.descricao || '',
           item.fotoUrl || '',
-          Number(item.qtdNoPacote !== undefined ? item.qtdNoPacote : (item.qtdPorPacote || 1)) || 1,
+          packVal,
+          packVal,
           Number(item.qtdPacotes !== undefined ? item.qtdPacotes : 0) || 0,
           Number(item.qtdTotalUnidades) || 0,
           Number(item.precoUnitario) || 0,
@@ -520,6 +522,7 @@ class OrderRepository {
         createdAt: now,
         updatedAt: now
       },
+      fiscalConfig: original.fiscalConfig,
       items: duplicatedItems,
       installments: duplicatedInstallments,
       inspection: null,

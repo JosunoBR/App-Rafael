@@ -891,11 +891,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               )}
             </div>
 
-            {/* 3. OFF (%) (Posicionado no topo com o fornecedor) */}
+            {/* 3. % NOTA (Faturado em NF) */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span>OFF (%)</span>
-                <span className="text-[10px] text-slate-400 font-normal">Histórico BD</span>
+                <span>% NOTA</span>
+                <span className="text-[10px] text-slate-400 font-normal">Faturado em NF</span>
               </label>
               <div className="relative">
                 <input

@@ -9,17 +9,18 @@ class UserRepository {
     return await queryOne("SELECT * FROM users WHERE id = ?", [id]);
   }
 
-  async findByEmailOrAlias(cleanEmail) {
+  async findByEmailOrAlias(identifier) {
+    if (!identifier) return null;
+    const clean = String(identifier).trim().toLowerCase();
     return await queryOne(
       `SELECT * FROM users 
        WHERE (
          LOWER(email) = ? 
          OR LOWER(nome) = ? 
-         OR (role = 'diretoria' AND ? IN ('diretoria', 'diretoria@mega12.com.br', 'rafael')) 
-         OR (role = 'deposito' AND ? IN ('deposito', 'deposito@mega12.com.br', 'cd@mega12.com.br', 'marcos', 'estoque')) 
-         OR (role = 'separacao' AND ? IN ('separacao', 'separacao@mega12.com.br', 'doca@mega12.com.br', 'jorge', 'conferente'))
+         OR id = ?
+         OR (id = 'usr_root' AND (? = 'root' OR ? = 'root@mega12.com.br'))
        ) AND ativo = 1`,
-      [cleanEmail, cleanEmail, cleanEmail, cleanEmail, cleanEmail]
+      [clean, clean, clean, clean, clean]
     );
   }
 

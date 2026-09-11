@@ -91,6 +91,7 @@ export function analyzeCatalogProducts(
         eanBarcode: rawItem.eanBarcode || matchedProduct.eanBarcode || matchedProduct.codigoBarras,
         precoUnitarioPadrao: rawItem.precoUnitario > 0 ? rawItem.precoUnitario : matchedProduct.precoUnitarioPadrao,
         pdvSugerido: rawItem.pdvSugerido || matchedProduct.pdvSugerido || 12.00,
+        qtdPorPacote: (rawItem.qtdNoPacote && rawItem.qtdNoPacote > 0) ? rawItem.qtdNoPacote : (matchedProduct.qtdPorPacote || 1),
         ncm: rawItem.ncm || matchedProduct.ncm,
         updatedAt: new Date().toISOString()
       };

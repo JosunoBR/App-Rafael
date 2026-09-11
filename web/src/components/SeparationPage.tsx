@@ -27,7 +27,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User, SeparationPreset } from '../shared/types';
-import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations } from '../shared/separationEngine';
+import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations, adjustSeparationReserveProportionally } from '../shared/separationEngine';
 import { SeparationMatrixModal } from './SeparationMatrixModal';
 import { OrderPipelineStepper } from './OrderPipelineStepper';
 
@@ -394,8 +394,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   const handleUpdateItemReserveUnits = (item: OrderItem, rawReserveUnits: number) => {
     if (!onChangeOrder) return;
     const safeUnits = Math.max(0, Math.min(item.qtdTotalUnidades, Math.floor(rawReserveUnits || 0)));
+    const targetPreset = presets.find(p => p.id === selectedPresetId);
 
-    const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, safeUnits);
+    const sep = adjustSeparationReserveProportionally(item, safeUnits, stores, targetPreset);
 
     const updatedItems = order.items.map(it => {
       if (it.id !== item.id) return it;
@@ -403,7 +404,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         ...it,
         separacaoLojas: sep.allocations,
         qtdReservaEstoque: sep.reserveStock,
-        separacaoManual: false
+        separacaoManual: true
       };
     });
 
@@ -418,7 +419,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     const itemToUpdate = order.items.find(i => i.id === itemId);
     if (!itemToUpdate) return;
 
-    const sep = calculateAutomaticSeparation(itemToUpdate.qtdTotalUnidades, stores, itemToUpdate.qtdReservaEstoque);
+    const targetPreset = presets.find(p => p.id === selectedPresetId);
+    const sep = targetPreset
+      ? applySeparationPreset(itemToUpdate.qtdTotalUnidades, targetPreset, stores)
+      : calculateAutomaticSeparation(itemToUpdate.qtdTotalUnidades, stores, itemToUpdate.qtdReservaEstoque);
 
     const updatedItems = order.items.map(it => {
       if (it.id !== itemId) return it;
@@ -426,7 +430,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         ...it,
         separacaoLojas: sep.allocations,
         qtdReservaEstoque: sep.reserveStock,
-        separacaoManual: false
+        separacaoManual: Boolean(targetPreset)
       };
     });
 
@@ -463,14 +467,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   const handleApplyGlobalReservePercent = (percent: number) => {
     if (!onChangeOrder) return;
 
+    const targetPreset = presets.find(p => p.id === selectedPresetId);
+
     const updatedItems = order.items.map(item => {
       const reserveUnits = Math.round((item.qtdTotalUnidades * percent) / 100);
-      const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, reserveUnits);
+      const sep = adjustSeparationReserveProportionally(item, reserveUnits, stores, targetPreset);
       return {
         ...item,
         separacaoLojas: sep.allocations,
         qtdReservaEstoque: sep.reserveStock,
-        separacaoManual: false
+        separacaoManual: true
       };
     });
 
@@ -478,6 +484,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
       ...order,
       items: updatedItems
     });
+
+    showFeedback(`Retenção de ${percent}% aplicada no Estoque Central de forma proporcional entre as lojas!`, 'success');
   };
 
   const handleSaveModalSeparation = (itemId: string, allocations: Record<string, number>, isManual: boolean, qtdReservaEstoque?: number) => {

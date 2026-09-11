@@ -122,6 +122,7 @@ export function mapParsedExcelToOrder(
       codigoBarras: rawItem.eanBarcode || undefined,
       descricao: rawItem.descricao,
       qtdNoPacote: rawItem.qtdNoPacote,
+      qtdPorPacote: rawItem.qtdNoPacote || 1,
       qtdPacotes: rawItem.qtdPacotes,
       qtdTotalUnidades,
       precoUnitario,

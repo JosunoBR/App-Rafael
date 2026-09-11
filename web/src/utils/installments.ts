@@ -124,7 +124,7 @@ export function formatPaymentConditionString(
     for (let i = 1; i <= parcelas; i++) {
       days.push(i * intervalo);
     }
-    return `${parcelas}x (${days.join('/')} Dias)`;
+    return `${parcelas}x (${days.join('/')} Dias - de ${intervalo} em ${intervalo} dias)`;
   }
   if (prazo === 'custom') {
     return `${parcelas}x Personalizado`;

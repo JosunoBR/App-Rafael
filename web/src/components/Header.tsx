@@ -433,6 +433,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>Gerar proposta comercial</span>
               </button>
 
+              {/* Botão de Exportação: Exportar Excel (.xlsx) */}
+              {onExportExcel && (
+                <button
+                  onClick={onExportExcel}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  title="Exportar Proposta Comercial em planilha Excel (.xlsx) com o mesmo layout do PDF"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Exportar Excel</span>
+                </button>
+              )}
+
               {/* Botão de Importação: Importar Pedido Excel (.xlsx) */}
               {onImportExcel && (
                 <button

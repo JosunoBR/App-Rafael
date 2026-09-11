@@ -327,7 +327,8 @@ async function getDatabase() {
         subcategoria: "TEXT",
         supplierId: "TEXT",
         nomeFornecedor: "TEXT",
-        fotoUrl: "TEXT"
+        fotoUrl: "TEXT",
+        qtdPorPacote: "REAL DEFAULT 1"
       };
 
       Object.entries(requiredProdCols).forEach(([col, def]) => {
@@ -370,7 +371,12 @@ async function getDatabase() {
         codigoBarras: "TEXT",
         custoLoja: "REAL DEFAULT 0",
         custoFornecedor: "REAL DEFAULT 0",
-        ruptura: "INTEGER DEFAULT 0"
+        separacaoLojasJson: "TEXT",
+        separacaoManual: "INTEGER DEFAULT 0",
+        qtdReservaEstoque: "INTEGER DEFAULT 0",
+        ruptura: "INTEGER DEFAULT 0",
+        createdAt: "TEXT",
+        updatedAt: "TEXT"
       };
 
       Object.entries(requiredItemCols).forEach(([col, def]) => {
@@ -385,7 +391,9 @@ async function getDatabase() {
       const colNames = orderInstTableInfo[0].values.map(v => v[1]);
       const requiredInstCols = {
         isBoletoFrete: "INTEGER DEFAULT 0",
-        tipoTitulo: "TEXT DEFAULT 'mercadoria'"
+        tipoTitulo: "TEXT DEFAULT 'mercadoria'",
+        createdAt: "TEXT",
+        updatedAt: "TEXT"
       };
 
       Object.entries(requiredInstCols).forEach(([col, def]) => {
@@ -398,18 +406,39 @@ async function getDatabase() {
     console.error('Aviso na verificação de migrações:', err.message);
   }
 
-  // Seed de usuários padrão se a tabela estiver vazia
-  const userCheck = dbInstance.exec("SELECT COUNT(*) as count FROM users");
-  if (userCheck[0] && userCheck[0].values[0][0] === 0) {
+  // Garantir usuário raiz (root) único e seguro no sistema
+  try {
+    const bcrypt = require('bcryptjs');
+    const rootHash = bcrypt.hashSync('Athlon64', 10);
     const now = new Date().toISOString();
-    // Inserir senhas padrão (serão hasheadas automaticamente no login)
-    dbInstance.run(`
-      INSERT INTO users (id, nome, email, senha, role, cargo, telefone, ativo, createdAt, updatedAt)
-      VALUES 
-        ('usr_rafael', 'Rafael', 'diretoria@mega12.com.br', '123456', 'diretoria', 'Diretor Geral', '(42) 99999-0001', 1, '${now}', '${now}'),
-        ('usr_comprador', 'Mariana Compras', 'compras@mega12.com.br', '123456', 'comprador', 'Compradora Pleno', '(42) 99999-0002', 1, '${now}', '${now}'),
-        ('usr_conferente', 'Jorge Doca (Separação)', 'separacao@mega12.com.br', '123456', 'conferente', 'Conferente Líder Doca', '(42) 99999-0003', 1, '${now}', '${now}')
-    `);
+
+    // Remove qualquer resquício de logins de teste antigos
+    try {
+      dbInstance.run(`
+        DELETE FROM users 
+        WHERE id IN ('usr_rafael', 'usr_comprador', 'usr_conferente', 'usr_diretoria', 'usr_deposito', 'usr_separacao', 'usr_jorge', 'usr_marcos') 
+           OR LOWER(email) IN ('diretoria@mega12.com.br', 'deposito@mega12.com.br', 'separacao@mega12.com.br', 'compras@mega12.com.br', 'jorge@mega12.com.br', 'marcos@mega12.com.br')
+      `);
+    } catch (cleanErr) {}
+
+    // Verifica se usuário root já existe
+    const rootCheck = dbInstance.exec("SELECT id FROM users WHERE LOWER(email) = 'root' OR id = 'usr_root' OR LOWER(nome) = 'root'");
+    if (!rootCheck[0] || rootCheck[0].values.length === 0) {
+      dbInstance.run(`
+        INSERT INTO users (id, nome, email, senha, role, cargo, telefone, ativo, createdAt, updatedAt)
+        VALUES ('usr_root', 'Root', 'root', ?, 'diretoria', 'Administrador Raiz (Root)', '', 1, ?, ?)
+      `, [rootHash, now, now]);
+      console.log('✔ Usuário root (Athlon64) inicializado no banco de dados.');
+    } else {
+      // Garante que a senha e privilégios estejam atualizados para Athlon64 e diretoria
+      dbInstance.run(`
+        UPDATE users 
+        SET senha = ?, role = 'diretoria', ativo = 1, updatedAt = ? 
+        WHERE LOWER(email) = 'root' OR id = 'usr_root' OR LOWER(nome) = 'root'
+      `, [rootHash, now]);
+    }
+  } catch (userErr) {
+    console.error('Aviso na inicialização do usuário root:', userErr.message);
   }
 
   // Seeder rico de dados e histórico de compras desde Janeiro de 2026

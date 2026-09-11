@@ -28,6 +28,13 @@ class ProductRepository {
 
     const targetId = existing ? existing.id : (product.id || ('prod_' + Date.now()));
 
+    const incomingQtd = product.qtdPorPacote !== undefined && product.qtdPorPacote !== null && !isNaN(Number(product.qtdPorPacote))
+      ? Number(product.qtdPorPacote)
+      : (product.qtdNoPacote !== undefined && product.qtdNoPacote !== null && !isNaN(Number(product.qtdNoPacote))
+          ? Number(product.qtdNoPacote)
+          : (existing ? Number(existing.qtdPorPacote) : 1));
+    const finalQtdPorPacote = incomingQtd > 0 ? incomingQtd : 1;
+
     if (existing) {
       const sql = `
         UPDATE products SET
@@ -50,7 +57,7 @@ class ProductRepository {
         nomeFornecedor || existing.nomeFornecedor || '',
         Number(product.precoUnitarioPadrao) || Number(existing.precoUnitarioPadrao) || 0,
         Number(product.pdvSugerido) || Number(existing.pdvSugerido) || 12.0,
-        Number(product.qtdPorPacote) || Number(existing.qtdPorPacote) || 12,
+        finalQtdPorPacote,
         product.fotoUrl || existing.fotoUrl || '',
         product.ncm || existing.ncm || '',
         codBarras || existing.codigoBarras || '',
@@ -80,7 +87,7 @@ class ProductRepository {
         nomeFornecedor,
         Number(product.precoUnitarioPadrao) || 0,
         Number(product.pdvSugerido) || 12.0,
-        Number(product.qtdPorPacote) || 12,
+        finalQtdPorPacote,
         product.fotoUrl || '',
         product.ncm || '',
         codBarras,

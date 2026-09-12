@@ -413,10 +413,8 @@ export function generateOrderInstallments(
     const saldoPrazo = String(order.header.saldoPrazoDias || '30');
     const totalParcelasGeral = totalParcelasDeposito + totalParcelasSaldo;
 
-    // Regra: por padrão a primeira parcela vence 10 dias após a previsão de entrega (salvo data fixa informada)
-    const firstDueDate = order.header.dataPrimeiroVencimento 
-      ? addDaysToDate(order.header.dataPrimeiroVencimento, 0) 
-      : addDaysToDate(baseDeliveryDate, 10);
+    // Regra: por padrão a primeira parcela vence 10 dias após a previsão de entrega
+    const firstDueDate = addDaysToDate(baseDeliveryDate, 10);
 
     // 1. Parcelas de Depósito / PIX
     const depBaseValue = totalParcelasDeposito > 0 ? Number((valorTotalDeposito / totalParcelasDeposito).toFixed(2)) : valorTotalDeposito;
@@ -527,10 +525,8 @@ export function generateOrderInstallments(
       ? parsed.daysOffsets
       : undefined;
 
-    // Regra: por padrão a primeira parcela vence 10 dias após a previsão de entrega (salvo data fixa informada)
-    const firstDueDate = order.header.dataPrimeiroVencimento 
-      ? addDaysToDate(order.header.dataPrimeiroVencimento, 0)
-      : addDaysToDate(baseDeliveryDate, 10);
+    // Regra: por padrão a primeira parcela vence 10 dias após a previsão de entrega
+    const firstDueDate = addDaysToDate(baseDeliveryDate, 10);
 
     for (let i = 1; i <= totalParcelas; i++) {
       const existing = existingMap.get(i);
@@ -540,9 +536,7 @@ export function generateOrderInstallments(
 
       if (prazo === 'vista') {
         dueDays = 0;
-        calculatedDueDate = order.header.dataPrimeiroVencimento 
-          ? addDaysToDate(order.header.dataPrimeiroVencimento, 0)
-          : addDaysToDate(orderDate, 0);
+        calculatedDueDate = addDaysToDate(orderDate, 0);
       } else {
         const intervalNum = Number(prazo) || 30;
         const diffFromFirst = (daysOffsets && daysOffsets.length >= i)
@@ -565,7 +559,7 @@ export function generateOrderInstallments(
 
       const obsText = prazo === 'vista' 
         ? 'Pagamento 100% À Vista' 
-        : `Parcela ${i}/${totalParcelas} (${dueDays === 0 ? (order.header.dataPrimeiroVencimento ? '1º Vencimento' : '10d da Entrega') : `+${dueDays}d`})`;
+        : `Parcela ${i}/${totalParcelas} (${dueDays === 0 ? '10d da Entrega' : `+${dueDays}d`})`;
 
       list.push({
         id: existing?.id || `inst_${order.header.id || 'ord'}_${i}_${Date.now()}`,

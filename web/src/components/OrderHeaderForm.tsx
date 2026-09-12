@@ -175,7 +175,16 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         return;
       }
     }
-    if (field === 'formaPagamento' && value === 'Boleto / Depósito') {
+    if (field === 'dataEntregaPrevista' || field === 'dataPedido') {
+      onChange({
+        ...header,
+        [field]: value,
+        datasVencimentoPersonalizadas: undefined
+      });
+      return;
+    }
+
+    if (field === 'formaPagamento' && (value === 'Boleto / Depósito' || value === 'Boleto / Cheque')) {
       const pctBoleto = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
         ? header.percentualNota
         : 50;
@@ -326,7 +335,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         condicaoPagamento: newCondString,
         datasVencimentoPersonalizadas: undefined
       });
-    } else if (newPrazo === 'entrada_com_parcelamento') {
+      return;
+    } 
+    
+    if (newPrazo === 'entrada_com_parcelamento') {
       const initEntrada = header.valorEntradaAVista !== undefined 
         ? header.valorEntradaAVista 
         : (valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * 0.3).toFixed(2)) : 0);
@@ -354,21 +366,46 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         condicaoPagamento: newCondString,
         datasVencimentoPersonalizadas: undefined
       });
-    } else if (newPrazo === 'vista') {
+      return;
+    }
+
+    if (newPrazo === '' || newPrazo === '0' || newPrazo.toLowerCase() === 'vista') {
       const newCondString = formatPaymentConditionString(1, 'vista');
       onChange({
         ...header,
-        prazoDias: newPrazo,
-        parcelasCount: 1,
+        prazoDias: 'vista',
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: undefined
+      });
+      return;
+    }
+
+    if (newPrazo.includes('/')) {
+      const parsed = parsePaymentConditionString(newPrazo);
+      onChange({
+        ...header,
+        prazoDias: parsed.prazo,
+        parcelasCount: parsed.parcelas,
+        condicaoPagamento: newPrazo,
+        datasVencimentoPersonalizadas: undefined
+      });
+      return;
+    }
+
+    const cleanNum = newPrazo.replace(/\D/g, '');
+    const numDias = parseInt(cleanNum, 10);
+    if (!isNaN(numDias) && numDias > 0) {
+      const newCondString = formatPaymentConditionString(currentParcelas, numDias);
+      onChange({
+        ...header,
+        prazoDias: String(numDias),
         condicaoPagamento: newCondString,
         datasVencimentoPersonalizadas: undefined
       });
     } else {
-      const newCondString = formatPaymentConditionString(currentParcelas, newPrazo);
       onChange({
         ...header,
-        prazoDias: newPrazo,
-        condicaoPagamento: newCondString,
+        prazoDias: cleanNum,
         datasVencimentoPersonalizadas: undefined
       });
     }
@@ -505,8 +542,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           const b = idx + 1;
           const numeroParcela = depositoParcelas + b;
           const interval = Number(saldoPrazo) || 30;
-          const dueDays = 10 + (b - 1) * interval;
-          const defaultDate = addDaysToDate(baseDate, dueDays);
+          let defaultDate = '';
+          if (depositoParcelas === 1 && depositoPrazo === 'vista') {
+            defaultDate = addDaysToDate(baseDate, 10 + (b - 1) * interval);
+          } else if (depositoPrazo !== 'vista') {
+            const lastDepDueDays = 10 + (depositoParcelas - 1) * (Number(depositoPrazo) || 30);
+            defaultDate = addDaysToDate(baseDate, lastDepDueDays + b * interval);
+          } else {
+            defaultDate = addDaysToDate(baseDate, 10 + (b - 1) * interval);
+          }
           const rawCustom = customDates?.[String(numeroParcela)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
           return {
@@ -523,16 +567,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     : Array.from({ length: currentParcelas }, (_, idx) => {
         const num = idx + 1;
         const interval = Number(currentPrazo) || 30;
-        const dueDays = currentPrazo === 'vista' ? 0 : num * interval;
+        // A 1ª parcela vence exatamente 10 dias após a previsão de entrega.
+        // O campo intervalo representa apenas o intervalo entre as parcelas subsequentes.
+        const dueDays = 10 + (num - 1) * interval;
         const defaultDate = addDaysToDate(baseDate, dueDays);
         const rawCustom = customDates?.[String(num)];
         const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
         return {
           numeroParcela: num,
-          rotulo: currentPrazo === 'vista' ? 'À Vista' : `${num}ª Parcela`,
+          rotulo: `${num}ª Parcela`,
           dataVencimento: customDate || defaultDate,
           valor: currentParcelas > 0 ? valorBaseMercadoria / currentParcelas : valorBaseMercadoria,
-          isEntrada: currentPrazo === 'vista',
+          isEntrada: false,
           metodoPagamento: header.formaPagamento || 'Boleto',
           isFrete: false
         };
@@ -1056,22 +1102,23 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
                   {!isEntradaMista && (
                     <>
-                      {/* 2. Modalidade de Prazo */}
+                      {/* 2. Intervalo de Pagamento (Digitável, sem dropdown) */}
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                          2. Prazo / Intervalo
+                          Intervalo de Pagamento
                         </label>
-                        <select
-                          value={currentPrazo}
-                          onChange={(e) => handlePaymentPrazoChange(e.target.value)}
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
-                        >
-                          {PRAZO_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={currentPrazo === 'vista' ? '0' : currentPrazo}
+                            onChange={(e) => handlePaymentPrazoChange(e.target.value)}
+                            placeholder="Ex: 30"
+                            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold shadow-2xs font-mono pr-12"
+                          />
+                          <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
+                            dias
+                          </span>
+                        </div>
                       </div>
 
                       {/* 3. Quantidade de Parcelas */}
@@ -1248,19 +1295,24 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
                               <div>
                                 <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                  Intervalo Depósito
+                                  Intervalo de Pagamento
                                 </label>
-                                <select
-                                  value={depositoPrazo}
-                                  onChange={(e) => handleDepositoPrazoChange(e.target.value)}
-                                  className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-indigo-500 outline-hidden cursor-pointer"
-                                >
-                                  {DEPOSITO_PRAZO_OPTIONS.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                      {opt.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    value={depositoPrazo === 'vista' ? '0' : depositoPrazo}
+                                    onChange={(e) => {
+                                      const val = e.target.value.trim().replace(/\D/g, '');
+                                      const finalPrazo = val === '0' || val === '' ? 'vista' : val;
+                                      handleDepositoPrazoChange(finalPrazo);
+                                    }}
+                                    placeholder="Ex: 30"
+                                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold font-mono focus:ring-2 focus:ring-indigo-500 outline-hidden pr-10"
+                                  />
+                                  <span className="absolute right-2.5 top-1.5 text-[10px] font-bold text-slate-400 pointer-events-none">
+                                    dias
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1324,19 +1376,23 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
                               <div>
                                 <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                  Prazo Saldo (pós-entrega)
+                                  Intervalo de Pagamento
                                 </label>
-                                <select
-                                  value={saldoPrazo}
-                                  onChange={(e) => handleSaldoPrazoChange(e.target.value)}
-                                  className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-                                >
-                                  {SALDO_PRAZO_OPTIONS.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                      {opt.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    value={saldoPrazo}
+                                    onChange={(e) => {
+                                      const val = e.target.value.trim().replace(/\D/g, '');
+                                      handleSaldoPrazoChange(val || '30');
+                                    }}
+                                    placeholder="Ex: 30"
+                                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold font-mono focus:ring-2 focus:ring-emerald-500 outline-hidden pr-10"
+                                  />
+                                  <span className="absolute right-2.5 top-1.5 text-[10px] font-bold text-slate-400 pointer-events-none">
+                                    dias
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </div>

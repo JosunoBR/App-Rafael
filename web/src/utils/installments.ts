@@ -40,6 +40,43 @@ export const SALDO_PRAZO_OPTIONS = PRAZO_OPTIONS.filter(
   (opt) => !['vista', 'entrada_com_parcelamento', 'deposito_e_boleto'].includes(opt.value)
 );
 
+export interface QuickPaymentPreset {
+  id: string;
+  label: string;
+  conditionString: string;
+  parcelas: number;
+  daysOffsets: number[];
+  category: '10_dias' | '15_dias' | '30_dias' | 'semanal' | 'outros';
+}
+
+export const QUICK_PAYMENT_PRESETS: QuickPaymentPreset[] = [
+  // De 10 em 10 dias (Iniciando em 30)
+  { id: '10_60', label: '30 a 60 (10/10d • 4x)', conditionString: '30/40/50/60 Dias', parcelas: 4, daysOffsets: [30, 40, 50, 60], category: '10_dias' },
+  { id: '10_90', label: '30 a 90 (10/10d • 7x)', conditionString: '30/40/50/60/70/80/90 Dias', parcelas: 7, daysOffsets: [30, 40, 50, 60, 70, 80, 90], category: '10_dias' },
+  { id: '10_120', label: '30 a 120 (10/10d • 10x)', conditionString: '30/40/50/60/70/80/90/100/110/120 Dias', parcelas: 10, daysOffsets: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120], category: '10_dias' },
+  { id: '10_150', label: '30 a 150 (10/10d • 13x)', conditionString: '30/40/50/60/70/80/90/100/110/120/130/140/150 Dias', parcelas: 13, daysOffsets: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150], category: '10_dias' },
+
+  // De 15 em 15 dias (Iniciando em 30)
+  { id: '15_75', label: '30 a 75 (15/15d • 4x)', conditionString: '30/45/60/75 Dias', parcelas: 4, daysOffsets: [30, 45, 60, 75], category: '15_dias' },
+  { id: '15_90', label: '30 a 90 (15/15d • 5x)', conditionString: '30/45/60/75/90 Dias', parcelas: 5, daysOffsets: [30, 45, 60, 75, 90], category: '15_dias' },
+  { id: '15_105', label: '30 a 105 (15/15d • 6x)', conditionString: '30/45/60/75/90/105 Dias', parcelas: 6, daysOffsets: [30, 45, 60, 75, 90, 105], category: '15_dias' },
+  { id: '15_120', label: '30 a 120 (15/15d • 7x)', conditionString: '30/45/60/75/90/105/120 Dias', parcelas: 7, daysOffsets: [30, 45, 60, 75, 90, 105, 120], category: '15_dias' },
+
+  // Padrões Tradicionais (30 em 30 dias)
+  { id: '30_30', label: '30 Dias (1x)', conditionString: '30 Dias', parcelas: 1, daysOffsets: [30], category: '30_dias' },
+  { id: '30_60', label: '30/60 Dias (2x)', conditionString: '30/60 Dias', parcelas: 2, daysOffsets: [30, 60], category: '30_dias' },
+  { id: '30_90', label: '30/60/90 Dias (3x)', conditionString: '30/60/90 Dias', parcelas: 3, daysOffsets: [30, 60, 90], category: '30_dias' },
+  { id: '30_120', label: '30/60/90/120 Dias (4x)', conditionString: '30/60/90/120 Dias', parcelas: 4, daysOffsets: [30, 60, 90, 120], category: '30_dias' },
+  { id: '30_150', label: '30 a 150 (30/30d • 5x)', conditionString: '30/60/90/120/150 Dias', parcelas: 5, daysOffsets: [30, 60, 90, 120, 150], category: '30_dias' },
+  { id: '30_180', label: '30 a 180 (30/30d • 6x)', conditionString: '30/60/90/120/150/180 Dias', parcelas: 6, daysOffsets: [30, 60, 90, 120, 150, 180], category: '30_dias' },
+
+  // Semanal (Doces / Perecíveis)
+  { id: '7_28', label: '7/14/21/28 Dias (4x)', conditionString: '7/14/21/28 Dias', parcelas: 4, daysOffsets: [7, 14, 21, 28], category: 'semanal' },
+
+  // À Vista
+  { id: 'vista', label: '100% À Vista (TED/PIX)', conditionString: '100% À Vista (TED/PIX)', parcelas: 1, daysOffsets: [0], category: 'outros' },
+];
+
 /**
  * Calcula o valor líquido total apenas das mercadorias/produtos (com desconto OFF)
  */
@@ -132,14 +169,43 @@ export function formatPaymentConditionString(
   return `${parcelas}x Parcelas`;
 }
 
+export interface ParsedPaymentCondition {
+  parcelas: number;
+  prazo: string;
+  daysOffsets?: number[];
+}
+
 /**
- * Extrai quantidade de parcelas e prazo a partir da string salva
+ * Extrai quantidade de parcelas, prazo e offsets de dias a partir da string de condição
  */
-export function parsePaymentConditionString(cond?: string): { parcelas: number; prazo: string } {
-  if (!cond || cond.trim() === '') {
-    return { parcelas: 3, prazo: '30' };
+export function parsePaymentConditionString(cond?: string): ParsedPaymentCondition {
+  if (!cond || typeof cond !== 'string' || cond.trim() === '') {
+    return { parcelas: 3, prazo: '30', daysOffsets: [30, 60, 90] };
   }
-  const lower = cond.toLowerCase();
+  const clean = cond.trim();
+  const lower = clean.toLowerCase();
+
+  // 1. Verifica se bate diretamente com um dos presets rápidos
+  const matchedPreset = QUICK_PAYMENT_PRESETS.find(p => 
+    p.id.toLowerCase() === lower ||
+    p.conditionString.toLowerCase() === lower ||
+    p.label.toLowerCase() === lower ||
+    lower.startsWith(p.label.toLowerCase()) ||
+    lower.startsWith(p.conditionString.toLowerCase())
+  );
+  if (matchedPreset) {
+    if (matchedPreset.id === 'vista' || matchedPreset.parcelas === 1) {
+      return { parcelas: 1, prazo: 'vista', daysOffsets: [0] };
+    }
+    const step = matchedPreset.daysOffsets[1] ? matchedPreset.daysOffsets[1] - matchedPreset.daysOffsets[0] : 30;
+    return {
+      parcelas: matchedPreset.parcelas,
+      prazo: String(step),
+      daysOffsets: [...matchedPreset.daysOffsets]
+    };
+  }
+
+  // 2. Modos especiais
   if (lower.includes('depósito') && lower.includes('boleto')) {
     return { parcelas: 3, prazo: 'deposito_e_boleto' };
   }
@@ -150,39 +216,74 @@ export function parsePaymentConditionString(cond?: string): { parcelas: number; 
     return { parcelas: 3, prazo: 'entrada_com_parcelamento' };
   }
   if (lower.includes('vista') || lower.includes('ted') || lower.includes('pix')) {
-    return { parcelas: 1, prazo: 'vista' };
+    return { parcelas: 1, prazo: 'vista', daysOffsets: [0] };
   }
 
-  // Verifica se há formato "Nx" (ex: "3x", "4x")
-  const matchX = cond.match(/(\d+)\s*x/i);
+  // 3. Sequência de dias com barra (ex: "30/40/50/60/70/80/90/100/110/120 Dias" ou "30/45/60/75")
+  const cleanWithoutNotes = clean.replace(/\(\s*\d+\/\d+d?[^)]*\)/gi, '');
+  if (cleanWithoutNotes.includes('/')) {
+    const parts = cleanWithoutNotes.split('/').map(p => {
+      const m = p.match(/\b\d+\b/);
+      return m ? parseInt(m[0], 10) : null;
+    }).filter((n): n is number => n !== null && n > 0 && n <= 720);
+
+    if (parts.length >= 2) {
+      const step = parts[1] - parts[0];
+      return {
+        parcelas: parts.length,
+        prazo: step > 0 ? String(step) : '30',
+        daysOffsets: parts
+      };
+    }
+  }
+
+  // 4. Faixa "X a Y" (ex: "30 a 120" ou "30 a 90")
+  const rangeMatch = clean.match(/(\d+)\s*(?:a|ate|até|-)\s*(\d+)/i);
+  if (rangeMatch) {
+    const start = parseInt(rangeMatch[1], 10);
+    const end = parseInt(rangeMatch[2], 10);
+    if (start >= 5 && end > start && end <= 720) {
+      let step = 30;
+      if (lower.includes('10/10') || lower.includes('10 em 10') || lower.includes('10d') || ((end - start) % 10 === 0 && lower.includes('10'))) {
+        step = 10;
+      } else if (lower.includes('15/15') || lower.includes('15 em 15') || lower.includes('15d') || ((end - start) % 15 === 0 && lower.includes('15'))) {
+        step = 15;
+      } else if (lower.includes('7/7') || lower.includes('7 em 7') || lower.includes('7d') || lower.includes('semanal')) {
+        step = 7;
+      }
+      const offsets: number[] = [];
+      for (let d = start; d <= end; d += step) {
+        offsets.push(d);
+      }
+      return {
+        parcelas: offsets.length,
+        prazo: String(step),
+        daysOffsets: offsets
+      };
+    }
+  }
+
+  // 5. Formato "Nx" (ex: "3x", "4x", "10x")
+  const matchX = clean.match(/(\d+)\s*x/i);
   let parcelas = matchX ? parseInt(matchX[1], 10) : 0;
 
-  if (lower.includes('7') && (lower.includes('7/') || lower.includes('7 dias') || lower.includes('cada 7') || lower.includes('(7/'))) {
-    if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 2;
-    return { parcelas: parcelas || 2, prazo: '7' };
-  }
-  if (lower.includes('10') && (lower.includes('10/') || lower.includes('10 dias') || lower.includes('cada 10') || lower.includes('(10/'))) {
-    if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 3;
-    return { parcelas: parcelas || 3, prazo: '10' };
-  }
-  if (lower.includes('15')) {
-    if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 3;
-    return { parcelas: parcelas || 3, prazo: '15' };
-  }
-  if (lower.includes('21')) {
-    if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 3;
-    return { parcelas: parcelas || 3, prazo: '21' };
-  }
-  if (lower.includes('28')) {
-    if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 2;
-    return { parcelas: parcelas || 2, prazo: '28' };
-  }
-  if (lower.includes('30')) {
-    if (!parcelas) parcelas = cond.includes('/') ? cond.split('/').length : 3;
-    return { parcelas: parcelas || 3, prazo: '30' };
+  let prazo = '30';
+  if (lower.includes('7 dias') || lower.includes('cada 7') || lower.includes('semanal') || lower.includes('7/')) prazo = '7';
+  else if (lower.includes('10 dias') || lower.includes('cada 10') || lower.includes('10/')) prazo = '10';
+  else if (lower.includes('15 dias') || lower.includes('cada 15') || lower.includes('15/')) prazo = '15';
+  else if (lower.includes('20 dias') || lower.includes('cada 20')) prazo = '20';
+  else if (lower.includes('21 dias') || lower.includes('cada 21') || lower.includes('21/')) prazo = '21';
+  else if (lower.includes('28 dias') || lower.includes('cada 28') || lower.includes('28/')) prazo = '28';
+  else if (lower.includes('30 dias') || lower.includes('cada 30') || lower.includes('mensal') || lower.includes('30/')) prazo = '30';
+
+  const numPrazo = Number(prazo) || 30;
+  const count = parcelas || 3;
+  const offsets: number[] = [];
+  for (let i = 1; i <= count; i++) {
+    offsets.push(i * numPrazo);
   }
 
-  return { parcelas: parcelas || 3, prazo: '30' };
+  return { parcelas: count, prazo, daysOffsets: offsets };
 }
 
 /**
@@ -300,7 +401,6 @@ export function generateOrderInstallments(
 
   const list: PaymentInstallment[] = [];
   const valorFrete = Number(order.header?.valorFrete ?? order.header?.valorFreteGlobal) || 0;
-  // As parcelas de mercadoria do fornecedor dividem o valor líquido sem o frete (pois o frete possui boleto próprio)
   const valorBaseMercadoria = Math.max(0, netTotal - valorFrete);
 
   // CENÁRIO A: NEGOCIAÇÃO MISTA (DEPÓSITO PARCELADO + SALDO EM BOLETO PARCELADO)
@@ -313,25 +413,31 @@ export function generateOrderInstallments(
     const saldoPrazo = String(order.header.saldoPrazoDias || '30');
     const totalParcelasGeral = totalParcelasDeposito + totalParcelasSaldo;
 
+    // Regra: por padrão a primeira parcela vence 10 dias após a previsão de entrega (salvo data fixa informada)
+    const firstDueDate = order.header.dataPrimeiroVencimento 
+      ? addDaysToDate(order.header.dataPrimeiroVencimento, 0) 
+      : addDaysToDate(baseDeliveryDate, 10);
+
     // 1. Parcelas de Depósito / PIX
     const depBaseValue = totalParcelasDeposito > 0 ? Number((valorTotalDeposito / totalParcelasDeposito).toFixed(2)) : valorTotalDeposito;
     const depRemainder = totalParcelasDeposito > 0 ? Number((valorTotalDeposito - depBaseValue * totalParcelasDeposito).toFixed(2)) : 0;
+
+    let lastDepositDate = '';
 
     for (let d = 1; d <= totalParcelasDeposito; d++) {
       const existingDep = existingMap.get(d);
       const customDepDate = customDates?.[String(d)];
 
-      let dueDays = 0;
       let calculatedDueDate = '';
       if (depositoPrazo === 'vista') {
-        dueDays = 0;
         calculatedDueDate = addDaysToDate(orderDate, 0);
       } else {
         const interval = Number(depositoPrazo) || 30;
-        // Primeira parcela é 10 dias depois da data de entrega; as seguintes seguem o intervalo escolhido
-        dueDays = 10 + (d - 1) * interval;
-        calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
+        const dueDays = (d - 1) * interval;
+        calculatedDueDate = addDaysToDate(firstDueDate, dueDays);
       }
+
+      lastDepositDate = calculatedDueDate;
 
       const origVal = d === 1 ? Number((depBaseValue + depRemainder).toFixed(2)) : depBaseValue;
       const isDepManuallyOverridden = existingDep?.valor !== undefined && existingDep?.valorOriginal !== undefined && Math.abs(existingDep.valor - existingDep.valorOriginal) > 0.01;
@@ -361,7 +467,7 @@ export function generateOrderInstallments(
       });
     }
 
-    // 2. Parcelas do Saldo em Boleto (1ª parcela 10 dias após a entrega, seguintes somando o intervalo)
+    // 2. Parcelas do Saldo em Boleto
     const saldoBaseValue = totalParcelasSaldo > 0 ? Number((saldoRestante / totalParcelasSaldo).toFixed(2)) : saldoRestante;
     const saldoRemainder = totalParcelasSaldo > 0 ? Number((saldoRestante - saldoBaseValue * totalParcelasSaldo).toFixed(2)) : 0;
 
@@ -370,10 +476,18 @@ export function generateOrderInstallments(
       const existing = existingMap.get(numParcela);
 
       const intervalNum = Number(saldoPrazo) || 30;
-      // Primeira parcela é 10 dias depois da data de entrega; as seguintes seguem o intervalo escolhido
-      const dueDays = 10 + (j - 1) * intervalNum;
+      let calculatedDueDate = '';
 
-      const calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
+      if (totalParcelasDeposito === 1 && depositoPrazo === 'vista') {
+        // Se a entrada foi à vista, o saldo em boleto inicia no 1º vencimento (10 dias após a entrega por padrão)
+        calculatedDueDate = addDaysToDate(firstDueDate, (j - 1) * intervalNum);
+      } else if (lastDepositDate && depositoPrazo !== 'vista') {
+        // Se o depósito foi parcelado, os boletos correm após o último depósito
+        calculatedDueDate = addDaysToDate(lastDepositDate, j * intervalNum);
+      } else {
+        calculatedDueDate = addDaysToDate(firstDueDate, (j - 1) * intervalNum);
+      }
+
       const originalProportionalVal = j === 1 ? Number((saldoBaseValue + saldoRemainder).toFixed(2)) : saldoBaseValue;
 
       const customSaldoDate = customDates?.[String(numParcela)];
@@ -409,26 +523,49 @@ export function generateOrderInstallments(
     const baseValue = totalParcelas > 0 ? Number((valorBaseMercadoria / totalParcelas).toFixed(2)) : valorBaseMercadoria;
     const remainder = totalParcelas > 0 ? Number((valorBaseMercadoria - baseValue * totalParcelas).toFixed(2)) : 0;
 
+    const daysOffsets = (parsed.daysOffsets && parsed.daysOffsets.length === totalParcelas)
+      ? parsed.daysOffsets
+      : undefined;
+
+    // Regra: por padrão a primeira parcela vence 10 dias após a previsão de entrega (salvo data fixa informada)
+    const firstDueDate = order.header.dataPrimeiroVencimento 
+      ? addDaysToDate(order.header.dataPrimeiroVencimento, 0)
+      : addDaysToDate(baseDeliveryDate, 10);
+
     for (let i = 1; i <= totalParcelas; i++) {
       const existing = existingMap.get(i);
 
       let dueDays = 0;
+      let calculatedDueDate = '';
+
       if (prazo === 'vista') {
         dueDays = 0;
+        calculatedDueDate = order.header.dataPrimeiroVencimento 
+          ? addDaysToDate(order.header.dataPrimeiroVencimento, 0)
+          : addDaysToDate(orderDate, 0);
       } else {
         const intervalNum = Number(prazo) || 30;
-        dueDays = i * intervalNum;
+        const diffFromFirst = (daysOffsets && daysOffsets.length >= i)
+          ? (daysOffsets[i - 1] - daysOffsets[0])
+          : (i - 1) * intervalNum;
+
+        dueDays = diffFromFirst;
+        calculatedDueDate = addDaysToDate(firstDueDate, diffFromFirst);
       }
 
-      const calculatedDueDate = addDaysToDate(baseDeliveryDate, dueDays);
       const originalProportionalVal = i === 1 ? Number((baseValue + remainder).toFixed(2)) : baseValue;
 
       const customDate = customDates?.[String(i)];
       const isManuallyOverridden = existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01;
       const valorFinal = isManuallyOverridden ? existing.valor : originalProportionalVal;
-      const rawDueDate = customDate || existing?.dataVencimento || calculatedDueDate;
+      // Stale dates fix: recalculate dynamically if not explicitly in customDates
+      const rawDueDate = customDate || calculatedDueDate;
       const dataVencimentoFinal = addDaysToDate(rawDueDate, 0);
       const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
+
+      const obsText = prazo === 'vista' 
+        ? 'Pagamento 100% À Vista' 
+        : `Parcela ${i}/${totalParcelas} (${dueDays === 0 ? (order.header.dataPrimeiroVencimento ? '1º Vencimento' : '10d da Entrega') : `+${dueDays}d`})`;
 
       list.push({
         id: existing?.id || `inst_${order.header.id || 'ord'}_${i}_${Date.now()}`,
@@ -442,7 +579,7 @@ export function generateOrderInstallments(
         valorOriginal: isManuallyOverridden ? existing.valorOriginal : originalProportionalVal,
         status: statusFinal,
         dataPagamento: existing?.dataPagamento,
-        observacao: existing?.observacao || (prazo === 'vista' ? 'Pagamento 100% À Vista' : `Parcela ${i}/${totalParcelas} (${dueDays}d da Entrega)`),
+        observacao: existing?.observacao || obsText,
         documentoRef: existing?.documentoRef,
         tipoTitulo: 'mercadoria',
         isBoletoFrete: false,

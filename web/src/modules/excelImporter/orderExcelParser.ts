@@ -134,6 +134,7 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
   let telefoneVendedor = '';
   let condicaoPagamento = '';
   let percentualDescontoOff = 0;
+  let percentualNota: number | undefined = undefined;
   let dataPedidoVal: any = null;
   let dataEntregaVal: any = null;
   const observacoesList: string[] = [];
@@ -259,8 +260,19 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
         }
       }
 
-      // % OFF
-      if (upper === '% OFF' || upper === 'DESCONTO OFF' || upper === '%OFF') {
+      // % NOTA (Faturado em NF)
+      if (upper === '% NOTA' || upper === '% NOTA FISCAL' || upper === '% NF' || upper === 'NOTA FISCAL %' || upper === '% FATURADO') {
+        const nextColVal = row[c + 1];
+        const nextRowVal = matrix[r + 1]?.[c];
+        const notaCandidate = (parseNumber(nextColVal) > 0) ? nextColVal : ((parseNumber(nextRowVal) > 0) ? nextRowVal : 0);
+        const parsedNota = parseNumber(notaCandidate);
+        if (parsedNota > 0) {
+          percentualNota = parsedNota <= 1 ? parsedNota * 100 : parsedNota;
+        }
+      }
+
+      // % OFF (Desconto Comercial Direto)
+      if (upper === '% OFF' || upper === 'DESCONTO OFF' || upper === '%OFF' || upper === 'DESC. COMERCIAL' || upper === 'DESCONTO COMERCIAL') {
         const nextColVal = row[c + 1];
         const nextRowVal = matrix[r + 1]?.[c];
         const offCandidate = (parseNumber(nextColVal) > 0) ? nextColVal : ((parseNumber(nextRowVal) > 0) ? nextRowVal : 0);
@@ -338,6 +350,7 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
     contatoVendedor,
     condicaoPagamento: condicaoPagamento || '30/60/90 Dias',
     percentualDescontoOff,
+    percentualNota,
     dataPedido,
     dataEntregaPrevista,
     observacoes: observacoesList.join(' | '),

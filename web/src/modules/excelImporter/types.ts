@@ -12,6 +12,7 @@ export interface ExcelImportHeader {
   contatoVendedor?: string;
   condicaoPagamento?: string;
   percentualDescontoOff: number; // e.g. 50 (from 0.5)
+  percentualNota?: number;        // e.g. 50 (faturado em NF)
   dataPedido: string;            // YYYY-MM-DD
   dataEntregaPrevista: string;   // YYYY-MM-DD
   observacoes?: string;

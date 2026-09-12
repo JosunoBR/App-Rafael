@@ -32,6 +32,8 @@ import {
   PRAZO_OPTIONS, 
   SALDO_PRAZO_OPTIONS,
   DEPOSITO_PRAZO_OPTIONS,
+  QUICK_PAYMENT_PRESETS,
+  QuickPaymentPreset,
   parsePaymentConditionString, 
   formatPaymentConditionString,
   addDaysToDate,
@@ -464,12 +466,85 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     });
   };
 
-  // Previsão dinâmica das datas das parcelas a partir da data de entrega da mercadoria
+  // Previsão dinâmica das datas das parcelas a partir da data de entrega da mercadoria ou do 1º vencimento
   const rawBase = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
   const baseDate = addDaysToDate(rawBase, 0);
   const rawOrderDate = header.dataPedido || new Date().toISOString().split('T')[0];
   const orderDate = addDaysToDate(rawOrderDate, 0);
   const customDates = header.datasVencimentoPersonalizadas;
+
+  // Regra Padrão: A 1ª parcela vence exatamente 10 dias após a previsão de entrega.
+  // Caso o usuário preencha uma data fixa em dataPrimeiroVencimento, ela tem prioridade e cascateia as demais.
+  const defaultFirstDueDate = addDaysToDate(baseDate, 10);
+  const isCustomFirstDueDate = Boolean(header.dataPrimeiroVencimento && header.dataPrimeiroVencimento.trim());
+  const effectiveFirstDueDate = isCustomFirstDueDate 
+    ? addDaysToDate(header.dataPrimeiroVencimento!.trim(), 0) 
+    : defaultFirstDueDate;
+
+  const daysOffsets = (parsedPayment.daysOffsets && parsedPayment.daysOffsets.length === currentParcelas)
+    ? parsedPayment.daysOffsets
+    : undefined;
+
+  const matchedPreset = QUICK_PAYMENT_PRESETS.find(p => 
+    p.conditionString.trim().toLowerCase() === (header.condicaoPagamento || '').trim().toLowerCase() ||
+    p.label.trim().toLowerCase() === (header.condicaoPagamento || '').trim().toLowerCase()
+  );
+
+  const selectedConditionValue = isEntradaMista
+    ? 'misto'
+    : matchedPreset
+      ? matchedPreset.id
+      : (isVistaIntegral ? 'vista' : 'custom');
+
+  const handleApplyPreset = (preset: QuickPaymentPreset) => {
+    const isVista = preset.id === 'vista';
+    const step = preset.daysOffsets[1] ? preset.daysOffsets[1] - preset.daysOffsets[0] : 30;
+    onChange({
+      ...header,
+      condicaoPagamento: preset.conditionString,
+      parcelasCount: preset.parcelas,
+      prazoDias: isVista ? 'vista' : String(step),
+      formaPagamento: isVista ? 'Depósito' : (header.formaPagamento === 'Boleto / Depósito' ? 'Boleto' : header.formaPagamento || 'Boleto'),
+      datasVencimentoPersonalizadas: undefined
+    });
+  };
+
+  const handleSelectCondition = (selectedVal: string) => {
+    if (selectedVal === 'misto') {
+      handleFieldChange('formaPagamento', 'Boleto / Depósito');
+      return;
+    }
+    if (selectedVal === 'custom') {
+      if (header.formaPagamento === 'Boleto / Depósito') {
+        handleFieldChange('formaPagamento', 'Boleto');
+      }
+      return;
+    }
+    const preset = QUICK_PAYMENT_PRESETS.find(p => p.id === selectedVal);
+    if (preset) {
+      handleApplyPreset(preset);
+    }
+  };
+
+  const handleCustomConditionChange = (val: string) => {
+    const parsed = parsePaymentConditionString(val);
+    onChange({
+      ...header,
+      condicaoPagamento: val,
+      parcelasCount: parsed.parcelas,
+      prazoDias: parsed.prazo,
+      datasVencimentoPersonalizadas: undefined
+    });
+  };
+
+  const handleDataPrimeiroVencimentoChange = (dateVal: string) => {
+    const isoVal = dateVal ? toIsoDate(dateVal) : undefined;
+    onChange({
+      ...header,
+      dataPrimeiroVencimento: isoVal,
+      datasVencimentoPersonalizadas: undefined
+    });
+  };
 
   const previewInstallments = isEntradaMista
     ? [
@@ -483,8 +558,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
             defaultDate = addDaysToDate(orderDate, 0);
           } else {
             const interval = Number(depositoPrazo) || 30;
-            dueDays = 10 + (d - 1) * interval;
-            defaultDate = addDaysToDate(baseDate, dueDays);
+            dueDays = (d - 1) * interval;
+            defaultDate = addDaysToDate(effectiveFirstDueDate, dueDays);
           }
           const rawCustom = customDates?.[String(d)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
@@ -505,8 +580,12 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           const b = idx + 1;
           const numeroParcela = depositoParcelas + b;
           const interval = Number(saldoPrazo) || 30;
-          const dueDays = 10 + (b - 1) * interval;
-          const defaultDate = addDaysToDate(baseDate, dueDays);
+          let defaultDate = '';
+          if (depositoParcelas === 1 && depositoPrazo === 'vista') {
+            defaultDate = addDaysToDate(effectiveFirstDueDate, (b - 1) * interval);
+          } else {
+            defaultDate = addDaysToDate(effectiveFirstDueDate, (depositoParcelas + b - 1) * interval);
+          }
           const rawCustom = customDates?.[String(numeroParcela)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
           return {
@@ -522,14 +601,29 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       ]
     : Array.from({ length: currentParcelas }, (_, idx) => {
         const num = idx + 1;
-        const interval = Number(currentPrazo) || 30;
-        const dueDays = currentPrazo === 'vista' ? 0 : num * interval;
-        const defaultDate = addDaysToDate(baseDate, dueDays);
+        let dueDays = 0;
+        let defaultDate = '';
+        if (currentPrazo === 'vista') {
+          dueDays = 0;
+          defaultDate = isCustomFirstDueDate ? effectiveFirstDueDate : addDaysToDate(orderDate, 0);
+        } else {
+          const interval = Number(currentPrazo) || 30;
+          const diffFromFirst = (daysOffsets && daysOffsets.length >= num)
+            ? (daysOffsets[num - 1] - daysOffsets[0])
+            : (num - 1) * interval;
+          dueDays = diffFromFirst;
+          defaultDate = addDaysToDate(effectiveFirstDueDate, diffFromFirst);
+        }
         const rawCustom = customDates?.[String(num)];
         const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
+        const rotuloText = currentPrazo === 'vista'
+          ? 'À Vista'
+          : isCustomFirstDueDate
+            ? `${num}ª Parcela (${dueDays === 0 ? '1º Venc. Fixo' : `+${dueDays}d`})`
+            : `${num}ª Parcela (${dueDays === 0 ? '10d pós-entrega' : `+${dueDays}d`})`;
         return {
           numeroParcela: num,
-          rotulo: currentPrazo === 'vista' ? 'À Vista' : `${num}ª Parcela`,
+          rotulo: rotuloText,
           dataVencimento: customDate || defaultDate,
           valor: currentParcelas > 0 ? valorBaseMercadoria / currentParcelas : valorBaseMercadoria,
           isEntrada: currentPrazo === 'vista',
@@ -593,10 +687,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       });
     }
 
-    onChange({
+    const updatedHeader: OrderHeader = {
       ...header,
       datasVencimentoPersonalizadas: updatedCustomDates
-    });
+    };
+    if (numeroParcela === 1 && !isFrete) {
+      updatedHeader.dataPrimeiroVencimento = isoNewDate;
+    }
+
+    onChange(updatedHeader);
   };
 
   const handleResetDates = () => {
@@ -621,7 +720,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       parcelasCount: supParsed.parcelas,
       prazoDias: supParsed.prazo,
       aliquotaSt: supplier.aliquotaStPadrao || 0,
-      percentualDescontoOff: 0,
+      percentualDescontoOff: supplier.descontoOffPadrao || 0,
       percentualNota: supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : (header.percentualNota ?? 100),
       observacoesDescarga: supplier.observacoesDescarga || header.observacoesDescarga || header.observacoes || ''
     });
@@ -1034,8 +1133,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
                 </div>
 
-                {/* LINHA 1: CONFIGURAÇÃO DE FORMA DE PAGAMENTO & PRAZOS */}
-                <div className={`grid grid-cols-1 ${isEntradaMista ? 'sm:grid-cols-1 max-w-sm' : 'sm:grid-cols-3'} gap-3.5 mb-3.5`}>
+                {/* LINHA 1: FORMA DE PAGAMENTO, CONDIÇÃO COMERCIAL (DROPDOWN AGRUPADO ERP) E 1º VENCIMENTO */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-3.5">
                   {/* 1. Forma de Pagamento */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -1054,17 +1153,139 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </select>
                   </div>
 
-                  {!isEntradaMista && (
-                    <>
-                      {/* 2. Modalidade de Prazo */}
+                  {/* 2. Condição de Pagamento (Menu Agrupado ERP - Tiny/Bling) */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        2. Condição de Pagamento
+                      </span>
+                      {selectedConditionValue !== 'custom' && (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectCondition('custom')}
+                          className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                        >
+                          Personalizar
+                        </button>
+                      )}
+                    </label>
+                    <select
+                      id="condicaoPagamentoSelect"
+                      value={selectedConditionValue}
+                      onChange={(e) => handleSelectCondition(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
+                    >
+                      <optgroup label="⚡ Intervalos Mais Usados (10 em 10 dias)">
+                        {QUICK_PAYMENT_PRESETS.filter(p => p.category === '10_dias').map(p => (
+                          <option key={p.id} value={p.id}>{p.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="📅 Intervalos Quinzenais (15 em 15 dias)">
+                        {QUICK_PAYMENT_PRESETS.filter(p => p.category === '15_dias').map(p => (
+                          <option key={p.id} value={p.id}>{p.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="📆 Intervalos Mensais (30 em 30 dias)">
+                        {QUICK_PAYMENT_PRESETS.filter(p => p.category === '30_dias').map(p => (
+                          <option key={p.id} value={p.id}>{p.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="🔄 Intervalo Semanal (7 em 7 dias)">
+                        {QUICK_PAYMENT_PRESETS.filter(p => p.category === 'semanal').map(p => (
+                          <option key={p.id} value={p.id}>{p.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="💵 Modalidades Especiais">
+                        <option value="vista">100% À Vista (TED / PIX)</option>
+                        <option value="misto">Entrada + Boletos (Depósito + Parcelas)</option>
+                        <option value="custom">Digitação Livre / Intervalo Personalizado...</option>
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  {/* 3. 1º Vencimento (Primeira Parcela) */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                        <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                        3. 1º Vencimento
+                      </span>
+                      {header.dataPrimeiroVencimento && (
+                        <button
+                          type="button"
+                          onClick={() => handleDataPrimeiroVencimentoChange('')}
+                          className="text-[10px] text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 font-bold flex items-center gap-0.5 cursor-pointer"
+                          title="Restaurar padrão: 10 dias após a entrega"
+                        >
+                          <RotateCcw className="w-2.5 h-2.5" />
+                          Restaurar Padrão (10d)
+                        </button>
+                      )}
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={header.dataPrimeiroVencimento ? toBrDate(header.dataPrimeiroVencimento) : ''}
+                        onChange={(e) => handleDataPrimeiroVencimentoChange(maskDate(e.target.value))}
+                        placeholder={`Padrão: ${toBrDate(defaultFirstDueDate)} (10d)`}
+                        maxLength={10}
+                        className={`w-full px-3 py-2 pr-8 text-xs rounded-xl border bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-hidden font-mono font-medium shadow-2xs ${
+                          header.dataPrimeiroVencimento 
+                            ? 'border-indigo-400 dark:border-indigo-600 font-bold' 
+                            : 'border-slate-200 dark:border-slate-700'
+                        }`}
+                        title="Vencimento da 1ª parcela. Por padrão são 10 dias após a entrega da mercadoria. Se informado, substitui o cálculo inicial."
+                      />
+                      <input
+                        type="date"
+                        value={header.dataPrimeiroVencimento ? toIsoDate(header.dataPrimeiroVencimento) : ''}
+                        onChange={(e) => handleDataPrimeiroVencimentoChange(toBrDate(e.target.value))}
+                        className="absolute right-1 w-7 h-7 opacity-0 cursor-pointer z-10"
+                        tabIndex={-1}
+                        title="Selecionar no calendário"
+                      />
+                      <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 pointer-events-none" />
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                      {header.dataPrimeiroVencimento ? (
+                        <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
+                          ⚡ Data fixa definida. Demais parcelas calculadas a partir deste dia.
+                        </span>
+                      ) : (
+                        <span>
+                          📅 Padrão: <strong>10d após entrega</strong> ({toBrDate(defaultFirstDueDate)})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* DIGITAÇÃO LIVRE E CONTROLES MANUAIS (EXIBIDO QUANDO SELECIONADO PERSONALIZADO OU CONDIÇÃO AVULSA) */}
+                {selectedConditionValue === 'custom' && (
+                  <div className="mb-3.5 p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <label className="text-xs font-bold text-amber-900 dark:text-amber-200 whitespace-nowrap flex items-center gap-1.5">
+                        <Edit3 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        <span>Digitação Livre da Condição:</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={header.condicaoPagamento || ''}
+                        onChange={(e) => handleCustomConditionChange(e.target.value)}
+                        placeholder="Ex: 30/40/50/60/70/80/90/100/110/120 Dias ou 15 a 90 (15/15d)"
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-amber-500 outline-hidden"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-amber-200/60 dark:border-amber-900/40">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                          2. Prazo / Intervalo
+                        <label className="block text-[10px] font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
+                          Intervalo Manual (Dias)
                         </label>
                         <select
                           value={currentPrazo}
                           onChange={(e) => handlePaymentPrazoChange(e.target.value)}
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-200 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium"
                         >
                           {PRAZO_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>
@@ -1073,32 +1294,25 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           ))}
                         </select>
                       </div>
-
-                      {/* 3. Quantidade de Parcelas */}
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                          <span>3. Qtd Parcelas</span>
+                        <label className="block text-[10px] font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
+                          Qtd Parcelas Manual
                         </label>
                         <select
-                          value={isVistaIntegral ? 1 : currentParcelas}
-                          disabled={isVistaIntegral}
+                          value={currentParcelas}
                           onChange={(e) => handlePaymentParcelasChange(Number(e.target.value))}
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-200 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium"
                         >
-                          {isVistaIntegral ? (
-                            <option value="1">1x (À Vista ou 1 Parcela)</option>
-                          ) : (
-                            PARCELAS_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))
-                          )}
+                          {PARCELAS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
                         </select>
                       </div>
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* LINHA 2: FRETE E NOTA FISCAL */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">

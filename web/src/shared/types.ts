@@ -219,6 +219,7 @@ export interface OrderHeader {
   parcelasCount?: number;            // Quantidade de parcelas (ex: 1, 2, 3, 4...)
   prazoDias?: number | string;       // Intervalo ou dias (ex: 30, 28, 15, 21, 45, 60, 'vista', 'entrada_com_parcelamento', 'custom')
   diaVencimentoPersonalizado?: string; // Data inicial ou dia base
+  dataPrimeiroVencimento?: string;    // Data programada para o 1º vencimento (ex: 12/10/2026 para pedidos sazonais/importados)
   datasVencimentoPersonalizadas?: Record<string, string>; // Mapeamento de parcela/frete -> data YYYY-MM-DD customizada
   
   // Negociação Mista: Depósito/PIX Parcelado + Saldo em Boleto Parcelado

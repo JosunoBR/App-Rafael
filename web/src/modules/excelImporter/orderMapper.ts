@@ -165,8 +165,10 @@ export function mapParsedExcelToOrder(
     formaPagamento: 'Boleto Bancário',
     dataPedido: parsed.header.dataPedido,
     dataEntregaPrevista: parsed.header.dataEntregaPrevista,
-    percentualDescontoOff: parsed.header.percentualDescontoOff || 0,
-    percentualNota: supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : 100,
+    percentualDescontoOff: parsed.header.percentualDescontoOff || supplier.descontoOffPadrao || 0,
+    percentualNota: parsed.header.percentualNota !== undefined 
+      ? parsed.header.percentualNota 
+      : (supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : 100),
     tipoFrete: parsed.header.tipoFrete || 'Retira',
     valorFrete: 0,
     valorFreteGlobal: 0,

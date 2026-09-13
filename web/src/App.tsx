@@ -2056,6 +2056,7 @@ export function App() {
                     onLoadSupplierTemplate={handleLoadSupplierTemplate}
                     hasSupplierTemplate={Boolean(activeSupplierTemplate)}
                     supplierTemplateItemsCount={activeSupplierTemplate?.items?.length || 0}
+                    showToast={showToast}
                   />
 
                   {/* Card Retrátil de Engenharia Fiscal do Pedido (Entrada e Saída) */}

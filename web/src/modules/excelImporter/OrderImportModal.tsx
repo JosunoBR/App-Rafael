@@ -466,12 +466,12 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
 
                 <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 shadow-xs">
                   <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 block">
-                    {parsedData.header.percentualNota !== undefined ? '% Faturado em NF' : 'OFF (%) Comercial'}
+                    OFF %
                   </span>
                   <span className="text-xl font-extrabold text-indigo-700 dark:text-indigo-400 mt-0.5 block">
                     {parsedData.header.percentualNota !== undefined 
-                      ? `${parsedData.header.percentualNota}% NOTA` 
-                      : `${parsedData.header.percentualDescontoOff}% OFF`}
+                      ? `${parsedData.header.percentualNota}%` 
+                      : (parsedData.header.percentualDescontoOff ? `${parsedData.header.percentualDescontoOff}%` : '100%')}
                   </span>
                 </div>
               </div>

@@ -11,7 +11,16 @@ export const PARCELAS_OPTIONS = [
   { value: 8, label: '8x Parcelas' },
   { value: 9, label: '9x Parcelas' },
   { value: 10, label: '10x Parcelas' },
+  { value: 11, label: '11x Parcelas' },
   { value: 12, label: '12x Parcelas' },
+  { value: 13, label: '13x Parcelas' },
+  { value: 14, label: '14x Parcelas' },
+  { value: 15, label: '15x Parcelas' },
+  { value: 16, label: '16x Parcelas' },
+  { value: 17, label: '17x Parcelas' },
+  { value: 18, label: '18x Parcelas' },
+  { value: 20, label: '20x Parcelas' },
+  { value: 24, label: '24x Parcelas' },
 ];
 
 export const PRAZO_OPTIONS = [
@@ -46,34 +55,45 @@ export interface QuickPaymentPreset {
   conditionString: string;
   parcelas: number;
   daysOffsets: number[];
-  category: '10_dias' | '15_dias' | '30_dias' | 'semanal' | 'outros';
+  category: 'semanal' | '30_dias' | '15_dias' | '10_dias' | '45_dias' | 'outros';
 }
 
 export const QUICK_PAYMENT_PRESETS: QuickPaymentPreset[] = [
-  // De 10 em 10 dias (Iniciando em 30)
-  { id: '10_60', label: '30 a 60 (10/10d • 4x)', conditionString: '30/40/50/60 Dias', parcelas: 4, daysOffsets: [30, 40, 50, 60], category: '10_dias' },
-  { id: '10_90', label: '30 a 90 (10/10d • 7x)', conditionString: '30/40/50/60/70/80/90 Dias', parcelas: 7, daysOffsets: [30, 40, 50, 60, 70, 80, 90], category: '10_dias' },
-  { id: '10_120', label: '30 a 120 (10/10d • 10x)', conditionString: '30/40/50/60/70/80/90/100/110/120 Dias', parcelas: 10, daysOffsets: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120], category: '10_dias' },
-  { id: '10_150', label: '30 a 150 (10/10d • 13x)', conditionString: '30/40/50/60/70/80/90/100/110/120/130/140/150 Dias', parcelas: 13, daysOffsets: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150], category: '10_dias' },
+  // 1. Semanal e Ciclos de 7 em 7 Dias
+  { id: '7_28', label: '7/14/21/28 (4x)', conditionString: '7/14/21/28 Dias', parcelas: 4, daysOffsets: [7, 14, 21, 28], category: 'semanal' },
+  { id: '14_56', label: '14/21/28/35/42/49/56 (7x)', conditionString: '14/21/28/35/42/49/56 Dias', parcelas: 7, daysOffsets: [14, 21, 28, 35, 42, 49, 56], category: 'semanal' },
+  { id: '28_42', label: '28/35/42 (3x)', conditionString: '28/35/42 Dias', parcelas: 3, daysOffsets: [28, 35, 42], category: 'semanal' },
+  { id: '28_56', label: '28/35/42/49/56 (5x)', conditionString: '28/35/42/49/56 Dias', parcelas: 5, daysOffsets: [28, 35, 42, 49, 56], category: 'semanal' },
 
-  // De 15 em 15 dias (Iniciando em 30)
-  { id: '15_75', label: '30 a 75 (15/15d • 4x)', conditionString: '30/45/60/75 Dias', parcelas: 4, daysOffsets: [30, 45, 60, 75], category: '15_dias' },
-  { id: '15_90', label: '30 a 90 (15/15d • 5x)', conditionString: '30/45/60/75/90 Dias', parcelas: 5, daysOffsets: [30, 45, 60, 75, 90], category: '15_dias' },
-  { id: '15_105', label: '30 a 105 (15/15d • 6x)', conditionString: '30/45/60/75/90/105 Dias', parcelas: 6, daysOffsets: [30, 45, 60, 75, 90, 105], category: '15_dias' },
-  { id: '15_120', label: '30 a 120 (15/15d • 7x)', conditionString: '30/45/60/75/90/105/120 Dias', parcelas: 7, daysOffsets: [30, 45, 60, 75, 90, 105, 120], category: '15_dias' },
-
-  // Padrões Tradicionais (30 em 30 dias)
+  // 2. Iniciando em 30 Dias (30 em 30)
   { id: '30_30', label: '30 Dias (1x)', conditionString: '30 Dias', parcelas: 1, daysOffsets: [30], category: '30_dias' },
-  { id: '30_60', label: '30/60 Dias (2x)', conditionString: '30/60 Dias', parcelas: 2, daysOffsets: [30, 60], category: '30_dias' },
-  { id: '30_90', label: '30/60/90 Dias (3x)', conditionString: '30/60/90 Dias', parcelas: 3, daysOffsets: [30, 60, 90], category: '30_dias' },
-  { id: '30_120', label: '30/60/90/120 Dias (4x)', conditionString: '30/60/90/120 Dias', parcelas: 4, daysOffsets: [30, 60, 90, 120], category: '30_dias' },
-  { id: '30_150', label: '30 a 150 (30/30d • 5x)', conditionString: '30/60/90/120/150 Dias', parcelas: 5, daysOffsets: [30, 60, 90, 120, 150], category: '30_dias' },
-  { id: '30_180', label: '30 a 180 (30/30d • 6x)', conditionString: '30/60/90/120/150/180 Dias', parcelas: 6, daysOffsets: [30, 60, 90, 120, 150, 180], category: '30_dias' },
+  { id: '30_60', label: '30/60 (2x)', conditionString: '30/60 Dias', parcelas: 2, daysOffsets: [30, 60], category: '30_dias' },
+  { id: '30_90', label: '30/60/90 (3x)', conditionString: '30/60/90 Dias', parcelas: 3, daysOffsets: [30, 60, 90], category: '30_dias' },
+  { id: '30_120', label: '30/60/90/120 (4x)', conditionString: '30/60/90/120 Dias', parcelas: 4, daysOffsets: [30, 60, 90, 120], category: '30_dias' },
+  { id: '30_150', label: '30/60/90/120/150 (5x)', conditionString: '30/60/90/120/150 Dias', parcelas: 5, daysOffsets: [30, 60, 90, 120, 150], category: '30_dias' },
 
-  // Semanal (Doces / Perecíveis)
-  { id: '7_28', label: '7/14/21/28 Dias (4x)', conditionString: '7/14/21/28 Dias', parcelas: 4, daysOffsets: [7, 14, 21, 28], category: 'semanal' },
+  // 3. Iniciando em 30 Dias (15 em 15)
+  { id: '30_60_15d', label: '30/45/60 (3x)', conditionString: '30/45/60 Dias', parcelas: 3, daysOffsets: [30, 45, 60], category: '15_dias' },
+  { id: '15_90', label: '30/45/60/75/90 (5x)', conditionString: '30/45/60/75/90 Dias', parcelas: 5, daysOffsets: [30, 45, 60, 75, 90], category: '15_dias' },
+  { id: '15_120', label: '30/45/60/75/90/105/120 (7x)', conditionString: '30/45/60/75/90/105/120 Dias', parcelas: 7, daysOffsets: [30, 45, 60, 75, 90, 105, 120], category: '15_dias' },
+  { id: '15_150', label: '30/45/60/75/90/105/120/135/150 (9x)', conditionString: '30/45/60/75/90/105/120/135/150 Dias', parcelas: 9, daysOffsets: [30, 45, 60, 75, 90, 105, 120, 135, 150], category: '15_dias' },
 
-  // À Vista
+  // 4. Iniciando em 30 Dias (10 em 10)
+  { id: '10_60', label: '30/40/50/60 (4x)', conditionString: '30/40/50/60 Dias', parcelas: 4, daysOffsets: [30, 40, 50, 60], category: '10_dias' },
+  { id: '10_90', label: '30/40/50/60/70/80/90 (7x)', conditionString: '30/40/50/60/70/80/90 Dias', parcelas: 7, daysOffsets: [30, 40, 50, 60, 70, 80, 90], category: '10_dias' },
+  { id: '10_120', label: '30/40/50/60/70/80/90/100/110/120 (10x)', conditionString: '30/40/50/60/70/80/90/100/110/120 Dias', parcelas: 10, daysOffsets: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120], category: '10_dias' },
+  { id: '10_150', label: '30/40/50/60/70/80/90/100/110/120/130/140/150 (13x)', conditionString: '30/40/50/60/70/80/90/100/110/120/130/140/150 Dias', parcelas: 13, daysOffsets: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150], category: '10_dias' },
+
+  // 5. Iniciando em 45 Dias (15 em 15)
+  { id: '45_90', label: '45/60/75/90 (4x)', conditionString: '45/60/75/90 Dias', parcelas: 4, daysOffsets: [45, 60, 75, 90], category: '45_dias' },
+  { id: '45_120', label: '45/60/75/90/105/120 (6x)', conditionString: '45/60/75/90/105/120 Dias', parcelas: 6, daysOffsets: [45, 60, 75, 90, 105, 120], category: '45_dias' },
+  { id: '45_150', label: '45/60/75/90/105/120/135/150 (8x)', conditionString: '45/60/75/90/105/120/135/150 Dias', parcelas: 8, daysOffsets: [45, 60, 75, 90, 105, 120, 135, 150], category: '45_dias' },
+
+  // 6. Iniciando em 45 Dias (10 em 10)
+  { id: '45_115', label: '45/55/65/75/85/95/105/115 (8x)', conditionString: '45/55/65/75/85/95/105/115 Dias', parcelas: 8, daysOffsets: [45, 55, 65, 75, 85, 95, 105, 115], category: '45_dias' },
+  { id: '45_155', label: '45/55/65/75/85/95/105/115/125/135/145/155 (12x)', conditionString: '45/55/65/75/85/95/105/115/125/135/145/155 Dias', parcelas: 12, daysOffsets: [45, 55, 65, 75, 85, 95, 105, 115, 125, 135, 145, 155], category: '45_dias' },
+
+  // 7. À Vista
   { id: 'vista', label: '100% À Vista (TED/PIX)', conditionString: '100% À Vista (TED/PIX)', parcelas: 1, daysOffsets: [0], category: 'outros' },
 ];
 
@@ -118,6 +138,62 @@ export function calculateOrderNetTotal(order: PurchaseOrder): number {
 }
 
 /**
+ * Localiza o preset pré-definido correspondente à nova quantidade de parcelas mantendo a cadência e início atuais
+ */
+export function findMatchingPresetForParcelas(newParc: number, currentPrazo?: string | number): QuickPaymentPreset | undefined {
+  const prazoStr = String(currentPrazo || '30').trim().toLowerCase();
+  if (newParc <= 1) {
+    if (prazoStr === 'vista' || prazoStr === '0') {
+      return QUICK_PAYMENT_PRESETS.find(p => p.id === 'vista');
+    }
+    return QUICK_PAYMENT_PRESETS.find(p => p.id === '30_30');
+  }
+
+  // 1. Detecta o início e o passo/cadência a partir do prazo atual
+  let start = 30;
+  let step = 30;
+
+  const currentPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === prazoStr || p.conditionString.toLowerCase() === prazoStr);
+  if (currentPreset && currentPreset.daysOffsets && currentPreset.daysOffsets.length > 0) {
+    start = currentPreset.daysOffsets[0];
+    step = currentPreset.daysOffsets.length > 1
+      ? (currentPreset.daysOffsets[1] - currentPreset.daysOffsets[0])
+      : currentPreset.daysOffsets[0];
+  } else {
+    const interval = parseInt(prazoStr, 10);
+    if (!isNaN(interval) && interval > 0) {
+      step = interval;
+      if (interval === 7) start = 7;
+      else if (interval === 21) start = 21;
+      else if (interval === 28) start = 28;
+      else start = 30;
+    }
+  }
+
+  // 2. Monta os offsets ideais esperados para a nova quantidade de parcelas
+  const expectedOffsets: number[] = [];
+  for (let i = 0; i < newParc; i++) {
+    expectedOffsets.push(start + i * step);
+  }
+
+  // 3. Procura preset com offsets idênticos e quantidade idêntica
+  const exactMatch = QUICK_PAYMENT_PRESETS.find(p => 
+    p.parcelas === newParc &&
+    p.daysOffsets &&
+    p.daysOffsets.length === newParc &&
+    p.daysOffsets.every((d, idx) => d === expectedOffsets[idx])
+  );
+  if (exactMatch) return exactMatch;
+
+  // 4. Se não achou exato com mesmo início, procura na mesma cadência (step)
+  return QUICK_PAYMENT_PRESETS.find(p => {
+    if (p.parcelas !== newParc || !p.daysOffsets || p.daysOffsets.length !== newParc) return false;
+    const pStep = p.daysOffsets.length > 1 ? (p.daysOffsets[1] - p.daysOffsets[0]) : p.daysOffsets[0];
+    return pStep === step;
+  });
+}
+
+/**
  * Formata a string de condição de pagamento (ex: "Depósito 2x (R$ 5.000) + Boleto 3x (30/60/90 Dias)")
  */
 export function formatPaymentConditionString(
@@ -152,6 +228,13 @@ export function formatPaymentConditionString(
       : 'Entrada À Vista';
     return `${entradaStr} + Boleto ${sPrazoStr}`;
   }
+
+  // Verifica se o prazo corresponde a um dos modelos pré-definidos
+  const matchedPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === String(prazo) || p.conditionString.toLowerCase() === String(prazo).toLowerCase());
+  if (matchedPreset) {
+    return matchedPreset.conditionString;
+  }
+
   const intervalo = Number(prazo);
   if (!isNaN(intervalo) && intervalo > 0) {
     if (parcelas === 1) {

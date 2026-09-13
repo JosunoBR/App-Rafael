@@ -224,8 +224,10 @@ export interface OrderHeader {
   
   // Negociação Mista: Depósito/PIX Parcelado + Saldo em Boleto Parcelado
   valorEntradaAVista?: number;       // Valor total em Depósito/PIX (R$)
+  depositoFormaPagamento?: string;   // Depósito, Boleto, Cheque
   depositoParcelasCount?: number;    // Quantidade de parcelas do depósito (ex: 1x, 2x, 3x, 4x...)
   depositoPrazoDias?: number | string; // Intervalo do depósito (ex: 'vista', 7, 10, 15, 30...)
+  saldoFormaPagamento?: string;      // Boleto, Depósito, Cheque
   saldoParcelasCount?: number;       // Quantidade de parcelas do saldo em boleto (ex: 1x, 2x, 3x, 4x, 10x...)
   saldoPrazoDias?: number | string;  // Intervalo de vencimento do saldo em boleto (ex: 10, 15, 28, 30...)
 

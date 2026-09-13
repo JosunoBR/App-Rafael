@@ -193,10 +193,12 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
 
+    const offPercent = order.header?.percentualNota !== undefined ? order.header.percentualNota : 100;
+
     const card2Fields = [
       `Fornecedor: ${fornecedorNome}`,
       `Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`,
-      `% OFF (Desconto Negociado): ${offValue}%`,
+      `OFF %: ${offPercent}%`,
       `Desconto Comercial: ${descontoComercialTexto}`,
       `Condição de Pagto: ${condicaoPagamento}`,
       `Forma de Pagto: ${formaPagamento}`,
@@ -447,7 +449,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     if (observacoes) {
       doc.setTextColor(71, 85, 105);
       doc.setFont('helvetica', 'italic');
-      doc.text(`Obs: ${observacoes.substring(0, 115)}`, 13, finalY + 27.2);
+      doc.text(`Descrição do Pedido: ${observacoes.substring(0, 115)}`, 13, finalY + 27.2);
     }
 
     // Bloco Direito: Resumo Financeiro & Assinaturas
@@ -633,10 +635,11 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
 
+    const offPercentSeparacao = order.header?.percentualNota !== undefined ? order.header.percentualNota : 100;
     const col1Fields = [
       `Fornecedor: ${fornecedorNome}`,
       `Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`,
-      `% OFF (Desconto Negociado): ${offValue}%`
+      `OFF %: ${offPercentSeparacao}%`
     ];
     const col1Lines: string[] = [];
     col1Fields.forEach(f => {

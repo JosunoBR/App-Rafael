@@ -432,7 +432,7 @@ export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
                 🏷️ Média R$ {mediaPrecoPonderada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
               <span className="px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 font-bold border border-purple-200 dark:border-purple-800">
-                🧾 {mediaPercentualNota.toFixed(1)}% NF
+                🏷️ {mediaPercentualNota.toFixed(1)}% OFF
               </span>
             </div>
           )}
@@ -700,21 +700,21 @@ export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
               </div>
             </div>
 
-            {/* CARD 4: MÉDIA DE % DE NOTA */}
+            {/* CARD 4: MÉDIA DE % OFF */}
             <div className="bg-gradient-to-br from-white to-purple-50/40 dark:from-slate-800 dark:to-purple-950/20 p-4 rounded-xl border border-purple-100 dark:border-purple-900/50 shadow-2xs hover:border-purple-300 transition">
               <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
                 <span className="flex items-center gap-1.5 text-purple-700 dark:text-purple-400">
                   <Receipt className="w-4 h-4" />
-                  Média de % de Nota
+                  Média % OFF
                 </span>
                 <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
-                  Fiscal
+                  OFF %
                 </span>
               </div>
 
               <div className="text-xl font-extrabold text-purple-600 dark:text-purple-400 font-mono tracking-tight mt-1 flex items-baseline gap-2">
                 <span>{mediaPercentualNota.toFixed(1)}%</span>
-                <span className="text-[10px] font-normal text-slate-400">faturado em NF</span>
+                <span className="text-[10px] font-normal text-slate-400">média dos pedidos</span>
               </div>
 
               {/* Barra de Progresso e Total Faturado */}

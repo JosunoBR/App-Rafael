@@ -312,14 +312,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                   </div>
                 </div>
 
-                {/* % NOTA (Faturamento em NF) */}
-                <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/50">
-                  <label className="block text-xs font-bold text-amber-900 dark:text-amber-300 mb-1 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Percent className="w-3.5 h-3.5 text-amber-600" />
-                      % Faturado em NF (% NOTA)
-                    </span>
-                    <span className="text-[10px] font-normal text-amber-700 dark:text-amber-400">NF vs Depósito</span>
+                {/* OFF % */}
+                <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/50">
+                  <label className="block text-xs font-bold text-blue-900 dark:text-blue-300 mb-1 flex items-center gap-1">
+                    <Percent className="w-3.5 h-3.5 text-blue-600" />
+                    OFF %
                   </label>
                   <div className="relative">
                     <input
@@ -331,40 +328,12 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                       placeholder="100"
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => setPercentualNotaPadrao(parseFloat(e.target.value) || 0)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-900 dark:text-amber-300 font-bold font-mono pr-7"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-900 text-blue-900 dark:text-blue-300 font-bold font-mono pr-7"
                     />
-                    <span className="absolute right-2.5 top-1.5 text-xs font-bold text-amber-500 pointer-events-none">%</span>
+                    <span className="absolute right-2.5 top-1.5 text-xs font-bold text-blue-500 pointer-events-none">%</span>
                   </div>
-                  <span className="text-[10px] text-amber-700 dark:text-amber-400 mt-1 block">
-                    % faturado em NF/Boleto (ex: 50% Nota + 50% Depósito/Por fora)
-                  </span>
-                </div>
-
-                {/* % OFF (Desconto Comercial habitual sobre os produtos) */}
-                <div className="bg-emerald-50/70 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
-                  <label className="block text-xs font-bold text-emerald-900 dark:text-emerald-300 mb-1 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Percent className="w-3.5 h-3.5 text-emerald-600" />
-                      % OFF Habitual (Desconto)
-                    </span>
-                    <span className="text-[10px] font-normal text-emerald-700 dark:text-emerald-400">Desc. Comercial</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      max="100"
-                      value={descontoOffPadrao === 0 ? '' : descontoOffPadrao}
-                      placeholder="0"
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => setDescontoOffPadrao(parseFloat(e.target.value) || 0)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-emerald-900 dark:text-emerald-300 font-bold font-mono pr-7"
-                    />
-                    <span className="absolute right-2.5 top-1.5 text-xs font-bold text-emerald-500 pointer-events-none">%</span>
-                  </div>
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1 block">
-                    Desconto comercial habitual negociado sobre os produtos
+                  <span className="text-[10px] text-blue-700 dark:text-blue-400 mt-1 block">
+                    Define o percentual de OFF no pedido
                   </span>
                 </div>
 
@@ -470,14 +439,9 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                             ({sup.nomeFantasia})
                           </span>
                         )}
-                        {sup.percentualNotaPadrao !== undefined && sup.percentualNotaPadrao < 100 && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                            NF: {sup.percentualNotaPadrao}%
-                          </span>
-                        )}
-                        {sup.descontoOffPadrao !== undefined && sup.descontoOffPadrao > 0 && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                            Desc. OFF: {sup.descontoOffPadrao}%
+                        {sup.percentualNotaPadrao !== undefined && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                            OFF: {sup.percentualNotaPadrao}%
                           </span>
                         )}
                       </div>

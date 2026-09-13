@@ -295,7 +295,7 @@ export function exportMonthlyMatrixPDF(orders: PurchaseOrder[]) {
   // 3. Tabela Principal da Matriz de Fornecedores e Meses
   const tableHead = [
     'EMPRESA',
-    'NOTA',
+    'OFF %',
     'VALOR MENOR',
     'VALOR 12',
     'PC 12',

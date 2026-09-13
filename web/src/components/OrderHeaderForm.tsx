@@ -22,7 +22,8 @@ import {
   X,
   Search,
   Check,
-  RotateCcw
+  RotateCcw,
+  ArrowRightLeft
 } from 'lucide-react';
 import { OrderHeader, Supplier, PaymentCondition } from '../shared/types';
 import { handleCurrencyInput, formatCurrency, maskPhone, maskDate, toBrDate, toIsoDate } from '../utils/masks';
@@ -34,13 +35,15 @@ import {
   PRAZO_OPTIONS, 
   SALDO_PRAZO_OPTIONS,
   DEPOSITO_PRAZO_OPTIONS,
+  QUICK_PAYMENT_PRESETS,
+  findMatchingPresetForParcelas,
   parsePaymentConditionString, 
   formatPaymentConditionString,
   addDaysToDate,
   getDaysDifference
 } from '../utils/installments';
 
-export const FORMA_PAGAMENTO_OPTIONS = [
+const FORMA_PAGAMENTO_OPTIONS = [
   { value: 'Boleto', label: '📄 Boleto' },
   { value: 'Depósito', label: '🏦 Depósito / PIX' },
   { value: 'Cheque', label: '📜 Cheque' },
@@ -48,7 +51,7 @@ export const FORMA_PAGAMENTO_OPTIONS = [
   { value: 'Boleto / Cheque', label: '📄/📜 Boleto / Cheque' }
 ];
 
-export const TIPO_FRETE_OPTIONS = [
+const TIPO_FRETE_OPTIONS = [
   { value: 'CIF', label: '🚚 CIF (Por Conta do Fornecedor)' },
   { value: 'FOB', label: '🚛 FOB (Por Conta da Mega 12)' },
   { value: 'Retira', label: '🏬 Retira (Retirada no Fornecedor)' }
@@ -64,6 +67,7 @@ interface OrderHeaderFormProps {
   onLoadSupplierTemplate?: (supplierId?: string) => void;
   hasSupplierTemplate?: boolean;
   supplierTemplateItemsCount?: number;
+  showToast?: (msg: string, type?: 'success' | 'info' | 'error') => void;
 }
 
 export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({ 
@@ -75,11 +79,13 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   onSaveAsSupplierTemplate,
   onLoadSupplierTemplate,
   hasSupplierTemplate = false,
-  supplierTemplateItemsCount = 0
+  supplierTemplateItemsCount = 0,
+  showToast
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [supplierFilterText, setSupplierFilterText] = useState('');
+  const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Box de Condições de Pagamento
@@ -216,8 +222,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     if (field === 'percentualNota') {
       const pctVal = parseFloat(value) || 0;
       if (isEntradaMista && valorBaseMercadoria > 0 && pctVal > 0 && pctVal <= 100) {
-        const pctBoleto = pctVal;
-        const pctDeposito = Math.max(0, 100 - pctBoleto);
+        const pctDeposito = pctVal;
         const newValorEntrada = Number((valorBaseMercadoria * (pctDeposito / 100)).toFixed(2));
         const newCondString = formatPaymentConditionString(
           currentParcelas,
@@ -317,7 +322,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
   // Condição de Pagamento estruturada (Dropdown Duplo & Entrada Mista)
   const parsedPayment = parsePaymentConditionString(header.condicaoPagamento);
-  const currentParcelas = header.parcelasCount ?? parsedPayment.parcelas;
+  const currentParcelas = (header.parcelasCount && (header.condicaoPagamento?.includes('/') || header.condicaoPagamento?.toLowerCase().includes('x')) && parsedPayment.parcelas > 1 && header.parcelasCount === 1)
+    ? parsedPayment.parcelas
+    : (header.parcelasCount ?? parsedPayment.parcelas);
   const currentPrazo = String(header.prazoDias ?? parsedPayment.prazo);
 
   const isDepositoEBoleto = currentPrazo === 'deposito_e_boleto' || header.formaPagamento === 'Boleto / Depósito';
@@ -329,8 +336,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const valorBaseMercadoria = Math.max(0, valorTotalPedido - valorFreteNum);
 
   const hasCustomOff = header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100;
-  const pctBoletoFromOff = hasCustomOff ? header.percentualNota! : (isDepositoEBoleto ? 50 : 70);
-  const pctDepositoFromOff = Math.max(0, 100 - pctBoletoFromOff);
+  const pctDepositoFromOff = hasCustomOff ? header.percentualNota! : (isDepositoEBoleto ? 50 : 30);
+  const pctBoletoFromOff = Math.max(0, 100 - pctDepositoFromOff);
 
   const valorEntrada = header.valorEntradaAVista !== undefined 
     ? header.valorEntradaAVista 
@@ -343,24 +350,119 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const saldoParcelas = Math.max(1, header.saldoParcelasCount || 2);
   const saldoPrazo = String(header.saldoPrazoDias || '30');
 
-  const saldoRestante = Math.max(0, valorBaseMercadoria - valorEntrada);
+  const baseReferenciaTotal = valorBaseMercadoria > 0 ? valorBaseMercadoria : (valorEntrada > 0 ? (valorEntrada <= 1000 ? 1000 : valorEntrada * 2) : 0);
+  const saldoRestante = Math.max(0, baseReferenciaTotal - valorEntrada);
   const valorPorParcelaSaldo = saldoParcelas > 0 ? (saldoRestante / saldoParcelas) : 0;
+  const baseReferenciaPercentual = valorBaseMercadoria > 0 ? valorBaseMercadoria : (valorEntrada + saldoRestante);
 
   const handlePaymentParcelasChange = (newParcelas: number) => {
-    const newCondString = formatPaymentConditionString(
-      newParcelas, 
-      currentPrazo, 
-      valorEntrada, 
-      saldoParcelas, 
-      saldoPrazo, 
-      depositoParcelas, 
-      depositoPrazo
+    const rawBase = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
+    const baseDate = addDaysToDate(rawBase, 0);
+
+    if (isEntradaMista) {
+      const newCondString = formatPaymentConditionString(
+        newParcelas, 
+        currentPrazo, 
+        valorEntrada, 
+        saldoParcelas, 
+        saldoPrazo, 
+        depositoParcelas, 
+        depositoPrazo
+      );
+      onChange({
+        ...header,
+        parcelasCount: newParcelas,
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: undefined
+      });
+      return;
+    }
+
+    if (newParcelas <= 1) {
+      if (currentPrazo === 'vista') {
+        onChange({
+          ...header,
+          parcelasCount: 1,
+          prazoDias: 'vista',
+          condicaoPagamento: '100% À Vista (TED/PIX)',
+          datasVencimentoPersonalizadas: { '1': baseDate }
+        });
+      } else {
+        onChange({
+          ...header,
+          parcelasCount: 1,
+          prazoDias: '30',
+          condicaoPagamento: '30 Dias',
+          datasVencimentoPersonalizadas: { '1': addDaysToDate(baseDate, 30) }
+        });
+      }
+      return;
+    }
+
+    // Identificar a cadência e o início atual
+    let detectedStep = 30;
+    let detectedStart = 30;
+    const condLower = (header.condicaoPagamento || '').toLowerCase();
+    const currentPreset = QUICK_PAYMENT_PRESETS.find(
+      (p) => p.conditionString.toLowerCase() === condLower || p.id === currentPrazo
     );
+
+    if (currentPreset && currentPreset.daysOffsets && currentPreset.daysOffsets.length > 0) {
+      detectedStart = currentPreset.daysOffsets[0];
+      if (currentPreset.daysOffsets.length > 1) {
+        detectedStep = currentPreset.daysOffsets[1] - currentPreset.daysOffsets[0];
+      } else {
+        detectedStep = currentPreset.daysOffsets[0];
+      }
+    } else if (condLower.startsWith('45') || condLower.includes('/45') || condLower.includes('45 a')) {
+      detectedStart = 45;
+      detectedStep = (condLower.includes('55') || condLower.includes('10d') || condLower.includes('10/10')) ? 10 : 15;
+    } else if (condLower.includes('10/10') || condLower.includes('10d') || currentPrazo === '10') {
+      detectedStart = 30;
+      detectedStep = 10;
+    } else if (condLower.includes('15/15') || condLower.includes('15d') || currentPrazo === '15') {
+      detectedStart = 30;
+      detectedStep = 15;
+    } else if (condLower.includes('7/14') || condLower.includes('semanal') || currentPrazo === '7') {
+      detectedStart = 7;
+      detectedStep = 7;
+    } else if (currentPrazo === '28') {
+      detectedStart = 28;
+      detectedStep = 7;
+    } else if (currentPrazo === '21') {
+      detectedStart = 21;
+      detectedStep = 7;
+    } else {
+      detectedStart = 30;
+      detectedStep = 30;
+    }
+
+    // Calcula os offsets para o número selecionado de parcelas
+    let offsets: number[] = [];
+    for (let i = 0; i < newParcelas; i++) {
+      offsets.push(detectedStart + i * detectedStep);
+    }
+
+    // Verifica se os novos offsets batem perfeitamente com um preset pré-existente
+    const matchingPreset = findMatchingPresetForParcelas(newParcelas, currentPrazo);
+    const newPrazoId = matchingPreset ? matchingPreset.id : String(detectedStep);
+
+    const newCondString = matchingPreset 
+      ? matchingPreset.conditionString 
+      : `${offsets.join('/')} Dias`;
+
+    const newCustomDates: Record<string, string> = {};
+    const finalOffsets = (matchingPreset && matchingPreset.daysOffsets) ? matchingPreset.daysOffsets : offsets;
+    finalOffsets.forEach((days, idx) => {
+      newCustomDates[String(idx + 1)] = addDaysToDate(baseDate, days);
+    });
+
     onChange({
       ...header,
       parcelasCount: newParcelas,
+      prazoDias: newPrazoId,
       condicaoPagamento: newCondString,
-      datasVencimentoPersonalizadas: undefined
+      datasVencimentoPersonalizadas: newCustomDates
     });
   };
 
@@ -475,7 +577,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   };
 
   const handleEntradaChange = (val: number) => {
-    const valFinal = Math.max(0, Math.min(valorBaseMercadoria, val));
+    const valFinal = valorBaseMercadoria > 0 ? Math.max(0, Math.min(valorBaseMercadoria, val)) : Math.max(0, val);
     const newCondString = formatPaymentConditionString(
       currentParcelas, 
       currentPrazo, 
@@ -492,76 +594,508 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     });
   };
 
+  const recalculateCombinedDates = (
+    depParc: number,
+    depPrazo: string,
+    salParc: number,
+    salPrazo: string
+  ) => {
+    const rawBase = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
+    const baseDate = addDaysToDate(rawBase, 0);
+    const rawOrderDate = header.dataPedido || new Date().toISOString().split('T')[0];
+    const orderDate = addDaysToDate(rawOrderDate, 0);
+
+    const newDates: Record<string, string> = {};
+
+    // 1. Parcelas de Depósito / Entrada
+    const matchedDepPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === depPrazo);
+    for (let d = 1; d <= depParc; d++) {
+      if (depPrazo === 'vista') {
+        newDates[String(d)] = addDaysToDate(orderDate, 0);
+      } else if (matchedDepPreset && matchedDepPreset.daysOffsets && matchedDepPreset.daysOffsets[d - 1] !== undefined) {
+        newDates[String(d)] = addDaysToDate(baseDate, matchedDepPreset.daysOffsets[d - 1]);
+      } else {
+        const interval = Number(depPrazo) || 30;
+        newDates[String(d)] = addDaysToDate(baseDate, 10 + (d - 1) * interval);
+      }
+    }
+
+    // 2. Parcelas do Saldo em Boleto
+    const matchedSalPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === salPrazo);
+    for (let b = 1; b <= salParc; b++) {
+      const numParcela = depParc + b;
+      if (matchedSalPreset && matchedSalPreset.daysOffsets && matchedSalPreset.daysOffsets[b - 1] !== undefined) {
+        newDates[String(numParcela)] = addDaysToDate(baseDate, matchedSalPreset.daysOffsets[b - 1]);
+      } else {
+        const interval = Number(salPrazo) || 30;
+        if (depParc === 1 && depPrazo === 'vista') {
+          newDates[String(numParcela)] = addDaysToDate(baseDate, 10 + (b - 1) * interval);
+        } else if (depPrazo !== 'vista') {
+          const lastDepDueDays = (matchedDepPreset && matchedDepPreset.daysOffsets && matchedDepPreset.daysOffsets.length > 0)
+            ? matchedDepPreset.daysOffsets[matchedDepPreset.daysOffsets.length - 1]
+            : (10 + (depParc - 1) * (Number(depPrazo) || 30));
+          newDates[String(numParcela)] = addDaysToDate(baseDate, lastDepDueDays + b * interval);
+        } else {
+          newDates[String(numParcela)] = addDaysToDate(baseDate, 10 + (b - 1) * interval);
+        }
+      }
+    }
+
+    return newDates;
+  };
+
   const handleDepositoParcelasChange = (newDepParc: number) => {
+    let newPrazo = depositoPrazo;
+    const matchingPreset = findMatchingPresetForParcelas(newDepParc, depositoPrazo);
+    if (matchingPreset) {
+      newPrazo = matchingPreset.id;
+    } else if (depositoPrazo === 'vista' && newDepParc > 1) {
+      newPrazo = '30';
+    }
+
+    const newDates = recalculateCombinedDates(newDepParc, newPrazo, saldoParcelas, saldoPrazo);
     const newCondString = formatPaymentConditionString(
-      currentParcelas, 
+      newDepParc + saldoParcelas, 
       currentPrazo, 
       valorEntrada, 
       saldoParcelas, 
       saldoPrazo, 
       newDepParc, 
-      depositoPrazo
+      newPrazo
     );
     onChange({
       ...header,
       depositoParcelasCount: newDepParc,
+      depositoPrazoDias: newPrazo,
+      parcelasCount: newDepParc + saldoParcelas,
       condicaoPagamento: newCondString,
-      datasVencimentoPersonalizadas: undefined
+      datasVencimentoPersonalizadas: newDates
     });
   };
 
   const handleDepositoPrazoChange = (newDepPrazo: string) => {
+    let newParc = depositoParcelas;
+    const preset = QUICK_PAYMENT_PRESETS.find(p => p.id === newDepPrazo);
+    if (preset) {
+      newParc = preset.parcelas;
+    } else if (newDepPrazo === 'vista') {
+      newParc = 1;
+    } else {
+      const matching = findMatchingPresetForParcelas(newParc, newDepPrazo);
+      if (matching) {
+        newDepPrazo = matching.id;
+        newParc = matching.parcelas;
+      }
+    }
+
+    const newDates = recalculateCombinedDates(newParc, newDepPrazo, saldoParcelas, saldoPrazo);
     const newCondString = formatPaymentConditionString(
-      currentParcelas, 
+      newParc + saldoParcelas, 
       currentPrazo, 
       valorEntrada, 
       saldoParcelas, 
       saldoPrazo, 
-      depositoParcelas, 
+      newParc, 
       newDepPrazo
     );
     onChange({
       ...header,
+      depositoParcelasCount: newParc,
       depositoPrazoDias: newDepPrazo,
+      parcelasCount: newParc + saldoParcelas,
       condicaoPagamento: newCondString,
-      datasVencimentoPersonalizadas: undefined
+      datasVencimentoPersonalizadas: newDates
     });
   };
 
   const handleSaldoParcelasChange = (newSaldoParc: number) => {
+    let newPrazo = saldoPrazo;
+    const matchingPreset = findMatchingPresetForParcelas(newSaldoParc, saldoPrazo);
+    if (matchingPreset) {
+      newPrazo = matchingPreset.id;
+    } else if (saldoPrazo === 'vista' && newSaldoParc > 1) {
+      newPrazo = '30';
+    }
+
+    const newDates = recalculateCombinedDates(depositoParcelas, depositoPrazo, newSaldoParc, newPrazo);
     const newCondString = formatPaymentConditionString(
-      currentParcelas, 
+      depositoParcelas + newSaldoParc, 
       currentPrazo, 
       valorEntrada, 
       newSaldoParc, 
-      saldoPrazo, 
+      newPrazo, 
       depositoParcelas, 
       depositoPrazo
     );
     onChange({
       ...header,
       saldoParcelasCount: newSaldoParc,
+      saldoPrazoDias: newPrazo,
+      parcelasCount: depositoParcelas + newSaldoParc,
       condicaoPagamento: newCondString,
-      datasVencimentoPersonalizadas: undefined
+      datasVencimentoPersonalizadas: newDates
     });
   };
 
   const handleSaldoPrazoChange = (newSaldoPrazo: string) => {
+    let newParc = saldoParcelas;
+    const preset = QUICK_PAYMENT_PRESETS.find(p => p.id === newSaldoPrazo);
+    if (preset) {
+      newParc = preset.parcelas;
+    } else if (newSaldoPrazo === 'vista') {
+      newParc = 1;
+    } else {
+      const matching = findMatchingPresetForParcelas(newParc, newSaldoPrazo);
+      if (matching) {
+        newSaldoPrazo = matching.id;
+        newParc = matching.parcelas;
+      }
+    }
+
+    const newDates = recalculateCombinedDates(depositoParcelas, depositoPrazo, newParc, newSaldoPrazo);
     const newCondString = formatPaymentConditionString(
-      currentParcelas, 
+      depositoParcelas + newParc, 
       currentPrazo, 
       valorEntrada, 
-      saldoParcelas, 
+      newParc, 
       newSaldoPrazo, 
       depositoParcelas, 
       depositoPrazo
     );
     onChange({
       ...header,
+      saldoParcelasCount: newParc,
       saldoPrazoDias: newSaldoPrazo,
+      parcelasCount: depositoParcelas + newParc,
       condicaoPagamento: newCondString,
-      datasVencimentoPersonalizadas: undefined
+      datasVencimentoPersonalizadas: newDates
     });
+  };
+
+  const renderPeriodoOptions = (selectedVal: string, allowSpecialDivided: boolean = true) => (
+    <>
+      <optgroup label="⚡ Semanal & Ciclos de 7 em 7 Dias">
+        <option value="preset:7_28">7/14/21/28 (4x)</option>
+        <option value="preset:14_56">14/21/28/35/42/49/56 (7x)</option>
+        <option value="preset:28_42">28/35/42 (3x)</option>
+        <option value="preset:28_56">28/35/42/49/56 (5x)</option>
+      </optgroup>
+
+      <optgroup label="⚡ Modelos de 30 em 30 Dias">
+        <option value="preset:30_30">30 Dias (1x)</option>
+        <option value="preset:30_60">30/60 (2x)</option>
+        <option value="preset:30_90">30/60/90 (3x)</option>
+        <option value="preset:30_120">30/60/90/120 (4x)</option>
+        <option value="preset:30_150">30/60/90/120/150 (5x)</option>
+      </optgroup>
+
+      <optgroup label="⚡ Modelos de 15 em 15 Dias (Iniciando em 30)">
+        <option value="preset:30_60_15d">30/45/60 (3x)</option>
+        <option value="preset:15_90">30/45/60/75/90 (5x)</option>
+        <option value="preset:15_120">30/45/60/75/90/105/120 (7x)</option>
+        <option value="preset:15_150">30/45/60/75/90/105/120/135/150 (9x)</option>
+      </optgroup>
+
+      <optgroup label="⚡ Modelos de 10 em 10 Dias (Iniciando em 30)">
+        <option value="preset:10_60">30/40/50/60 (4x)</option>
+        <option value="preset:10_90">30/40/50/60/70/80/90 (7x)</option>
+        <option value="preset:10_120">30/40/50/60/70/80/90/100/110/120 (10x)</option>
+        <option value="preset:10_150">30/40/50/60/70/80/90/100/110/120/130/140/150 (13x)</option>
+      </optgroup>
+
+      <optgroup label="⚡ Modelos de 15 em 15 Dias (Iniciando em 45)">
+        <option value="preset:45_90">45/60/75/90 (4x)</option>
+        <option value="preset:45_120">45/60/75/90/105/120 (6x)</option>
+        <option value="preset:45_150">45/60/75/90/105/120/135/150 (8x)</option>
+      </optgroup>
+
+      <optgroup label="⚡ Modelos de 10 em 10 Dias (Iniciando em 45)">
+        <option value="preset:45_115">45/55/65/75/85/95/105/115 (8x)</option>
+        <option value="preset:45_155">45/55/65/75/85/95/105/115/125/135/145/155 (12x)</option>
+      </optgroup>
+
+      <optgroup label="📅 Intervalos Regulares Fixos">
+        <option value="30">A cada 30 dias (30/60/90...)</option>
+        <option value="28">A cada 28 dias (28/56/84...)</option>
+        <option value="21">A cada 21 dias (21/42/63...)</option>
+        <option value="15">A cada 15 dias (15/30/45...)</option>
+        <option value="10">A cada 10 dias (10/20/30...)</option>
+        <option value="7">A cada 7 dias (7/14/21...)</option>
+      </optgroup>
+
+      <optgroup label="💵 Modalidades">
+        <option value="vista">100% À Vista Integral (TED / PIX)</option>
+        {allowSpecialDivided && (
+          <>
+            <option value="deposito_e_boleto">🏦 Depósito Parcelado + 📄 Boleto Parcelado</option>
+            <option value="entrada_com_parcelamento">Entrada À Vista + Saldo Parcelado</option>
+          </>
+        )}
+      </optgroup>
+
+      {!['30', '28', '21', '15', '10', '7', 'vista', 'deposito_e_boleto', 'entrada_com_parcelamento'].includes(selectedVal) &&
+       !selectedVal.startsWith('preset:') && selectedVal !== '' && (
+        <option value={selectedVal}>
+          A cada {selectedVal} dias
+        </option>
+      )}
+    </>
+  );
+
+  const getDepositoPeriodoDropdownValue = () => {
+    if (depositoPrazo === 'vista' || depositoPrazo === '0') return 'vista';
+    const cleanPrazo = depositoPrazo.trim().toLowerCase().replace(/\s*dias$/i, '');
+    let matched = QUICK_PAYMENT_PRESETS.find(
+      (p) => p.id === depositoPrazo || p.conditionString.trim().toLowerCase().replace(/\s*dias$/i, '') === cleanPrazo
+    );
+    if (!matched) {
+      matched = findMatchingPresetForParcelas(depositoParcelas, depositoPrazo);
+    }
+    if (matched) return `preset:${matched.id}`;
+    if (['30', '28', '21', '15', '10', '7'].includes(depositoPrazo)) return depositoPrazo;
+    return depositoPrazo || 'vista';
+  };
+
+  const handleDepositoPeriodoSelect = (selectedVal: string) => {
+    if (!selectedVal) return;
+    if (selectedVal.startsWith('preset:')) {
+      const presetId = selectedVal.replace('preset:', '');
+      handleDepositoPrazoChange(presetId);
+      return;
+    }
+    handleDepositoPrazoChange(selectedVal);
+  };
+
+  const getSaldoPeriodoDropdownValue = () => {
+    if (saldoPrazo === 'vista' || saldoPrazo === '0') return 'vista';
+    const cleanPrazo = saldoPrazo.trim().toLowerCase().replace(/\s*dias$/i, '');
+    let matched = QUICK_PAYMENT_PRESETS.find(
+      (p) => p.id === saldoPrazo || p.conditionString.trim().toLowerCase().replace(/\s*dias$/i, '') === cleanPrazo
+    );
+    if (!matched) {
+      matched = findMatchingPresetForParcelas(saldoParcelas, saldoPrazo);
+    }
+    if (matched) return `preset:${matched.id}`;
+    if (['30', '28', '21', '15', '10', '7'].includes(saldoPrazo)) return saldoPrazo;
+    return saldoPrazo || '30';
+  };
+
+  const handleSaldoPeriodoSelect = (selectedVal: string) => {
+    if (!selectedVal) return;
+    if (selectedVal.startsWith('preset:')) {
+      const presetId = selectedVal.replace('preset:', '');
+      handleSaldoPrazoChange(presetId);
+      return;
+    }
+    handleSaldoPrazoChange(selectedVal);
+  };
+
+  const getPeriodoDropdownValue = () => {
+    if (isEntradaMista) return currentPrazo;
+    if (isVistaIntegral) return 'vista';
+
+    // 1. Procura se a condição de pagamento atual bate com algum dos modelos pré-definidos
+    if (header.condicaoPagamento) {
+      const cleanHeaderCond = header.condicaoPagamento.trim().toLowerCase().replace(/\s*dias$/i, '');
+      const matchedPreset = QUICK_PAYMENT_PRESETS.find((p) => {
+        const cleanPresetCond = p.conditionString.trim().toLowerCase().replace(/\s*dias$/i, '');
+        return cleanPresetCond === cleanHeaderCond || p.id === header.condicaoPagamento;
+      });
+      if (matchedPreset) return `preset:${matchedPreset.id}`;
+    }
+
+    // 2. Procura pelo ID do preset salvo no prazo
+    const matchedPresetById = QUICK_PAYMENT_PRESETS.find((p) => p.id === currentPrazo);
+    if (matchedPresetById) return `preset:${matchedPresetById.id}`;
+
+    // 3. Procura por correspondência da quantidade de parcelas e cadência
+    const matchedByParc = findMatchingPresetForParcelas(currentParcelas, currentPrazo);
+    if (matchedByParc) return `preset:${matchedByParc.id}`;
+
+    // 4. Intervalos clássicos numéricos
+    if (['30', '28', '21', '15', '10', '7'].includes(currentPrazo)) {
+      return currentPrazo;
+    }
+
+    return currentPrazo || '30';
+  };
+
+  const handlePeriodoSelect = (selectedVal: string) => {
+    if (!selectedVal) return;
+
+    if (selectedVal.startsWith('preset:')) {
+      const presetId = selectedVal.replace('preset:', '');
+      const preset = QUICK_PAYMENT_PRESETS.find((p) => p.id === presetId);
+      if (preset) {
+        const baseDate = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
+        const customDates: Record<string, string> = {};
+        if (preset.daysOffsets) {
+          preset.daysOffsets.forEach((days, idx) => {
+            customDates[String(idx + 1)] = addDaysToDate(baseDate, days);
+          });
+        }
+
+        onChange({
+          ...header,
+          condicaoPagamento: preset.conditionString,
+          parcelasCount: preset.parcelas,
+          prazoDias: preset.id,
+          formaPagamento: preset.id === 'vista' ? 'Depósito' : (header.formaPagamento === 'Boleto / Depósito' ? 'Boleto' : (header.formaPagamento || 'Boleto')),
+          valorEntradaAVista: undefined,
+          depositoParcelasCount: undefined,
+          depositoPrazoDias: undefined,
+          saldoParcelasCount: undefined,
+          saldoPrazoDias: undefined,
+          datasVencimentoPersonalizadas: Object.keys(customDates).length > 0 ? customDates : undefined
+        });
+      }
+      return;
+    }
+
+    if (selectedVal === 'vista') {
+      handlePaymentPrazoChange('vista');
+      return;
+    }
+
+    if (selectedVal === 'deposito_e_boleto' || selectedVal === 'entrada_com_parcelamento') {
+      handlePaymentPrazoChange(selectedVal);
+      return;
+    }
+
+    // Intervalos numéricos padrão (ex: 30, 28, 21, 15, 10, 7)
+    const intervalNum = parseInt(selectedVal, 10);
+    if (!isNaN(intervalNum) && intervalNum > 0) {
+      const rawBase = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
+      const baseDate = addDaysToDate(rawBase, 0);
+      const count = Math.max(1, currentParcelas);
+      const offsets: number[] = [];
+      if (intervalNum === 10) {
+        for (let i = 0; i < count; i++) offsets.push(30 + i * 10);
+      } else if (intervalNum === 15) {
+        for (let i = 0; i < count; i++) offsets.push(30 + i * 15);
+      } else if (intervalNum === 7) {
+        for (let i = 1; i <= count; i++) offsets.push(i * 7);
+      } else {
+        for (let i = 1; i <= count; i++) offsets.push(i * intervalNum);
+      }
+
+      const matchingPreset = QUICK_PAYMENT_PRESETS.find(
+        (p) => p.parcelas === count &&
+               p.daysOffsets.length === offsets.length &&
+               p.daysOffsets.every((d, idx) => d === offsets[idx])
+      );
+
+      const newCondString = matchingPreset
+        ? matchingPreset.conditionString
+        : (count === 1 ? `${offsets[0]} Dias` : `${offsets.join('/')} Dias`);
+
+      const customDates: Record<string, string> = {};
+      offsets.forEach((days, idx) => {
+        customDates[String(idx + 1)] = addDaysToDate(baseDate, days);
+      });
+
+      onChange({
+        ...header,
+        parcelasCount: count,
+        prazoDias: selectedVal,
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: customDates
+      });
+      return;
+    }
+
+    handlePaymentPrazoChange(selectedVal);
+  };
+
+  const getSavedConditionDropdownValue = () => {
+    if (header.condicaoPagamento) {
+      const cleanHeaderCond = header.condicaoPagamento.trim().toLowerCase().replace(/\s*dias$/i, '');
+      const matched = availableConditions.find((c) => {
+        if (c.id === header.condicaoPagamento) return true;
+        const cleanDesc = c.descricao.trim().toLowerCase().replace(/\s*dias$/i, '');
+        return cleanDesc === cleanHeaderCond;
+      });
+      if (matched) return matched.id;
+    }
+    return '';
+  };
+
+  const handleApplySavedConditionById = (condId: string) => {
+    if (!condId) return;
+    const cond = availableConditions.find((c) => c.id === condId);
+    if (cond) {
+      handleApplyPaymentCondition(cond);
+    }
+  };
+
+  const handleToggleSplitPayment = () => {
+    if (isEntradaMista) {
+      const fallbackPrazo = '30';
+      const fallbackParc = 3;
+      const newCondString = formatPaymentConditionString(fallbackParc, fallbackPrazo);
+      onChange({
+        ...header,
+        formaPagamento: 'Boleto',
+        prazoDias: fallbackPrazo,
+        parcelasCount: fallbackParc,
+        valorEntradaAVista: undefined,
+        depositoFormaPagamento: undefined,
+        depositoParcelasCount: undefined,
+        depositoPrazoDias: undefined,
+        saldoFormaPagamento: undefined,
+        saldoParcelasCount: undefined,
+        saldoPrazoDias: undefined,
+        condicaoPagamento: newCondString,
+        datasVencimentoPersonalizadas: undefined
+      });
+    } else {
+      handlePaymentPrazoChange('deposito_e_boleto');
+    }
+  };
+
+  // Percentual de OFF para cálculo e exibição
+  const currentOffPct = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
+    ? header.percentualNota
+    : (header.percentualDescontoOff !== undefined && header.percentualDescontoOff > 0 && header.percentualDescontoOff < 100
+        ? header.percentualDescontoOff
+        : (header.percentualNota || 33));
+
+  const handleSyncWithOff = (invertSplit: boolean = false) => {
+    const rawOff = Math.max(1, Math.min(99, Number(currentOffPct) || 33));
+    // Padrão: Depósito (OFF) = rawOff%, Boleto = (100 - rawOff)%
+    // Invertido: Depósito = (100 - rawOff)%, Boleto = rawOff%
+    const pctDeposito = invertSplit ? (100 - rawOff) : rawOff;
+    const pctBoleto = 100 - pctDeposito;
+
+    // Base de cálculo: usa o valor das mercadorias do pedido ou R$ 1.000,00 como base padrão para testes imediatos
+    const baseParaCalculo = valorBaseMercadoria > 0 ? valorBaseMercadoria : 1000;
+    const newEntrada = Number((baseParaCalculo * (pctDeposito / 100)).toFixed(2));
+    const newSaldo = Math.max(0, Number((baseParaCalculo - newEntrada).toFixed(2)));
+
+    // Recalcular cronograma completo de datas de vencimento
+    const newCustomDates = recalculateCombinedDates(depositoParcelas, depositoPrazo, saldoParcelas, saldoPrazo);
+
+    const newCondString = formatPaymentConditionString(
+      currentParcelas, 
+      currentPrazo, 
+      newEntrada, 
+      saldoParcelas, 
+      saldoPrazo, 
+      depositoParcelas, 
+      depositoPrazo
+    );
+
+    onChange({
+      ...header,
+      valorEntradaAVista: newEntrada,
+      condicaoPagamento: newCondString,
+      datasVencimentoPersonalizadas: newCustomDates
+    });
+
+    const successMsg = `✨ Sincronizado: ${pctDeposito}% Depósito (R$ ${newEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) + ${pctBoleto}% Boleto (R$ ${newSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
+    setSyncFeedback({ message: successMsg, type: 'success' });
+    showToast?.(successMsg, 'success');
+    setTimeout(() => setSyncFeedback(null), 5000);
   };
 
   // Previsão dinâmica das datas das parcelas a partir da data de entrega da mercadoria
@@ -573,56 +1107,64 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
   const previewInstallments = isEntradaMista
     ? [
-        // 1. Parcelas de Depósito / PIX
+        // 1. Parcelas de Depósito / PIX / 1ª Condição
         ...Array.from({ length: depositoParcelas }, (_, idx) => {
           const d = idx + 1;
-          let dueDays = 0;
           let defaultDate = '';
+          const matchedPreset = QUICK_PAYMENT_PRESETS.find((p) => p.id === depositoPrazo);
           if (depositoPrazo === 'vista') {
-            dueDays = 0;
             defaultDate = addDaysToDate(orderDate, 0);
+          } else if (matchedPreset && matchedPreset.daysOffsets && matchedPreset.daysOffsets[idx] !== undefined) {
+            defaultDate = addDaysToDate(baseDate, matchedPreset.daysOffsets[idx]);
           } else {
             const interval = Number(depositoPrazo) || 30;
-            dueDays = 10 + (d - 1) * interval;
+            const dueDays = 10 + (d - 1) * interval;
             defaultDate = addDaysToDate(baseDate, dueDays);
           }
           const rawCustom = customDates?.[String(d)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
+          const labelForma = header.depositoFormaPagamento || 'Depósito';
           return {
             numeroParcela: d,
             rotulo: (depositoParcelas === 1 && depositoPrazo === 'vista') 
-              ? 'Entrada (Depósito / PIX)' 
-              : `${d}º Depósito`,
+              ? `Entrada (${labelForma})` 
+              : `${d}º ${labelForma}`,
             dataVencimento: customDate || defaultDate,
             valor: valorPorParcelaDeposito,
             isEntrada: true,
-            metodoPagamento: 'Depósito',
+            metodoPagamento: labelForma,
             isFrete: false
           };
         }),
-        // 2. Parcelas do Saldo em Boleto
+        // 2. Parcelas do Saldo em Boleto / 2ª Condição
         ...Array.from({ length: saldoParcelas }, (_, idx) => {
           const b = idx + 1;
           const numeroParcela = depositoParcelas + b;
-          const interval = Number(saldoPrazo) || 30;
           let defaultDate = '';
-          if (depositoParcelas === 1 && depositoPrazo === 'vista') {
-            defaultDate = addDaysToDate(baseDate, 10 + (b - 1) * interval);
-          } else if (depositoPrazo !== 'vista') {
-            const lastDepDueDays = 10 + (depositoParcelas - 1) * (Number(depositoPrazo) || 30);
-            defaultDate = addDaysToDate(baseDate, lastDepDueDays + b * interval);
+          const matchedPreset = QUICK_PAYMENT_PRESETS.find((p) => p.id === saldoPrazo);
+          if (matchedPreset && matchedPreset.daysOffsets && matchedPreset.daysOffsets[idx] !== undefined) {
+            defaultDate = addDaysToDate(baseDate, matchedPreset.daysOffsets[idx]);
           } else {
-            defaultDate = addDaysToDate(baseDate, 10 + (b - 1) * interval);
+            const interval = Number(saldoPrazo) || 30;
+            if (depositoParcelas === 1 && depositoPrazo === 'vista') {
+              defaultDate = addDaysToDate(baseDate, 10 + (b - 1) * interval);
+            } else if (depositoPrazo !== 'vista') {
+              const lastDepDueDays = 10 + (depositoParcelas - 1) * (Number(depositoPrazo) || 30);
+              defaultDate = addDaysToDate(baseDate, lastDepDueDays + b * interval);
+            } else {
+              defaultDate = addDaysToDate(baseDate, 10 + (b - 1) * interval);
+            }
           }
           const rawCustom = customDates?.[String(numeroParcela)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
+          const labelForma = header.saldoFormaPagamento || 'Boleto';
           return {
             numeroParcela,
-            rotulo: `${b}º Boleto Saldo`,
+            rotulo: `${b}º ${labelForma} Saldo`,
             dataVencimento: customDate || defaultDate,
             valor: valorPorParcelaSaldo,
             isEntrada: false,
-            metodoPagamento: 'Boleto',
+            metodoPagamento: labelForma,
             isFrete: false
           };
         })
@@ -630,10 +1172,13 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     : Array.from({ length: currentParcelas }, (_, idx) => {
         const num = idx + 1;
         const interval = Number(currentPrazo) || 30;
-        // A 1ª parcela vence exatamente 10 dias após a previsão de entrega.
-        // O campo intervalo representa apenas o intervalo entre as parcelas subsequentes.
-        const dueDays = 10 + (num - 1) * interval;
-        const defaultDate = addDaysToDate(baseDate, dueDays);
+        const matchedPreset = QUICK_PAYMENT_PRESETS.find(
+          (p) => p.conditionString.toLowerCase() === (header.condicaoPagamento || '').toLowerCase() || p.id === currentPrazo
+        );
+        const defaultOffset = (matchedPreset && matchedPreset.daysOffsets && matchedPreset.daysOffsets[idx] !== undefined)
+          ? matchedPreset.daysOffsets[idx]
+          : (10 + (num - 1) * interval);
+        const defaultDate = addDaysToDate(baseDate, defaultOffset);
         const rawCustom = customDates?.[String(num)];
         const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
         return {
@@ -732,7 +1277,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       aliquotaSt: supplier.aliquotaStPadrao || 0,
       percentualDescontoOff: 0,
       percentualNota: supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : (header.percentualNota ?? 100),
-      observacoesDescarga: supplier.observacoesDescarga || header.observacoesDescarga || header.observacoes || ''
+      observacoesDescarga: header.observacoesDescarga || header.observacoes || '',
+      observacoes: header.observacoes || header.observacoesDescarga || ''
     });
     setIsDropdownOpen(false);
   };
@@ -1000,11 +1546,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               )}
             </div>
 
-            {/* 3. % NOTA (Faturado em NF) */}
+            {/* 3. OFF % */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                <span>% NOTA</span>
-                <span className="text-[10px] text-slate-400 font-normal">Faturado em NF</span>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                OFF %
               </label>
               <div className="relative">
                 <input
@@ -1158,45 +1703,81 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
                 </div>
 
-                {/* LINHA 1: CONFIGURAÇÃO DE FORMA DE PAGAMENTO & PRAZOS */}
-                <div className={`grid grid-cols-1 ${isEntradaMista ? 'sm:grid-cols-1 max-w-sm' : 'sm:grid-cols-3'} gap-3.5 mb-3.5`}>
-                  {/* 1. Forma de Pagamento */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      1. Forma de Pagamento
-                    </label>
+                {/* BARRA: CONDIÇÃO SALVA NO BANCO DE DADOS */}
+                <div className="p-2.5 mb-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <BookmarkCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                      Condição Salva (BD):
+                    </span>
+                  </div>
+
+                  <div className="flex-1 flex items-center gap-2">
                     <select
-                      value={header.formaPagamento || 'Boleto'}
-                      onChange={(e) => handleFieldChange('formaPagamento', e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
+                      value={getSavedConditionDropdownValue()}
+                      onChange={(e) => handleApplySavedConditionById(e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer shadow-2xs"
                     >
-                      {FORMA_PAGAMENTO_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
+                      <option value="">-- Selecione uma Condição Salva no Banco --</option>
+                      {availableConditions.map((cond) => (
+                        <option key={cond.id} value={cond.id}>
+                          {cond.descricao} {cond.qtdParcelas ? `(${cond.qtdParcelas}x)` : ''} {cond.especie ? `• ${cond.especie}` : ''} {cond.banco ? `• ${cond.banco}` : ''} {cond.padrao ? '⭐ (Padrão)' : ''}
                         </option>
                       ))}
                     </select>
-                  </div>
 
-                  {!isEntradaMista && (
-                    <>
-                      {/* 2. Intervalo de Pagamento (Digitável, sem dropdown) */}
+                    <button
+                      type="button"
+                      onClick={() => setIsPaymentCondModalOpen(true)}
+                      className="px-2.5 py-1.5 text-xs rounded-lg font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
+                      title="Cadastrar ou Gerenciar Condições de Pagamento no Banco de Dados"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Nova</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* CONFIGURAÇÃO DE PAGAMENTO: MODO ÚNICO OU DUAS LINHAS COMBINADAS */}
+                {!isEntradaMista ? (
+                  <>
+                    {/* LINHA DE CONDIÇÃO ÚNICA DE PAGAMENTO */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-3.5">
+                      {/* 1. Forma de Pagamento */}
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                          Intervalo de Pagamento
+                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                          <span>1. Forma de Pagamento</span>
                         </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={currentPrazo === 'vista' ? '0' : currentPrazo}
-                            onChange={(e) => handlePaymentPrazoChange(e.target.value)}
-                            placeholder="Ex: 30"
-                            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold shadow-2xs font-mono pr-12"
-                          />
-                          <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
-                            dias
-                          </span>
-                        </div>
+                        <select
+                          value={header.formaPagamento || 'Boleto'}
+                          onChange={(e) => handleFieldChange('formaPagamento', e.target.value)}
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
+                        >
+                          {FORMA_PAGAMENTO_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* 2. Coluna de Períodos (Modelos Pré-definidos & Intervalos) */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                          <span>2. Período / Prazos</span>
+                          {header.condicaoPagamento && (
+                            <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[160px]">
+                              {header.condicaoPagamento}
+                            </span>
+                          )}
+                        </label>
+                        <select
+                          value={getPeriodoDropdownValue()}
+                          onChange={(e) => handlePeriodoSelect(e.target.value)}
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
+                        >
+                          {renderPeriodoOptions(getPeriodoDropdownValue(), true)}
+                        </select>
                       </div>
 
                       {/* 3. Quantidade de Parcelas */}
@@ -1208,29 +1789,278 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           value={isVistaIntegral ? 1 : currentParcelas}
                           disabled={isVistaIntegral}
                           onChange={(e) => handlePaymentParcelasChange(Number(e.target.value))}
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           {isVistaIntegral ? (
                             <option value="1">1x (À Vista ou 1 Parcela)</option>
                           ) : (
-                            PARCELAS_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))
+                            <>
+                              {PARCELAS_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                              {!PARCELAS_OPTIONS.some((o) => o.value === currentParcelas) && currentParcelas > 0 && (
+                                <option key={currentParcelas} value={currentParcelas}>
+                                  {currentParcelas}x Parcelas
+                                </option>
+                              )}
+                            </>
                           )}
                         </select>
                       </div>
-                    </>
-                  )}
-                </div>
+                    </div>
 
-                {/* LINHA 2: FRETE E NOTA FISCAL */}
+                    {/* BOTÃO PARA ADICIONAR FORMA DE PAGAMENTO */}
+                    <div className="flex items-center gap-2 mb-3.5">
+                      <button
+                        type="button"
+                        onClick={handleToggleSplitPayment}
+                        className="px-3 py-1.5 text-xs rounded-xl font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                        title="Adicionar forma de pagamento e desdobrar as condições"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Adicionar forma de pagamento</span>
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  /* MODO DUAS CONDIÇÕES / LINHAS COMBINADAS */
+                  <div className="mb-3.5 p-3 rounded-2xl border border-indigo-200/80 dark:border-indigo-800/60 bg-gradient-to-br from-indigo-50/40 via-white to-emerald-50/30 dark:from-indigo-950/20 dark:via-slate-900/40 dark:to-emerald-950/10 space-y-3 shadow-xs">
+                    {/* BARRA SUPERIOR DE SINCRONIZAÇÃO E CONTROLE */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-indigo-100 dark:border-indigo-900/40">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1 rounded-lg bg-indigo-600 text-white shadow-xs">
+                          <Sparkles className="w-3.5 h-3.5" />
+                        </span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Condições Combinadas (1ª e 2ª Forma de Pagamento)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleSyncWithOff(false)}
+                          className="px-2.5 py-1 text-xs rounded-lg font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
+                          title={`Calcular divisão do pedido aplicando ${currentOffPct}% para Depósito e ${100 - currentOffPct}% para Boleto`}
+                        >
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          <span>Sincronizar OFF ({currentOffPct}%)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSyncWithOff(true)}
+                          className="px-2.5 py-1 text-xs rounded-lg font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
+                          title={`Inverter proporção: ${100 - currentOffPct}% para Depósito e ${currentOffPct}% para Boleto`}
+                        >
+                          <ArrowRightLeft className="w-3 h-3 text-slate-500 dark:text-slate-400" />
+                          <span>Inverter</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleToggleSplitPayment}
+                          className="px-2.5 py-1 text-xs rounded-lg font-bold bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
+                          title="Remover a 2ª forma de pagamento e voltar para forma única"
+                        >
+                          <span>Remover 2ª Forma</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* LINHA 1 (1ª FORMA / DEPÓSITO / ENTRADA) */}
+                    <div className="p-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
+                      <div className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 mb-1.5 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
+                          1ª Condição: Depósito / Entrada
+                        </span>
+                        {baseReferenciaPercentual > 0 && (
+                          <span className="font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-900">
+                            {((valorEntrada / baseReferenciaPercentual) * 100).toFixed(0)}% do Pedido
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                        {/* 1. Forma */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                            Forma de Pagamento
+                          </label>
+                          <select
+                            value={header.depositoFormaPagamento || 'Depósito'}
+                            onChange={(e) => handleFieldChange('depositoFormaPagamento', e.target.value)}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold cursor-pointer"
+                          >
+                            <option value="Depósito">Depósito / PIX</option>
+                            <option value="Boleto">Boleto</option>
+                            <option value="Cheque">Cheque</option>
+                          </select>
+                        </div>
+
+                        {/* 2. Período / Prazos */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                            Período / Prazos
+                          </label>
+                          <select
+                            value={getDepositoPeriodoDropdownValue()}
+                            onChange={(e) => handleDepositoPeriodoSelect(e.target.value)}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold cursor-pointer"
+                          >
+                            {renderPeriodoOptions(getDepositoPeriodoDropdownValue(), false)}
+                          </select>
+                        </div>
+
+                        {/* 3. Qtd Parcelas */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                            Qtd Parcelas
+                          </label>
+                          <select
+                            value={depositoParcelas}
+                            onChange={(e) => handleDepositoParcelasChange(Number(e.target.value))}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold cursor-pointer"
+                          >
+                            {PARCELAS_OPTIONS.filter((o) => o.value > 0).map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.value === 1 ? '1x (À Vista)' : `${opt.value}x`}
+                              </option>
+                            ))}
+                            {!PARCELAS_OPTIONS.some((o) => o.value === depositoParcelas) && depositoParcelas > 0 && (
+                              <option key={depositoParcelas} value={depositoParcelas}>
+                                {depositoParcelas}x
+                              </option>
+                            )}
+                          </select>
+                        </div>
+
+                        {/* 4. Valor (R$) */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                            Valor 1ª Condição (R$)
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={valorEntrada > 0 ? formatCurrency(valorEntrada, false) : ''}
+                            placeholder="0,00"
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const { value } = handleCurrencyInput(e.target.value, true);
+                              handleEntradaChange(value);
+                            }}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* LINHA 2 (2ª FORMA / SALDO BOLETO) */}
+                    <div className="p-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs">
+                      <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mb-1.5 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                          2ª Condição: Saldo Boleto
+                        </span>
+                        {baseReferenciaPercentual > 0 && (
+                          <span className="font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
+                            {((saldoRestante / baseReferenciaPercentual) * 100).toFixed(0)}% do Pedido
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                        {/* 1. Forma */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                            Forma de Pagamento
+                          </label>
+                          <select
+                            value={header.saldoFormaPagamento || 'Boleto'}
+                            onChange={(e) => handleFieldChange('saldoFormaPagamento', e.target.value)}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold cursor-pointer"
+                          >
+                            <option value="Boleto">Boleto</option>
+                            <option value="Depósito">Depósito / PIX</option>
+                            <option value="Cheque">Cheque</option>
+                          </select>
+                        </div>
+
+                        {/* 2. Período / Prazos */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                            Período / Prazos
+                          </label>
+                          <select
+                            value={getSaldoPeriodoDropdownValue()}
+                            onChange={(e) => handleSaldoPeriodoSelect(e.target.value)}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold cursor-pointer"
+                          >
+                            {renderPeriodoOptions(getSaldoPeriodoDropdownValue(), false)}
+                          </select>
+                        </div>
+
+                        {/* 3. Qtd Parcelas */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                            Qtd Parcelas
+                          </label>
+                          <select
+                            value={saldoParcelas}
+                            onChange={(e) => handleSaldoParcelasChange(Number(e.target.value))}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold cursor-pointer"
+                          >
+                            {PARCELAS_OPTIONS.filter((o) => o.value > 0).map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.value}x
+                              </option>
+                            ))}
+                            {!PARCELAS_OPTIONS.some((o) => o.value === saldoParcelas) && saldoParcelas > 0 && (
+                              <option key={saldoParcelas} value={saldoParcelas}>
+                                {saldoParcelas}x
+                              </option>
+                            )}
+                          </select>
+                        </div>
+
+                        {/* 4. Saldo Restante (R$) */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                            Saldo Restante (R$)
+                          </label>
+                          <input
+                            type="text"
+                            readOnly
+                            value={`R$ ${saldoRestante.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/90 dark:bg-slate-800/80 text-emerald-700 dark:text-emerald-400 font-mono font-bold cursor-default"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* NOTIFICAÇÃO INLINE DE SINCRONIZAÇÃO */}
+                {syncFeedback && (
+                  <div className={`mb-3.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 ${
+                    syncFeedback.type === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                      : 'bg-sky-50 dark:bg-sky-950/50 border-sky-300 dark:border-sky-800 text-sky-800 dark:text-sky-200'
+                  }`}>
+                    {syncFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                    )}
+                    <span>{syncFeedback.message}</span>
+                  </div>
+                )}
+
+                {/* LINHA: FRETE E NOTA FISCAL */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   {/* 4. Tipo de Frete */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      4. Modalidade Frete
+                      Modalidade Frete
                     </label>
                     <select
                       value={header.tipoFrete || 'CIF'}
@@ -1248,7 +2078,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   {/* 5. Valor do Frete */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>5. Valor Frete (R$)</span>
+                      <span>Valor Frete (R$)</span>
                       {valorFreteNum > 0 && valorBaseMercadoria > 0 && (
                         <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400">
                           {((valorFreteNum / valorBaseMercadoria) * 100).toFixed(2)}% dos produtos
@@ -1277,7 +2107,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   {/* 6. Desconto comercial (%) (Desconto Direto no Valor do Pedido) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>6. Desconto comercial (%)</span>
+                      <span>Desconto comercial (%)</span>
                       <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">Desc. Direto</span>
                     </label>
                     <div className="relative">
@@ -1298,197 +2128,6 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </div>
                   </div>
                 </div>
-
-                {/* LINHA 2 INSERIDA DINAMICAMENTE: NEGOCIAÇÃO DE ENTRADA À VISTA + SALDO PARCELADO */}
-                {isEntradaMista && (
-                  <div className="mt-3.5 pt-3.5 border-t border-emerald-200 dark:border-emerald-900/60 bg-gradient-to-br from-emerald-50/70 via-slate-50/60 to-indigo-50/70 dark:from-emerald-950/20 dark:via-slate-900/40 dark:to-indigo-950/20 p-3.5 rounded-2xl border">
-                    <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="p-1 rounded-lg bg-emerald-600 text-white shadow-xs">
-                          <Sparkles className="w-3.5 h-3.5" />
-                        </span>
-                        <span>Detalhamento da Negociação: Depósito Parcelado + Saldo em Boleto</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] font-mono">
-                        <span className="px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800">
-                          Depósito: R$ {valorEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800">
-                          Saldo Boleto: R$ {saldoRestante.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* BLOCO 1: DEPÓSITO / PIX PARCELADO */}
-                      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs p-3 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 shadow-xs flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-900 dark:text-indigo-300">
-                              <span>🏦 1ª Etapa: Depósito / PIX</span>
-                            </div>
-                            <span className="text-[9px] font-bold font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-900">
-                              {valorBaseMercadoria > 0 ? `${((valorEntrada / valorBaseMercadoria) * 100).toFixed(0)}% do Pedido` : '0%'}
-                            </span>
-                          </div>
-
-                          <div className="space-y-2.5">
-                            {/* Valor Total do Depósito */}
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                Valor Total Depósito (R$)
-                              </label>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={valorEntrada > 0 ? formatCurrency(valorEntrada, false) : ''}
-                                placeholder="0,00"
-                                onFocus={(e) => e.target.select()}
-                                onChange={(e) => {
-                                  const { value } = handleCurrencyInput(e.target.value, true);
-                                  handleEntradaChange(Math.min(valorBaseMercadoria, value));
-                                }}
-                                className="w-full px-3 py-1.5 text-xs rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-extrabold font-mono focus:ring-2 focus:ring-indigo-500 outline-hidden"
-                              />
-                            </div>
-
-                            {/* Parcelas e Prazo do Depósito */}
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                  Qtd Parcelas Depósito
-                                </label>
-                                <select
-                                  value={depositoParcelas}
-                                  onChange={(e) => handleDepositoParcelasChange(Number(e.target.value))}
-                                  className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-indigo-500 outline-hidden cursor-pointer"
-                                >
-                                  {PARCELAS_OPTIONS.filter(o => o.value > 0).map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                      {opt.value === 1 ? '1x (À Vista no Pedido)' : `${opt.value}x Parcelas`}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                  Intervalo de Pagamento
-                                </label>
-                                <div className="relative">
-                                  <input
-                                    type="text"
-                                    value={depositoPrazo === 'vista' ? '0' : depositoPrazo}
-                                    onChange={(e) => {
-                                      const val = e.target.value.trim().replace(/\D/g, '');
-                                      const finalPrazo = val === '0' || val === '' ? 'vista' : val;
-                                      handleDepositoPrazoChange(finalPrazo);
-                                    }}
-                                    placeholder="Ex: 30"
-                                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold font-mono focus:ring-2 focus:ring-indigo-500 outline-hidden pr-10"
-                                  />
-                                  <span className="absolute right-2.5 top-1.5 text-[10px] font-bold text-slate-400 pointer-events-none">
-                                    dias
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Resumo do Depósito */}
-                        <div className="mt-3 bg-indigo-50/70 dark:bg-indigo-950/40 p-2 rounded-lg border border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-between">
-                          <span className="text-[10px] font-semibold text-indigo-900 dark:text-indigo-300">
-                            Parcelamento Depósito:
-                          </span>
-                          <span className="text-xs font-black text-indigo-700 dark:text-indigo-300 font-mono">
-                            {depositoParcelas}x de R$ {valorPorParcelaDeposito.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* BLOCO 2: SALDO EM BOLETO PARCELADO */}
-                      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xs p-3 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 shadow-xs flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 dark:text-emerald-300">
-                              <span>📄 2ª Etapa: Saldo em Boleto</span>
-                            </div>
-                            <span className="text-[9px] font-bold font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
-                              {valorBaseMercadoria > 0 ? `${((saldoRestante / valorBaseMercadoria) * 100).toFixed(0)}% do Pedido` : '0%'}
-                            </span>
-                          </div>
-
-                          <div className="space-y-2.5">
-                            {/* Saldo Restante */}
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                Saldo Restante a Parcelar em Boleto (R$)
-                              </label>
-                              <input
-                                type="text"
-                                readOnly
-                                value={`R$ ${saldoRestante.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                                className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-emerald-700 dark:text-emerald-400 font-black font-mono cursor-default outline-hidden"
-                              />
-                            </div>
-
-                            {/* Parcelas e Prazo do Saldo */}
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                  Qtd Parcelas Boleto
-                                </label>
-                                <select
-                                  value={saldoParcelas}
-                                  onChange={(e) => handleSaldoParcelasChange(Number(e.target.value))}
-                                  className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-                                >
-                                  {PARCELAS_OPTIONS.filter(o => o.value > 0).map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                      {opt.value}x Parcela{opt.value > 1 ? 's' : ''} Saldo
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                  Intervalo de Pagamento
-                                </label>
-                                <div className="relative">
-                                  <input
-                                    type="text"
-                                    value={saldoPrazo}
-                                    onChange={(e) => {
-                                      const val = e.target.value.trim().replace(/\D/g, '');
-                                      handleSaldoPrazoChange(val || '30');
-                                    }}
-                                    placeholder="Ex: 30"
-                                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold font-mono focus:ring-2 focus:ring-emerald-500 outline-hidden pr-10"
-                                  />
-                                  <span className="absolute right-2.5 top-1.5 text-[10px] font-bold text-slate-400 pointer-events-none">
-                                    dias
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Resumo dos Boletos */}
-                        <div className="mt-3 bg-emerald-50/70 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-between">
-                          <span className="text-[10px] font-semibold text-emerald-900 dark:text-emerald-300">
-                            Parcelamento Boleto:
-                          </span>
-                          <span className="text-xs font-black text-emerald-700 dark:text-emerald-300 font-mono">
-                            {saldoParcelas}x de R$ {valorPorParcelaSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Prévia dos Boletos e Parcelas */}
                 {previewInstallments.length > 0 && (
@@ -1593,21 +2232,21 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               />
             </div>
 
-            {/* Observação para o Pedido */}
+            {/* Descrição / Observação do Pedido */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-slate-400" />
-                Observação para o pedido
+                Descrição / Observação do Pedido
               </label>
               <input
                 type="text"
-                value={header.observacoesDescarga || header.observacoes || ''}
+                value={header.observacoes || header.observacoesDescarga || ''}
                 onChange={(e) => {
-                  handleFieldChange('observacoesDescarga', e.target.value);
                   handleFieldChange('observacoes', e.target.value);
+                  handleFieldChange('observacoesDescarga', e.target.value);
                 }}
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                placeholder="Observações para o pedido"
+                placeholder="Descrição ou observações específicas deste pedido..."
               />
             </div>
           </div>

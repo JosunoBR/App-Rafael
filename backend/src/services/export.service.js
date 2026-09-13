@@ -63,9 +63,8 @@ class ExportService {
       ['Fornecedor:', order.header?.fornecedor || '', 'Vendedor:', order.header?.vendedor || ''],
       ['Contato Vendedor:', order.header?.contatoVendedor || '', 'Condição Pagto:', order.header?.condicaoPagamento || ''],
       ['Data Emissão:', order.header?.dataEmissao || '', 'Entrega Prevista:', order.header?.dataEntregaPrevista || ''],
-      ['Desconto OFF (%):', `${order.header?.percentualDescontoOff || 0}%`, 'Alíquota ST (%):', `${order.header?.aliquotaSt || 0}%`],
-      ['% NOTA:', `${order.header?.percentualNota !== undefined ? order.header.percentualNota : 100}%`],
-      ['Observações:', order.header?.observacoes || ''],
+      ['OFF %:', `${order.header?.percentualNota !== undefined ? order.header.percentualNota : 100}%`, 'Alíquota ST (%):', `${order.header?.aliquotaSt || 0}%`],
+      ['Descrição / Obs do Pedido:', order.header?.observacoes || order.header?.observacoesDescarga || ''],
       []
     ];
 
@@ -247,8 +246,8 @@ class ExportService {
     doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 8.5);
     doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 12.1);
 
-    const offValue = Number(order.header?.percentualDescontoOff || 0);
-    doc.text(`% OFF (Desconto Negociado): ${offValue}%`, card2X + 3, cardY + 15.7);
+    const offPercent = order.header?.percentualNota !== undefined ? order.header.percentualNota : 100;
+    doc.text(`OFF %: ${offPercent}%`, card2X + 3, cardY + 15.7);
 
     doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 19.3);
     doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 22.9);
@@ -414,7 +413,7 @@ class ExportService {
     if (observacoes) {
       doc.setTextColor(71, 85, 105);
       doc.setFont('helvetica', 'italic');
-      doc.text(`Obs: ${observacoes.substring(0, 115)}`, 13, finalY + 27.2);
+      doc.text(`Descrição do Pedido: ${observacoes.substring(0, 115)}`, 13, finalY + 27.2);
     }
 
     // Bloco Direito: Resumo Financeiro & Assinaturas

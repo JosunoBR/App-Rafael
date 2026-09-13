@@ -521,6 +521,63 @@ async function getDatabase() {
     console.warn('Aviso no seeding de fiscal_presets:', fiscPresetErr.message);
   }
 
+  // Seed das condições de pagamento padrão da Rede Mega 12
+  try {
+    const DEFAULT_PAYMENT_CONDITIONS = [
+      { id: 'cond_7_14_21_28', descricao: '7/14/21/28 Dias', qtdParcelas: 4, parcelasDias: [7, 14, 21, 28] },
+      { id: 'cond_14_21_28_35_42_49_56', descricao: '14/21/28/35/42/49/56 Dias', qtdParcelas: 7, parcelasDias: [14, 21, 28, 35, 42, 49, 56] },
+      { id: 'cond_28_35_42', descricao: '28/35/42 Dias', qtdParcelas: 3, parcelasDias: [28, 35, 42] },
+      { id: 'cond_28_35_42_49_56', descricao: '28/35/42/49/56 Dias', qtdParcelas: 5, parcelasDias: [28, 35, 42, 49, 56] },
+      { id: 'cond_30_60', descricao: '30/60 Dias', qtdParcelas: 2, parcelasDias: [30, 60] },
+      { id: 'cond_30_45_60', descricao: '30/45/60 Dias', qtdParcelas: 3, parcelasDias: [30, 45, 60] },
+      { id: 'cond_30_40_50_60', descricao: '30/40/50/60 Dias', qtdParcelas: 4, parcelasDias: [30, 40, 50, 60] },
+      { id: 'cond_30_60_90', descricao: '30/60/90 Dias', qtdParcelas: 3, parcelasDias: [30, 60, 90], padrao: 1 },
+      { id: 'cond_30_45_60_75_90', descricao: '30/45/60/75/90 Dias', qtdParcelas: 5, parcelasDias: [30, 45, 60, 75, 90] },
+      { id: 'cond_30_40_50_60_70_80_90', descricao: '30/40/50/60/70/80/90 Dias', qtdParcelas: 7, parcelasDias: [30, 40, 50, 60, 70, 80, 90] },
+      { id: 'cond_30_60_90_120', descricao: '30/60/90/120 Dias', qtdParcelas: 4, parcelasDias: [30, 60, 90, 120] },
+      { id: 'cond_30_45_60_75_90_105_120', descricao: '30/45/60/75/90/105/120 Dias', qtdParcelas: 7, parcelasDias: [30, 45, 60, 75, 90, 105, 120] },
+      { id: 'cond_30_40_50_60_70_80_90_100_110_120', descricao: '30/40/50/60/70/80/90/100/110/120 Dias', qtdParcelas: 10, parcelasDias: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120] },
+      { id: 'cond_30_60_90_120_150', descricao: '30/60/90/120/150 Dias', qtdParcelas: 5, parcelasDias: [30, 60, 90, 120, 150] },
+      { id: 'cond_30_45_60_75_90_105_120_135_150', descricao: '30/45/60/75/90/105/120/135/150 Dias', qtdParcelas: 9, parcelasDias: [30, 45, 60, 75, 90, 105, 120, 135, 150] },
+      { id: 'cond_30_40_50_60_70_80_90_100_110_120_130_140_150', descricao: '30/40/50/60/70/80/90/100/110/120/130/140/150 Dias', qtdParcelas: 13, parcelasDias: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150] },
+      { id: 'cond_45_60_75_90', descricao: '45/60/75/90 Dias', qtdParcelas: 4, parcelasDias: [45, 60, 75, 90] },
+      { id: 'cond_45_55_65_75_85_95_105_115', descricao: '45/55/65/75/85/95/105/115 Dias', qtdParcelas: 8, parcelasDias: [45, 55, 65, 75, 85, 95, 105, 115] },
+      { id: 'cond_45_60_75_90_105_120', descricao: '45/60/75/90/105/120 Dias', qtdParcelas: 6, parcelasDias: [45, 60, 75, 90, 105, 120] },
+      { id: 'cond_45_60_75_90_105_120_135_150', descricao: '45/60/75/90/105/120/135/150 Dias', qtdParcelas: 8, parcelasDias: [45, 60, 75, 90, 105, 120, 135, 150] },
+      { id: 'cond_45_55_65_75_85_95_105_115_125_135_145_155', descricao: '45/55/65/75/85/95/105/115/125/135/145/155 Dias', qtdParcelas: 12, parcelasDias: [45, 55, 65, 75, 85, 95, 105, 115, 125, 135, 145, 155] },
+      { id: 'cond_30', descricao: '30 Dias (1x)', qtdParcelas: 1, parcelasDias: [30] },
+      { id: 'cond_vista', descricao: '100% À Vista (TED/PIX)', qtdParcelas: 1, parcelasDias: [0], especie: 'Depósito' }
+    ];
+
+    const now = new Date().toISOString();
+    for (const cond of DEFAULT_PAYMENT_CONDITIONS) {
+      const existing = dbInstance.exec("SELECT id FROM payment_conditions WHERE id = '" + cond.id + "' OR descricao = '" + cond.descricao + "'");
+      if (!existing[0] || existing[0].values.length === 0) {
+        dbInstance.run(`
+          INSERT INTO payment_conditions (
+            id, descricao, qtdParcelas, parcelasDiasJson, especie, banco, ativo, padrao, observacao, createdAt, updatedAt
+          ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          )
+        `, [
+          cond.id,
+          cond.descricao,
+          cond.qtdParcelas,
+          JSON.stringify(cond.parcelasDias),
+          cond.especie || 'Boleto',
+          '',
+          1,
+          cond.padrao ? 1 : 0,
+          'Modelo pré-cadastrado no sistema',
+          now,
+          now
+        ]);
+      }
+    }
+  } catch (payCondErr) {
+    console.warn('Aviso no seeding de payment_conditions:', payCondErr.message);
+  }
+
   saveDatabaseToDisk();
 
   return dbInstance;

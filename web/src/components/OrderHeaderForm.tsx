@@ -24,9 +24,11 @@ import {
   Check,
   RotateCcw
 } from 'lucide-react';
-import { OrderHeader, Supplier } from '../shared/types';
+import { OrderHeader, Supplier, PaymentCondition } from '../shared/types';
 import { handleCurrencyInput, formatCurrency, maskPhone, maskDate, toBrDate, toIsoDate } from '../utils/masks';
 import { LEGACY_DEFAULT_OBSERVACOES } from '../utils/storage';
+import { PaymentConditionsModal } from './PaymentConditionsModal';
+import { loadPaymentConditions } from '../utils/paymentConditionStorage';
 import { 
   PARCELAS_OPTIONS, 
   PRAZO_OPTIONS, 
@@ -79,6 +81,67 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [supplierFilterText, setSupplierFilterText] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Box de Condições de Pagamento
+  const [isPaymentCondModalOpen, setIsPaymentCondModalOpen] = useState(false);
+  const [availableConditions, setAvailableConditions] = useState<PaymentCondition[]>([]);
+
+  const refreshPaymentConditions = async () => {
+    try {
+      const conds = await loadPaymentConditions(true);
+      setAvailableConditions(conds);
+    } catch (err) {
+      console.error('Erro ao carregar condições de pagamento:', err);
+    }
+  };
+
+  useEffect(() => {
+    refreshPaymentConditions();
+  }, []);
+
+  const handleApplyPaymentCondition = (cond: PaymentCondition) => {
+    const baseDate = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
+
+    const customDates: Record<string, string> = {};
+    if (cond.parcelasDias && cond.parcelasDias.length > 0) {
+      cond.parcelasDias.forEach((dias, idx) => {
+        const numParcela = idx + 1;
+        customDates[String(numParcela)] = addDaysToDate(baseDate, dias);
+      });
+    }
+
+    let formaPgto = header.formaPagamento || 'Boleto';
+    if (cond.especie) {
+      const espLower = cond.especie.toLowerCase();
+      if (espLower.includes('depósito') || espLower.includes('deposito') || espLower.includes('pix')) {
+        formaPgto = 'Depósito';
+      } else if (espLower.includes('cheque')) {
+        formaPgto = 'Cheque';
+      } else if (espLower.includes('boleto')) {
+        formaPgto = 'Boleto';
+      }
+    }
+
+    let prazoStr = '30';
+    if (cond.parcelasDias && cond.parcelasDias.length > 0) {
+      if (cond.parcelasDias[0] === 0 && cond.parcelasDias.length === 1) {
+        prazoStr = 'vista';
+      } else if (cond.parcelasDias.length > 1 && cond.parcelasDias[0] === 0) {
+        prazoStr = String(cond.parcelasDias[1]);
+      } else {
+        prazoStr = String(cond.parcelasDias[0]);
+      }
+    }
+
+    onChange({
+      ...header,
+      condicaoPagamento: cond.descricao,
+      parcelasCount: cond.qtdParcelas,
+      prazoDias: prazoStr,
+      formaPagamento: formaPgto,
+      datasVencimentoPersonalizadas: Object.keys(customDates).length > 0 ? customDates : undefined
+    });
+  };
 
   // Identificar o fornecedor ativo no cadastro
   const currentSupplier = suppliers.find(s => 
@@ -1069,8 +1132,23 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </span>
                   </div>
 
-                  {/* Indicador de Limite de Boleto (R$ 9.999,00) */}
+                  {/* Indicador de Limite de Boleto (R$ 9.999,00) & Botão de Gestão de Condições */}
                   <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setIsPaymentCondModalOpen(true)}
+                      className="px-2.5 py-1 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800 shadow-2xs flex items-center gap-1.5 transition cursor-pointer"
+                      title="Gerenciar Condições de Pagamento"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Condições de Pagamento</span>
+                      {availableConditions.length > 0 && (
+                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-extrabold">
+                          {availableConditions.length}
+                        </span>
+                      )}
+                    </button>
+
                     {valorTotalPedido > 0 && (
                       <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100/80 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -1536,6 +1614,19 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
         </div>
       )}
+
+      {/* Modal de Gestão de Condições de Pagamento */}
+      <PaymentConditionsModal
+        isOpen={isPaymentCondModalOpen}
+        onClose={() => {
+          setIsPaymentCondModalOpen(false);
+          refreshPaymentConditions();
+        }}
+        onSelectCondition={(cond) => {
+          handleApplyPaymentCondition(cond);
+          refreshPaymentConditions();
+        }}
+      />
 
     </div>
   );

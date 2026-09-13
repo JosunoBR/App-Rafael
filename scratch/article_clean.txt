@@ -1,0 +1,256 @@
+Title: Live Content
+Description: Fetched live
+Source: https://site.guinzo.com.br/centraldeajuda/como-cadastrar-condicoes-de-pagamento-no-sistema-guinzo/
+---
+	Como cadastrar Condições de Pagamento no Sistema GUINZO &#8211; Guinzo Soluções em Tecnologia
+			Ir para o conteúdo
+Sistemas 
+Comércio
+Oficina Mecânica
+Assistência Técnica
+Comércio e Serviços
+Planos &#038; Serviços
+Sobre Nós
+Blog
+Central Ajuda
+Acesso ao GUINZO
+Sistemas 
+Comércio
+Oficina Mecânica
+Assistência Técnica
+Comércio e Serviços
+Planos &#038; Serviços
+Sobre Nós
+Blog
+Central Ajuda
+Acesso ao GUINZO
+Sistemas 
+Comércio
+Oficina Mecânica
+Assistência Técnica
+Comércio e Serviços
+Planos &#038; Serviços
+Sobre Nós
+Blog
+Central Ajuda
+Acesso ao GUINZO	
+ Como podemos ajudar você? 		
+Acesse Primeiro: Boas Vindas
+Primeiros Passos no Sistema GUINZO 
+Como navegar nas telas do Sistema GUINZO 
+Cadastros, Alterações e Telas do Sistema GUINZO  
+Configure os dados de sua Empresa no Sistema GUINZO 
+Cadastro de Perfis e Permissões no Sistema GUINZO 
+Cadastro e Administração de Usuários no Sistema GUINZO 
+Outros Cadastros e Configurações no Sistema GUINZO 
+Cadastro de Pessoas no Sistema GUINZO  
+Cadastro de Produtos no Sistema GUINZO 
+Cadastro Complementar de Produtos no Sistema GUINZO 
+Cadastro de Configurações Fiscais no Sistema GUINZO 
+Como cadastrar Condições de Pagamento no Sistema GUINZO 
+Cadastro de Vendedores no Sistema GUINZO  
+Explicação dos cadastros financeiro no Sistema GUINZO 
+Cadastro de Pessoas
+Pessoas: Como incluir um cadastro? 
+Pessoas: Dados Cadastrais Pessoa Física 
+Pessoas: Dados Cadastrais Pessoa Jurídica 
+Pessoas: Dados Cadastrais Pessoa Estrangeira 
+Pessoas: Dados Cadastrais Sem Documentos 
+Pessoas: Dados Complementares 
+Pessoas: Endereços Adicionais 
+Pessoas: Ocorrências 
+Pessoas: Dados Bancários 
+Pessoas: Contatos Adicionais 
+Cadastro de Produtos
+Produtos: Como incluir um cadastro? 
+Produtos: Dados Cadastrais 
+Produtos: Valores Custo e Venda 
+Produtos: Código Fabricante 
+Produtos: Controle de Estoque 
+Produtos: Cadastro de Estrutura 
+Produtos: Inclusão de Arquivos 
+Serviços: Como incluir um cadastro? 
+Cadastros Complementares
+			Cadastros Auxiliares: Pessoas
+Classificações de Pessoas
+Departamento
+Ramo de Atividade
+Tipo de Ocorrência		
+			Cadastros Auxiliares: Produtos
+Grupo de Produtos
+Local de Estoque
+Marca dos Produtos
+NCM
+Unidade de Medida		
+			Cadastros de Compras
+Condição de Pagamento
+Compradores		
+			Cadastros de Vendas
+Condição de Pagamento
+Tabela de Preço
+Vendedor		
+			Cadastros do Financeiro
+Natureza Financeira
+Cadastro de Espécie
+Cadastro de Bancos
+Cadastro de Acréscimos e Descontos		
+			Cadastros do Fiscal
+CFOP
+Natureza de Operação		
+Dúvidas Frequentes
+			Dúvidas Frequentes das Configurações
+Como subir Certificado Digital no Sistema GUINZO?		
+			Dúvidas Frequentes das Vendas
+Como utilizar o crédito de uma troca dentro do PDV &#8211; Frente de Caixa?
+Como utilizar o crédito de uma troca dentro do Pedido de Venda?
+Como Configurar os Impostos da Nota Fiscal de Produto?
+Como Configurar os Impostos da Nota Fiscal de Serviço?
+Como dar Desconto Total em Orçamento ou Pedido de Venda?
+Como programar o financeiro nos Pedidos?		
+			Dúvidas Frequentes do Compras
+Como programar o financeiro nos Pedidos?		
+			Dúvidas Frequentes do Estoque
+Como importar uma planilha com os itens na Entrada Manual?
+Como zerar a quantidade de estoque no Sistema GUINZO?		
+			Dúvidas Frequentes do Financeiro
+Glossário de Termos Financeiros no Sistema GUINZO
+Como Realizar o Rateio da Conta dentro do Título?
+Como pagar ou receber um título parcialmente?
+Como Realizar o Pagamento ou Recebimento de um Título Financeiro
+Como fazer uma transferência bancária?
+Como alterar os dados de um título financeiro já lançado?
+Conciliação Bancária, como conferir saldo?
+Como consultar os títulos financeiros?
+Como Emitir uma Nota Fiscal de Serviço direto do Financeiro?		
+			Dúvidas Frequentes do Fiscal
+Como emitir uma Nota Fiscal de Devolução?
+Como Configurar os Impostos da Nota Fiscal de Produto?
+Como Configurar os Impostos da Nota Fiscal de Serviço?
+Como corrigir uma Nota Fiscal que foi rejeitada?
+Como buscar uma Nota ou Cupom Fiscal?
+Como enviar uma Nota ou Cupom Fiscal por E-mail?
+Como cancelar uma Nota ou Cupom Fiscal?
+Como inutilizar um Número de Nota Fiscal?
+Como fazer uma Carta de Correção da Nota Fiscal?
+Como baixar vários .xmls das Notas Fiscais?
+Como Alterar a % do ICMS de Crédito do Simples Nacional?
+Como Emitir uma Nota Fiscal de Serviço direto do Financeiro?		
+Módulo Compras
+Portal de NF-e Entrada 
+Busca Df-e e Manifesto 
+Pedido de Compra 
+Módulo Configurações
+Alterar Senha 
+Logotipo da Empresa 
+Cadastro de Perfil &#038; Permissões 
+Empresa: Cadastro Dados e Configurações 
+Usuários 
+Liberação de Acesso Externo 
+Módulo Estoque
+Entrada Manual 
+Saída Manual 
+Inventário 
+Kits de Produtos 
+Módulo Financeiro
+Contratos: Cadastro e Gestão 
+Incluir uma Conta a Pagar ou Receber 
+Movimentos Bancários 
+Título Financeiro 
+Alteração em Lote dos Títulos Financeiros 
+Emissão de Boletos via arquivo CNAB 
+Fechamento de Caixa 
+Renegociação em Lote dos Títulos Financeiros 
+Importação Extrato &#8211; Arquivo .ofx 
+Módulo Fiscal
+Emitir Nota Fiscal (NF-e) 
+Emissor NF-e (Nota Fiscal) 
+Emitir Nota Fiscal de Serviço (NFS-e) 
+Emissor NFS-e (Nota Fiscal de Serviço) 
+Manifesto Eletrônico de Documentos Fiscais (MDF-e) 
+Módulo Vendas
+Troca de Mercadorias 
+Orçamento Venda Produtos e Serviços 
+PDV – Frente de Caixa 
+Pedido de Venda Produtos 
+Pedido de Venda Produtos + Serviços 
+Consulta de Preços 
+Rejeições das Notas Fiscais
+Rejeição 234: IE do destinatário não vinculada ao CNPJ &#8211; Como resolver? 
+Rejeição 600: CSOSN incompatível na operação com Não Contribuinte &#8211; Como resolver? 
+Relatórios
+			Relatório de Configurações
+Relatório Estatística de Acesso
+Relatório E-mails Enviados
+Relatório de Produtos
+Relatório de Pessoas		
+			Relatórios de Compras
+Relatório Pedido de Compra
+Relatório Itens Pedido de Compra
+Relatório Itens Agrupados Comprados
+Relatório Representatividade Compras		
+			Relatórios de Vendas
+Relatório Orçamento de Venda
+Relatório Itens Orçamento de Venda
+Relatório Pedido de Venda
+Relatório Itens Produtos Pedido de Venda
+Relatório Itens Serviços Pedido de Venda
+Relatório Itens Produtos Agrupados Vendidos
+Relatório Itens Serviços Agrupados Vendidos
+Relatório Representatividade Vendas
+Relatório Fechamento do Dia
+Relatório Fechamento Dia &#8211; Impressão em Cupom
+Relatório Tabelas de Preço
+Relatório Notas Fiscais
+Relatório Itens Notas Fiscais		
+			Relatórios do Estoque
+Relatório Quantidade de Estoque
+Relatório Movimentações Estoque (Kardex)
+Relatório de Estoque Mínimo		
+			Relatórios do Fiscal
+Relatório Notas Fiscais
+Relatório Itens Notas Fiscais		
+			Relatórios Financeiros
+Relatório Fluxo de Caixa
+Relatório Contas a Pagar
+Relatório Contas a Receber
+Relatório Extrato Financeiro
+Relatório Naturezas Financeiras
+Relatório Naturezas Financeiras Mês a Mês
+Relatório Fechamento Diário
+Relatório de Representatividade (%) &#8211; Agrupamento de Títulos Financeiros
+Relatório de Descontos
+Relatório de Acréscimos
+Relatório de Acréscimos e Descontos
+Relatório Análise Títulos Financeiros		
+			Ver categorias
+				Inicio				
+				Central de Ajuda				
+				Acesse Primeiro: Boas Vindas				
+Como cadastrar Condições de Pagamento no Sistema GUINZO	
+		Tempo estimado de Leitura: 1 min	
+O Sistema GUINZO é um sistema muito simples para você gerenciar sua Empresa. Além disso, os cadastros podem ser localizados facilmente e você controla as informações do seu negócio com o máximo de precisão.
+Introdução:
+Que bom ter você aqui!
+Na GUINZO, acreditamos que organização e gestão inteligente são os pilares do crescimento sustentável. Por isso, desenvolvemos um sistema completo, pensado para simplificar rotinas, dar clareza aos números e facilitar a tomada de decisões no seu negócio.
+Nosso objetivo é que você tenha mais tempo para focar no que realmente importa: fazer sua empresa prosperar.
+Caso precise de ajuda, conte com o nosso time de suporte ou acesse os tutoriais disponíveis no menu principal.
+Boas-vindas ao GUINZO.
+No décimo segundo vídeo do treinamento, vamos te mostrar como cadastrar as Condições de Pagamento no Sistema GUINZO. 
+Esse cadastro é essencial para facilitar a programação das parcelas na Guia Financeiro de: 
+Pedido de Compra 
+Orçamento de Venda 
+Pedido de Venda 
+Emissão de Nota Fiscal Avulsa 
+Com as condições de pagamento bem configuradas, você garante mais controle financeiro e agilidade no processo de vendas e compras.
+Assista ao Treinamento Completo no vídeo:
+Em caso de dúvidas, não hesite em procurar nosso time de suporte. Estamos à disposição para te ajudar!
+Até mais 💚
+Guinzo Soluções em Tecnologia
+Da Organização à Sistema de Gestão.
+Esse conteúdo fez a diferença pra você?	
+Atualizado em 13/06/2025
+		Feito com carinho pela Equipe Guinzo Soluções em Tecnologia.
+© 2025 – Todo o conteúdo deste site é de uso exclusivo. Proibida reprodução ou utilização a qualquer título, sob as penas da lei.	
+FacebookYouTubeInstagramTiktok
+				Page load link
+			Ir ao Topo

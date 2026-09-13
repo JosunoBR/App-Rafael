@@ -1,4 +1,4 @@
-import { PurchaseOrder, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset } from '../shared/types';
+import { PurchaseOrder, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition } from '../shared/types';
 import { API_BASE_URL } from './config';
 
 export class ApiError extends Error {
@@ -327,6 +327,28 @@ export async function saveUserToDb(user: Partial<User> & { senha?: string }): Pr
 
 export async function deleteUserFromDb(id: string): Promise<void> {
   await apiFetch(`/users/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+// Condições de Pagamento
+export async function fetchPaymentConditionsFromDb(activeOnly: boolean = false): Promise<PaymentCondition[]> {
+  const query = activeOnly ? '?active=true' : '';
+  const res = await apiFetch(`/payment-conditions${query}`);
+  return res.json();
+}
+
+export async function savePaymentConditionToDb(condition: Partial<PaymentCondition>): Promise<PaymentCondition> {
+  const res = await apiFetch('/payment-conditions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(condition)
+  });
+  return res.json();
+}
+
+export async function deletePaymentConditionFromDb(id: string): Promise<void> {
+  await apiFetch(`/payment-conditions/${id}`, {
     method: 'DELETE'
   });
 }

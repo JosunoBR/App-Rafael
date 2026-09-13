@@ -269,6 +269,20 @@ async function getDatabase() {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS payment_conditions (
+      id TEXT PRIMARY KEY,
+      descricao TEXT NOT NULL,
+      qtdParcelas INTEGER NOT NULL DEFAULT 1,
+      parcelasDiasJson TEXT NOT NULL DEFAULT '[]',
+      especie TEXT DEFAULT 'Boleto',
+      banco TEXT DEFAULT '',
+      ativo INTEGER NOT NULL DEFAULT 1,
+      padrao INTEGER NOT NULL DEFAULT 0,
+      observacao TEXT DEFAULT '',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
   `);
 
   // Migrações automáticas de colunas

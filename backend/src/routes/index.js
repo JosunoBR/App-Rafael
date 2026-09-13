@@ -12,6 +12,7 @@ const configRoutes = require('./config.routes');
 const stockRoutes = require('./stock.routes');
 const separationPresetRoutes = require('./separationPreset.routes');
 const fiscalPresetRoutes = require('./fiscalPreset.routes');
+const paymentConditionRoutes = require('./paymentCondition.routes');
 
 const router = Router();
 
@@ -36,6 +37,7 @@ router.use('/stock', stockRoutes);
 router.use('/config', configRoutes);
 router.use('/separation-presets', separationPresetRoutes);
 router.use('/fiscal-presets', fiscalPresetRoutes);
+router.use('/payment-conditions', paymentConditionRoutes);
 router.use('/audit', auditRoutes);
 router.use('/export', exportRoutes);
 

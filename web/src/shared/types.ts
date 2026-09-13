@@ -315,3 +315,19 @@ export interface User {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// 8. Condição de Pagamento
+export interface PaymentCondition {
+  id: string;
+  descricao: string;
+  qtdParcelas: number;
+  parcelasDias: number[]; // ex: [30, 60, 90, 120]
+  parcelasDiasJson?: string;
+  especie: string;        // 'Boleto' | 'Dinheiro / PIX' | 'Cartão de Crédito' | 'Cheque' | 'Depósito'
+  banco?: string;
+  ativo: boolean;
+  padrao?: boolean;
+  observacao?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}

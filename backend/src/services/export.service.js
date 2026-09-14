@@ -344,51 +344,93 @@ class ExportService {
 
     const descontoComercialTexto = `${Number(descontoComercialPercent.toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 
+    const maxCardTextW = cardW - 6;
+    const offPercent = order.header?.percentualNota !== undefined ? order.header.percentualNota : 100;
+
+    const card2Fields = [
+      `Fornecedor: ${fornecedorNome}`,
+      `Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`,
+      `OFF %: ${offPercent}%`,
+      `Desconto Comercial: ${descontoComercialTexto}`,
+      `Condição de Pagto: ${condicaoPagamento}`,
+      `Forma de Pagto: ${formaPagamento}`,
+      `Tipo de Frete: ${tipoFrete}`
+    ];
+
+    if (observacoes && observacoes.trim()) {
+      card2Fields.push(`Obs. do Pedido: ${observacoes.trim()}`);
+    }
+
+    const card2Lines = [];
+    card2Fields.forEach(field => {
+      const split = doc.splitTextToSize(field, maxCardTextW);
+      if (Array.isArray(split)) {
+        split.forEach((s, idx) => {
+          card2Lines.push(idx > 0 ? `  ${s.trim()}` : s.trim());
+        });
+      } else if (split) {
+        card2Lines.push(split);
+      }
+    });
+
+    const card2LineStep = card2Lines.length > 7 ? 2.85 : 3.1;
+    const neededCard2H = 7.8 + (card2Lines.length - 1) * card2LineStep + 2.5;
+    const cardH = Math.max(baseCardH, neededCard2H);
+
+    // Card 1: Comprador / Faturamento (Esquerda)
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(10, cardY, cardW, cardH, 1.5, 1.5, 'FD');
+
+    doc.setFillColor(241, 245, 249);
+    doc.rect(10.2, cardY + 0.2, cardW - 0.4, 5, 'F');
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.text('DADOS DA EMPRESA COMPRADORA & FATURAMENTO:', 13, cardY + 3.8);
+
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 7.5);
-    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 10.8);
+    doc.text('Razão Social: ALS 10 BAZAR E BRINQUEDOS LTDA', 13, cardY + 7.8);
+    doc.text('CNPJ: 37.144.240/0001-70       IE: 90847822-35', 13, cardY + 11.3);
+    doc.text('End. Entrega: Av. José Galiciolli, 152 – BR153 – Centro – Irati – PR (CEP: 84500-009)', 13, cardY + 14.8);
+    doc.text('E-mail para Boletos e XML: als.conecta@gmail.com', 13, cardY + 18.3);
+    doc.text('Compras: (55) 9 9659-6315 (Rafael)  |  Faturamento: (55) 9 99691-0247 (Ketlyn)', 13, cardY + 21.8);
+    doc.text('Financeiro: (55) 9 3618-5609 (Bruna)', 13, cardY + 25.3);
 
-    const offPercent = order.header?.percentualNota !== undefined ? order.header.percentualNota : 100;
-    doc.text(`OFF %: ${offPercent}%`, card2X + 3, cardY + 14.1);
-    doc.text(`Desconto Comercial: ${descontoComercialTexto}`, card2X + 3, cardY + 17.4);
-    doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 20.7);
-    doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 24.0);
-    doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 27.3);
+    // Card 2: Fornecedor & Comercial (Direita)
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(card2X, cardY, cardW, cardH, 1.5, 1.5, 'FD');
 
-    // =========================================================================
-    // 3.1 BANNER DE DESTAQUE: DESCRIÇÃO / OBSERVAÇÕES DO PEDIDO (Se houver)
-    // =========================================================================
-    let obsBannerH = 0;
-    if (observacoes && observacoes.trim()) {
-      const obsBannerY = cardY + cardH + 2.2;
-      const maxObsW = 271;
-      const obsLines = doc.splitTextToSize(observacoes.trim(), maxObsW);
-      const lineCount = Array.isArray(obsLines) ? obsLines.length : 1;
-      obsBannerH = Math.max(10, 5.5 + lineCount * 3.6);
+    doc.setFillColor(241, 245, 249);
+    doc.rect(card2X + 0.2, cardY + 0.2, cardW - 0.4, 5, 'F');
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.text('DADOS DO FORNECEDOR & CONDIÇÕES COMERCIAIS:', card2X + 3, cardY + 3.8);
 
-      doc.setFillColor(254, 249, 195); // Amber-100
-      doc.setDrawColor(217, 119, 6);   // Amber-600
-      doc.setLineWidth(0.4);
-      doc.roundedRect(10, obsBannerY, 277, obsBannerH, 1.5, 1.5, 'FD');
-
-      doc.setTextColor(146, 64, 14); // Amber-800
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.text('📌 DESCRIÇÃO / OBSERVAÇÕES DO PEDIDO:', 13, obsBannerY + 4.2);
-
-      doc.setTextColor(15, 23, 42); // Slate-900
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.2);
-      if (Array.isArray(obsLines)) {
-        obsLines.forEach((line, idx) => {
-          doc.text(line, 13, obsBannerY + 8 + idx * 3.6);
-        });
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    card2Lines.forEach((lineText, idx) => {
+      const lineY = cardY + 7.8 + idx * card2LineStep;
+      if (lineText.startsWith('Obs. do Pedido:')) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('Obs. do Pedido:', card2X + 3, lineY);
+        const prefixW = doc.getTextWidth('Obs. do Pedido: ');
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        const rest = lineText.replace(/^Obs\. do Pedido:\s*/, '');
+        doc.text(rest, card2X + 3 + prefixW, lineY);
       } else {
-        doc.text(String(obsLines), 13, obsBannerY + 8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(lineText, card2X + 3, lineY);
       }
-    }
+    });
 
     // =========================================================================
     // 4. TABELA DE ITENS (SEM Código Interno e SEM Desconto)
@@ -471,7 +513,7 @@ class ExportService {
     ];
 
     autoTable(doc, {
-      startY: cardY + cardH + 2.0 + (obsBannerH > 0 ? obsBannerH + 2.0 : 0),
+      startY: cardY + cardH + 2.5,
       head: [headCols],
       body: [...bodyRows, footerRow],
       theme: 'grid',
@@ -525,7 +567,7 @@ class ExportService {
       finalY = 12;
     }
 
-    const bottomCardH = 32;
+    const bottomCardH = 28;
 
     // Bloco Esquerdo: Instruções Mandatórias da Loja (ALS 10)
     const leftW = 165;
@@ -547,23 +589,6 @@ class ExportService {
     doc.text('3. Pagamento de Parte Especial exclusivamente via depósitos bancários autorizados.', 13, finalY + 15.6);
     doc.text('4. Os pedidos seguem espelho oficial da empresa. Favor conferir e avisar imediatamente se houver desacordo.', 13, finalY + 19.4);
     doc.text('5. Descarregamento no local de entrega sob responsabilidade do fornecedor / transportadora.', 13, finalY + 23.2);
-    if (observacoes && observacoes.trim()) {
-      doc.setFillColor(254, 243, 199); // Amber-100
-      doc.setDrawColor(217, 119, 6);   // Amber-600
-      doc.setLineWidth(0.3);
-      doc.roundedRect(12, finalY + 24.5, leftW - 4, 6.2, 1, 1, 'FD');
-
-      doc.setTextColor(146, 64, 14); // Amber-800
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.8);
-      doc.text('OBSERVAÇÕES DO PEDIDO:', 14, finalY + 28.5);
-
-      doc.setTextColor(15, 23, 42); // Slate-900
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.8);
-      const obsResumo = observacoes.length > 105 ? `${observacoes.substring(0, 102)}...` : observacoes;
-      doc.text(obsResumo, 54, finalY + 28.5);
-    }
 
     // Bloco Direito: Resumo Financeiro & Assinaturas
     const rightX = 179;
@@ -575,19 +600,26 @@ class ExportService {
 
     // Destaque do Valor Total
     doc.setFillColor(5, 150, 105); // Emerald-600
-    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
+    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 11, 1.5, 1.5, 'F');
 
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.8);
-    doc.text(`TOTAL GERAL DO PEDIDO (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX | ${totalPecasGeral.toLocaleString('pt-BR')} UN):`, rightX + 6, finalY + 7);
+    const totalGeralComIpi = subtotalGeral + totalIpiGeral;
+    const labelTotalGeral = totalIpiGeral > 0
+      ? `TOTAL DO PEDIDO C/ IPI (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX):`
+      : `TOTAL GERAL DO PEDIDO (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX | ${totalPecasGeral.toLocaleString('pt-BR')} UN):`;
+    doc.text(labelTotalGeral, rightX + 6, finalY + 6.8);
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(formatCurrency(subtotalGeral), rightX + 6, finalY + 13);
+    doc.setFontSize(totalIpiGeral > 0 ? 9.5 : 11);
+    const textoValorTotal = totalIpiGeral > 0
+      ? `${formatCurrency(totalGeralComIpi)} (Líq: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)})`
+      : formatCurrency(subtotalGeral);
+    doc.text(textoValorTotal, rightX + 6, finalY + 12.5);
 
     // Linhas de Assinatura
-    const sigY = finalY + 23;
+    const sigY = finalY + 20.5;
     doc.setDrawColor(148, 163, 184);
     doc.setLineWidth(0.2);
     doc.line(rightX + 5, sigY, rightX + 48, sigY);

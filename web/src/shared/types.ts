@@ -263,6 +263,7 @@ export interface PaymentInstallment {
   observacao?: string; // Motivo do acordo comercial / desconto / abatimento
   documentoRef?: string; // Código de barras / Boleto / NF
   isBoletoFrete?: boolean; // Identificador de boleto de frete (gerado 10 dias após entrega)
+  isEntrada?: boolean;     // Identificador de parcela de entrada/depósito
   tipoTitulo?: 'mercadoria' | 'frete';
   metodoPagamento?: 'Boleto' | 'Depósito' | 'Cheque' | 'PIX' | string;
   updatedAt?: string;

@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { PurchaseOrder, StoreConfig } from '../shared/types';
 import { DEFAULT_STORES } from '../shared/constants';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
-import { QUICK_PAYMENT_PRESETS } from './installments';
+import { QUICK_PAYMENT_PRESETS, formatPaymentConditionString } from './installments';
 
 function formatCurrency(val: number | string): string {
   const num = Number(val) || 0;
@@ -34,6 +34,19 @@ export function formatPaymentConditionDisplay(cond?: string | number, parcelas?:
   const matchedPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === text);
   if (matchedPreset) {
     return matchedPreset.conditionString;
+  }
+
+  // Se for um número puro representando intervalo em dias
+  const numInterval = parseInt(text, 10);
+  if (!isNaN(numInterval) && numInterval > 0 && String(numInterval) === text) {
+    if (!parcelas || parcelas <= 1) {
+      return `${numInterval} Dias`;
+    }
+    const days: number[] = [];
+    for (let i = 1; i <= parcelas; i++) {
+      days.push(i * numInterval);
+    }
+    return `${days.join('/')} Dias`;
   }
 
   // 1. Caso legado '3x (30/60/90 Dias - de 30 em 30 dias)', extrair '30/60/90 Dias'
@@ -68,6 +81,75 @@ export function formatPaymentConditionDisplay(cond?: string | number, parcelas?:
   text = text.replace(/\s+/g, ' ').trim();
 
   return text || 'A Combinar';
+}
+
+export interface ResolvedPaymentInfo {
+  condicaoPagamento: string;
+  formaPagamento: string;
+}
+
+/**
+ * Resolve e valida com precisão a condição e forma de pagamento do pedido para exibição em relatórios/PDFs.
+ * Garante que se o pedido possui negociação combinada (Depósito + Boleto), as 1ª e 2ª condições
+ * sejam fielmente representadas, inclusive recuperando-se de sequências anômalas ou corrompidas.
+ */
+export function resolveOrderPaymentCondition(order: PurchaseOrder): ResolvedPaymentInfo {
+  const header = order.header || ({} as any);
+
+  // 1. Identifica se é pagamento combinado
+  const isCombined =
+    header.prazoDias === 'deposito_e_boleto' ||
+    header.prazoDias === 'entrada_com_parcelamento' ||
+    header.formaPagamento === 'Boleto / Depósito' ||
+    header.formaPagamento === 'Boleto / Cheque' ||
+    (header.depositoParcelasCount !== undefined && header.saldoParcelasCount !== undefined && (header.depositoParcelasCount > 0 || header.saldoParcelasCount > 0)) ||
+    (Array.isArray(order.installments) &&
+      order.installments.some(i => !i.isBoletoFrete && (i.metodoPagamento === 'Depósito' || i.isEntrada)) &&
+      order.installments.some(i => !i.isBoletoFrete && (i.metodoPagamento === 'Boleto' || !i.isEntrada)));
+
+  if (isCombined) {
+    const dForma = header.depositoFormaPagamento || 'Depósito';
+    const sForma = header.saldoFormaPagamento || 'Boleto';
+    const formaPagamento = `${sForma} / ${dForma}`;
+
+    const rawCond = header.condicaoPagamento || '';
+    // Se a string já estiver consistente (possui "+" e não possui repetição anômala de intervalos como 10/20/.../140)
+    if (rawCond && rawCond.includes('+') && !rawCond.includes('10/20/30/40/50/60/70/80/90/100')) {
+      return {
+        condicaoPagamento: formatPaymentConditionDisplay(rawCond),
+        formaPagamento
+      };
+    }
+
+    // Se estiver corrompida, vazia ou sem o "+", reconstrói fielmente a partir dos parâmetros do pedido
+    const dParc = header.depositoParcelasCount || 1;
+    const dPrazo = header.depositoPrazoDias || 'vista';
+    const sParc = header.saldoParcelasCount || (header.parcelasCount ? Math.max(1, header.parcelasCount - dParc) : 2);
+    const sPrazo = header.saldoPrazoDias || '30';
+
+    const cleanCond = formatPaymentConditionString(
+      dParc + sParc,
+      'deposito_e_boleto',
+      header.valorEntradaAVista,
+      sParc,
+      sPrazo,
+      dParc,
+      dPrazo,
+      dForma,
+      sForma
+    );
+
+    return {
+      condicaoPagamento: formatPaymentConditionDisplay(cleanCond),
+      formaPagamento
+    };
+  }
+
+  // Pagamento não combinado (padrão)
+  return {
+    condicaoPagamento: formatPaymentConditionDisplay(header.condicaoPagamento || header.prazoDias, header.parcelasCount),
+    formaPagamento: cleanPaymentFormDisplay(header.formaPagamento) || 'Boleto Bancário'
+  };
 }
 
 /**
@@ -152,8 +234,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
-    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento || order.header?.prazoDias, order.header?.parcelasCount);
-    const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento) || 'Boleto Bancário';
+    const { condicaoPagamento, formaPagamento } = resolveOrderPaymentCondition(order);
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
     const observacoes = order.header?.observacoes || order.header?.observacoesDescarga || '';
 
@@ -270,6 +351,10 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       `Tipo de Frete: ${tipoFrete}`
     ];
 
+    if (observacoes && observacoes.trim()) {
+      card2Fields.push(`Obs. do Pedido: ${observacoes.trim()}`);
+    }
+
     const card2Lines: string[] = [];
     card2Fields.forEach(field => {
       const split = doc.splitTextToSize(field, maxCardTextW);
@@ -325,7 +410,21 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     card2Lines.forEach((lineText, idx) => {
-      doc.text(lineText, card2X + 3, cardY + 7.8 + idx * card2LineStep);
+      const lineY = cardY + 7.8 + idx * card2LineStep;
+      if (lineText.startsWith('Obs. do Pedido:')) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('Obs. do Pedido:', card2X + 3, lineY);
+        const prefixW = doc.getTextWidth('Obs. do Pedido: ');
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        const rest = lineText.replace(/^Obs\. do Pedido:\s*/, '');
+        doc.text(rest, card2X + 3 + prefixW, lineY);
+      } else {
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(15, 23, 42);
+        doc.text(lineText, card2X + 3, lineY);
+      }
     });
 
 
@@ -490,7 +589,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       finalY = 12;
     }
 
-    const bottomCardH = 32;
+    const bottomCardH = 28;
 
     // Bloco Esquerdo: Instruções Mandatórias da Loja (ALS 10)
     const leftW = 165;
@@ -512,23 +611,6 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.text('3. Pagamento de Parte Especial exclusivamente via depósitos bancários autorizados.', 13, finalY + 15.6);
     doc.text('4. Os pedidos seguem espelho oficial da empresa. Favor conferir e avisar imediatamente se houver desacordo.', 13, finalY + 19.4);
     doc.text('5. Descarregamento no local de entrega sob responsabilidade do fornecedor / transportadora.', 13, finalY + 23.2);
-    if (observacoes && observacoes.trim()) {
-      doc.setFillColor(254, 243, 199); // Amber-100
-      doc.setDrawColor(217, 119, 6);   // Amber-600
-      doc.setLineWidth(0.3);
-      doc.roundedRect(12, finalY + 24.5, leftW - 4, 6.2, 1, 1, 'FD');
-
-      doc.setTextColor(146, 64, 14); // Amber-800
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.8);
-      doc.text('OBSERVAÇÕES DO PEDIDO:', 14, finalY + 28.5);
-
-      doc.setTextColor(15, 23, 42); // Slate-900
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.8);
-      const obsResumo = observacoes.length > 105 ? `${observacoes.substring(0, 102)}...` : observacoes;
-      doc.text(obsResumo, 54, finalY + 28.5);
-    }
 
     // Bloco Direito: Resumo Financeiro & Assinaturas
     const rightX = 179;
@@ -540,23 +622,23 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
 
     // Destaque do Valor Total
     doc.setFillColor(5, 150, 105); // Emerald-600
-    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
+    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 11, 1.5, 1.5, 'F');
 
     const totalGeralComIpi = subtotalGeral + totalIpiGeral;
     const labelTotalGeral = totalIpiGeral > 0
       ? `TOTAL DO PEDIDO C/ IPI (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX):`
       : `TOTAL GERAL DO PEDIDO (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX | ${totalPecasGeral.toLocaleString('pt-BR')} UN):`;
-    doc.text(labelTotalGeral, rightX + 6, finalY + 7);
+    doc.text(labelTotalGeral, rightX + 6, finalY + 6.8);
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(totalIpiGeral > 0 ? 9.5 : 11);
     const textoValorTotal = totalIpiGeral > 0
       ? `${formatCurrency(totalGeralComIpi)} (Líq: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)})`
       : formatCurrency(subtotalGeral);
-    doc.text(textoValorTotal, rightX + 6, finalY + 13);
+    doc.text(textoValorTotal, rightX + 6, finalY + 12.5);
 
     // Linhas de Assinatura
-    const sigY = finalY + 23;
+    const sigY = finalY + 20.5;
     doc.setDrawColor(148, 163, 184);
     doc.setLineWidth(0.2);
     doc.line(rightX + 5, sigY, rightX + 48, sigY);
@@ -640,8 +722,7 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
-    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento || order.header?.prazoDias, order.header?.parcelasCount);
-    const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento) || 'Boleto Bancário';
+    const { condicaoPagamento, formaPagamento } = resolveOrderPaymentCondition(order);
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
 
     // =========================================================================

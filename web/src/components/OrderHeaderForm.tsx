@@ -1189,17 +1189,20 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     const newCustomDates = recalculateCombinedDates(depositoParcelas, depositoPrazo, saldoParcelas, saldoPrazo);
 
     const newCondString = formatPaymentConditionString(
-      currentParcelas, 
-      currentPrazo, 
+      depositoParcelas + saldoParcelas, 
+      'deposito_e_boleto', 
       newEntrada, 
       saldoParcelas, 
       saldoPrazo, 
       depositoParcelas, 
-      depositoPrazo
+      depositoPrazo,
+      header.depositoFormaPagamento || 'Depósito',
+      header.saldoFormaPagamento || 'Boleto'
     );
 
     onChange({
       ...header,
+      prazoDias: 'deposito_e_boleto',
       percentualEntrada: pctDeposito,
       isEntradaProporcional: true,
       valorEntradaAVista: newEntrada,
@@ -1228,7 +1231,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         ...Array.from({ length: depositoParcelas }, (_, idx) => {
           const d = idx + 1;
           let defaultDate = '';
-          const matchedPreset = QUICK_PAYMENT_PRESETS.find((p) => p.id === depositoPrazo);
+          const matchedPreset = QUICK_PAYMENT_PRESETS.find((p) => p.id === depositoPrazo || p.conditionString.toLowerCase() === depositoPrazo.toLowerCase());
           if (depositoPrazo === 'vista') {
             defaultDate = addDaysToDate(orderDate, 0);
           } else if (matchedPreset && matchedPreset.daysOffsets && matchedPreset.daysOffsets[idx] !== undefined) {
@@ -1258,7 +1261,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           const b = idx + 1;
           const numeroParcela = depositoParcelas + b;
           let defaultDate = '';
-          const matchedPreset = QUICK_PAYMENT_PRESETS.find((p) => p.id === saldoPrazo);
+          const matchedPreset = QUICK_PAYMENT_PRESETS.find((p) => p.id === saldoPrazo || p.conditionString.toLowerCase() === saldoPrazo.toLowerCase());
           if (matchedPreset && matchedPreset.daysOffsets && matchedPreset.daysOffsets[idx] !== undefined) {
             defaultDate = addDaysToDate(baseDate, matchedPreset.daysOffsets[idx]);
           } else {
@@ -1266,7 +1269,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
             if (depositoParcelas === 1 && depositoPrazo === 'vista') {
               defaultDate = addDaysToDate(baseDate, 10 + (b - 1) * interval);
             } else if (depositoPrazo !== 'vista') {
-              const lastDepDueDays = 10 + (depositoParcelas - 1) * (Number(depositoPrazo) || 30);
+              const matchedDep = QUICK_PAYMENT_PRESETS.find((p) => p.id === depositoPrazo || p.conditionString.toLowerCase() === depositoPrazo.toLowerCase());
+              const lastDepDueDays = (matchedDep && matchedDep.daysOffsets && matchedDep.daysOffsets.length > 0)
+                ? matchedDep.daysOffsets[matchedDep.daysOffsets.length - 1]
+                : (10 + (depositoParcelas - 1) * (Number(depositoPrazo) || 30));
               defaultDate = addDaysToDate(baseDate, lastDepDueDays + b * interval);
             } else {
               defaultDate = addDaysToDate(baseDate, 10 + (b - 1) * interval);

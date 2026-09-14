@@ -30,6 +30,7 @@ import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, U
 import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations, adjustSeparationReserveProportionally } from '../shared/separationEngine';
 import { SeparationMatrixModal } from './SeparationMatrixModal';
 import { OrderPipelineStepper } from './OrderPipelineStepper';
+import { canCreateOrEditOrders } from '../shared/permissions';
 
 interface SeparationPageProps {
   order: PurchaseOrder;
@@ -210,22 +211,30 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     }
   };
 
-  // Inclui pedidos salvos (Em Cotação, Rascunho) e pedidos fechados (Aprovado, Em Distribuição, Em Separação) para o depósito
+  // Inclui pedidos fechados ou em andamento na esteira conforme o perfil do usuário
   const availableDepositOrders = useMemo(() => {
-    const list = orders.filter(o => 
-      !o.header.status ||
-      o.header.status === 'Em Cotação' ||
-      o.header.status === 'Rascunho' ||
-      o.header.status === 'Aprovado' || 
-      o.header.status === 'Em Distribuição' || 
-      o.header.status === 'Em Separação'
-    );
+    const isSeparacao = currentUser?.role === 'separacao';
+    const list = orders.filter(o => {
+      if (isSeparacao) {
+        return o.header.status === 'Em Separação' || o.header.status === 'Aprovado' || o.header.status === 'Em Distribuição';
+      }
+      return (
+        !o.header.status ||
+        o.header.status === 'Em Cotação' ||
+        o.header.status === 'Rascunho' ||
+        o.header.status === 'Aprovado' || 
+        o.header.status === 'Em Distribuição' || 
+        o.header.status === 'Em Separação'
+      );
+    });
     const currentId = order.header.id || order.header.numeroPedido;
     if (currentId && !list.some(o => (o.header.id || o.header.numeroPedido) === currentId)) {
-      return [order, ...list];
+      if (!isSeparacao || (order.header.status === 'Em Separação' || order.header.status === 'Aprovado' || order.header.status === 'Em Distribuição' || order.header.status === 'Finalizado')) {
+        return [order, ...list];
+      }
     }
     return list;
-  }, [orders, order]);
+  }, [orders, order, currentUser?.role]);
   const pendingSeparationOrders = availableDepositOrders;
 
   const isCurrentFinalized = order.header.status === 'Finalizado';
@@ -570,7 +579,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
-            {currentUser?.role === 'diretoria' && onNavigateToOrders && (
+            {canCreateOrEditOrders(currentUser?.role) && onNavigateToOrders && (
               <button
                 onClick={onNavigateToOrders}
                 className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 transition flex items-center gap-2 cursor-pointer"
@@ -754,13 +763,15 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           </div>
 
           {/* Editar Pedido */}
-          <button
-            onClick={onNavigateToOrders}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition cursor-pointer"
-          >
-            <span>Editar Pedido</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          {canCreateOrEditOrders(currentUser?.role) && (
+            <button
+              onClick={onNavigateToOrders}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition cursor-pointer"
+            >
+              <span>Editar Pedido</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 

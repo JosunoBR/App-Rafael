@@ -13,6 +13,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { PurchaseOrder, User, OrderStatus } from '../shared/types';
+import { canManagePipelineDistribution } from '../shared/permissions';
 
 interface OrderPipelineStepperProps {
   order: PurchaseOrder;
@@ -160,7 +161,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
 
         {/* Lado Direito: Ações rápidas de esteira */}
         <div className="flex items-center gap-2 shrink-0">
-          {currentIndex <= 1 && onOpenDistribution && (
+          {currentIndex <= 1 && onOpenDistribution && canManagePipelineDistribution(currentUser?.role) && (
             <button
               onClick={() => onOpenDistribution(order)}
               className="px-3 py-1 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
@@ -170,7 +171,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </button>
           )}
 
-          {currentIndex === 2 && onReleaseToSeparation && (
+          {currentIndex === 2 && onReleaseToSeparation && canManagePipelineDistribution(currentUser?.role) && (
             <button
               onClick={() => onReleaseToSeparation(order)}
               className="px-3 py-1 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"

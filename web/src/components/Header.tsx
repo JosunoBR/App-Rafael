@@ -28,7 +28,7 @@ import {
   Copy
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
-import { ActiveNavTab } from './Sidebar';
+import { ActiveNavTab, canAccessTab, canCreateOrEditOrders } from '../shared/permissions';
 import { calculateOrderNetTotal } from '../utils/installments';
 
 interface HeaderProps {
@@ -124,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const userRole: UserRole = currentUser?.role || 'diretoria';
-  const canAccessOrders = userRole === 'diretoria';
+  const canAccessOrders = canCreateOrEditOrders(userRole);
 
   // Configurações de Título e Ícone da Página Ativa
   const getNavMeta = (tab: ActiveNavTab) => {

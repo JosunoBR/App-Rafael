@@ -22,8 +22,8 @@ import {
   CreditCard,
   Warehouse
 } from 'lucide-react';
-import { PurchaseOrder, User, Supplier, StoreConfig } from '../shared/types';
-import { ActiveNavTab } from './Sidebar';
+import { PurchaseOrder, User, Supplier, StoreConfig, CentralStockItem } from '../shared/types';
+import { ActiveNavTab, canAccessTab, canCreateOrEditOrders } from '../shared/permissions';
 import { toBrDate } from '../utils/masks';
 
 interface HomePageProps {
@@ -32,6 +32,7 @@ interface HomePageProps {
   draftOrder: PurchaseOrder | null;
   suppliers: Supplier[];
   stores: StoreConfig[];
+  centralStock?: CentralStockItem[];
   onNavigate: (tab: ActiveNavTab) => void;
   onNewOrder: () => void;
   onContinueDraft: () => void;
@@ -46,6 +47,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   draftOrder,
   suppliers,
   stores,
+  centralStock = [],
   onNavigate,
   onNewOrder,
   onContinueDraft,
@@ -53,6 +55,10 @@ export const HomePage: React.FC<HomePageProps> = ({
   onSelectOrder,
   onSwitchViewMode
 }) => {
+  // Regras de RBAC para atalhos e menus
+  const canAccessOrders = canCreateOrEditOrders(currentUser.role);
+  const canAccessStock = canAccessTab(currentUser.role, 'stock');
+
   // Saudação dinâmica por horário
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -121,11 +127,13 @@ export const HomePage: React.FC<HomePageProps> = ({
             <p className="text-sm text-slate-300 mt-1 max-w-xl">
               {currentUser.role === 'deposito' 
                 ? 'Gestão de estoque central CD, controle de saldos, transferências para as lojas e conferência de separação.'
+                : currentUser.role === 'separacao'
+                ? 'Conferência de mercadorias na doca, romaneio digital de bolso e apontamento de avarias das 20 lojas.'
                 : 'Central de compras, simulação fiscal, rateio para 20 lojas e controle de separação da matriz.'}
             </p>
           </div>
 
-          {/* Ação Primária em Destaque */}
+          {/* Ação Primária em Destaque Conforme Perfil */}
           <div className="flex items-center gap-3">
             {currentUser.role === 'deposito' ? (
               <button
@@ -136,7 +144,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                 <span>Estoque Central CD</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
-            ) : (
+            ) : canAccessOrders ? (
               <button
                 onClick={onNewOrder}
                 className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-sm shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2 cursor-pointer hover:scale-102"
@@ -145,13 +153,22 @@ export const HomePage: React.FC<HomePageProps> = ({
                 <span>Novo Pedido de Compras</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
+            ) : (
+              <button
+                onClick={() => onNavigate('separation')}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-extrabold text-sm shadow-lg shadow-teal-500/25 transition-all flex items-center gap-2 cursor-pointer hover:scale-102"
+              >
+                <PackageCheck className="w-4 h-4" />
+                <span>Conferência de Separação</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* 2. CARD DE RASCUNHO EM ANDAMENTO (Apenas Diretoria de Compras) */}
-      {hasValidDraft && currentUser.role === 'diretoria' && (
+      {/* 2. CARD DE RASCUNHO EM ANDAMENTO (Apenas Diretoria de Compras e Comprador) */}
+      {hasValidDraft && canAccessOrders && (
         <div className="p-5 rounded-3xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700/60 shadow-lg relative overflow-hidden animate-in slide-in-from-top-3 duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
@@ -195,97 +212,136 @@ export const HomePage: React.FC<HomePageProps> = ({
         </div>
       )}
 
-      {/* 3. Métricas do Funil Operacional de Pedidos (4 Status da Rede Mega 12) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {/* 3. Métricas do Funil Operacional de Pedidos */}
+      <div className={`grid ${canAccessOrders ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'} gap-4`}>
         
-        {/* 1. Pedido em Aberto (Não Salvo) */}
-        <div 
-          className={`p-4 rounded-2xl bg-white dark:bg-slate-900 border ${
-            hasValidDraft 
-              ? 'border-amber-400 dark:border-amber-500/60 ring-2 ring-amber-400/20 shadow-md' 
-              : 'border-slate-200 dark:border-slate-800 shadow-xs'
-          } flex flex-col justify-between transition group relative overflow-hidden`}
-        >
-          {hasValidDraft && (
-            <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase">
-                Não Salvo
-              </span>
-            </div>
-          )}
-
-          <div className="flex items-center gap-3.5">
-            <div className={`w-11 h-11 rounded-xl ${
+        {/* 1. Pedido em Aberto (Não Salvo) - Apenas Compras / Diretoria */}
+        {canAccessOrders && (
+          <div 
+            className={`p-4 rounded-2xl bg-white dark:bg-slate-900 border ${
               hasValidDraft 
-                ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400' 
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-            } flex items-center justify-center shrink-0 group-hover:scale-105 transition`}>
-              <FileEdit className="w-5 h-5" />
-            </div>
-            <div>
-              <div className={`text-xl font-black font-mono ${hasValidDraft ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>
-                {hasValidDraft ? 1 : 0}
+                ? 'border-amber-400 dark:border-amber-500/60 ring-2 ring-amber-400/20 shadow-md' 
+                : 'border-slate-200 dark:border-slate-800 shadow-xs'
+            } flex flex-col justify-between transition group relative overflow-hidden`}
+          >
+            {hasValidDraft && (
+              <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase">
+                  Não Salvo
+                </span>
               </div>
-              <div className="text-xs text-slate-600 dark:text-slate-300 font-semibold leading-tight">
-                Pedido em Aberto
-              </div>
-            </div>
-          </div>
+            )}
 
-          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[110px]">
-              {hasValidDraft 
-                ? (draftOrder?.header.fornecedor || `${draftItemCount} item(ns)`) 
-                : 'Nenhum rascunho'}
-            </span>
-            <button
-              onClick={currentUser.role === 'diretoria' ? (hasValidDraft ? onContinueDraft : () => onNavigate('orders')) : () => onNavigate('separation')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
-                hasValidDraft
-                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xs'
-                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
-              }`}
-              title={currentUser.role === 'diretoria' ? (hasValidDraft ? 'Acessar e continuar pedido em aberto' : 'Ir para página de pedidos') : 'Acessar painel de separação e distribuição'}
-            >
-              <span>{hasValidDraft && currentUser.role === 'diretoria' ? 'Acessar' : 'Abrir'}</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-
-        {/* 2. Em Cotação / Salvos (Pendente de Aprovação) */}
-        <div 
-          className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between transition group hover:border-slate-300 dark:hover:border-slate-700"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-              <Clock className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xl font-black text-blue-600 dark:text-blue-400 font-mono">
-                {cotacaoCount}
+            <div className="flex items-center gap-3.5">
+              <div className={`w-11 h-11 rounded-xl ${
+                hasValidDraft 
+                  ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+              } flex items-center justify-center shrink-0 group-hover:scale-105 transition`}>
+                <FileEdit className="w-5 h-5" />
               </div>
-              <div className="text-xs text-slate-600 dark:text-slate-300 font-semibold leading-tight">
-                Em Cotação / Salvos
+              <div>
+                <div className={`text-xl font-black font-mono ${hasValidDraft ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>
+                  {hasValidDraft ? 1 : 0}
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-300 font-semibold leading-tight">
+                  Pedido em Aberto
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">
-              Salvos no SQLite
-            </span>
-            <button
-              onClick={() => onNavigate(currentUser.role === 'diretoria' ? 'history' : 'separation')}
-              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-blue-50 hover:text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-950/60 dark:hover:text-blue-400 text-slate-700 dark:text-slate-300 transition flex items-center gap-1 cursor-pointer"
-              title={currentUser.role === 'diretoria' ? 'Acessar histórico de cotações' : 'Acessar painel de separação e distribuição'}
-            >
-              <span>Ver</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
+            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[110px]">
+                {hasValidDraft 
+                  ? (draftOrder?.header.fornecedor || `${draftItemCount} item(ns)`) 
+                  : 'Nenhum rascunho'}
+              </span>
+              <button
+                onClick={hasValidDraft ? onContinueDraft : () => onNavigate('orders')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                  hasValidDraft
+                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+                title={hasValidDraft ? 'Acessar e continuar pedido em aberto' : 'Ir para página de pedidos'}
+              >
+                <span>{hasValidDraft ? 'Acessar' : 'Abrir'}</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* 2. Em Cotação / Salvos - Apenas Compras / Diretoria */}
+        {canAccessOrders && (
+          <div 
+            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between transition group hover:border-slate-300 dark:hover:border-slate-700"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xl font-black text-blue-600 dark:text-blue-400 font-mono">
+                  {cotacaoCount}
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-300 font-semibold leading-tight">
+                  Em Cotação / Salvos
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Salvos no SQLite
+              </span>
+              <button
+                onClick={() => onNavigate('history')}
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-blue-50 hover:text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-950/60 dark:hover:text-blue-400 text-slate-700 dark:text-slate-300 transition flex items-center gap-1 cursor-pointer"
+                title="Acessar histórico de cotações"
+              >
+                <span>Ver</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Card Alternativo para Depósito: Estoque CD */}
+        {!canAccessOrders && canAccessStock && (
+          <div 
+            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between transition group hover:border-blue-300 dark:hover:border-blue-700"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                <Warehouse className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xl font-black text-blue-600 dark:text-blue-400 font-mono">
+                  {centralStock?.length || 0}
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-300 font-semibold leading-tight">
+                  Itens no Estoque CD
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Almoxarifado & Saldos
+              </span>
+              <button
+                onClick={() => onNavigate('stock')}
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-blue-50 hover:text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-950/60 dark:hover:text-blue-400 text-slate-700 dark:text-slate-300 transition flex items-center gap-1 cursor-pointer"
+                title="Acessar painel do Estoque Central CD"
+              >
+                <span>Acessar</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 3. Em Separação / Doca */}
         <div 
@@ -368,8 +424,8 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           
-          {/* Card 1: Novo Pedido (Apenas Diretoria de Compras) */}
-          {currentUser.role === 'diretoria' && (
+          {/* Card 1: Novo Pedido (Compras / Diretoria) */}
+          {canAccessOrders && (
             <div 
               onClick={onNewOrder}
               className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
@@ -390,7 +446,7 @@ export const HomePage: React.FC<HomePageProps> = ({
           )}
 
           {/* Card 2: Depósito / Estoque Central CD (Diretoria e Depósito) */}
-          {(currentUser.role === 'diretoria' || currentUser.role === 'deposito') && (
+          {canAccessStock && (
             <div 
               onClick={() => onNavigate('stock')}
               className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
@@ -411,26 +467,28 @@ export const HomePage: React.FC<HomePageProps> = ({
           )}
 
           {/* Card 3: Conferência & Romaneio (Todos) */}
-          <div 
-            onClick={() => onNavigate('separation')}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition">
-                <PackageCheck className="w-5 h-5" />
+          {canAccessTab(currentUser.role, 'separation') && (
+            <div 
+              onClick={() => onNavigate('separation')}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition">
+                  <PackageCheck className="w-5 h-5" />
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-1 transition" />
               </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-1 transition" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition">
+                Conferência & Romaneio (20 Lojas)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Painel de doca com conferência em tempo real, peças por loja e impressão em PDF.
+              </p>
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition">
-              Conferência & Romaneio (20 Lojas)
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Painel de doca com conferência em tempo real, peças por loja e impressão em PDF.
-            </p>
-          </div>
+          )}
 
           {/* Card 4: Dashboard & BI (Diretoria) */}
-          {currentUser.role === 'diretoria' && (
+          {canAccessTab(currentUser.role, 'dashboard') && (
             <div 
               onClick={() => onNavigate('dashboard')}
               className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
@@ -450,8 +508,8 @@ export const HomePage: React.FC<HomePageProps> = ({
             </div>
           )}
 
-          {/* Card 5: Catálogo de Produtos (Diretoria e Depósito) */}
-          {(currentUser.role === 'diretoria' || currentUser.role === 'deposito') && (
+          {/* Card 5: Catálogo de Produtos (Diretoria, Comprador e Depósito) */}
+          {canAccessTab(currentUser.role, 'products') && (
             <div 
               onClick={() => onNavigate('products')}
               className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
@@ -472,7 +530,7 @@ export const HomePage: React.FC<HomePageProps> = ({
           )}
 
           {/* Card 6: Gestão Financeira & Boletos (Diretoria) */}
-          {currentUser.role === 'diretoria' && (
+          {canAccessTab(currentUser.role, 'financial') && (
             <div 
               onClick={() => onNavigate('financial')}
               className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500 dark:hover:border-amber-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
@@ -493,26 +551,28 @@ export const HomePage: React.FC<HomePageProps> = ({
           )}
 
           {/* Card 7: Histórico de Separações (Todos) */}
-          <div 
-            onClick={() => onNavigate('separationHistory')}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition">
-                <Boxes className="w-5 h-5" />
+          {canAccessTab(currentUser.role, 'separationHistory') && (
+            <div 
+              onClick={() => onNavigate('separationHistory')}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-1 transition" />
               </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-1 transition" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition">
+                Histórico de Romaneios & Cargas
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Consulte romaneios finalizados e cargas expedidas para as 20 lojas.
+              </p>
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition">
-              Histórico de Romaneios & Cargas
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Consulte romaneios finalizados e cargas expedidas para as 20 lojas.
-            </p>
-          </div>
+          )}
 
-          {/* Card 8: Histórico Geral de Pedidos (Apenas Diretoria de Compras) */}
-          {currentUser.role === 'diretoria' && (
+          {/* Card 8: Histórico Geral de Pedidos (Apenas Compras / Diretoria) */}
+          {canAccessTab(currentUser.role, 'history') && (
             <div 
               onClick={() => onNavigate('history')}
               className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 shadow-xs hover:shadow-md transition-all cursor-pointer group"
@@ -544,104 +604,126 @@ export const HomePage: React.FC<HomePageProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Histórico Recente de Pedidos
+                {canAccessOrders ? 'Histórico Recente de Pedidos' : 'Pedidos em Separação & Expedição'}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Acompanhe o andamento das cotações, pedidos em separação e histórico finalizado
+                {canAccessOrders 
+                  ? 'Acompanhe o andamento das cotações, pedidos em separação e histórico finalizado'
+                  : 'Acompanhe os pedidos liberados para separação e conferência de doca'}
               </p>
             </div>
           </div>
 
           <button
-            onClick={() => onNavigate(currentUser.role === 'diretoria' ? 'history' : 'separationHistory')}
+            onClick={() => onNavigate(canAccessTab(currentUser.role, 'history') ? 'history' : 'separationHistory')}
             className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
           >
-            <span>Ver Todos</span>
+            <span>{canAccessTab(currentUser.role, 'history') ? 'Ver Todos' : 'Ver Romaneios'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {savedOrders.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
-              <ShoppingCart className="w-6 h-6" />
+        {(() => {
+          const displayOrders = canAccessOrders 
+            ? savedOrders 
+            : savedOrders.filter(o => 
+                o.header.status === 'Em Separação' || 
+                o.header.status === 'Aprovado' || 
+                o.header.status === 'Em Distribuição' || 
+                o.header.status === 'Finalizado'
+              );
+
+          if (displayOrders.length === 0) {
+            return (
+              <div className="p-8 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                  <ShoppingCart className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  {canAccessOrders ? 'Nenhum pedido gravado ainda' : 'Nenhum pedido em separação no momento'}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                  {canAccessOrders 
+                    ? 'Inicie um novo pedido de compras para salvar cotações e gerar separação para as lojas.'
+                    : 'Assim que a equipe de compras liberar um pedido, ele aparecerá aqui para separação e expedição.'}
+                </p>
+                {canAccessOrders && (
+                  <button
+                    onClick={onNewOrder}
+                    className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    Criar Primeiro Pedido
+                  </button>
+                )}
+              </div>
+            );
+          }
+
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="py-3 px-4">Nº Pedido</th>
+                    <th className="py-3 px-4">Fornecedor</th>
+                    <th className="py-3 px-4">Data</th>
+                    <th className="py-3 px-4 text-center">Itens</th>
+                    {canAccessOrders && <th className="py-3 px-4 text-right">Valor Total</th>}
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  {displayOrders.slice(0, 5).map((ord) => {
+                    const totalVal = ord.items?.reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0) || 0;
+                    return (
+                      <tr 
+                        key={ord.header.id}
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer"
+                        onClick={() => onSelectOrder(ord)}
+                      >
+                        <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {ord.header.numeroPedido}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-900 dark:text-white">
+                          {ord.header.fornecedor || 'Fornecedor não informado'}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
+                          {toBrDate(ord.header.dataPedido) || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                          {ord.items?.length || 0}
+                        </td>
+                        {canAccessOrders && (
+                          <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
+                            R$ {totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                        )}
+                        <td className="py-3 px-4 text-center">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${getStatusBadge(ord.header.status)}`}>
+                            {ord.header.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => onSelectOrder(ord)}
+                            className="px-3 py-1 rounded-lg text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
+                          >
+                            {canAccessOrders ? 'Abrir' : 'Conferir'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
-              Nenhum pedido gravado ainda
-            </h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-              Inicie um novo pedido de compras para salvar cotações e gerar separação para as lojas.
-            </p>
-            {currentUser.role === 'diretoria' && (
-              <button
-                onClick={onNewOrder}
-                className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <ShoppingCart className="w-3.5 h-3.5" />
-                Criar Primeiro Pedido
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[700px]">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  <th className="py-3 px-4">Nº Pedido</th>
-                  <th className="py-3 px-4">Fornecedor</th>
-                  <th className="py-3 px-4">Data</th>
-                  <th className="py-3 px-4 text-center">Itens</th>
-                  <th className="py-3 px-4 text-right">Valor Total</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-center">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                {savedOrders.slice(0, 5).map((ord) => {
-                  const totalVal = ord.items?.reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0) || 0;
-                  return (
-                    <tr 
-                      key={ord.header.id}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer"
-                      onClick={() => onSelectOrder(ord)}
-                    >
-                      <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        {ord.header.numeroPedido}
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-900 dark:text-white">
-                        {ord.header.fornecedor || 'Fornecedor não informado'}
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">
-                        {toBrDate(ord.header.dataPedido) || '-'}
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
-                        {ord.items?.length || 0}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
-                        R$ {totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${getStatusBadge(ord.header.status)}`}>
-                          {ord.header.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => onSelectOrder(ord)}
-                          className="px-3 py-1 rounded-lg text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
-                        >
-                          Abrir
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
     </div>
   );
 };
+

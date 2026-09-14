@@ -149,6 +149,7 @@ import { DEFAULT_FISCAL_CONFIG } from './shared/constants';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem, generateNextProductCode } from './utils/orderItemUtils';
 import { CheckCircle2, AlertCircle, Plus } from 'lucide-react';
+import { canAccessTab, canCreateOrEditOrders, getDefaultNavForRole } from './shared/permissions';
 
 export function App() {
   // 1. Estado de Autenticação (RBAC) - Inicia nulo para exigir login obrigatório
@@ -169,8 +170,26 @@ export function App() {
     return null;
   });
 
-  // Navigation State: Agora inicia por padrão no Hub / Home
-  const [activeNav, setActiveNav] = useState<ActiveNavTab>('home');
+  // Navigation State: Agora inicia por padrão no Hub / Home ou rota autorizada para o perfil
+  const [activeNav, setActiveNav] = useState<ActiveNavTab>(() => {
+    const saved = localStorage.getItem('mega12_user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.role) {
+          return getDefaultNavForRole(parsed.role);
+        }
+      } catch {}
+    }
+    return 'home';
+  });
+
+  // Proteção e contenção de rota ativa contra acesso não autorizado
+  useEffect(() => {
+    if (currentUser && !canAccessTab(currentUser.role, activeNav)) {
+      setActiveNav(getDefaultNavForRole(currentUser.role));
+    }
+  }, [currentUser, activeNav]);
 
   // Modo de visualização: 'desktop' | 'mobile_purchases' | 'mobile_separation'
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile_purchases' | 'mobile_separation'>('desktop');
@@ -391,11 +410,7 @@ export function App() {
     localStorage.setItem('mega12_user', JSON.stringify(cleanUser));
     // Carrega na hora os dados do banco usando o token do usuário logado
     await loadFromSqlite();
-    if (cleanUser.role === 'separacao') {
-      setActiveNav('separation');
-    } else {
-      setActiveNav('home');
-    }
+    setActiveNav(getDefaultNavForRole(cleanUser.role));
   };
 
   // Sincroniza o frete proporcional ao total de produtos quando a alíquota percentual estiver definida
@@ -952,8 +967,8 @@ export function App() {
       items: ensureTrailingBlankItem(sanitizedItems, fiscalConfig, storeConfigs)
     });
     let targetTab = destinationTab;
-    if (currentUser?.role !== 'diretoria' && (targetTab === 'orders' || targetTab === 'history' || targetTab === 'financial' || targetTab === 'dashboard' || targetTab === 'suppliers' || targetTab === 'users')) {
-      targetTab = 'separation';
+    if (!canAccessTab(currentUser?.role, targetTab)) {
+      targetTab = getDefaultNavForRole(currentUser?.role);
     }
     if (activeNav !== targetTab) {
       setActiveNav(targetTab);
@@ -1944,8 +1959,10 @@ export function App() {
         order={order}
         activeNav={activeNav}
         onSelectNav={(tab) => {
-          setActiveNav(tab);
-          setViewMode('desktop');
+          if (canAccessTab(currentUser?.role, tab)) {
+            setActiveNav(tab);
+            setViewMode('desktop');
+          }
         }}
         isDark={isDark}
         onToggleTheme={toggleTheme}
@@ -1967,7 +1984,7 @@ export function App() {
           hasActiveDraft={hasActiveDraft}
           isSavedOrder={isCurrentOrderSaved}
           savedOrders={savedOrders}
-          onSelectOrder={(selected) => handleOpenSelectedOrder(selected, currentUser?.role === 'diretoria' ? 'orders' : 'separation')}
+          onSelectOrder={(selected) => handleOpenSelectedOrder(selected, canCreateOrEditOrders(currentUser?.role) ? 'orders' : 'separation')}
           onNewOrder={handleNewOrder}
           onSaveOrder={handleSaveDraftOrder}
           onCloseOrder={handleCloseOrder}
@@ -1976,13 +1993,17 @@ export function App() {
           onExportExcel={handleExportExcel}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
           onImportExcel={() => setIsImportModalOpen(true)}
-          onSelectNav={setActiveNav}
+          onSelectNav={(tab) => {
+            if (canAccessTab(currentUser?.role, tab)) {
+              setActiveNav(tab);
+            }
+          }}
         />
 
         <main className="flex-1 w-full max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-all duration-300">
           
-          {/* MODO MOBILE 1: COMPRAS EM VIAGENS / FEIRAS (Apenas Diretoria) */}
-          {viewMode === 'mobile_purchases' && currentUser?.role === 'diretoria' && (
+          {/* MODO MOBILE 1: COMPRAS EM VIAGENS / FEIRAS (Apenas Compradores) */}
+          {viewMode === 'mobile_purchases' && canCreateOrEditOrders(currentUser?.role) && (
             <MobilePurchasesView
               order={order}
               suppliers={suppliers}
@@ -2012,27 +2033,30 @@ export function App() {
           {viewMode === 'desktop' && (
             <>
               {/* PÁGINA 0: HOME / HUB PRINCIPAL */}
-              {activeNav === 'home' && (
+              {activeNav === 'home' && canAccessTab(currentUser?.role, 'home') && (
                 <HomePage
                   currentUser={currentUser}
                   savedOrders={savedOrders}
                   draftOrder={hasActiveDraft ? order : null}
                   suppliers={suppliers}
                   stores={storeConfigs}
+                  centralStock={centralStock}
                   onNavigate={(tab) => {
-                    setActiveNav(tab);
-                    setViewMode('desktop');
+                    if (canAccessTab(currentUser?.role, tab)) {
+                      setActiveNav(tab);
+                      setViewMode('desktop');
+                    }
                   }}
                   onNewOrder={handleNewOrder}
                   onContinueDraft={handleContinueDraft}
                   onDiscardDraft={handleDiscardDraft}
-                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, currentUser?.role === 'diretoria' ? 'orders' : 'separation')}
+                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, canCreateOrEditOrders(currentUser?.role) ? 'orders' : 'separation')}
                   onSwitchViewMode={(mode) => setViewMode(mode)}
                 />
               )}
 
-              {/* PÁGINA 1: COTAÇÃO E PEDIDOS (Apenas Diretoria de Compras) */}
-              {activeNav === 'orders' && currentUser?.role === 'diretoria' && (
+              {/* PÁGINA 1: COTAÇÃO E PEDIDOS (Diretoria & Compradores) */}
+              {activeNav === 'orders' && canAccessTab(currentUser?.role, 'orders') && (
                 <div className="space-y-6 animate-in fade-in duration-200">
                   {/* Esteira Operacional Visual do Pedido (Compras ➔ Depósito ➔ Separação ➔ Finalizado) */}
                   <OrderPipelineStepper
@@ -2115,7 +2139,7 @@ export function App() {
               )}
 
               {/* PÁGINA 1.1: GESTÃO DO ESTOQUE DO DEPÓSITO CENTRAL (CD MATRIZ) */}
-              {activeNav === 'stock' && (
+              {activeNav === 'stock' && canAccessTab(currentUser?.role, 'stock') && (
                 <CentralStockPage
                   stockItems={centralStock}
                   products={products}
@@ -2131,7 +2155,7 @@ export function App() {
               )}
 
               {/* PÁGINA 2: CONFERÊNCIA DE SEPARAÇÃO E ROMANEIO (20 LOJAS) */}
-              {activeNav === 'separation' && (
+              {activeNav === 'separation' && canAccessTab(currentUser?.role, 'separation') && (
                 <SeparationPage
                   order={order}
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
@@ -2152,7 +2176,7 @@ export function App() {
               )}
 
               {/* PÁGINA 2.1: HISTÓRICO DE SEPARAÇÕES & AUDITORIA DE CONFERENTES */}
-              {activeNav === 'separationHistory' && (
+              {activeNav === 'separationHistory' && canAccessTab(currentUser?.role, 'separationHistory') && (
                 <SeparationHistoryPage
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
                   stores={storeConfigs}
@@ -2162,7 +2186,7 @@ export function App() {
               )}
 
               {/* PÁGINA 3: CATÁLOGO & CADASTRO DE PRODUTOS COM FOTOS */}
-              {activeNav === 'products' && (
+              {activeNav === 'products' && canAccessTab(currentUser?.role, 'products') && (
                 <ProductsCatalogPage
                   products={products}
                   suppliers={suppliers}
@@ -2172,8 +2196,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 4: DASHBOARD EXECUTIVO & BI (Apenas Diretoria) */}
-              {activeNav === 'dashboard' && currentUser?.role === 'diretoria' && (
+              {/* PÁGINA 4: DASHBOARD EXECUTIVO & BI (Diretoria) */}
+              {activeNav === 'dashboard' && canAccessTab(currentUser?.role, 'dashboard') && (
                 <DashboardView
                   orders={savedOrders}
                   suppliers={suppliers}
@@ -2182,8 +2206,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 4.1: GESTÃO FINANCEIRA DE BOLETOS & CONTAS A PAGAR (Apenas Diretoria) */}
-              {activeNav === 'financial' && currentUser?.role === 'diretoria' && (
+              {/* PÁGINA 4.1: GESTÃO FINANCEIRA DE BOLETOS & CONTAS A PAGAR (Diretoria) */}
+              {activeNav === 'financial' && canAccessTab(currentUser?.role, 'financial') && (
                 <FinancialBoletosPage
                   orders={effectiveOrders}
                   suppliers={suppliers}
@@ -2195,8 +2219,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 5: GESTÃO COMPLETA DE FORNECEDORES (Apenas Diretoria) */}
-              {activeNav === 'suppliers' && currentUser?.role === 'diretoria' && (
+              {/* PÁGINA 5: GESTÃO COMPLETA DE FORNECEDORES (Diretoria & Compradores) */}
+              {activeNav === 'suppliers' && canAccessTab(currentUser?.role, 'suppliers') && (
                 <SuppliersPage
                   suppliers={suppliers}
                   products={products}
@@ -2218,8 +2242,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 5: HISTÓRICO & ARQUIVO DE PEDIDOS (Apenas Diretoria) */}
-              {activeNav === 'history' && currentUser?.role === 'diretoria' && (
+              {/* PÁGINA 5.1: HISTÓRICO & ARQUIVO DE PEDIDOS (Diretoria & Compradores) */}
+              {activeNav === 'history' && canAccessTab(currentUser?.role, 'history') && (
                 <OrderHistoryPage
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
                   onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
@@ -2230,8 +2254,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 6: CONFIGURAÇÕES FISCAIS & PARÂMETROS DA REDE */}
-              {activeNav === 'fiscal' && (
+              {/* PÁGINA 6: CONFIGURAÇÕES FISCAIS & PARÂMETROS DA REDE (Diretoria) */}
+              {activeNav === 'fiscal' && canAccessTab(currentUser?.role, 'fiscal') && (
                 <FiscalSettingsPage
                   fiscalConfig={fiscalConfig}
                   storeConfigs={storeConfigs}
@@ -2239,8 +2263,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 7: GESTÃO DE USUÁRIOS & PERMISSÕES (DIRETORIA) */}
-              {activeNav === 'users' && currentUser?.role === 'diretoria' && (
+              {/* PÁGINA 7: GESTÃO DE USUÁRIOS & PERMISSÕES (Diretoria) */}
+              {activeNav === 'users' && canAccessTab(currentUser?.role, 'users') && (
                 <UsersPage currentUser={currentUser} />
               )}
             </>

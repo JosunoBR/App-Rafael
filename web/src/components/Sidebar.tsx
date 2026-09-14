@@ -21,8 +21,9 @@ import {
   Warehouse
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
+import { canAccessTab, ActiveNavTab } from '../shared/permissions';
 
-export type ActiveNavTab = 'home' | 'orders' | 'stock' | 'financial' | 'separation' | 'separationHistory' | 'products' | 'dashboard' | 'suppliers' | 'history' | 'fiscal' | 'users';
+export type { ActiveNavTab };
 
 interface SidebarProps {
   order: PurchaseOrder;
@@ -67,23 +68,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const userRole: UserRole = currentUser?.role || 'diretoria';
 
-  // Configuração de visibilidade estrita por perfil (RBAC: Diretoria, Depósito, Separação)
-  const canAccessHome = userRole === 'diretoria' || userRole === 'deposito';
-  const canAccessOrders = userRole === 'diretoria';
-  const canAccessStock = userRole === 'diretoria' || userRole === 'deposito';
-  const canAccessSeparation = true; // Diretoria, Depósito e Separação
-  const canAccessFinancial = userRole === 'diretoria';
-  const canAccessDashboard = userRole === 'diretoria';
-  const canAccessHistory = userRole === 'diretoria';
-  const canAccessSeparationHistory = true; // Todos podem ver romaneios
-  const canAccessProducts = userRole === 'diretoria' || userRole === 'deposito';
-  const canAccessSuppliers = userRole === 'diretoria';
-  const canAccessFiscal = userRole === 'diretoria' || userRole === 'deposito';
-  const canAccessUsers = userRole === 'diretoria';
+  // Configuração de visibilidade estrita por perfil (RBAC: Diretoria, Comprador, Depósito, Separação)
+  const canAccessHome = canAccessTab(userRole, 'home');
+  const canAccessOrders = canAccessTab(userRole, 'orders');
+  const canAccessStock = canAccessTab(userRole, 'stock');
+  const canAccessSeparation = canAccessTab(userRole, 'separation');
+  const canAccessFinancial = canAccessTab(userRole, 'financial');
+  const canAccessDashboard = canAccessTab(userRole, 'dashboard');
+  const canAccessHistory = canAccessTab(userRole, 'history');
+  const canAccessSeparationHistory = canAccessTab(userRole, 'separationHistory');
+  const canAccessProducts = canAccessTab(userRole, 'products');
+  const canAccessSuppliers = canAccessTab(userRole, 'suppliers');
+  const canAccessFiscal = canAccessTab(userRole, 'fiscal');
+  const canAccessUsers = canAccessTab(userRole, 'users');
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
       case 'diretoria': return 'Diretoria';
+      case 'comprador': return 'Comprador';
       case 'deposito': return 'Depósito & CD';
       case 'separacao': return 'Separação & Doca';
       default: return 'Usuário';
@@ -93,6 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const getRoleBadgeStyle = (role: UserRole) => {
     switch (role) {
       case 'diretoria': return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
+      case 'comprador': return 'bg-purple-500/15 text-purple-500 border-purple-500/30';
       case 'deposito': return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
       case 'separacao': return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30';
       default: return 'bg-slate-500/15 text-slate-500 border-slate-500/30';
@@ -258,90 +261,94 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* GRUPO 2: GESTÃO & INTELIGÊNCIA */}
-          <div className="space-y-1">
-            {!isCollapsed ? (
-              <div className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Gestão & Inteligência
-              </div>
-            ) : (
-              <div className="h-px bg-slate-200/80 dark:bg-slate-800 my-1 mx-2" />
-            )}
+          {(canAccessFinancial || canAccessDashboard || canAccessHistory || canAccessSeparationHistory) && (
+            <div className="space-y-1">
+              {!isCollapsed ? (
+                <div className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Gestão & Inteligência
+                </div>
+              ) : (
+                <div className="h-px bg-slate-200/80 dark:bg-slate-800 my-1 mx-2" />
+              )}
 
-            {/* Financeiro / Boletos */}
-            {canAccessFinancial && renderItem(
-              'financial',
-              'Financeiro / Boletos',
-              <CreditCard className={`w-4 h-4 ${activeNav === 'financial' ? 'text-white' : 'text-amber-500'}`} />,
-              activeNav === 'financial'
-            )}
+              {/* Financeiro / Boletos */}
+              {canAccessFinancial && renderItem(
+                'financial',
+                'Financeiro / Boletos',
+                <CreditCard className={`w-4 h-4 ${activeNav === 'financial' ? 'text-white' : 'text-amber-500'}`} />,
+                activeNav === 'financial'
+              )}
 
-            {/* Dashboard & BI */}
-            {canAccessDashboard && renderItem(
-              'dashboard',
-              'Dashboard & BI',
-              <BarChart3 className={`w-4 h-4 ${activeNav === 'dashboard' ? 'text-white' : 'text-teal-500'}`} />,
-              activeNav === 'dashboard'
-            )}
+              {/* Dashboard & BI */}
+              {canAccessDashboard && renderItem(
+                'dashboard',
+                'Dashboard & BI',
+                <BarChart3 className={`w-4 h-4 ${activeNav === 'dashboard' ? 'text-white' : 'text-teal-500'}`} />,
+                activeNav === 'dashboard'
+              )}
 
-            {/* Histórico de Pedidos */}
-            {canAccessHistory && renderItem(
-              'history',
-              'Histórico de Pedidos',
-              <FolderOpen className={`w-4 h-4 ${activeNav === 'history' ? 'text-white' : 'text-amber-500'}`} />,
-              activeNav === 'history'
-            )}
+              {/* Histórico de Pedidos */}
+              {canAccessHistory && renderItem(
+                'history',
+                'Histórico de Pedidos',
+                <FolderOpen className={`w-4 h-4 ${activeNav === 'history' ? 'text-white' : 'text-amber-500'}`} />,
+                activeNav === 'history'
+              )}
 
-            {/* Histórico de Separações */}
-            {canAccessSeparationHistory && renderItem(
-              'separationHistory',
-              'Histórico Separações',
-              <Boxes className={`w-4 h-4 ${activeNav === 'separationHistory' ? 'text-white' : 'text-teal-400'}`} />,
-              activeNav === 'separationHistory'
-            )}
-          </div>
+              {/* Histórico de Separações */}
+              {canAccessSeparationHistory && renderItem(
+                'separationHistory',
+                'Histórico Separações',
+                <Boxes className={`w-4 h-4 ${activeNav === 'separationHistory' ? 'text-white' : 'text-teal-400'}`} />,
+                activeNav === 'separationHistory'
+              )}
+            </div>
+          )}
 
           {/* GRUPO 3: CADASTROS & SISTEMA */}
-          <div className="space-y-1">
-            {!isCollapsed ? (
-              <div className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Cadastros & Sistema
-              </div>
-            ) : (
-              <div className="h-px bg-slate-200/80 dark:bg-slate-800 my-1 mx-2" />
-            )}
+          {(canAccessProducts || canAccessSuppliers || canAccessFiscal || canAccessUsers) && (
+            <div className="space-y-1">
+              {!isCollapsed ? (
+                <div className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Cadastros & Sistema
+                </div>
+              ) : (
+                <div className="h-px bg-slate-200/80 dark:bg-slate-800 my-1 mx-2" />
+              )}
 
-            {/* Catálogo de Produtos */}
-            {canAccessProducts && renderItem(
-              'products',
-              'Catálogo de Produtos',
-              <ShoppingBag className={`w-4 h-4 ${activeNav === 'products' ? 'text-white' : 'text-purple-400'}`} />,
-              activeNav === 'products'
-            )}
+              {/* Catálogo de Produtos */}
+              {canAccessProducts && renderItem(
+                'products',
+                'Catálogo de Produtos',
+                <ShoppingBag className={`w-4 h-4 ${activeNav === 'products' ? 'text-white' : 'text-purple-400'}`} />,
+                activeNav === 'products'
+              )}
 
-            {/* Fornecedores */}
-            {canAccessSuppliers && renderItem(
-              'suppliers',
-              'Fornecedores',
-              <Building2 className={`w-4 h-4 ${activeNav === 'suppliers' ? 'text-white' : 'text-emerald-500'}`} />,
-              activeNav === 'suppliers'
-            )}
+              {/* Fornecedores */}
+              {canAccessSuppliers && renderItem(
+                'suppliers',
+                'Fornecedores',
+                <Building2 className={`w-4 h-4 ${activeNav === 'suppliers' ? 'text-white' : 'text-emerald-500'}`} />,
+                activeNav === 'suppliers'
+              )}
 
-            {/* Configurações Gerais */}
-            {canAccessFiscal && renderItem(
-              'fiscal',
-              'Configurações gerais',
-              <Settings className={`w-4 h-4 ${activeNav === 'fiscal' ? 'text-white' : 'text-indigo-400'}`} />,
-              activeNav === 'fiscal'
-            )}
+              {/* Configurações Gerais */}
+              {canAccessFiscal && renderItem(
+                'fiscal',
+                'Configurações gerais',
+                <Settings className={`w-4 h-4 ${activeNav === 'fiscal' ? 'text-white' : 'text-indigo-400'}`} />,
+                activeNav === 'fiscal'
+              )}
 
-            {/* Gestão de Usuários (RBAC) */}
-            {canAccessUsers && renderItem(
-              'users',
-              'Gestão de Usuários',
-              <UsersIcon className={`w-4 h-4 ${activeNav === 'users' ? 'text-white' : 'text-pink-400'}`} />,
-              activeNav === 'users'
-            )}
-          </div>
+              {/* Gestão de Usuários (RBAC) */}
+              {canAccessUsers && renderItem(
+                'users',
+                'Gestão de Usuários',
+                <UsersIcon className={`w-4 h-4 ${activeNav === 'users' ? 'text-white' : 'text-pink-400'}`} />,
+                activeNav === 'users'
+              )}
+            </div>
+          )}
 
         </div>
       </div>

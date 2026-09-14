@@ -29,7 +29,7 @@ fun NavGraph(
             LoginScreen(
                 viewModel = viewModel,
                 onLoginSuccess = { role ->
-                    if (role == "conferente") {
+                    if (role == "conferente" || role == "separacao") {
                         navController.navigate(Screen.SeparationList.route) {
                             popUpTo(Screen.Login.route) { inclusive = true }
                         }

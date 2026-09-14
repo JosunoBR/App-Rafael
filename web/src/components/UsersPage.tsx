@@ -138,6 +138,13 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
             👑 Diretoria (Acesso Total)
           </span>
         );
+      case 'comprador':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-300 dark:border-teal-800">
+            <ShoppingBag className="w-3 h-3 text-teal-600" />
+            🛒 Compras & Cotações
+          </span>
+        );
       case 'deposito':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800">
@@ -225,6 +232,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
           >
             <option value="all">Todos os Perfis ({users.length})</option>
             <option value="diretoria">👑 Diretoria</option>
+            <option value="comprador">🛒 Compras & Cotações</option>
             <option value="deposito">🏢 Depósito & CD</option>
             <option value="separacao">📦 Separação & Doca</option>
           </select>
@@ -364,6 +372,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                     className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-bold"
                   >
                     <option value="diretoria">👑 Diretoria (Acesso Total)</option>
+                    <option value="comprador">🛒 Compras (Cotação & Fornecedores)</option>
                     <option value="deposito">🏢 Depósito (Estoque & Rateio)</option>
                     <option value="separacao">📦 Separação (Doca & Lojas)</option>
                   </select>

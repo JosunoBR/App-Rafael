@@ -21,7 +21,8 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val currentUser = viewModel.currentUser.value
                 val startDestination = if (currentUser != null) {
-                    if (currentUser.role == "conferente") Screen.SeparationList.route else Screen.BuyerHome.route
+                    val isSeparacao = currentUser.role == "conferente" || currentUser.role == "separacao"
+                    if (isSeparacao) Screen.SeparationList.route else Screen.BuyerHome.route
                 } else {
                     Screen.Login.route
                 }

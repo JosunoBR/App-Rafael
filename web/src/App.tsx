@@ -1936,21 +1936,6 @@ export function App() {
         order={order}
         activeNav={activeNav}
         onSelectNav={(tab) => {
-          if (tab === 'orders') {
-            // Se o pedido atual for um pedido do histórico/finalizado, reseta para novo pedido em branco
-            if (isCurrentOrderSaved || order.header.status === 'Finalizado') {
-              const draft = loadCurrentOrder();
-              if (draft) {
-                setOrder(draft);
-              } else {
-                fetchNextOrderNumberFromDb().then(nextNum => {
-                  setOrder(createNewOrder(fiscalConfig, storeConfigs, nextNum));
-                }).catch(() => {
-                  setOrder(createNewOrder(fiscalConfig, storeConfigs, getNextOrderNumber()));
-                });
-              }
-            }
-          }
           setActiveNav(tab);
           setViewMode('desktop');
         }}

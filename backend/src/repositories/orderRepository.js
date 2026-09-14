@@ -30,6 +30,24 @@ class OrderRepository {
     const installmentsJson = JSON.stringify(installments);
     const separationJson = order.separationDistribution ? JSON.stringify(order.separationDistribution) : null;
 
+    const paymentConfig = {
+      parcelasCount: order.header.parcelasCount,
+      prazoDias: order.header.prazoDias,
+      diaVencimentoPersonalizado: order.header.diaVencimentoPersonalizado,
+      dataPrimeiroVencimento: order.header.dataPrimeiroVencimento,
+      datasVencimentoPersonalizadas: order.header.datasVencimentoPersonalizadas,
+      valorEntradaAVista: order.header.valorEntradaAVista,
+      percentualEntrada: order.header.percentualEntrada,
+      isEntradaProporcional: order.header.isEntradaProporcional,
+      depositoFormaPagamento: order.header.depositoFormaPagamento,
+      depositoParcelasCount: order.header.depositoParcelasCount,
+      depositoPrazoDias: order.header.depositoPrazoDias,
+      saldoFormaPagamento: order.header.saldoFormaPagamento,
+      saldoParcelasCount: order.header.saldoParcelasCount,
+      saldoPrazoDias: order.header.saldoPrazoDias
+    };
+    const paymentConfigJson = JSON.stringify(paymentConfig);
+
     const fiscal = order.fiscalConfig || {};
     const fiscalConfigJson = JSON.stringify(fiscal);
     const aliquotaIpi = Number(fiscal.ipiAliquota !== undefined ? fiscal.ipiAliquota : (order.header.aliquotaIpi || 0));
@@ -62,7 +80,7 @@ class OrderRepository {
           separationStatus = ?, totalLiquido = ?, totalPecas = ?, installmentsJson = ?,
           fiscalConfigJson = ?, aliquotaIpi = ?, aliquotaFrete = ?, aliquotaIcmsEntrada = ?,
           aliquotaCustoFixo = ?, aliquotaIcmsSaida = ?, aliquotaPisCofinsIr = ?,
-          itemsJson = ?, separationDistributionJson = ?, updatedAt = ?
+          itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, updatedAt = ?
         WHERE id = ?
       `;
       await execute(sql, [
@@ -100,6 +118,7 @@ class OrderRepository {
         aliquotaPisCofinsIr,
         itemsJson,
         separationJson,
+        paymentConfigJson,
         now,
         targetId
       ]);
@@ -113,9 +132,9 @@ class OrderRepository {
           percentualNota, observacoes, status, separationStatus, totalLiquido,
           totalPecas, installmentsJson, fiscalConfigJson, aliquotaIpi,
           aliquotaFrete, aliquotaIcmsEntrada, aliquotaCustoFixo, aliquotaIcmsSaida,
-          aliquotaPisCofinsIr, itemsJson, separationDistributionJson,
+          aliquotaPisCofinsIr, itemsJson, separationDistributionJson, paymentConfigJson,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await execute(sql, [
         order.header.id,
@@ -153,6 +172,7 @@ class OrderRepository {
         aliquotaPisCofinsIr,
         itemsJson,
         separationJson,
+        paymentConfigJson,
         order.header.createdAt || now,
         now
       ]);
@@ -432,6 +452,27 @@ class OrderRepository {
       };
     }
 
+    let paymentConfig = {};
+    if (r.paymentConfigJson) {
+      try {
+        paymentConfig = JSON.parse(r.paymentConfigJson) || {};
+      } catch (e) {}
+    }
+
+    // Fallback para pedidos antigos: se não houver datasVencimentoPersonalizadas salvas, reconstrói a partir de installments
+    if (!paymentConfig.datasVencimentoPersonalizadas && Array.isArray(installments) && installments.length > 0) {
+      const customDates = {};
+      installments.forEach(inst => {
+        if (inst.numeroParcela && inst.dataVencimento) {
+          const key = inst.isFrete ? 'frete' : String(inst.numeroParcela);
+          customDates[key] = inst.dataVencimento;
+        }
+      });
+      if (Object.keys(customDates).length > 0) {
+        paymentConfig.datasVencimentoPersonalizadas = customDates;
+      }
+    }
+
     return {
       header: {
         id: r.id,
@@ -457,6 +498,7 @@ class OrderRepository {
         observacoes: r.observacoes,
         status: r.status,
         separationStatus: r.separationStatus,
+        ...paymentConfig,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt
       },

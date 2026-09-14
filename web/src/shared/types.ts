@@ -224,6 +224,8 @@ export interface OrderHeader {
   
   // Negociação Mista: Depósito/PIX Parcelado + Saldo em Boleto Parcelado
   valorEntradaAVista?: number;       // Valor total em Depósito/PIX (R$)
+  percentualEntrada?: number;        // Percentual vinculado da 1ª Condição / Depósito (% do pedido)
+  isEntradaProporcional?: boolean;   // Se true (padrão), recalcula o valor em R$ proporcionalmente ao total do pedido
   depositoFormaPagamento?: string;   // Depósito, Boleto, Cheque
   depositoParcelasCount?: number;    // Quantidade de parcelas do depósito (ex: 1x, 2x, 3x, 4x...)
   depositoPrazoDias?: number | string; // Intervalo do depósito (ex: 'vista', 7, 10, 15, 30...)

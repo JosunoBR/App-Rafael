@@ -119,6 +119,7 @@ async function getDatabase() {
       aliquotaPisCofinsIr REAL DEFAULT 6,
       itemsJson TEXT NOT NULL DEFAULT '[]',
       separationDistributionJson TEXT,
+      paymentConfigJson TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -352,6 +353,7 @@ async function getDatabase() {
         condicaoPagamento: "TEXT",
         formaPagamento: "TEXT",
         previsaoPagamento: "TEXT",
+        paymentConfigJson: "TEXT",
         tipoFrete: "TEXT DEFAULT 'CIF'",
         valorFrete: "REAL DEFAULT 0",
         descontoComercialTotal: "REAL DEFAULT 0",

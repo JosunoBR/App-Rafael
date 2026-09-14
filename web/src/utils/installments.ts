@@ -271,8 +271,16 @@ export function parsePaymentConditionString(cond?: string): ParsedPaymentConditi
     lower.startsWith(p.conditionString.toLowerCase())
   );
   if (matchedPreset) {
-    if (matchedPreset.id === 'vista' || matchedPreset.parcelas === 1) {
+    if (matchedPreset.id === 'vista') {
       return { parcelas: 1, prazo: 'vista', daysOffsets: [0] };
+    }
+    if (matchedPreset.parcelas === 1) {
+      const offset = (matchedPreset.daysOffsets && matchedPreset.daysOffsets[0]) || 30;
+      return {
+        parcelas: 1,
+        prazo: String(offset),
+        daysOffsets: [offset]
+      };
     }
     const step = matchedPreset.daysOffsets[1] ? matchedPreset.daysOffsets[1] - matchedPreset.daysOffsets[0] : 30;
     return {
@@ -484,7 +492,15 @@ export function generateOrderInstallments(
   if (prazo === 'entrada_com_parcelamento' || prazo === 'deposito_e_boleto' || order.header.formaPagamento === 'Boleto / Depósito') {
     const totalParcelasDeposito = Math.max(1, order.header.depositoParcelasCount || (prazo === 'deposito_e_boleto' ? 2 : 1));
     const depositoPrazo = String(order.header.depositoPrazoDias || (totalParcelasDeposito === 1 ? 'vista' : '30'));
-    const valorTotalDeposito = Math.min(valorBaseMercadoria, Math.max(0, order.header.valorEntradaAVista || 0));
+    const isProporcional = order.header.isEntradaProporcional !== false;
+    const targetPctDep = order.header.percentualEntrada !== undefined 
+      ? order.header.percentualEntrada 
+      : ((order.header.percentualNota !== undefined && order.header.percentualNota > 0 && order.header.percentualNota < 100)
+          ? Math.max(0, 100 - order.header.percentualNota)
+          : (prazo === 'deposito_e_boleto' ? 50 : 30));
+    const valorTotalDeposito = isProporcional && valorBaseMercadoria > 0
+      ? Number((valorBaseMercadoria * (targetPctDep / 100)).toFixed(2))
+      : Math.min(valorBaseMercadoria, Math.max(0, order.header.valorEntradaAVista || 0));
     const saldoRestante = Math.max(0, valorBaseMercadoria - valorTotalDeposito);
     const totalParcelasSaldo = Math.max(1, order.header.saldoParcelasCount || 2);
     const saldoPrazo = String(order.header.saldoPrazoDias || '30');

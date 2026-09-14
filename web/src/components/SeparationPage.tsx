@@ -966,7 +966,13 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                           title={item.fotoUrl ? "Clique para ver a foto ampliada" : "Sem foto"}
                         >
                           {item.fotoUrl ? (
-                            <img src={item.fotoUrl} alt="" className="w-full h-full object-cover hover:scale-110 transition" />
+                            <img 
+                              src={item.fotoUrl} 
+                              alt="" 
+                              loading="lazy" 
+                              decoding="async" 
+                              className="w-full h-full object-cover hover:scale-110 transition" 
+                            />
                           ) : (
                             <ImageIcon className="w-4 h-4 text-slate-400" />
                           )}

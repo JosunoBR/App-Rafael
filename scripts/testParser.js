@@ -14,6 +14,24 @@ function parseNumber(val) {
   return isNaN(num) ? 0 : num;
 }
 
+function parsePercentage(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'string' && val.includes('%')) {
+    const clean = val.replace(/%/g, '').trim();
+    const num = parseNumber(clean);
+    return isNaN(num) ? 0 : num;
+  }
+  const num = typeof val === 'number' ? (isNaN(val) ? 0 : val) : parseNumber(val);
+  if (num <= 0) return 0;
+  if (num > 0 && num < 1) {
+    return Number((num * 100).toFixed(2));
+  }
+  if (num === 1 && typeof val === 'number') {
+    return 0; // Fator 1.0 de atacado = 0% de desconto
+  }
+  return num;
+}
+
 function parseExcelDate(val, defaultDaysAhead = 0) {
   if (!val) {
     const d = new Date();
@@ -187,20 +205,49 @@ function testParse(filename) {
         if (extracted) condicaoPagamento = extracted;
       }
 
-      if (upper === '% NOTA' || upper === '% NOTA:' || upper === '% NOTA FISCAL' || upper === '% NF' || upper === 'NOTA FISCAL %' || upper === '% FATURADO') {
-        const nextColVal = row[c + 1];
-        const nextRowVal = matrix[r + 1]?.[c];
-        const notaCandidate = (parseNumber(nextColVal) > 0) ? nextColVal : ((parseNumber(nextRowVal) > 0) ? nextRowVal : 0);
-        const parsedNota = parseNumber(notaCandidate);
-        if (parsedNota > 0) percentualNota = parsedNota <= 1 ? parsedNota * 100 : parsedNota;
+      if (
+        upper === '% NOTA' || upper === '% NOTA:' || upper === '% NOTA FISCAL' || 
+        upper === '% NF' || upper === 'NOTA FISCAL %' || upper === '% FATURADO' ||
+        upper.startsWith('% NOTA') || upper.startsWith('NOTA FISCAL')
+      ) {
+        let notaRaw = null;
+        const inlineMatch = cellVal.match(/(?:%\s*NOTA|NOTA\s*FISCAL)\s*:?\s*(\d+(?:[.,]\d+)?\s*%?)/i);
+        if (inlineMatch && inlineMatch[1]) notaRaw = inlineMatch[1];
+        else {
+          const nextColVal = row[c + 1];
+          const nextRowVal = matrix[r + 1]?.[c];
+          notaRaw = (nextColVal !== undefined && nextColVal !== '') ? nextColVal : nextRowVal;
+        }
+        const parsedNota = parsePercentage(notaRaw);
+        if (parsedNota > 0) percentualNota = parsedNota;
       }
 
-      if (upper === '% OFF' || upper === '% OFF:' || upper === 'DESCONTO OFF' || upper === '%OFF' || upper === 'DESC. COMERCIAL' || upper === 'DESCONTO COMERCIAL') {
-        const nextColVal = row[c + 1];
-        const nextRowVal = matrix[r + 1]?.[c];
-        const offCandidate = (parseNumber(nextColVal) > 0) ? nextColVal : ((parseNumber(nextRowVal) > 0) ? nextRowVal : 0);
-        const parsedOff = parseNumber(offCandidate);
-        if (parsedOff > 0) percentualDescontoOff = parsedOff <= 1 ? parsedOff * 100 : parsedOff;
+      const isOffOrDiscountHeader = (
+        upper === '% OFF' || upper === '% OFF:' || upper === 'OFF %' || upper === 'OFF %:' || 
+        upper === 'OFF%' || upper === '%OFF' || upper === 'DESCONTO OFF' || upper === 'DESCONTO OFF:' ||
+        upper === 'DESCONTO COMERCIAL' || upper === 'DESCONTO COMERCIAL:' || 
+        upper === 'DESCONTO COMERCIAL (%)' || upper === 'DESCONTO COMERCIAL (%):' ||
+        upper === 'DESC. COMERCIAL' || upper === 'DESC. COMERCIAL:' || 
+        upper === 'DESC. COMERCIAL (%)' || upper === 'DESC. COMERCIAL (%):' ||
+        upper === 'DESC COMERCIAL' || upper === 'DESC COMERCIAL (%)' ||
+        upper === 'DESCONTO (%)' || upper === 'DESCONTO (%):' ||
+        upper === 'DESC (%)' || upper === 'DESC (%):' ||
+        upper === 'DESCONTO:' || upper === '% DESCONTO' || upper === '% DESC' ||
+        upper.includes('% OFF') || upper.includes('OFF %') || upper.includes('DESCONTO COMERCIAL') ||
+        (upper.startsWith('DESCONTO') && !upper.includes('TOTAL') && !upper.includes('ITEM') && !upper.includes('PRODUTO'))
+      );
+
+      if (isOffOrDiscountHeader && !upper.includes('DESCARGA') && !upper.includes('DESCARREGAMENTO')) {
+        let offRaw = null;
+        const inlineMatch = cellVal.match(/(?:%\s*OFF|OFF\s*%|DESCONTO(?:\s*COMERCIAL)?|DESC\.?(?:\s*COMERCIAL)?)\s*:?\s*(\d+(?:[.,]\d+)?\s*%?)/i);
+        if (inlineMatch && inlineMatch[1]) offRaw = inlineMatch[1];
+        else {
+          const nextColVal = row[c + 1];
+          const nextRowVal = matrix[r + 1]?.[c];
+          offRaw = (nextColVal !== undefined && nextColVal !== '') ? nextColVal : nextRowVal;
+        }
+        const parsedOff = parsePercentage(offRaw);
+        if (parsedOff > 0) percentualDescontoOff = parsedOff;
       }
 
       if (upper.includes('DATA PEDIDO')) {
@@ -341,10 +388,10 @@ function testParse(filename) {
     }
     if (qtdTotalUnidades <= 0 && qtdPacotes <= 0) continue;
 
-    const valorTotalBruto = parseNumber(row[colMap['total'] ?? 10]) || (qtdTotalUnidades * precoUnitario);
-    const pdvSugerido = parseNumber(row[colMap['pdv'] ?? 11]) || 12.00;
-    const ncm = String(row[colMap['ncm'] ?? 2] || '').trim();
-    const eanBarcode = String(row[colMap['ean'] ?? 4] || '').trim();
+    const valorTotalBruto = (colMap['total'] !== undefined ? parseNumber(row[colMap['total']]) : 0) || (qtdTotalUnidades * precoUnitario);
+    const pdvSugerido = (colMap['pdv'] !== undefined ? parseNumber(row[colMap['pdv']]) : 0) || 12.00;
+    const ncm = colMap['ncm'] !== undefined ? String(row[colMap['ncm']] || '').trim() : '';
+    const eanBarcode = colMap['ean'] !== undefined ? String(row[colMap['ean']] || '').trim() : '';
     const unidadeMedida = colMap['unidade'] !== undefined ? String(row[colMap['unidade']] || '').trim() : undefined;
     const aliquotaIpiRaw = colMap['ipi'] !== undefined ? parseNumber(row[colMap['ipi']]) : undefined;
     const aliquotaIpi = aliquotaIpiRaw !== undefined ? (aliquotaIpiRaw <= 1 ? aliquotaIpiRaw * 100 : aliquotaIpiRaw) : undefined;

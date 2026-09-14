@@ -341,6 +341,21 @@ export function App() {
     loadFromSqlite();
   }, []);
 
+  // Prevenção global: impede que o navegador abra a imagem em tela cheia se for solta fora de caixas de upload
+  useEffect(() => {
+    const handleGlobalDrag = (e: DragEvent) => {
+      if (e.dataTransfer?.types && Array.from(e.dataTransfer.types).includes('Files')) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('dragover', handleGlobalDrag);
+    window.addEventListener('drop', handleGlobalDrag);
+    return () => {
+      window.removeEventListener('dragover', handleGlobalDrag);
+      window.removeEventListener('drop', handleGlobalDrag);
+    };
+  }, []);
+
   // Sync theme with <html> and <body> class
   useEffect(() => {
     if (isDark) {

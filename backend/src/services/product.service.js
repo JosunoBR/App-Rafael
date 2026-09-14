@@ -17,12 +17,14 @@ class ProductService {
   }
 
   async saveProduct(productData) {
-    if (!productData || !productData.codigo || !productData.descricao) {
+    const rawCod = (productData?.codigoInterno || productData?.codigo || '').trim();
+    if (!productData || !rawCod || !productData.descricao?.trim()) {
       const err = new Error('Código e descrição do produto são obrigatórios.');
       err.statusCode = 400;
       throw err;
     }
 
+    const cleanCod = rawCod.toUpperCase();
     let supplierId = (productData.supplierId || productData.fornecedorPadraoId || '').trim();
     let nomeFornecedor = (productData.nomeFornecedor || productData.fornecedorPadraoNome || '').trim();
 
@@ -46,8 +48,10 @@ class ProductService {
     const payload = {
       ...productData,
       id: productData.id || ('prod_' + Date.now()),
-      codigo: productData.codigo.trim().toUpperCase(),
+      codigo: cleanCod,
+      codigoInterno: cleanCod,
       descricao: productData.descricao.trim(),
+      fotoUrl: productData.fotoUrl !== undefined ? productData.fotoUrl : '',
       supplierId,
       nomeFornecedor
     };

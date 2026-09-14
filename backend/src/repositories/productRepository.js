@@ -58,7 +58,7 @@ class ProductRepository {
         Number(product.precoUnitarioPadrao) || Number(existing.precoUnitarioPadrao) || 0,
         Number(product.pdvSugerido) || Number(existing.pdvSugerido) || 12.0,
         finalQtdPorPacote,
-        product.fotoUrl || existing.fotoUrl || '',
+        product.fotoUrl !== undefined ? product.fotoUrl : (existing.fotoUrl || ''),
         product.ncm || existing.ncm || '',
         codBarras || existing.codigoBarras || '',
         product.ativo !== undefined ? (product.ativo ? 1 : 0) : 1,

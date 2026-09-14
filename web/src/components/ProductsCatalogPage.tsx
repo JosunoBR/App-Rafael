@@ -53,6 +53,7 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const [draggedOverCardId, setDraggedOverCardId] = useState<string | null>(null);
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
 
   // File Input Ref
@@ -192,6 +193,49 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
     const textData = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
     if (textData && textData.trim().length > 0) {
       setEditingProduct(prev => prev ? { ...prev, fotoUrl: textData.trim() } : null);
+    }
+  };
+
+  const handleCardPhotoDragOver = (e: React.DragEvent, prodId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedOverCardId !== prodId) setDraggedOverCardId(prodId);
+  };
+
+  const handleCardPhotoDragLeave = (e: React.DragEvent, prodId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedOverCardId === prodId) setDraggedOverCardId(null);
+  };
+
+  const handleCardPhotoDrop = async (e: React.DragEvent, prod: Product) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggedOverCardId(null);
+
+    let photoUrl = '';
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(file.name)) {
+        try {
+          photoUrl = await optimizeImageFile(file, 1200, 1200, 0.88);
+        } catch (err) {
+          console.error('Erro ao otimizar foto para o card:', err);
+        }
+      }
+    } else {
+      const textData = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
+      if (textData && textData.trim().length > 0) {
+        photoUrl = textData.trim();
+      }
+    }
+
+    if (photoUrl) {
+      onSaveProduct({
+        ...prod,
+        fotoUrl: photoUrl,
+        updatedAt: new Date().toISOString()
+      });
     }
   };
 
@@ -386,8 +430,22 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
             filteredProducts.map(product => (
               <div
                 key={product.id}
-                className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                onDragOver={(e) => handleCardPhotoDragOver(e, product.id)}
+                onDragEnter={(e) => handleCardPhotoDragOver(e, product.id)}
+                onDragLeave={(e) => handleCardPhotoDragLeave(e, product.id)}
+                onDrop={(e) => handleCardPhotoDrop(e, product)}
+                className={`bg-white dark:bg-slate-800/90 rounded-2xl border overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group relative ${
+                  draggedOverCardId === product.id 
+                    ? 'border-emerald-500 ring-4 ring-emerald-400/30 scale-[1.02]' 
+                    : 'border-slate-200/80 dark:border-slate-700/80'
+                }`}
               >
+                {draggedOverCardId === product.id && (
+                  <div className="absolute inset-0 z-20 bg-emerald-600/80 backdrop-blur-xs flex flex-col items-center justify-center text-white p-3 text-center gap-1.5 animate-in fade-in">
+                    <UploadCloud className="w-8 h-8 animate-bounce" />
+                    <span className="text-xs font-extrabold">Solte a foto para vincular!</span>
+                  </div>
+                )}
                 <div>
                   {/* Foto do Produto com botão de Zoom */}
                   <div className="relative aspect-square w-full bg-slate-100 dark:bg-slate-900/60 overflow-hidden flex items-center justify-center">
@@ -395,6 +453,8 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                       <img 
                         src={product.fotoUrl} 
                         alt={product.descricao}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
                         onClick={() => setZoomedImage({ url: product.fotoUrl!, title: product.descricao })}
                       />
@@ -542,7 +602,13 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                         onClick={() => product.fotoUrl && setZoomedImage({ url: product.fotoUrl, title: product.descricao })}
                       >
                         {product.fotoUrl ? (
-                          <img src={product.fotoUrl} alt="" className="w-full h-full object-cover" />
+                          <img 
+                            src={product.fotoUrl} 
+                            alt="" 
+                            loading="lazy" 
+                            decoding="async" 
+                            className="w-full h-full object-cover" 
+                          />
                         ) : (
                           <ImageIcon className="w-4 h-4 text-slate-400" />
                         )}

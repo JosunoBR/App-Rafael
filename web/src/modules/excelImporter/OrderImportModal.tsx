@@ -517,12 +517,10 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
 
                 <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 shadow-xs">
                   <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 block">
-                    OFF %
+                    Desc. Comercial (% OFF)
                   </span>
                   <span className="text-xl font-extrabold text-indigo-700 dark:text-indigo-400 mt-0.5 block">
-                    {parsedData.header.percentualNota !== undefined 
-                      ? `${parsedData.header.percentualNota}%` 
-                      : (parsedData.header.percentualDescontoOff ? `${parsedData.header.percentualDescontoOff}%` : '100%')}
+                    {parsedData.header.percentualDescontoOff > 0 ? `${parsedData.header.percentualDescontoOff}%` : '0%'}
                   </span>
                 </div>
               </div>
@@ -631,15 +629,18 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                     <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-semibold">Status: Em Cotação</span>
                   </div>
 
-                  {/* Condição de Pagamento */}
+                  {/* Condição de Pagamento e Desconto Comercial */}
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Pagamento & Frete</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Pagamento & Desconto</span>
                     <span className="text-slate-900 dark:text-white font-medium block truncate mt-0.5" title={parsedData.header.condicaoPagamento}>
                       {parsedData.header.condicaoPagamento}
                     </span>
-                    <span className="block text-[10px] text-slate-500 mt-0.5">
-                      Frete: {parsedData.header.tipoFrete || 'Retira'}
-                    </span>
+                    <div className="flex items-center justify-between text-[10px] mt-0.5">
+                      <span className="text-slate-500">Frete: {parsedData.header.tipoFrete || 'Retira'}</span>
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                        {parsedData.header.percentualDescontoOff > 0 ? `${parsedData.header.percentualDescontoOff}% OFF` : 'Sem Desc. OFF'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

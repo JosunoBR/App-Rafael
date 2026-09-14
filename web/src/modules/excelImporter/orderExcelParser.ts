@@ -514,18 +514,18 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
       continue;
     }
 
-    const valorTotalBruto = parseNumber(row[colMap['total'] ?? 10]) || (qtdTotalUnidades * precoUnitario);
-    const pdvSugerido = parseNumber(row[colMap['pdv'] ?? 11]) || 12.00;
-    const ncm = String(row[colMap['ncm'] ?? 2] || '').trim();
-    const eanBarcode = String(row[colMap['ean'] ?? 4] || '').trim();
+    const valorTotalBruto = (colMap['total'] !== undefined ? parseNumber(row[colMap['total']]) : 0) || (qtdTotalUnidades * precoUnitario);
+    const pdvSugerido = (colMap['pdv'] !== undefined ? parseNumber(row[colMap['pdv']]) : 0) || 12.00;
+    const ncm = colMap['ncm'] !== undefined ? String(row[colMap['ncm']] || '').trim() : '';
+    const eanBarcode = colMap['ean'] !== undefined ? String(row[colMap['ean']] || '').trim() : '';
     const unidadeMedida = colMap['unidade'] !== undefined ? String(row[colMap['unidade']] || '').trim() : undefined;
     const aliquotaIpiRaw = colMap['ipi'] !== undefined ? parseNumber(row[colMap['ipi']]) : undefined;
     const aliquotaIpi = aliquotaIpiRaw !== undefined ? (aliquotaIpiRaw <= 1 && aliquotaIpiRaw > 0 ? aliquotaIpiRaw * 100 : aliquotaIpiRaw) : undefined;
     const valorIpi = colMap['valorIpi'] !== undefined ? parseNumber(row[colMap['valorIpi']]) : undefined;
     const percentualDesconto = colMap['descontoPct'] !== undefined ? parsePercentage(row[colMap['descontoPct']]) : undefined;
     const valorDescontoItem = colMap['descontoValor'] !== undefined ? parseNumber(row[colMap['descontoValor']]) : undefined;
-    const custoTotalInformado = parseNumber(row[colMap['custoTotal'] ?? 12]);
-    const margemInformada = parseNumber(row[colMap['margem'] ?? 13]);
+    const custoTotalInformado = colMap['custoTotal'] !== undefined ? parseNumber(row[colMap['custoTotal']]) : undefined;
+    const margemInformada = colMap['margem'] !== undefined ? parseNumber(row[colMap['margem']]) : undefined;
 
     items.push({
       rowNumber: r + 1,

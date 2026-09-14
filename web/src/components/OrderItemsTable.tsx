@@ -1216,7 +1216,13 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   onClick={() => handleOpenPhotoModal(item)}
                   title="Clique para trocar, ver ampliado ou remover foto"
                 >
-                  <img src={item.fotoUrl} alt="" className="w-full h-full object-cover" />
+                  <img 
+                    src={item.fotoUrl} 
+                    alt="" 
+                    loading="lazy" 
+                    decoding="async" 
+                    className="w-full h-full object-cover" 
+                  />
                   <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover/photo:opacity-100 transition">
                     <Upload className="w-3 h-3" />
                   </div>

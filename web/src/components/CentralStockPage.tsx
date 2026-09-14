@@ -479,6 +479,8 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                           <img
                             src={item.fotoUrl}
                             alt={item.descricao}
+                            loading="lazy"
+                            decoding="async"
                             onClick={() => setZoomedImage({ url: item.fotoUrl!, title: item.descricao })}
                             className="w-10 h-10 object-cover rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:scale-105 transition mx-auto"
                           />

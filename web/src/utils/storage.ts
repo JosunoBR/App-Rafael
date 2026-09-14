@@ -529,11 +529,16 @@ export function saveCurrentOrder(order: PurchaseOrder): void {
     localStorage.removeItem(STORAGE_KEYS.CURRENT_ORDER);
     return;
   }
-  const orderWithFixedPdv = {
+  const orderWithPreservedPdv = {
     ...order,
-    items: (order.items || []).map(it => ({ ...it, pdvAlvo: 12.00 }))
+    items: (order.items || []).map(it => ({
+      ...it,
+      pdvAlvo: it.pdvAlvo !== undefined && it.pdvAlvo !== null && !isNaN(Number(it.pdvAlvo)) && Number(it.pdvAlvo) > 0
+        ? Number(it.pdvAlvo)
+        : 12.00
+    }))
   };
-  safeSetItem(STORAGE_KEYS.CURRENT_ORDER, JSON.stringify(orderWithFixedPdv));
+  safeSetItem(STORAGE_KEYS.CURRENT_ORDER, JSON.stringify(orderWithPreservedPdv));
 }
 
 export function clearCurrentDraft(): void {
@@ -739,14 +744,14 @@ export function saveCentralStock(stockList: CentralStockItem[]): void {
   safeSetItem(STORAGE_KEYS.CENTRAL_STOCK, JSON.stringify(stockList));
 }
 
-export function updateStockBalance(stockId: string, deltaCaixas: number, newLocation?: string): CentralStockItem[] {
+export function updateStockBalance(stockId: string, deltaUnidades: number, newLocation?: string): CentralStockItem[] {
   const stock = loadCentralStock();
   const index = stock.findIndex(s => s.id === stockId);
   if (index >= 0) {
     const item = stock[index];
     const pack = item.qtdPorPacote || 1;
     const currentUnidades = item.saldoUnidades || 0;
-    const newSaldoUnidades = Math.max(0, currentUnidades + (deltaCaixas * pack));
+    const newSaldoUnidades = Math.max(0, currentUnidades + Number(deltaUnidades));
     const newSaldoCaixas = Math.floor(newSaldoUnidades / pack);
     stock[index] = {
       ...item,

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { loadSavedOrdersList } from '../utils/storage';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 
 interface SavedOrdersModalProps {
   isOpen: boolean;
@@ -68,8 +69,9 @@ export const SavedOrdersModal: React.FC<SavedOrdersModalProps> = ({
             </div>
           ) : (
             orders.map(order => {
-              const totalPecas = order.items.reduce((a, b) => a + b.qtdTotalUnidades, 0);
-              const totalValor = order.items.reduce((a, b) => a + b.valorTotalBruto, 0);
+              const totals = calculateOrderTotals(order);
+              const totalPecas = totals.totalPecas;
+              const totalValor = totals.totalGeral;
 
               return (
                 <div

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { toBrDate } from '../utils/masks';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 
 interface PurchaseControlCardProps {
   orders: PurchaseOrder[];
@@ -217,7 +218,7 @@ export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
     let maior: { valor: number; order: PurchaseOrder | null } = { valor: -1, order: null };
 
     filteredOrders.forEach(order => {
-      const totalOrder = order.items.reduce((sum, item) => sum + (Number(item.valorTotalBruto) || 0), 0);
+      const totalOrder = calculateOrderTotals(order).totalGeral;
       total += totalOrder;
 
       if (totalOrder > maior.valor) {
@@ -243,9 +244,11 @@ export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
         const desc = (item.descricao || 'Produto sem descrição').trim();
         const key = cod ? `${cod}___${desc}` : desc;
 
-        const precoUnit = Number(item.precoUnitario) || (item.qtdTotalUnidades > 0 ? (item.valorTotalBruto || 0) / item.qtdTotalUnidades : 0);
         const qtdPecas = Number(item.qtdTotalUnidades) || 0;
-        const valorFinanceiro = Number(item.valorTotalBruto) || (precoUnit * qtdPecas);
+        const descPct = item.percentualDesconto || 0;
+        const bruto = Number(item.valorTotalBruto) || (Number(item.precoUnitario || 0) * qtdPecas);
+        const valorFinanceiro = item.valorTotalLiquido !== undefined ? Number(item.valorTotalLiquido) : (bruto * (1 - descPct / 100));
+        const precoUnit = Number(item.precoUnitario) || (qtdPecas > 0 ? valorFinanceiro / qtdPecas : 0);
 
         if (!map.has(key)) {
           map.set(key, {
@@ -330,7 +333,7 @@ export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
 
     filteredOrders.forEach(order => {
       const notaPct = order.header?.percentualNota !== undefined ? Number(order.header.percentualNota) : 100;
-      const orderTotal = order.items.reduce((sum, item) => sum + (Number(item.valorTotalBruto) || 0), 0);
+      const orderTotal = calculateOrderTotals(order).totalGeral;
       
       somaNotasSimples += notaPct;
       somaNotasPonderadas += (notaPct / 100) * orderTotal;
@@ -368,8 +371,8 @@ export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
   // Lista de pedidos ordenados por valor para a aba de Maiores Pedidos
   const sortedOrdersByValue = useMemo(() => {
     return [...filteredOrders].sort((a, b) => {
-      const totalA = a.items.reduce((s, i) => s + (i.valorTotalBruto || 0), 0);
-      const totalB = b.items.reduce((s, i) => s + (i.valorTotalBruto || 0), 0);
+      const totalA = calculateOrderTotals(a).totalGeral;
+      const totalB = calculateOrderTotals(b).totalGeral;
       return totalB - totalA;
     });
   }, [filteredOrders]);

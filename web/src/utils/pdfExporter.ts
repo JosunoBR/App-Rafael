@@ -4,6 +4,7 @@ import { PurchaseOrder, StoreConfig } from '../shared/types';
 import { DEFAULT_STORES } from '../shared/constants';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 import { QUICK_PAYMENT_PRESETS, formatPaymentConditionString } from './installments';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 
 function formatCurrency(val: number | string): string {
   const num = Number(val) || 0;
@@ -298,45 +299,11 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     const maxCardTextW = cardW - 6; // 130 mm (3mm margem esquerda + 3mm margem direita)
     const baseCardH = 28.5;
 
-    // Cálculo do Desconto Comercial
-    const offValue = Number(order.header?.percentualDescontoOff || 0);
-    let totalBrutoMercadorias = 0;
-    let totalDescontoItens = 0;
-    (order.items || []).forEach(item => {
-      const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
-      const pacotes = Number(item.qtdPacotes) || 0;
-      const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
-      const precoUnit = Number(item.precoUnitario) || 0;
-      const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
-      const valorLiquido = Number(item.valorTotalLiquido) || valorBruto;
-      totalBrutoMercadorias += valorBruto;
-      if (item.valorDescontoItem !== undefined && Number(item.valorDescontoItem) > 0) {
-        totalDescontoItens += Number(item.valorDescontoItem);
-      } else if (valorBruto > valorLiquido) {
-        totalDescontoItens += (valorBruto - valorLiquido);
-      }
-    });
-
-    let totalDescontoComercial = 0;
-    let descontoComercialPercent = 0;
-    if (order.header?.descontoComercialTotal !== undefined && Number(order.header.descontoComercialTotal) > 0) {
-      if (order.header.descontoComercialTipo === '%') {
-        descontoComercialPercent = Number(order.header.descontoComercialTotal);
-        totalDescontoComercial = Number(((totalBrutoMercadorias * descontoComercialPercent) / 100).toFixed(2));
-      } else {
-        totalDescontoComercial = Number(order.header.descontoComercialTotal);
-        descontoComercialPercent = totalBrutoMercadorias > 0 
-          ? (totalDescontoComercial / totalBrutoMercadorias) * 100 
-          : 0;
-      }
-    } else if (totalDescontoItens > 0 && totalBrutoMercadorias > 0) {
-      totalDescontoComercial = totalDescontoItens;
-      descontoComercialPercent = (totalDescontoItens / totalBrutoMercadorias) * 100;
-    } else if (offValue > 0) {
-      descontoComercialPercent = offValue;
-      totalDescontoComercial = Number(((totalBrutoMercadorias * offValue) / 100).toFixed(2));
-    }
-
+    // Cálculo do Desconto Comercial e Totais unificados pela Engine Oficial
+    const orderTotals = calculateOrderTotals(order);
+    const totalBrutoMercadorias = orderTotals.valorBruto;
+    const totalDescontoComercial = orderTotals.valorDescontoTotal;
+    const descontoComercialPercent = orderTotals.descontoPercentualMedio;
     const descontoComercialTexto = `${Number(descontoComercialPercent.toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 
     // Medir e quebrar linhas do Card 2 com quebra automática caso qualquer campo seja longo
@@ -522,9 +489,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       ];
     });
 
-    const precoMedioGeral = totalPecasGeral > 0
-      ? (subtotalGeral / totalPecasGeral)
-      : (bodyRows.length > 0 ? (somaPrecoUnitario / bodyRows.length) : 0);
+    const precoMedioGeral = orderTotals.precoMedio;
 
     // Linha de Totais da Tabela (com colSpan elegante para 9 colunas)
     const footerRow = [
@@ -645,8 +610,8 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setFillColor(5, 150, 105); // Emerald-600
     doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
 
-    const valorFrete = Number(order.header?.valorFrete) || 0;
-    const totalGeralFinal = Math.max(0, subtotalGeral + totalIpiGeral - totalDescontoComercial + valorFrete);
+    const valorFrete = orderTotals.valorFrete;
+    const totalGeralFinal = orderTotals.totalGeral;
 
     let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)}`;
     if (valorFrete > 0) {

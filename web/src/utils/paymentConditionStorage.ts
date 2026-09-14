@@ -5,6 +5,7 @@ import {
   deletePaymentConditionFromDb,
   isOfflineError
 } from './api';
+import { safeSetItem } from './storage';
 
 const STORAGE_KEY = 'mega12_payment_conditions';
 
@@ -14,7 +15,7 @@ export async function loadPaymentConditions(onlyActive: boolean = false): Promis
   try {
     const list = await fetchPaymentConditionsFromDb(onlyActive);
     if (Array.isArray(list)) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+      safeSetItem(STORAGE_KEY, JSON.stringify(list));
       return list;
     }
   } catch (err) {
@@ -77,7 +78,7 @@ export async function savePaymentCondition(condition: Partial<PaymentCondition>)
     updatedList.unshift(formatted);
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+  safeSetItem(STORAGE_KEY, JSON.stringify(updatedList));
   return savedCondition || formatted;
 }
 
@@ -90,5 +91,5 @@ export async function deletePaymentCondition(id: string): Promise<void> {
 
   const existingList = await loadPaymentConditions(false);
   const filtered = existingList.filter(c => c.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+  safeSetItem(STORAGE_KEY, JSON.stringify(filtered));
 }

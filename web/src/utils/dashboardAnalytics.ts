@@ -1,5 +1,6 @@
 import { PurchaseOrder, OrderItem, Supplier } from '../shared/types';
 import { toIsoDate } from './masks';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 
 export interface DashboardFilter {
   periodPreset: '30d' | 'trimestre' | 'semestre' | 'ano' | 'tudo' | 'custom';
@@ -178,12 +179,10 @@ export function calculateDashboardMetrics(
   // 3. Processar cada pedido
   filteredOrders.forEach(order => {
     const items = order.items || [];
-    const totalBrutoPedido = items.reduce((a, b) => a + (Number(b.valorTotalBruto) || 0), 0);
-    const descontoOff = (totalBrutoPedido * (Number(order.header.percentualDescontoOff) || 0)) / 100;
-    const subtotalAposDesconto = totalBrutoPedido - descontoOff;
-    const stAliquota = Number(order.header.aliquotaSt) || 0;
-    const stValorPedido = (subtotalAposDesconto * stAliquota) / 100;
-    const pedidoInvestimentoLiquido = subtotalAposDesconto + stValorPedido + (Number(order.header.valorFreteGlobal) || 0);
+    const totals = calculateOrderTotals(order);
+    const pedidoInvestimentoLiquido = totals.totalGeral;
+    const stValorPedido = totals.totalSt;
+    const stAliquota = Number(order.header?.aliquotaSt) || 0;
 
     totalInvestido += pedidoInvestimentoLiquido;
     totalStValor += stValorPedido;
@@ -328,10 +327,8 @@ export function calculateDashboardMetrics(
 
     mOrders.forEach(o => {
       const items = o.items || [];
-      const bruto = items.reduce((a, b) => a + (Number(b.valorTotalBruto) || 0), 0);
-      const desc = (bruto * (Number(o.header.percentualDescontoOff) || 0)) / 100;
-      const stVal = ((bruto - desc) * (Number(o.header.aliquotaSt) || 0)) / 100;
-      mInvest += (bruto - desc + stVal + (Number(o.header.valorFreteGlobal) || 0));
+      const totals = calculateOrderTotals(o);
+      mInvest += totals.totalGeral;
 
       items.forEach(i => {
         if (!i || !i.descricao || i.descricao.trim() === '') return;
@@ -380,11 +377,9 @@ function summarizeOrdersGroup(label: string, orders: PurchaseOrder[]): PeriodSum
 
   orders.forEach(o => {
     const items = o.items || [];
-    const bruto = items.reduce((a, b) => a + (Number(b.valorTotalBruto) || 0), 0);
-    const desc = (bruto * (Number(o.header?.percentualDescontoOff) || 0)) / 100;
-    const st = ((bruto - desc) * (Number(o.header?.aliquotaSt) || 0)) / 100;
-    stVal += st;
-    invest += (bruto - desc + st + (Number(o.header?.valorFreteGlobal) || 0));
+    const totals = calculateOrderTotals(o);
+    stVal += totals.totalSt;
+    invest += totals.totalGeral;
 
     items.forEach(i => {
       if (!i || !i.descricao || i.descricao.trim() === '') return;

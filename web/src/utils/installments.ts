@@ -1,4 +1,5 @@
 import { PurchaseOrder, PaymentInstallment } from '../shared/types';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 
 export const PARCELAS_OPTIONS = [
   { value: 1, label: '1x (À Vista ou 1 Parcela)' },
@@ -99,43 +100,19 @@ export const QUICK_PAYMENT_PRESETS: QuickPaymentPreset[] = [
 ];
 
 /**
- * Calcula o valor líquido total apenas das mercadorias/produtos (com desconto OFF)
+ * Calcula o valor líquido total apenas das mercadorias/produtos (com desconto comercial)
  */
 export function calculateOrderMerchandiseTotal(order: PurchaseOrder): number {
   if (!order) return 0;
-
-  const items = order.items || [];
-  const offGlobal = Math.max(0, Math.min(100, Number(order.header?.percentualDescontoOff) || 0));
-
-  return items.reduce((sum, it) => {
-    if (!it || (!it.descricao && !it.codigo)) return sum;
-    if (it.ruptura) return sum;
-    const bruto = it.valorTotalBruto || ((it.qtdTotalUnidades || 0) * (it.precoUnitario || 0)) || 0;
-    if (bruto <= 0) return sum;
-
-    // Se o item tem percentual de desconto individual > 0, utiliza ele; caso contrário, aplica o OFF global do pedido
-    const descPct = (it.percentualDesconto !== undefined && it.percentualDesconto > 0)
-      ? Math.max(0, Math.min(100, it.percentualDesconto))
-      : offGlobal;
-
-    const liq = (it.valorTotalLiquido !== undefined && it.percentualDesconto !== undefined && it.percentualDesconto > 0) 
-      ? it.valorTotalLiquido 
-      : (bruto * (1 - descPct / 100));
-
-    return sum + Math.max(0, liq);
-  }, 0);
+  return calculateOrderTotals(order).valorLiquido;
 }
 
 /**
- * Calcula o valor líquido total do pedido (itens com desconto OFF + frete + outras despesas)
+ * Calcula o valor total faturado do pedido (itens com desconto + IPI + ST + frete + outras despesas)
  */
 export function calculateOrderNetTotal(order: PurchaseOrder): number {
   if (!order) return 0;
-
-  const itemsComDesconto = calculateOrderMerchandiseTotal(order);
-  const frete = Number(order.header?.valorFrete ?? order.header?.valorFreteGlobal) || 0;
-  const outras = Number(order.header?.valorOutrasDespesasGlobal) || 0;
-  return Math.max(0, itemsComDesconto + frete + outras);
+  return calculateOrderTotals(order).totalGeral;
 }
 
 /**

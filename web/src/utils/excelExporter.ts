@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { PurchaseOrder, StoreConfig, FiscalConfig } from '../shared/types';
 import { formatPaymentConditionDisplay, cleanPaymentFormDisplay, resolveOrderPaymentCondition } from './pdfExporter';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 
 function formatCurrency(val: number): string {
   return `R$ ${Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -81,11 +82,9 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     };
   });
 
-  const precoMedioGeral = totalPecasGeral > 0
-    ? (subtotalGeral / totalPecasGeral)
-    : (filteredItems.length > 0 ? (somaPrecoUnitario / filteredItems.length) : 0);
-
-  const totalGeralComIpi = subtotalGeral + totalIpiGeral;
+  const orderTotals = calculateOrderTotals(order);
+  const precoMedioGeral = orderTotals.precoMedio;
+  const totalGeralComIpi = orderTotals.totalGeral;
 
   // Criação da Pasta de Trabalho com ExcelJS
   const workbook = new ExcelJS.Workbook();
@@ -209,39 +208,9 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   }
   ws.getRow(7).height = 20;
 
-  // Cálculo do Desconto Comercial
-  let totalBrutoMercadorias = 0;
-  let totalDescontoItens = 0;
-  filteredItems.forEach(item => {
-    const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
-    const pacotes = Number(item.qtdPacotes) || 0;
-    const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
-    const precoUnit = Number(item.precoUnitario) || 0;
-    const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
-    const valorLiquido = Number(item.valorTotalLiquido) || valorBruto;
-    totalBrutoMercadorias += valorBruto;
-    if (item.valorDescontoItem !== undefined && Number(item.valorDescontoItem) > 0) {
-      totalDescontoItens += Number(item.valorDescontoItem);
-    } else if (valorBruto > valorLiquido) {
-      totalDescontoItens += (valorBruto - valorLiquido);
-    }
-  });
-
-  let descontoComercialPercent = 0;
-  if (order.header?.descontoComercialTotal !== undefined && Number(order.header.descontoComercialTotal) > 0) {
-    if (order.header.descontoComercialTipo === '%') {
-      descontoComercialPercent = Number(order.header.descontoComercialTotal);
-    } else {
-      descontoComercialPercent = totalBrutoMercadorias > 0
-        ? (Number(order.header.descontoComercialTotal) / totalBrutoMercadorias) * 100
-        : 0;
-    }
-  } else if (totalDescontoItens > 0 && totalBrutoMercadorias > 0) {
-    descontoComercialPercent = (totalDescontoItens / totalBrutoMercadorias) * 100;
-  } else if (percentualOff > 0) {
-    descontoComercialPercent = percentualOff;
-  }
-
+  // Cálculo do Desconto Comercial via Engine Oficial
+  const totalBrutoMercadorias = orderTotals.valorBruto;
+  const descontoComercialPercent = orderTotals.descontoPercentualMedio;
   const descontoComercialTexto = `${Number(descontoComercialPercent.toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 
   // Linhas de dados dos dois cards
@@ -556,7 +525,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   const detRow = valRow + 2;
   ws.mergeCells(`G${detRow}:I${detRow}`);
   const detCell = ws.getCell(`G${detRow}`);
-  detCell.value = `(Líquido: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)})`;
+  detCell.value = `(Líquido: ${formatCurrency(orderTotals.valorLiquido)} + IPI: ${formatCurrency(orderTotals.totalIpi)}${orderTotals.valorFrete > 0 ? ` + Frete: ${formatCurrency(orderTotals.valorFrete)}` : ''})`;
   detCell.font = { name: 'Segoe UI', size: 8, color: { argb: 'FF475569' } };
   detCell.alignment = { vertical: 'middle', horizontal: 'center' };
   ws.getRow(detRow).height = 16;

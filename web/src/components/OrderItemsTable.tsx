@@ -34,6 +34,7 @@ import {
 import { optimizeImageFile } from '../utils/imageUtils';
 import { OrderItem, FiscalConfig, StoreConfig, Product, Supplier } from '../shared/types';
 import { calculateItemFiscal, normalizeRateToDecimal } from '../shared/fiscalEngine';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
 import { isOrderItemBlank, generateNextProductCode } from '../utils/orderItemUtils';
 import { handleCurrencyInput, formatCurrency } from '../utils/masks';
@@ -862,42 +863,17 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const validItemsCount = useMemo(() => items.filter(it => !isOrderItemBlank(it)).length, [items]);
 
   const totals = useMemo(() => {
-    let bruto = 0;
-    let desconto = 0;
-    let liquido = 0;
-    let totalIpi = 0;
-    let pecas = 0;
-    let rupturasCount = 0;
-    const defaultGlobalIpiPct = normalizeRateToDecimal(globalFiscal?.ipiAliquota) * 100;
-
-    items.forEach(it => {
-      if (isOrderItemBlank(it)) return;
-      if (it.ruptura) {
-        rupturasCount++;
-        return;
-      }
-      const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
-      const d = it.valorDescontoItem !== undefined ? it.valorDescontoItem : (b * ((it.percentualDesconto || 0) / 100));
-      const l = it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : (b - d);
-
-      const ipiAliq = (it.aliquotaIpi !== undefined && it.aliquotaIpi !== null && it.aliquotaIpi > 0)
-        ? it.aliquotaIpi
-        : (it.fiscalOverride?.useCustomFiscal && it.fiscalOverride?.ipiAliquota !== undefined
-            ? it.fiscalOverride.ipiAliquota
-            : defaultGlobalIpiPct);
-
-      const ipiVal = (it.valorIpi !== undefined && it.valorIpi !== null && Number(it.valorIpi) > 0)
-        ? Number(it.valorIpi)
-        : Number((l * (ipiAliq / 100)).toFixed(2));
-
-      bruto += b;
-      desconto += d;
-      liquido += l;
-      totalIpi += ipiVal;
-      pecas += (it.qtdTotalUnidades || 0);
-    });
-    const precoMedio = pecas > 0 ? (liquido / pecas) : 0;
-    return { bruto, desconto, liquido, totalIpi, pecas, precoMedio, rupturasCount };
+    const res = calculateOrderTotals(items, undefined, globalFiscal);
+    return {
+      bruto: res.valorBruto,
+      desconto: res.valorDescontoTotal,
+      liquido: res.valorLiquido,
+      totalIpi: res.totalIpi,
+      totalSt: res.totalSt,
+      pecas: res.totalPecas,
+      precoMedio: res.precoMedio,
+      rupturasCount: res.rupturasCount
+    };
   }, [items, globalFiscal]);
 
   // Navegação completa por teclado estilo planilha Excel (Setas Cima, Baixo, Esquerda, Direita e Enter)

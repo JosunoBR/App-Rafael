@@ -21,14 +21,11 @@ import {
   TrendingUp,
   CreditCard,
   FileText,
-  Upload,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
   Store,
   Layers,
-  Trash2,
-  Download
+  Trash2
 } from 'lucide-react';
 import { 
   PurchaseOrder, 
@@ -45,15 +42,12 @@ import {
   fetchFinancialSummaryFromDb, 
   saveFinancialEntryToDb, 
   payFinancialEntryInDb, 
-  deleteFinancialEntryFromDb, 
-  syncFinancialOrdersInDb, 
-  importFinancialClientSheetInDb 
+  deleteFinancialEntryFromDb 
 } from '../utils/api';
 import { toBrDate } from '../utils/masks';
 import { MonthlyPurchasesMatrixView } from './MonthlyPurchasesMatrixView';
 import { FinancialEntryModal } from './FinancialEntryModal';
 import { FinancialDailyView } from './FinancialDailyView';
-import * as XLSX from 'xlsx';
 
 interface FinancialBoletosPageProps {
   orders: PurchaseOrder[];
@@ -88,14 +82,13 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   const [selectedStore, setSelectedStore] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [onlyPending, setOnlyPending] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Estados de Dados do Backend
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [syncing, setSyncing] = useState<boolean>(false);
-  const [importing, setImporting] = useState<boolean>(false);
 
   // Modais
   const [isEntryModalOpen, setIsEntryModalOpen] = useState<boolean>(false);
@@ -111,11 +104,11 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     setLoading(true);
     try {
       const filters = {
-        year: selectedYear,
-        month: selectedMonth,
+        year: selectedYear !== 'all' ? selectedYear : undefined,
+        month: selectedMonth !== 'all' ? selectedMonth : undefined,
         lojaNome: selectedStore !== 'all' ? selectedStore : undefined,
         categoria: selectedCategory !== 'all' ? selectedCategory : undefined,
-        status: selectedStatus !== 'all' ? selectedStatus : undefined,
+        status: onlyPending ? 'pendente' : (selectedStatus !== 'all' ? selectedStatus : undefined),
         search: searchQuery.trim() || undefined
       };
 
@@ -131,7 +124,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [selectedYear, selectedMonth, selectedStore, selectedCategory, selectedStatus, searchQuery]);
+  }, [selectedYear, selectedMonth, selectedStore, selectedCategory, selectedStatus, searchQuery, onlyPending]);
 
   useEffect(() => {
     loadFinancialData();
@@ -139,59 +132,25 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
 
   // Navegação de Mês
   const handlePrevMonth = () => {
-    let m = parseInt(selectedMonth, 10) - 1;
-    let y = parseInt(selectedYear, 10);
+    let m = selectedMonth === 'all' ? 12 : parseInt(selectedMonth, 10) - 1;
+    let y = parseInt(selectedYear === 'all' ? '2026' : selectedYear, 10);
     if (m < 1) {
       m = 12;
       y -= 1;
     }
     setSelectedMonth(String(m).padStart(2, '0'));
-    setSelectedYear(String(y));
+    if (selectedYear === 'all') setSelectedYear('2026');
   };
 
   const handleNextMonth = () => {
-    let m = parseInt(selectedMonth, 10) + 1;
-    let y = parseInt(selectedYear, 10);
+    let m = selectedMonth === 'all' ? 1 : parseInt(selectedMonth, 10) + 1;
+    let y = parseInt(selectedYear === 'all' ? '2026' : selectedYear, 10);
     if (m > 12) {
       m = 1;
       y += 1;
     }
     setSelectedMonth(String(m).padStart(2, '0'));
-    setSelectedYear(String(y));
-  };
-
-  // Sincronizar Pedidos de Compras com o Financeiro
-  const handleSyncOrders = async () => {
-    setSyncing(true);
-    try {
-      const res = await syncFinancialOrdersInDb();
-      showToast(res.message || 'Sincronização concluída com sucesso!', 'success');
-      await loadFinancialData();
-    } catch (err: any) {
-      showToast(err.message || 'Erro ao sincronizar pedidos.', 'error');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // Importar Planilha do Cliente
-  const handleImportClientSheet = async () => {
-    if (!confirm('Deseja importar os lançamentos da planilha "PLANILHA DE PAGAMENTO AGOSTO.xlsx" para o banco de dados?')) {
-      return;
-    }
-
-    setImporting(true);
-    try {
-      const res = await importFinancialClientSheetInDb();
-      showToast(res.message || 'Planilha importada com sucesso!', 'success');
-      setSelectedYear('2026');
-      setSelectedMonth('08');
-      await loadFinancialData();
-    } catch (err: any) {
-      showToast(err.message || 'Erro ao importar planilha do cliente.', 'error');
-    } finally {
-      setImporting(false);
-    }
+    if (selectedYear === 'all') setSelectedYear('2026');
   };
 
   // Baixa rápida de Pagamento
@@ -230,34 +189,6 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     }
   };
 
-  // Exportar Excel
-  const handleExportExcel = () => {
-    if (entries.length === 0) {
-      showToast('Nenhum dado para exportar.', 'info');
-      return;
-    }
-
-    const rows = entries.map(item => ({
-      Vencimento: toBrDate(item.dataVencimento),
-      Valor: item.valor,
-      'Fornecedor / Despesa': item.descricao,
-      Categoria: item.categoria,
-      Loja: item.lojaNome || item.empresa || 'ALS',
-      'Forma de Pagamento': item.formaPagamento,
-      NF: item.documentoRef || '',
-      Parcela: item.parcelaDesc,
-      Status: item.status,
-      'Data Pagamento': item.dataPagamento ? toBrDate(item.dataPagamento) : '',
-      Observação: item.observacao || ''
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `Financeiro_${selectedMonth}_${selectedYear}`);
-    XLSX.writeFile(wb, `Mega12_Financeiro_${selectedYear}_${selectedMonth}.xlsx`);
-    showToast('Planilha Excel exportada com sucesso!', 'success');
-  };
-
   // Cálculos consolidados para os cards superiores
   const totalPrevisto = summary?.totalGeral || 0;
   const totalPago = summary?.totalPago || 0;
@@ -279,55 +210,15 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
               <DollarSign className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <h1 className="text-xl font-black text-slate-900 dark:text-white">
                 Gestão Financeira & Contas a Pagar
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
-                  ERP Rede Mega 12
-                </span>
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Controle diário unificado das despesas das lojas, despesas fixas e parcelas de compras
-              </p>
             </div>
           </div>
         </div>
 
         {/* Botões de Ação do Topo */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Sincronizar Pedidos */}
-          <button
-            type="button"
-            disabled={syncing}
-            onClick={handleSyncOrders}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            title="Gera parcelas financeiras para os pedidos de compra ainda não sincronizados"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Sincronizando...' : 'Sincronizar Pedidos'}
-          </button>
-
-          {/* Importar Planilha do Cliente */}
-          <button
-            type="button"
-            disabled={importing}
-            onClick={handleImportClientSheet}
-            className="px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-400 font-semibold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            title="Importa o arquivo PLANILHA DE PAGAMENTO AGOSTO.xlsx da raiz"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            {importing ? 'Importando Planilha...' : 'Importar Planilha Agosto'}
-          </button>
-
-          {/* Exportar Excel */}
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            Excel
-          </button>
-
           {/* Novo Lançamento ERP */}
           <button
             type="button"
@@ -441,29 +332,82 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
         {/* Linha 1: Navegação de Mês e Abas */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
-          {/* Seletor de Período Mês / Ano */}
-          <div className="flex items-center gap-2">
+          {/* Seletor de Período Mês / Ano com Dropdowns e Filtro Rápido */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              disabled={selectedMonth === 'all'}
               onClick={handlePrevMonth}
-              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               title="Mês Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold text-sm text-slate-800 dark:text-slate-200">
-              <Calendar className="w-4 h-4 text-amber-500" />
-              <span>{MONTHS_NAMES[parseInt(selectedMonth, 10) - 1]} de {selectedYear}</span>
+            {/* Dropdown Mês */}
+            <div className="relative flex items-center">
+              <Calendar className="w-4 h-4 text-amber-500 absolute left-3 pointer-events-none" />
+              <select
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
+                className="pl-9 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-xs text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-xs cursor-pointer"
+              >
+                <option value="all">📅 Todos os Meses (Visão Geral)</option>
+                {MONTHS_NAMES.map((name, idx) => {
+                  const mVal = String(idx + 1).padStart(2, '0');
+                  return (
+                    <option key={mVal} value={mVal}>
+                      {name}
+                    </option>
+                  );
+                })}
+              </select>
             </div>
+
+            {/* Dropdown Ano */}
+            <select
+              value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-xs text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-xs cursor-pointer"
+            >
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+              <option value="all">Todos os Anos</option>
+            </select>
 
             <button
               type="button"
+              disabled={selectedMonth === 'all'}
               onClick={handleNextMonth}
-              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               title="Próximo Mês"
             >
               <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {/* Botão Destaque: Apenas Pendentes (Não baixados) */}
+            <button
+              type="button"
+              onClick={() => {
+                setOnlyPending(prev => {
+                  const nextVal = !prev;
+                  if (nextVal) setSelectedStatus('all');
+                  return nextVal;
+                });
+              }}
+              className={`px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border ${
+                onlyPending
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-sm shadow-amber-500/30'
+                  : 'bg-slate-100 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+              }`}
+              title="Filtrar instantaneamente apenas o que não foi dado baixa (A Vencer, Vence Hoje e Em Atraso)"
+            >
+              <Clock className={`w-3.5 h-3.5 ${onlyPending ? 'text-white' : 'text-amber-500'}`} />
+              <span>Apenas Pendentes</span>
+              {onlyPending && (
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              )}
             </button>
           </div>
 
@@ -583,11 +527,20 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
             {/* Filtro Status */}
             <div className="lg:col-span-2">
               <select
-                value={selectedStatus}
-                onChange={e => setSelectedStatus(e.target.value)}
+                value={onlyPending ? 'pendente' : selectedStatus}
+                onChange={e => {
+                  if (e.target.value === 'pendente') {
+                    setOnlyPending(true);
+                    setSelectedStatus('all');
+                  } else {
+                    setOnlyPending(false);
+                    setSelectedStatus(e.target.value);
+                  }
+                }}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               >
                 <option value="all">Todos os Status</option>
+                <option value="pendente">⚡ Apenas Pendentes (A Pagar)</option>
                 <option value="A Vencer">A Vencer</option>
                 <option value="Vence Hoje">Vence Hoje</option>
                 <option value="Em Atraso">Em Atraso</option>

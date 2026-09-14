@@ -61,12 +61,24 @@ export function analyzeCatalogProducts(
 
   for (const rawItem of rawItems) {
     const rawCod = (rawItem.codigo || '').toUpperCase().trim();
+    const rawFornecCod = (rawItem.codigoFornecedor || '').toUpperCase().trim();
+    const rawInternoCod = (rawItem.codigoInterno || '').toUpperCase().trim();
     const rawEan = (rawItem.eanBarcode || '').trim();
     const normDesc = normalizeText(rawItem.descricao);
 
     // 1. Tentar encontrar produto correspondente no catálogo
     let matchedProduct: Product | undefined = existingCatalog.find(p => {
-      if (rawCod && (p.codigo?.toUpperCase().trim() === rawCod || p.codigoFornecedor?.toUpperCase().trim() === rawCod || p.codigoInterno?.toUpperCase().trim() === rawCod)) {
+      const pCod = p.codigo?.toUpperCase().trim();
+      const pFornec = p.codigoFornecedor?.toUpperCase().trim();
+      const pInterno = p.codigoInterno?.toUpperCase().trim();
+
+      if (rawInternoCod && (pInterno === rawInternoCod || pCod === rawInternoCod)) {
+        return true;
+      }
+      if (rawFornecCod && (pFornec === rawFornecCod || pCod === rawFornecCod)) {
+        return true;
+      }
+      if (rawCod && (pCod === rawCod || pFornec === rawCod || pInterno === rawCod)) {
         return true;
       }
       if (rawEan && (p.eanBarcode?.trim() === rawEan || p.codigoBarras?.trim() === rawEan)) {
@@ -86,7 +98,7 @@ export function analyzeCatalogProducts(
         ...matchedProduct,
         supplierId: supplier.id,
         nomeFornecedor: supplierName || matchedProduct.nomeFornecedor || '',
-        codigoFornecedor: rawItem.codigo || matchedProduct.codigoFornecedor,
+        codigoFornecedor: rawItem.codigoFornecedor || rawItem.codigo || matchedProduct.codigoFornecedor,
         codigoBarras: rawItem.eanBarcode || matchedProduct.codigoBarras || matchedProduct.eanBarcode,
         eanBarcode: rawItem.eanBarcode || matchedProduct.eanBarcode || matchedProduct.codigoBarras,
         precoUnitarioPadrao: rawItem.precoUnitario > 0 ? rawItem.precoUnitario : matchedProduct.precoUnitarioPadrao,
@@ -106,7 +118,7 @@ export function analyzeCatalogProducts(
       });
     } else {
       // Produto NOVO - precisa ser cadastrado com código único
-      let assignedCode = rawItem.codigo || '';
+      let assignedCode = rawItem.codigoInterno || rawItem.codigo || '';
       if (!assignedCode || existingCodes.has(assignedCode.toUpperCase()) || createdKeysInBatch.has(assignedCode.toUpperCase())) {
         maxSeq++;
         assignedCode = `PRD-${String(maxSeq).padStart(4, '0')}`;
@@ -119,7 +131,7 @@ export function analyzeCatalogProducts(
         id: `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         codigo: assignedCode,
         codigoInterno: assignedCode,
-        codigoFornecedor: rawItem.codigo || undefined,
+        codigoFornecedor: rawItem.codigoFornecedor || rawItem.codigo || undefined,
         codigoBarras: rawItem.eanBarcode || undefined,
         descricao: rawItem.descricao,
         categoria: 'Bazar / Utilidades',

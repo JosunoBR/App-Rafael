@@ -165,7 +165,11 @@ export function getProductsList(): Product[] {
 }
 
 export function saveProductsList(products: Product[]): void {
-  localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+  try {
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+  } catch (err) {
+    console.warn('Aviso: Limite de armazenamento local excedido, produtos preservados no banco SQLite:', err);
+  }
 }
 
 export function saveProduct(product: Product): Product[] {

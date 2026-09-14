@@ -44,6 +44,15 @@ app.use(errorHandler);
 async function bootstrap() {
   try {
     await getDatabase(); // Inicializa SQLite e executa migrações/seed
+
+    // Sincroniza automaticamente pedidos pendentes com o financeiro na inicialização
+    try {
+      const financialService = require('./src/services/financialService');
+      await financialService.syncOrdersToFinancial();
+    } catch (syncErr) {
+      console.warn('Aviso: Falha na sincronização automática inicial de pedidos:', syncErr.message);
+    }
+
     app.listen(config.PORT, () => {
       console.log(`🚀 Servidor Backend SQLite da Rede Mega 12 rodando na porta ${config.PORT}`);
       console.log(`🛡️ Segurança: Helmet, JWT e Bcrypt Ativos | Clean Architecture (SRP + DIP + RBAC)`);

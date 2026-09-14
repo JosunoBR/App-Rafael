@@ -22,13 +22,20 @@ export interface ExcelImportHeader {
 export interface ExcelImportRawItem {
   rowNumber: number;
   codigo: string;
+  codigoFornecedor?: string;
+  codigoInterno?: string;
   descricao: string;
   ncm?: string;
   eanBarcode?: string;
+  unidadeMedida?: string;
   qtdNoPacote: number;
   qtdPacotes: number;
   qtdTotalUnidades: number;
   precoUnitario: number;
+  aliquotaIpi?: number;
+  valorIpi?: number;
+  percentualDesconto?: number;
+  valorDescontoItem?: number;
   valorTotalBruto: number;
   pdvSugerido: number;
   custoTotalInformado?: number;

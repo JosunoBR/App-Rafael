@@ -19,7 +19,8 @@ import {
   RefreshCw,
   Mail,
   Phone,
-  User
+  User,
+  Download
 } from 'lucide-react';
 import { 
   Supplier, 
@@ -33,6 +34,7 @@ import { analyzeCatalogProducts, persistImportedCatalogProducts } from './catalo
 import { mapParsedExcelToOrder } from './orderMapper';
 import { ParsedExcelOrder, CatalogProductStatus } from './types';
 import { formatISODateToBR } from './excelDateHelper';
+import { downloadModelTemplate } from './modelTemplateGenerator';
 
 interface OrderImportModalProps {
   isOpen: boolean;
@@ -61,6 +63,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
 
   // Fechar com a tecla Escape
   useEffect(() => {
@@ -333,7 +336,55 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
 
           {/* ESTADO 1: Upload do Arquivo */}
           {!parsedData && (
-            <div className="space-y-6">
+            <div className="space-y-5">
+              
+              {/* Card de Download da Planilha Modelo Oficial */}
+              <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-slate-50 to-emerald-500/5 dark:from-emerald-950/40 dark:via-slate-900/60 dark:to-emerald-950/20 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/20">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                        Planilha Modelo Oficial (Padrão Rede Mega 12)
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-900/80 dark:text-emerald-300">
+                        Novo Layout v2.0
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Contém todos os campos obrigatórios (Código PRD, EAN-13, NCM, Unidade, Separação das 20 Lojas e Fórmulas Automáticas) para evitar erros de importação.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setIsDownloadingTemplate(true);
+                    try {
+                      await downloadModelTemplate();
+                    } catch (err: any) {
+                      setError(err.message || 'Erro ao baixar planilha modelo.');
+                    } finally {
+                      setIsDownloadingTemplate(false);
+                    }
+                  }}
+                  disabled={isDownloadingTemplate}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer shrink-0 disabled:opacity-60"
+                  title="Baixar modelo em formato Excel (.xlsx)"
+                >
+                  {isDownloadingTemplate ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span>Baixar Planilha Modelo (.xlsx)</span>
+                </button>
+              </div>
+
               <div
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}

@@ -142,26 +142,26 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
 
   // Determinar onde inicia a tabela de itens para limitar a varredura do cabeçalho
   let tableHeaderRowIndex = -1;
-  for (let r = 0; r < Math.min(matrix.length, 20); r++) {
+  for (let r = 0; r < Math.min(matrix.length, 25); r++) {
     const row = matrix[r] || [];
     const rowText = row.map(c => String(c).toUpperCase().trim());
-    if (rowText.includes('CODIGO') || rowText.includes('CÓDIGO') || rowText.includes('DESCRICAO') || rowText.includes('DESCRIÇÃO') || rowText.some(t => t.includes('REFER'))) {
+    if (rowText.some(t => t.includes('CODIGO') || t.includes('CÓDIGO') || t.includes('DESCRICAO') || t.includes('DESCRIÇÃO') || t.includes('REFER'))) {
       tableHeaderRowIndex = r;
       break;
     }
   }
-  const maxHeaderRow = tableHeaderRowIndex !== -1 ? tableHeaderRowIndex : 7;
+  const maxHeaderRow = tableHeaderRowIndex !== -1 ? tableHeaderRowIndex : 15;
 
-  // 1. Linha 3 do Excel (índice 2): FORNECEDOR (Col A/B), DATA ENTREGA (Col H/I)
+  // 1. Linha 3 do Excel legado (índice 2): FORNECEDOR (Col A/B), DATA ENTREGA (Col H/I)
   const rowExcel3 = matrix[2] || [];
   const cellA3 = String(rowExcel3[0] || '').trim();
   if (cellA3.toUpperCase().startsWith('FORNECEDOR:')) {
     const ext = cellA3.replace(/^FORNECEDOR:\s*/i, '').trim();
-    if (ext) fornecedorNome = ext;
-    else if (rowExcel3[1]) fornecedorNome = String(rowExcel3[1]).trim();
+    if (ext && !isBuyerCompanyData(ext)) fornecedorNome = ext;
+    else if (rowExcel3[1] && !isBuyerCompanyData(rowExcel3[1])) fornecedorNome = String(rowExcel3[1]).trim();
   }
 
-  // Contato do fornecedor em Col E..G (índices 4..6)
+  // Contato do fornecedor em Col E..G (índices 4..6) em planilhas legadas
   for (let c = 4; c <= 6; c++) {
     const contactVal = String(rowExcel3[c] || '').trim();
     if (contactVal && !isBuyerCompanyData(contactVal)) {
@@ -171,13 +171,13 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
     }
   }
 
-  // 2. Linha 4 do Excel (índice 3): VENDEDOR (Col A/B) e CONTATO DO VENDEDOR (Col E..G)
+  // 2. Linha 4 do Excel legado (índice 3): VENDEDOR (Col A/B) e CONTATO DO VENDEDOR (Col E..G)
   const rowExcel4 = matrix[3] || [];
   const cellA4 = String(rowExcel4[0] || '').trim();
   if (cellA4.toUpperCase().startsWith('VENDEDOR:')) {
     const ext = cellA4.replace(/^VENDEDOR:\s*/i, '').trim();
-    if (ext) vendedor = ext;
-    else if (rowExcel4[1]) vendedor = String(rowExcel4[1]).trim();
+    if (ext && !isBuyerCompanyData(ext)) vendedor = ext;
+    else if (rowExcel4[1] && !isBuyerCompanyData(rowExcel4[1])) vendedor = String(rowExcel4[1]).trim();
   }
 
   // Contato do vendedor na Linha 4 (sob CONTATO, Col E..G)
@@ -189,7 +189,7 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
     }
   }
 
-  // 3. Linha 5 do Excel (índice 4): COND. PAG. (Col A/B)
+  // 3. Linha 5 do Excel legado (índice 4): COND. PAG. (Col A/B)
   const rowExcel5 = matrix[4] || [];
   const cellA5 = String(rowExcel5[0] || '').trim();
   if (cellA5.toUpperCase().startsWith('COND. PAG.')) {
@@ -206,54 +206,60 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
       if (!cellVal) continue;
 
       const upper = cellVal.toUpperCase();
+      const nextCellVal = String(row[c + 1] || '').trim();
 
-      // Se estiver nas colunas de Observações (Colunas >= 9 ou cabeçalho OBSERVAÇÕES)
-      if (c >= 9) {
-        // NUNCA processa colunas >= 9 como dados do fornecedor (são da nossa empresa)
-        if (!isBuyerCompanyData(cellVal)) {
-          // Ignora rótulo do cabeçalho
-          if (!upper.startsWith('OBSERVAÇÕES') && !upper.startsWith('OBSERVACOES') && !upper.startsWith('VALOR TOTAL')) {
-            if (!observacoesList.includes(cellVal)) {
-              observacoesList.push(cellVal);
-            }
+      // N° PEDIDO / Nº PEDIDO
+      if (upper.includes('N° PEDIDO') || upper.includes('NUMERO PEDIDO') || upper.includes('Nº PEDIDO') || upper.startsWith('Nº PEDIDO:') || upper.startsWith('N° PEDIDO:')) {
+        let extNum = cellVal.replace(/^N[°º]\s*PEDIDO:?\s*/i, '').trim();
+        if (!extNum && nextCellVal && !nextCellVal.toUpperCase().includes('FORNECEDOR') && !nextCellVal.toUpperCase().includes('CONTATO')) {
+          extNum = nextCellVal;
+        }
+        if (extNum && !isBuyerCompanyData(extNum)) {
+          numeroPedido = extNum;
+        }
+      }
+
+      // FORNECEDOR / RAZÃO SOCIAL DO FORNECEDOR
+      // No modelo novo, fica na coluna H (c >= 6) com rótulo "Razão Social:" ou "Fornecedor:"
+      if (upper === 'FORNECEDOR:' || upper === 'RAZÃO SOCIAL:' || upper === 'RAZAO SOCIAL:' || upper.startsWith('FORNECEDOR:')) {
+        let extracted = cellVal.replace(/^(FORNECEDOR|RAZÃO SOCIAL|RAZAO SOCIAL):?\s*/i, '').trim();
+        if (!extracted && nextCellVal) extracted = nextCellVal;
+        if (extracted && !isBuyerCompanyData(extracted)) {
+          // Se for na coluna 0, só aceita se for claramente fornecedor
+          if (c >= 6 || !fornecedorNome) {
+            fornecedorNome = extracted;
           }
         }
-        continue; // Não permite extração de CNPJ, email ou vendedor desta área
       }
 
-      // N° PEDIDO
-      if (upper.includes('N° PEDIDO') || upper.includes('NUMERO PEDIDO') || upper.includes('Nº PEDIDO')) {
-        const nextCell = String(row[c + 1] || '').trim();
-        if (nextCell && !nextCell.toUpperCase().includes('FORNECEDOR') && !nextCell.toUpperCase().includes('CONTATO')) {
-          numeroPedido = nextCell;
-        }
-      }
-
-      // FORNECEDOR (caso não esteja fixo na célula A3)
-      if (!fornecedorNome && upper.startsWith('FORNECEDOR:')) {
-        const extracted = cellVal.replace(/^FORNECEDOR:\s*/i, '').trim();
-        if (extracted) {
-          fornecedorNome = extracted;
-        } else if (row[c + 1]) {
-          fornecedorNome = String(row[c + 1]).trim();
-        }
-      }
-
-      // VENDEDOR (caso não esteja fixo na célula A4)
-      if (!vendedor && upper.startsWith('VENDEDOR:')) {
-        const extracted = cellVal.replace(/^VENDEDOR:\s*/i, '').trim();
-        if (extracted) {
+      // VENDEDOR
+      if (upper === 'VENDEDOR:' || upper.startsWith('VENDEDOR:')) {
+        let extracted = cellVal.replace(/^VENDEDOR:\s*/i, '').trim();
+        if (!extracted && nextCellVal) extracted = nextCellVal;
+        if (extracted && !isBuyerCompanyData(extracted)) {
           vendedor = extracted;
-        } else if (row[c + 1]) {
-          vendedor = String(row[c + 1]).trim();
+        }
+      }
+
+      // WHATSAPP / TELEFONE DO VENDEDOR / CONTATO
+      if (upper.includes('WHATSAPP') || upper.includes('FONE') || upper.includes('CONTATO DO VENDEDOR')) {
+        if (nextCellVal && !isBuyerCompanyData(nextCellVal)) {
+          telefoneVendedor = nextCellVal;
+        }
+      }
+
+      // EMAIL
+      if (upper.includes('E-MAIL VENDAS') || upper.includes('EMAIL COMERCIAL') || upper.includes('E-MAIL:')) {
+        if (nextCellVal && !isBuyerCompanyData(nextCellVal)) {
+          email = nextCellVal;
         }
       }
 
       // COND. PAG.
-      if (!condicaoPagamento && (upper.startsWith('COND. PAG.') || upper.startsWith('CONDICAO PAG') || upper.startsWith('COND. PAGAMENTO'))) {
-        let extracted = cellVal.replace(/^COND\.\s*PAG\.\s*:?\s*/i, '').trim();
-        if (!extracted && row[c + 1]) {
-          extracted = String(row[c + 1]).trim();
+      if (upper.startsWith('COND. PAG') || upper.startsWith('CONDICAO PAG') || upper.startsWith('COND. PAGAMENTO')) {
+        let extracted = cellVal.replace(/^COND\.\s*PAG\w*\.?\s*:?\s*/i, '').trim();
+        if (!extracted && nextCellVal) {
+          extracted = nextCellVal;
         }
         if (extracted) {
           condicaoPagamento = extracted;
@@ -261,24 +267,57 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
       }
 
       // % NOTA (Faturado em NF)
-      if (upper === '% NOTA' || upper === '% NOTA FISCAL' || upper === '% NF' || upper === 'NOTA FISCAL %' || upper === '% FATURADO') {
-        const nextColVal = row[c + 1];
-        const nextRowVal = matrix[r + 1]?.[c];
-        const notaCandidate = (parseNumber(nextColVal) > 0) ? nextColVal : ((parseNumber(nextRowVal) > 0) ? nextRowVal : 0);
-        const parsedNota = parseNumber(notaCandidate);
+      if (
+        upper === '% NOTA' || upper === '% NOTA:' || upper === '% NOTA FISCAL' || 
+        upper === '% NF' || upper === 'NOTA FISCAL %' || upper === '% FATURADO' ||
+        upper.startsWith('% NOTA') || upper.startsWith('NOTA FISCAL')
+      ) {
+        let notaRaw: any = null;
+        // Verifica se o valor veio na mesma célula (ex: "% NOTA: 100%")
+        const inlineMatch = cellVal.match(/(?:%\s*NOTA|NOTA\s*FISCAL)\s*:?\s*(\d+(?:[.,]\d+)?\s*%?)/i);
+        if (inlineMatch && inlineMatch[1]) {
+          notaRaw = inlineMatch[1];
+        } else {
+          const nextColVal = row[c + 1];
+          const nextRowVal = matrix[r + 1]?.[c];
+          notaRaw = (nextColVal !== undefined && nextColVal !== '') ? nextColVal : nextRowVal;
+        }
+        const parsedNota = parsePercentage(notaRaw);
         if (parsedNota > 0) {
-          percentualNota = parsedNota <= 1 ? parsedNota * 100 : parsedNota;
+          percentualNota = parsedNota;
         }
       }
 
-      // % OFF (Desconto Comercial Direto)
-      if (upper === '% OFF' || upper === 'DESCONTO OFF' || upper === '%OFF' || upper === 'DESC. COMERCIAL' || upper === 'DESCONTO COMERCIAL') {
-        const nextColVal = row[c + 1];
-        const nextRowVal = matrix[r + 1]?.[c];
-        const offCandidate = (parseNumber(nextColVal) > 0) ? nextColVal : ((parseNumber(nextRowVal) > 0) ? nextRowVal : 0);
-        const parsedOff = parseNumber(offCandidate);
+      // % OFF / DESCONTO COMERCIAL (Desconto Direto Comercial Negociado)
+      const isOffOrDiscountHeader = (
+        upper === '% OFF' || upper === '% OFF:' || upper === 'OFF %' || upper === 'OFF %:' || 
+        upper === 'OFF%' || upper === '%OFF' || upper === 'DESCONTO OFF' || upper === 'DESCONTO OFF:' ||
+        upper === 'DESCONTO COMERCIAL' || upper === 'DESCONTO COMERCIAL:' || 
+        upper === 'DESCONTO COMERCIAL (%)' || upper === 'DESCONTO COMERCIAL (%):' ||
+        upper === 'DESC. COMERCIAL' || upper === 'DESC. COMERCIAL:' || 
+        upper === 'DESC. COMERCIAL (%)' || upper === 'DESC. COMERCIAL (%):' ||
+        upper === 'DESC COMERCIAL' || upper === 'DESC COMERCIAL (%)' ||
+        upper === 'DESCONTO (%)' || upper === 'DESCONTO (%):' ||
+        upper === 'DESC (%)' || upper === 'DESC (%):' ||
+        upper === 'DESCONTO:' || upper === '% DESCONTO' || upper === '% DESC' ||
+        upper.includes('% OFF') || upper.includes('OFF %') || upper.includes('DESCONTO COMERCIAL') ||
+        (upper.startsWith('DESCONTO') && !upper.includes('TOTAL') && !upper.includes('ITEM') && !upper.includes('PRODUTO'))
+      );
+
+      if (isOffOrDiscountHeader && !upper.includes('DESCARGA') && !upper.includes('DESCARREGAMENTO')) {
+        let offRaw: any = null;
+        // Verifica se o valor veio na mesma célula (ex: "% OFF: 5%" ou "Desconto Comercial: 10%")
+        const inlineMatch = cellVal.match(/(?:%\s*OFF|OFF\s*%|DESCONTO(?:\s*COMERCIAL)?|DESC\.?(?:\s*COMERCIAL)?)\s*:?\s*(\d+(?:[.,]\d+)?\s*%?)/i);
+        if (inlineMatch && inlineMatch[1]) {
+          offRaw = inlineMatch[1];
+        } else {
+          const nextColVal = row[c + 1];
+          const nextRowVal = matrix[r + 1]?.[c];
+          offRaw = (nextColVal !== undefined && nextColVal !== '') ? nextColVal : nextRowVal;
+        }
+        const parsedOff = parsePercentage(offRaw);
         if (parsedOff > 0) {
-          percentualDescontoOff = parsedOff <= 1 ? parsedOff * 100 : parsedOff;
+          percentualDescontoOff = parsedOff;
         }
       }
 
@@ -289,31 +328,43 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
         dataPedidoVal = (nextColVal !== undefined && nextColVal !== '') ? nextColVal : nextRowVal;
       }
 
-      // DATA ENTREGA
-      if (upper.includes('DATA ENTREGA')) {
+      // DATA ENTREGA / ENTREGA
+      if (upper === 'ENTREGA:' || upper.includes('DATA ENTREGA') || upper.includes('PREVISÃO DE ENTREGA') || upper.includes('PREVISAO DE ENTREGA')) {
         const nextColVal = row[c + 1];
         const nextRowVal = matrix[r + 1]?.[c];
         dataEntregaVal = (nextColVal !== undefined && nextColVal !== '') ? nextColVal : nextRowVal;
       }
 
-      // FRETE
-      if (upper.startsWith('FRETE')) {
-        const freteText = cellVal.replace(/^FRETE\s*:?\s*/i, '').trim() || String(row[c + 1] || '').trim().toUpperCase();
+      // FRETE / TIPO FRETE
+      if (upper.includes('FRETE')) {
+        const freteText = cellVal.replace(/^TIPO\s*FRETE:?\s*|^FRETE:?\s*/i, '').trim() || String(row[c + 1] || '').trim().toUpperCase();
         if (freteText.includes('FOB')) tipoFrete = 'FOB';
         else if (freteText.includes('CIF')) tipoFrete = 'CIF';
-        else tipoFrete = 'Retira';
+        else if (freteText.includes('RETIRA')) tipoFrete = 'Retira';
       }
 
-      // CNPJ na coluna do fornecedor (que não seja da nossa empresa)
+      // CNPJ do fornecedor (que não seja da empresa compradora)
       const cnpjMatch = cellVal.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
       if (cnpjMatch && !cnpj && !isBuyerCompanyData(cnpjMatch[0])) {
         cnpj = cnpjMatch[0];
+      }
+      if (nextCellVal) {
+        const nextCnpjMatch = nextCellVal.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
+        if (nextCnpjMatch && !cnpj && !isBuyerCompanyData(nextCnpjMatch[0])) {
+          cnpj = nextCnpjMatch[0];
+        }
       }
 
       // Email do fornecedor (que não seja da nossa empresa)
       const emailMatch = cellVal.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
       if (emailMatch && !email && !isBuyerCompanyData(emailMatch[0])) {
         email = emailMatch[0];
+      }
+      if (nextCellVal) {
+        const nextEmailMatch = nextCellVal.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
+        if (nextEmailMatch && !email && !isBuyerCompanyData(nextEmailMatch[0])) {
+          email = nextEmailMatch[0];
+        }
       }
 
       // Telefone da empresa fornecedora
@@ -322,9 +373,15 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
         telefoneEmpresa = phoneMatch[0].trim();
       }
 
-      // Textos operacionais na área do pedido
-      if (upper.includes('DESCARREGAMENTO') || upper.includes('DESCARGA') || upper.includes('PALETE') || upper.includes('BOLETOS E PEDIDOS')) {
-        if (!observacoesList.includes(cellVal)) {
+      // Textos operacionais e observações na área do pedido
+      if (upper.startsWith('OBSERVAÇÕES') || upper.startsWith('OBSERVACOES') || upper.startsWith('OBSERVAÇÃO') || upper.startsWith('OBSERVACAO')) {
+        let obsText = cellVal.replace(/^OBSERVA[ÇC][ÕO0]ES?:?\s*/i, '').trim();
+        if (!obsText && nextCellVal) obsText = nextCellVal;
+        if (obsText && !isBuyerCompanyData(obsText) && !observacoesList.includes(obsText)) {
+          observacoesList.push(obsText);
+        }
+      } else if (upper.includes('DESCARREGAMENTO') || upper.includes('DESCARGA') || upper.includes('PALETE') || upper.includes('BOLETOS E PEDIDOS')) {
+        if (!isBuyerCompanyData(cellVal) && !observacoesList.includes(cellVal)) {
           observacoesList.push(cellVal);
         }
       }
@@ -366,27 +423,38 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
   let colMap: Record<string, number> = {};
 
   // Procurar a linha onde estão as colunas (CODIGO, DESCRICAO, VALOR TOTAL...)
-  for (let r = 0; r < Math.min(matrix.length, 20); r++) {
+  for (let r = 0; r < Math.min(matrix.length, 25); r++) {
     const row = matrix[r] || [];
     const rowText = row.map(c => String(c).toUpperCase().trim());
     
-    if (rowText.includes('CODIGO') || rowText.includes('CÓDIGO') || rowText.includes('DESCRICAO') || rowText.includes('DESCRIÇÃO') || rowText.some(t => t.includes('REFER'))) {
+    if (rowText.some(t => t.includes('CODIGO') || t.includes('CÓDIGO') || t.includes('DESCRICAO') || t.includes('DESCRIÇÃO') || t.includes('REFER'))) {
       headerRowIndex = r;
       row.forEach((cell, c) => {
         const clean = String(cell).toUpperCase().trim();
-        if (clean.includes('CODIGO') || clean.includes('CÓDIGO') || clean.includes('REFER')) colMap['codigo'] = c;
+        if (clean.includes('FORNECEDOR') && (clean.includes('COD') || clean.includes('CÓD') || clean.includes('REF'))) colMap['codigoFornecedor'] = c;
+        else if (clean.includes('INTERNO') || clean.includes('PRD')) colMap['codigoInterno'] = c;
+        else if (clean.includes('EAN') || clean.includes('BARRAS') || clean.includes('BARCODE')) colMap['ean'] = c;
+        else if (clean.includes('CODIGO') || clean.includes('CÓDIGO') || clean.includes('REFER')) colMap['codigo'] = c;
         else if (clean.includes('DESCRICAO') || clean.includes('DESCRIÇÃO')) colMap['descricao'] = c;
-        else if (clean === 'NCM') colMap['ncm'] = c;
-        else if (clean === 'EAN' || clean.includes('BARRAS') || clean.includes('BARCODE')) colMap['ean'] = c;
-        else if (clean.includes('EMBALAGEM') || clean.includes('QTD NO PAC') || clean.includes('QTD NO PEC') || clean.includes('QTD/CX') || clean.includes('QTD PACOTE') || clean.includes('QTD POR PACOTE') || clean.includes('UN/CX') || clean.includes('UN/PAC') || clean === 'EMB' || clean === 'CX') colMap['embalagem'] = c;
-        else if (clean.includes('PACOTES') || clean.includes('QTD DE PEC') || clean.includes('QTD CX')) colMap['pacotes'] = c;
-        else if (clean.includes('R$ UNIT') || clean === 'UNIT' || clean.includes('PRECO UNIT') || clean.includes('VALOR UNIT')) colMap['unit'] = c;
-        else if (clean.includes('TOTAL UNIDADE') || clean.includes('TOTAL UNIDADES') || clean.includes('QTD UNI') || clean === 'UNIDADES') colMap['unidades'] = c;
+        else if (clean === 'NCM' || clean.includes('NCM')) colMap['ncm'] = c;
+        else if (clean === 'UNID.' || clean === 'UNID' || clean.includes('UNIDADE DE MEDIDA') || clean === 'UM') colMap['unidade'] = c;
+        else if (clean.includes('EMBALAGEM') || clean.includes('QTD/CX') || clean.includes('QTD NO PAC') || clean.includes('QTD NO PEC') || clean.includes('QTD POR PACOTE') || clean.includes('UN/CX') || clean.includes('UN/PAC') || clean === 'EMB' || clean === 'CX') colMap['embalagem'] = c;
+        else if (clean.includes('PACOTES') || clean.includes('QTD CX') || clean.includes('QTD DE PEC') || clean.includes('QTD CAIXA')) colMap['pacotes'] = c;
+        else if (clean.includes('R$ UNIT') || clean === 'UNIT' || clean.includes('PRECO UNIT') || clean.includes('PREÇO UNIT') || clean.includes('VALOR UNIT')) colMap['unit'] = c;
+        else if (clean.includes('TOTAL PEÇAS') || clean.includes('TOTAL PECAS') || clean.includes('TOTAL UNIDADE') || clean.includes('TOTAL UNIDADES') || clean.includes('QTD UNI') || clean === 'UNIDADES') colMap['unidades'] = c;
+        else if (clean.includes('VALOR IPI') || clean.includes('TOTAL IPI')) colMap['valorIpi'] = c;
+        else if (clean.includes('% IPI') || clean === 'IPI' || clean.includes('ALIQ IPI')) colMap['ipi'] = c;
         else if (clean.includes('VALOR TOTAL') || clean === 'TOTAL R$' || clean === 'TOTAL') colMap['total'] = c;
         else if (clean === 'PDV' || clean.includes('PDV SUGERIDO') || clean.includes('VENDA')) colMap['pdv'] = c;
         else if (clean.includes('CUSTO TOTAL')) colMap['custoTotal'] = c;
-        else if (clean === 'MARGEM' || clean.includes('MARGEM')) colMap['margem'] = c;
+        else if (clean.includes('MARGEM')) colMap['margem'] = c;
+        else if (clean.includes('VALOR DESC') || clean === 'DESC (R$)' || clean.includes('DESCONTO (R$)')) colMap['descontoValor'] = c;
+        else if ((clean.includes('DESC') || clean.includes('DESCONTO') || clean.includes('OFF')) && !clean.includes('DESCR')) colMap['descontoPct'] = c;
       });
+
+      if (colMap['codigo'] === undefined) {
+        colMap['codigo'] = colMap['codigoFornecedor'] ?? colMap['codigoInterno'] ?? 0;
+      }
 
       // Se a coluna de preço unitário não tiver título na planilha mas estiver entre unidades e valor total
       if (colMap['unit'] === undefined && colMap['unidades'] !== undefined && colMap['total'] !== undefined && colMap['total'] - colMap['unidades'] === 2) {
@@ -415,7 +483,9 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
   for (let r = headerRowIndex + 1; r < matrix.length; r++) {
     const row = matrix[r] || [];
     
-    const codigoRaw = String(row[colMap['codigo'] ?? 0] || '').trim();
+    const codFornecRaw = colMap['codigoFornecedor'] !== undefined ? String(row[colMap['codigoFornecedor']] || '').trim() : '';
+    const codInternoRaw = colMap['codigoInterno'] !== undefined ? String(row[colMap['codigoInterno']] || '').trim() : '';
+    const codigoRaw = String(row[colMap['codigo'] ?? 0] || '').trim() || codFornecRaw || codInternoRaw;
     const descRaw = String(row[colMap['descricao'] ?? 1] || '').trim();
 
     // Se a descrição indicar resumo de total ou for linha vazia, encerra a leitura de itens
@@ -448,19 +518,32 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
     const pdvSugerido = parseNumber(row[colMap['pdv'] ?? 11]) || 12.00;
     const ncm = String(row[colMap['ncm'] ?? 2] || '').trim();
     const eanBarcode = String(row[colMap['ean'] ?? 4] || '').trim();
+    const unidadeMedida = colMap['unidade'] !== undefined ? String(row[colMap['unidade']] || '').trim() : undefined;
+    const aliquotaIpiRaw = colMap['ipi'] !== undefined ? parseNumber(row[colMap['ipi']]) : undefined;
+    const aliquotaIpi = aliquotaIpiRaw !== undefined ? (aliquotaIpiRaw <= 1 && aliquotaIpiRaw > 0 ? aliquotaIpiRaw * 100 : aliquotaIpiRaw) : undefined;
+    const valorIpi = colMap['valorIpi'] !== undefined ? parseNumber(row[colMap['valorIpi']]) : undefined;
+    const percentualDesconto = colMap['descontoPct'] !== undefined ? parsePercentage(row[colMap['descontoPct']]) : undefined;
+    const valorDescontoItem = colMap['descontoValor'] !== undefined ? parseNumber(row[colMap['descontoValor']]) : undefined;
     const custoTotalInformado = parseNumber(row[colMap['custoTotal'] ?? 12]);
     const margemInformada = parseNumber(row[colMap['margem'] ?? 13]);
 
     items.push({
       rowNumber: r + 1,
       codigo: codigoRaw || `ITEM-${items.length + 1}`,
+      codigoFornecedor: codFornecRaw || codigoRaw || undefined,
+      codigoInterno: codInternoRaw || undefined,
       descricao: descRaw,
       ncm: ncm || undefined,
       eanBarcode: eanBarcode || undefined,
+      unidadeMedida: unidadeMedida || undefined,
       qtdNoPacote,
       qtdPacotes,
       qtdTotalUnidades: Math.round(qtdTotalUnidades),
       precoUnitario,
+      aliquotaIpi,
+      valorIpi,
+      percentualDesconto: percentualDesconto || undefined,
+      valorDescontoItem: valorDescontoItem || undefined,
       valorTotalBruto,
       pdvSugerido,
       custoTotalInformado: custoTotalInformado || undefined,
@@ -525,15 +608,19 @@ function extractStoreSeparation(workbook: XLSX.WorkBook): Record<string, Record<
   if (!worksheet) return undefined;
 
   const matrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: '' });
-  if (matrix.length < 8) return undefined;
+  if (matrix.length < 5) return undefined;
 
-  // Localizar linha de cabeçalho das lojas (linha com "LOJA" ou códigos de lojas)
+  // Localizar linha de cabeçalho das lojas (linha com lojas ou códigos de lojas)
   let headerRow = -1;
   let storeCols: { name: string; col: number }[] = [];
   let codCol = 0;
 
   for (let r = 0; r < Math.min(matrix.length, 12); r++) {
     const row = matrix[r] || [];
+    const rowText = row.map(c => String(c).toUpperCase().trim());
+    // Pula linhas de agrupamento visual de clusters ("CLUSTER A", etc.)
+    if (rowText.some(t => t.includes('CLUSTER'))) continue;
+
     const storesFound: { name: string; col: number }[] = [];
     
     row.forEach((cell, c) => {
@@ -541,6 +628,8 @@ function extractStoreSeparation(workbook: XLSX.WorkBook): Record<string, Record<
       const up = txt.toUpperCase();
       if (up.includes('CODIGO') || up.includes('CÓDIGO')) {
         codCol = c;
+      } else if (c >= 5 && txt && !up.includes('TOTAL') && !up.includes('CONFER') && !up.includes('STATUS') && !up.includes('AUDITORIA')) {
+        storesFound.push({ name: txt, col: c });
       } else if (up.includes('LOJA') || up.startsWith('LJ') || /^\d{2}\s*-\s*[A-Z]+/.test(txt)) {
         storesFound.push({ name: txt, col: c });
       }
@@ -599,4 +688,38 @@ function parseNumber(val: any): number {
 
   const num = parseFloat(str);
   return isNaN(num) ? 0 : num;
+}
+
+/**
+ * Converte valor de porcentagem com segurança.
+ * - Trata strings com "%" (ex: "5%", "50%", "1%", "0%")
+ * - Trata números decimais (ex: 0.05 -> 5, 0.5 -> 50)
+ * - Trata números inteiros (ex: 5 -> 5, 10 -> 10)
+ * - Trata multiplicadores de atacado legados (ex: Fator 1.0 = sem desconto = 0% OFF)
+ */
+function parsePercentage(val: any): number {
+  if (val === null || val === undefined || val === '') return 0;
+  
+  // Se for string com símbolo "%" explícito (ex: "5%", "1%", "50%"):
+  if (typeof val === 'string' && val.includes('%')) {
+    const clean = val.replace(/%/g, '').trim();
+    const num = parseNumber(clean);
+    return isNaN(num) ? 0 : num;
+  }
+
+  // Se for número puro ou string sem "%":
+  const num = typeof val === 'number' ? (isNaN(val) ? 0 : val) : parseNumber(val);
+  if (num <= 0) return 0;
+
+  // Se for fração decimal entre 0 e 1 (ex: 0.05 -> 5%, 0.5 -> 50%):
+  if (num > 0 && num < 1) {
+    return Number((num * 100).toFixed(2));
+  }
+
+  // Caso especial: número 1 puro sem "%" em cabeçalho legado de atacado ("Fator 1" = 100% de preço = 0% de desconto)
+  if (num === 1 && typeof val === 'number') {
+    return 0;
+  }
+
+  return num;
 }

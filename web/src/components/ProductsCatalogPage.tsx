@@ -20,8 +20,11 @@ import {
   LayoutGrid,
   List,
   Building2,
-  Package
+  Package,
+  Loader2,
+  UploadCloud
 } from 'lucide-react';
+import { optimizeImageFile } from '../utils/imageUtils';
 import { Product, Supplier } from '../shared/types';
 import { handleCurrencyInput, formatCurrency } from '../utils/masks';
 
@@ -47,9 +50,9 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
 
   // Modal de Cadastro/Edição
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
-
-  // Modal de Zoom de Imagem
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
 
   // File Input Ref
@@ -117,7 +120,9 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
       ncm: '',
       supplierId: targetSupplier?.id || '',
       nomeFornecedor: targetSupplier?.razaoSocial || '',
-      ativo: true
+      ativo: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
     setIsModalOpen(true);
   };
@@ -133,17 +138,61 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
     setIsModalOpen(true);
   };
 
+  const processProductImageFile = async (file: File) => {
+    if (!file) return;
+    setIsProcessingPhoto(true);
+    try {
+      const base64 = await optimizeImageFile(file, 1200, 1200, 0.88);
+      if (base64) {
+        setEditingProduct(prev => prev ? { ...prev, fotoUrl: base64 } : null);
+      }
+    } catch (err) {
+      console.error('Erro ao processar imagem:', err);
+    } finally {
+      setIsProcessingPhoto(false);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    processProductImageFile(file);
+    e.target.value = '';
+  };
 
-    // Converter para base64 para armazenar localmente de forma autônoma
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      setEditingProduct(prev => prev ? { ...prev, fotoUrl: base64 } : null);
-    };
-    reader.readAsDataURL(file);
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+    setIsDraggingPhoto(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDraggingPhoto(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingPhoto(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(file.name)) {
+        processProductImageFile(file);
+        return;
+      }
+    }
+
+    const textData = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
+    if (textData && textData.trim().length > 0) {
+      setEditingProduct(prev => prev ? { ...prev, fotoUrl: textData.trim() } : null);
+    }
   };
 
   const handleSaveModal = (e: React.FormEvent) => {
@@ -619,22 +668,57 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
             {/* Formulário */}
             <form onSubmit={handleSaveModal} className="p-6 space-y-4">
               
-              {/* Seção de Foto do Produto (Upload & Preview) */}
-              <div className="p-4 rounded-2xl border-2 border-dashed border-indigo-300/80 dark:border-indigo-800/80 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-3">
-                <label className="text-xs font-extrabold text-indigo-950 dark:text-indigo-300 block">
-                  Foto do Produto
-                </label>
+              {/* Seção de Foto do Produto (Upload & Preview com Drag & Drop) */}
+              <div 
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`p-4 rounded-2xl border-2 border-dashed transition-all space-y-3 ${
+                  isDraggingPhoto
+                    ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/80 ring-4 ring-emerald-500/20 scale-[1.01]'
+                    : 'border-indigo-300/80 dark:border-indigo-800/80 bg-indigo-50/30 dark:bg-indigo-950/20'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-indigo-950 dark:text-indigo-300 block">
+                    Foto do Produto
+                  </label>
+                  {isDraggingPhoto && (
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 animate-pulse flex items-center gap-1">
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      Solte a imagem aqui!
+                    </span>
+                  )}
+                </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-4">
                   
                   {/* Preview da Foto */}
-                  <div className="w-28 h-28 rounded-2xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800/60 overflow-hidden flex items-center justify-center shrink-0 shadow-xs relative group">
-                    {editingProduct.fotoUrl ? (
+                  <div 
+                    onClick={() => {
+                      if (!editingProduct.fotoUrl && !isProcessingPhoto) {
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    className={`w-28 h-28 rounded-2xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800/60 overflow-hidden flex items-center justify-center shrink-0 shadow-xs relative group ${
+                      !editingProduct.fotoUrl ? 'cursor-pointer hover:border-indigo-400' : ''
+                    }`}
+                  >
+                    {isProcessingPhoto ? (
+                      <div className="text-center p-2 text-indigo-600 dark:text-indigo-400">
+                        <Loader2 className="w-6 h-6 mx-auto animate-spin" />
+                        <span className="text-[9px] font-bold block mt-1">Carregando...</span>
+                      </div>
+                    ) : editingProduct.fotoUrl ? (
                       <>
                         <img src={editingProduct.fotoUrl} alt="Preview" className="w-full h-full object-cover" />
                         <button
                           type="button"
-                          onClick={() => setEditingProduct(prev => prev ? { ...prev, fotoUrl: '' } : null)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingProduct(prev => prev ? { ...prev, fotoUrl: '' } : null);
+                          }}
                           className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs"
                           title="Remover foto"
                         >
@@ -644,7 +728,9 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                     ) : (
                       <div className="flex flex-col items-center justify-center text-slate-400 gap-1 p-2 text-center">
                         <ImageIcon className="w-7 h-7 text-indigo-400" />
-                        <span className="text-[9px] font-semibold leading-tight">Sem imagem</span>
+                        <span className="text-[9px] font-semibold leading-tight">
+                          {isDraggingPhoto ? 'Soltar aqui' : 'Arraste ou clique'}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -662,14 +748,14 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/60 hover:bg-indigo-200 border border-indigo-300 dark:border-indigo-700 transition"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/60 hover:bg-indigo-200 border border-indigo-300 dark:border-indigo-700 transition cursor-pointer"
                     >
                       <Upload className="w-3.5 h-3.5" />
                       <span>Selecionar Foto do Computador</span>
                     </button>
 
                     <div className="text-[10px] text-slate-400">
-                      Ou cole o link/URL da imagem abaixo:
+                      Ou arraste a imagem diretamente para este quadro, ou cole a URL abaixo:
                     </div>
 
                     <input

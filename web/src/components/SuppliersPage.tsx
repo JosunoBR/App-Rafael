@@ -22,8 +22,10 @@ import {
   Check,
   Star,
   MapPin,
-  Mail
+  Mail,
+  Loader2
 } from 'lucide-react';
+import { optimizeImageFile } from '../utils/imageUtils';
 import { Supplier, Product } from '../shared/types';
 import { maskCNPJ, maskPhone, handleCurrencyInput, formatCurrency } from '../utils/masks';
 
@@ -107,6 +109,8 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
     eanBarcode: ''
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<Partial<Supplier>>({
@@ -217,14 +221,58 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
     });
   };
 
+  const processProductPhotoFile = async (file: File) => {
+    if (!file) return;
+    setIsProcessingPhoto(true);
+    try {
+      const base64 = await optimizeImageFile(file, 1200, 1200, 0.88);
+      if (base64) {
+        setNewProductData(prev => ({ ...prev, fotoUrl: base64 }));
+      }
+    } catch (err) {
+      console.error('Erro ao processar imagem:', err);
+    } finally {
+      setIsProcessingPhoto(false);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setNewProductData(prev => ({ ...prev, fotoUrl: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
+    if (file) {
+      processProductPhotoFile(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleProductPhotoDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDraggingPhoto) setIsDraggingPhoto(true);
+  };
+
+  const handleProductPhotoDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingPhoto(false);
+  };
+
+  const handleProductPhotoDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingPhoto(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        processProductPhotoFile(file);
+        return;
+      }
+    }
+
+    const textData = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
+    if (textData && (textData.startsWith('http://') || textData.startsWith('https://') || textData.startsWith('data:image/'))) {
+      setNewProductData(prev => ({ ...prev, fotoUrl: textData.trim() }));
+    }
   };
 
   const handleSaveProductFromModal = (e: React.FormEvent) => {
@@ -711,20 +759,50 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                 </span>
               </div>
 
-              {/* Upload de Foto */}
-              <div className="p-4 rounded-2xl border-2 border-dashed border-indigo-300/80 dark:border-indigo-800/80 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-3">
-                <label className="text-xs font-extrabold text-indigo-950 dark:text-indigo-300 block">
-                  Foto do Produto
-                </label>
+              {/* Upload de Foto com Suporte a Drag & Drop */}
+              <div 
+                onDragOver={handleProductPhotoDragOver}
+                onDragEnter={handleProductPhotoDragOver}
+                onDragLeave={handleProductPhotoDragLeave}
+                onDrop={handleProductPhotoDrop}
+                className={`p-4 rounded-2xl border-2 border-dashed transition-all duration-200 space-y-3 ${
+                  isDraggingPhoto 
+                    ? 'border-indigo-500 bg-indigo-100/70 dark:bg-indigo-900/40 ring-4 ring-indigo-400/20 scale-[1.01]' 
+                    : 'border-indigo-300/80 dark:border-indigo-800/80 bg-indigo-50/30 dark:bg-indigo-950/20'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-indigo-950 dark:text-indigo-300 block">
+                    Foto do Produto
+                  </label>
+                  {isDraggingPhoto && (
+                    <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 animate-pulse">
+                      Solte a foto aqui!
+                    </span>
+                  )}
+                </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-4">
-                  <div className="w-24 h-24 rounded-2xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800/60 overflow-hidden flex items-center justify-center shrink-0 shadow-xs relative group">
-                    {newProductData.fotoUrl ? (
+                  <div 
+                    onClick={() => !newProductData.fotoUrl && fileInputRef.current?.click()}
+                    className={`w-24 h-24 rounded-2xl bg-white dark:bg-slate-800 border overflow-hidden flex items-center justify-center shrink-0 shadow-xs relative group ${
+                      !newProductData.fotoUrl ? 'cursor-pointer hover:border-indigo-400' : ''
+                    } ${isDraggingPhoto ? 'border-indigo-500 ring-2 ring-indigo-400' : 'border-indigo-200 dark:border-indigo-800/60'}`}
+                  >
+                    {isProcessingPhoto ? (
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                        <span className="text-[9px] text-slate-500 font-medium">Otimizando...</span>
+                      </div>
+                    ) : newProductData.fotoUrl ? (
                       <>
                         <img src={newProductData.fotoUrl} alt="Preview" className="w-full h-full object-cover" />
                         <button
                           type="button"
-                          onClick={() => setNewProductData(prev => ({ ...prev, fotoUrl: '' }))}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNewProductData(prev => ({ ...prev, fotoUrl: '' }));
+                          }}
                           className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs"
                           title="Remover foto"
                         >
@@ -734,7 +812,7 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                     ) : (
                       <div className="flex flex-col items-center justify-center text-slate-400 gap-1 p-2 text-center">
                         <ImageIcon className="w-6 h-6 text-indigo-400" />
-                        <span className="text-[9px] font-semibold leading-tight">Sem imagem</span>
+                        <span className="text-[9px] font-semibold leading-tight">Arraste ou clique</span>
                       </div>
                     )}
                   </div>
@@ -751,10 +829,15 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/60 hover:bg-indigo-200 border border-indigo-300 dark:border-indigo-700 transition"
+                      disabled={isProcessingPhoto}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/60 hover:bg-indigo-200 border border-indigo-300 dark:border-indigo-700 transition disabled:opacity-50"
                     >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Selecionar Imagem do PC</span>
+                      {isProcessingPhoto ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isProcessingPhoto ? 'Processando...' : 'Selecionar Imagem do PC'}</span>
                     </button>
 
                     <input

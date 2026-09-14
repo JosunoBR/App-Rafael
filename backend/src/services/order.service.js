@@ -24,6 +24,15 @@ class OrderService {
     }
 
     const saved = await orderRepository.save(orderData);
+
+    // Sincronização automática em tempo real com o Financeiro / Contas a Pagar
+    try {
+      const financialService = require('./financialService');
+      await financialService.syncSingleOrder(saved);
+    } catch (finErr) {
+      console.error('Erro ao sincronizar pedido com o financeiro:', finErr);
+    }
+
     return {
       success: true,
       message: `Pedido ${orderData.header.numeroPedido} salvo com sucesso no SQLite!`,
@@ -49,6 +58,15 @@ class OrderService {
     }
 
     const updated = await orderRepository.updateInstallments(orderId, installments);
+
+    // Sincronização automática em tempo real com o Financeiro
+    try {
+      const financialService = require('./financialService');
+      await financialService.syncSingleOrder(updated);
+    } catch (finErr) {
+      console.error('Erro ao sincronizar parcela com o financeiro:', finErr);
+    }
+
     return {
       success: true,
       message: `Parcela ${updatedInstallment.numeroParcela}ª atualizada com sucesso!`,
@@ -65,6 +83,15 @@ class OrderService {
     }
 
     await orderRepository.delete(id);
+
+    // Remove lançamentos financeiros vinculados ao pedido
+    try {
+      const financialRepo = require('../repositories/financialRepository');
+      await financialRepo.deleteByOrderId(id);
+    } catch (finErr) {
+      console.error('Erro ao remover lançamentos financeiros do pedido:', finErr);
+    }
+
     return { success: true, message: `Pedido ${existing.header.numeroPedido} excluído com sucesso.` };
   }
 

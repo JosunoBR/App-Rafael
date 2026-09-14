@@ -239,9 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               'separation',
               userRole === 'separacao' 
                 ? 'Conferência & Doca' 
-                : userRole === 'deposito' 
-                  ? 'Distribuição por Lojas' 
-                  : 'Distribuição (20 Lojas)',
+                : 'Distribuição',
               userRole === 'separacao' ? (
                 <PackageCheck className={`w-4 h-4 ${activeNav === 'separation' ? 'text-white' : 'text-purple-500'}`} />
               ) : (

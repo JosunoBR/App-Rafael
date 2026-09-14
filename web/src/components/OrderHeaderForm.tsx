@@ -222,7 +222,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     if (field === 'percentualNota') {
       const pctVal = parseFloat(value) || 0;
       if (isEntradaMista && valorBaseMercadoria > 0 && pctVal > 0 && pctVal <= 100) {
-        const pctDeposito = pctVal;
+        const pctBoleto = pctVal;
+        const pctDeposito = Math.max(0, 100 - pctBoleto);
         const newValorEntrada = Number((valorBaseMercadoria * (pctDeposito / 100)).toFixed(2));
         const newCondString = formatPaymentConditionString(
           currentParcelas,
@@ -336,8 +337,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const valorBaseMercadoria = Math.max(0, valorTotalPedido - valorFreteNum);
 
   const hasCustomOff = header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100;
-  const pctDepositoFromOff = hasCustomOff ? header.percentualNota! : (isDepositoEBoleto ? 50 : 30);
-  const pctBoletoFromOff = Math.max(0, 100 - pctDepositoFromOff);
+  const pctBoletoFromOff = hasCustomOff ? header.percentualNota! : (isDepositoEBoleto ? 50 : 70);
+  const pctDepositoFromOff = Math.max(0, 100 - pctBoletoFromOff);
 
   const valorEntrada = header.valorEntradaAVista !== undefined 
     ? header.valorEntradaAVista 
@@ -1058,14 +1059,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     ? header.percentualNota
     : (header.percentualDescontoOff !== undefined && header.percentualDescontoOff > 0 && header.percentualDescontoOff < 100
         ? header.percentualDescontoOff
-        : (header.percentualNota || 33));
+        : (header.percentualNota || 70));
 
   const handleSyncWithOff = (invertSplit: boolean = false) => {
-    const rawOff = Math.max(1, Math.min(99, Number(currentOffPct) || 33));
-    // Padrão: Depósito (OFF) = rawOff%, Boleto = (100 - rawOff)%
-    // Invertido: Depósito = (100 - rawOff)%, Boleto = rawOff%
-    const pctDeposito = invertSplit ? (100 - rawOff) : rawOff;
-    const pctBoleto = 100 - pctDeposito;
+    const rawOff = Math.max(1, Math.min(99, Number(currentOffPct) || 70));
+    // Padrão: Boleto = rawOff%, Depósito = (100 - rawOff)%
+    // Invertido: Boleto = (100 - rawOff)%, Depósito = rawOff%
+    const pctBoleto = invertSplit ? (100 - rawOff) : rawOff;
+    const pctDeposito = 100 - pctBoleto;
 
     // Base de cálculo: usa o valor das mercadorias do pedido ou R$ 1.000,00 como base padrão para testes imediatos
     const baseParaCalculo = valorBaseMercadoria > 0 ? valorBaseMercadoria : 1000;
@@ -1092,7 +1093,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       datasVencimentoPersonalizadas: newCustomDates
     });
 
-    const successMsg = `✨ Sincronizado: ${pctDeposito}% Depósito (R$ ${newEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) + ${pctBoleto}% Boleto (R$ ${newSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
+    const successMsg = `✨ Sincronizado: ${pctBoleto}% Boleto (R$ ${newSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) + ${pctDeposito}% Depósito (R$ ${newEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
     setSyncFeedback({ message: successMsg, type: 'success' });
     showToast?.(successMsg, 'success');
     setTimeout(() => setSyncFeedback(null), 5000);
@@ -1842,7 +1843,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           type="button"
                           onClick={() => handleSyncWithOff(false)}
                           className="px-2.5 py-1 text-xs rounded-lg font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
-                          title={`Calcular divisão do pedido aplicando ${currentOffPct}% para Depósito e ${100 - currentOffPct}% para Boleto`}
+                          title={`Calcular divisão do pedido aplicando ${currentOffPct}% para Boleto e ${100 - currentOffPct}% para Depósito`}
                         >
                           <Sparkles className="w-3 h-3 text-amber-500" />
                           <span>Sincronizar OFF ({currentOffPct}%)</span>
@@ -1851,7 +1852,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           type="button"
                           onClick={() => handleSyncWithOff(true)}
                           className="px-2.5 py-1 text-xs rounded-lg font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
-                          title={`Inverter proporção: ${100 - currentOffPct}% para Depósito e ${currentOffPct}% para Boleto`}
+                          title={`Inverter proporção: ${100 - currentOffPct}% para Boleto e ${currentOffPct}% para Depósito`}
                         >
                           <ArrowRightLeft className="w-3 h-3 text-slate-500 dark:text-slate-400" />
                           <span>Inverter</span>

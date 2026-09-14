@@ -48,18 +48,20 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
   onSelectEntry,
   onDeleteEntry
 }) => {
-  const [collapsedDays, setCollapsedDays] = useState<Record<number, boolean>>({});
+  const [collapsedDays, setCollapsedDays] = useState<Record<string, boolean>>({});
 
   // Identificar o dia atual para destaque
   const today = new Date();
   const currentDayNum = today.getDate();
   const currentMonthStr = String(today.getMonth() + 1).padStart(2, '0');
   const currentYearStr = String(today.getFullYear());
+  const todayIso = today.toISOString().substring(0, 10);
   const isCurrentMonth = selectedYear === currentYearStr && selectedMonth === currentMonthStr;
 
-  // Agrupar entradas por Dia do Mês
+  // Agrupar entradas por Dia do Mês ou por Data Completa
   const dailyGroups = useMemo(() => {
-    const groups: Record<number, {
+    const groups: Record<string, {
+      key: string;
       dia: number;
       dateIso: string;
       entries: FinancialEntry[];
@@ -71,9 +73,11 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
     entries.forEach(entry => {
       const due = (entry.dataVencimento || '').substring(0, 10);
       const diaNum = due ? parseInt(due.split('-')[2], 10) : 1;
+      const groupKey = selectedMonth === 'all' ? (due || 'sem_data') : String(diaNum);
 
-      if (!groups[diaNum]) {
-        groups[diaNum] = {
+      if (!groups[groupKey]) {
+        groups[groupKey] = {
+          key: groupKey,
           dia: diaNum,
           dateIso: due,
           entries: [],
@@ -84,27 +88,32 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
       }
 
       const val = Number(entry.valor) || 0;
-      groups[diaNum].entries.push(entry);
-      groups[diaNum].totalDia += val;
+      groups[groupKey].entries.push(entry);
+      groups[groupKey].totalDia += val;
 
       if (entry.status === 'Pago') {
-        groups[diaNum].pagoDia += val;
+        groups[groupKey].pagoDia += val;
       } else {
-        groups[diaNum].abertoDia += val;
+        groups[groupKey].abertoDia += val;
       }
     });
 
-    return Object.values(groups).sort((a, b) => a.dia - b.dia);
-  }, [entries]);
+    return Object.values(groups).sort((a, b) => {
+      if (selectedMonth === 'all') {
+        return (a.dateIso || '').localeCompare(b.dateIso || '');
+      }
+      return a.dia - b.dia;
+    });
+  }, [entries, selectedMonth]);
 
-  const toggleDay = (dia: number) => {
-    setCollapsedDays(prev => ({ ...prev, [dia]: !prev[dia] }));
+  const toggleDay = (key: string) => {
+    setCollapsedDays(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const expandAll = () => setCollapsedDays({});
   const collapseAll = () => {
-    const all: Record<number, boolean> = {};
-    dailyGroups.forEach(g => { all[g.dia] = true; });
+    const all: Record<string, boolean> = {};
+    dailyGroups.forEach(g => { all[g.key] = true; });
     setCollapsedDays(all);
   };
 
@@ -148,14 +157,16 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
       {/* Lista de Dias (Estilo Planilha de Pagamentos) */}
       <div className="space-y-3">
         {dailyGroups.map(group => {
-          const isCollapsed = Boolean(collapsedDays[group.dia]);
-          const isToday = isCurrentMonth && group.dia === currentDayNum;
+          const isCollapsed = Boolean(collapsedDays[group.key]);
+          const isToday = selectedMonth === 'all'
+            ? group.dateIso === todayIso
+            : (isCurrentMonth && group.dia === currentDayNum);
           const percentPago = group.totalDia > 0 ? Math.round((group.pagoDia / group.totalDia) * 100) : 0;
           const isTotalmentePago = group.abertoDia === 0 && group.totalDia > 0;
 
           return (
             <div
-              key={group.dia}
+              key={group.key}
               className={`rounded-2xl border transition-all overflow-hidden ${
                 isToday
                   ? 'bg-amber-50/20 dark:bg-amber-950/20 border-amber-400/80 dark:border-amber-600 shadow-md shadow-amber-500/5'
@@ -164,7 +175,7 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
             >
               {/* Header do Dia (Subtotal do Dia, igual na planilha do cliente) */}
               <div
-                onClick={() => toggleDay(group.dia)}
+                onClick={() => toggleDay(group.key)}
                 className="p-3.5 sm:p-4 cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none"
               >
                 <div className="flex items-center gap-3">

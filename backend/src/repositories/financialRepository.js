@@ -9,13 +9,17 @@ class FinancialRepository {
     const params = [];
 
     // Filtro por Ano/Mês no campo dataVencimento (formato YYYY-MM-DD)
-    if (year && month) {
+    if (year && year !== 'all' && month && month !== 'all') {
       const formattedMonth = String(month).padStart(2, '0');
       sql += ' AND dataVencimento LIKE ?';
       params.push(`${year}-${formattedMonth}-%`);
-    } else if (year) {
+    } else if (year && year !== 'all') {
       sql += ' AND dataVencimento LIKE ?';
       params.push(`${year}-%`);
+    } else if (month && month !== 'all') {
+      const formattedMonth = String(month).padStart(2, '0');
+      sql += ' AND dataVencimento LIKE ?';
+      params.push(`%-${formattedMonth}-%`);
     }
 
     if (storeId) {
@@ -34,8 +38,12 @@ class FinancialRepository {
     }
 
     if (status && status !== 'all') {
-      sql += ' AND status = ?';
-      params.push(status);
+      if (status === 'pendente' || status === 'aberto' || status === 'nao_pago') {
+        sql += " AND status != 'Pago'";
+      } else {
+        sql += ' AND status = ?';
+        params.push(status);
+      }
     }
 
     if (tipo && tipo !== 'all') {

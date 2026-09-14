@@ -65,14 +65,17 @@ export function mapParsedExcelToOrder(
     const statusObj = statusList.find(s => s.rawItem.rowNumber === rawItem.rowNumber);
     const finalCode = statusObj?.assignedCode || rawItem.codigo;
 
-    // Regra Fundamental: Preço unitário na planilha já é o preço de compra líquido negociado.
-    // O 50% OFF é apenas referência histórica no cabeçalho.
+    // Regra Fundamental: Se a planilha possui desconto por item explícito, preserva-o.
+    // Se possui apenas % OFF no cabeçalho, o preço unitário da planilha já reflete o valor líquido negociado,
+    // e o % OFF do cabeçalho é registrado como referência e condição comercial sem duplicar abatimento.
     const precoUnitario = rawItem.precoUnitario;
     const qtdTotalUnidades = rawItem.qtdTotalUnidades;
     const valorTotalBruto = qtdTotalUnidades * precoUnitario;
-    const percentualDesconto = 0; // NÃO reaplica desconto
-    const valorDescontoItem = 0;
-    const valorTotalLiquido = valorTotalBruto;
+    const percentualDesconto = rawItem.percentualDesconto || 0;
+    const valorDescontoItem = rawItem.valorDescontoItem !== undefined 
+      ? rawItem.valorDescontoItem 
+      : (percentualDesconto > 0 ? Number((valorTotalBruto * (percentualDesconto / 100)).toFixed(2)) : 0);
+    const valorTotalLiquido = Math.max(0, valorTotalBruto - valorDescontoItem);
     const pdvAlvo = rawItem.pdvSugerido || 12.00;
 
     // Cálculo fiscal do item
@@ -118,7 +121,7 @@ export function mapParsedExcelToOrder(
       id: itemId,
       codigo: finalCode,
       codigoInterno: finalCode,
-      codigoFornecedor: rawItem.codigo,
+      codigoFornecedor: rawItem.codigoFornecedor || rawItem.codigo,
       codigoBarras: rawItem.eanBarcode || undefined,
       descricao: rawItem.descricao,
       qtdNoPacote: rawItem.qtdNoPacote,
@@ -130,6 +133,8 @@ export function mapParsedExcelToOrder(
       percentualDesconto,
       valorDescontoItem,
       valorTotalLiquido,
+      aliquotaIpi: rawItem.aliquotaIpi !== undefined ? rawItem.aliquotaIpi : undefined,
+      valorIpi: rawItem.valorIpi !== undefined ? rawItem.valorIpi : (rawItem.aliquotaIpi ? (valorTotalBruto * (rawItem.aliquotaIpi / 100)) : undefined),
       pdvAlvo,
       custoLoja: fiscalRes.custoLoja,
       custoFornecedor: fiscalRes.custoFornecedor,
@@ -165,7 +170,9 @@ export function mapParsedExcelToOrder(
     formaPagamento: 'Boleto Bancário',
     dataPedido: parsed.header.dataPedido,
     dataEntregaPrevista: parsed.header.dataEntregaPrevista,
-    percentualDescontoOff: parsed.header.percentualDescontoOff || supplier.descontoOffPadrao || 0,
+    percentualDescontoOff: (parsed.header.percentualDescontoOff !== undefined && parsed.header.percentualDescontoOff > 0)
+      ? parsed.header.percentualDescontoOff 
+      : (supplier.descontoOffPadrao || 0),
     percentualNota: parsed.header.percentualNota !== undefined 
       ? parsed.header.percentualNota 
       : (supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : 100),
@@ -173,7 +180,8 @@ export function mapParsedExcelToOrder(
     valorFrete: 0,
     valorFreteGlobal: 0,
     valorOutrasDespesasGlobal: 0,
-    descontoComercialTotal: 0,
+    descontoComercialTotal: parsed.header.percentualDescontoOff || 0,
+    descontoComercialTipo: '%' as const,
     // Descrição do Pedido: exclusiva do pedido/planilha, independente do fornecedor
     observacoes: parsed.header.observacoes || '',
     observacoesDescarga: parsed.header.observacoes || '',

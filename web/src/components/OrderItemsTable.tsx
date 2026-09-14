@@ -28,8 +28,10 @@ import {
   Trash,
   SlidersHorizontal,
   RotateCcw,
-  Calculator
+  Calculator,
+  Loader2
 } from 'lucide-react';
+import { optimizeImageFile } from '../utils/imageUtils';
 import { OrderItem, FiscalConfig, StoreConfig, Product, Supplier } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
@@ -231,6 +233,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const [photoTab, setPhotoTab] = useState<'upload' | 'url'>('upload');
   const [photoUrlInput, setPhotoUrlInput] = useState('');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
 
   // Estado do Filtro Inteligente / Autocomplete nas Linhas da Tabela
@@ -685,16 +689,70 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     setPhotoUrlInput('');
   };
 
-  // Upload de arquivo dentro do modal
+  // Processamento e otimização de arquivo de imagem (redimensiona fotos mantendo alta qualidade e peso leve)
+  const processImageFile = async (file: File) => {
+    if (!file) return;
+    setIsProcessingPhoto(true);
+    try {
+      const optimizedBase64 = await optimizeImageFile(file, 1200, 1200, 0.88);
+      if (optimizedBase64) {
+        setPhotoPreview(optimizedBase64);
+        setPhotoTab('upload');
+      }
+    } catch (err) {
+      console.error('Erro ao processar imagem:', err);
+    } finally {
+      setIsProcessingPhoto(false);
+    }
+  };
+
+  // Upload de arquivo dentro do modal (via seletor de arquivo)
   const handleFileSelectedInModal = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      setPhotoPreview(base64);
-    };
-    reader.readAsDataURL(file);
+    processImageFile(file);
+    e.target.value = '';
+  };
+
+  // Handlers de arrastar e soltar (Drag & Drop)
+  const handlePhotoDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+    setIsDraggingPhoto(true);
+  };
+
+  const handlePhotoDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDraggingPhoto(false);
+  };
+
+  const handlePhotoDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingPhoto(false);
+
+    // 1. Arquivo de imagem arrastado direto do computador / explorador de arquivos
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(file.name)) {
+        processImageFile(file);
+        return;
+      }
+    }
+
+    // 2. Link / URL de imagem arrastado da web ou texto
+    const textData = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
+    if (textData && textData.trim().length > 0) {
+      const trimmed = textData.trim();
+      setPhotoUrlInput(trimmed);
+      setPhotoPreview(trimmed);
+      setPhotoTab('url');
+    }
   };
 
   const handleFieldChange = (item: OrderItem, field: keyof OrderItem, rawValue: any) => {
@@ -2174,7 +2232,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       {/* Modal: Zoom da Imagem */}
       {/* MODAL ESPECIALIZADO DE FOTO DO PRODUTO NO PEDIDO */}
       {photoModalItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+        <div 
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handlePhotoDrop(e); }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
+        >
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             
             {/* Header do Modal */}
@@ -2231,27 +2293,78 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 </button>
               </div>
 
-              {/* Área de Preview da Imagem */}
-              <div className="w-full h-44 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 overflow-hidden flex items-center justify-center relative group">
-                {photoPreview ? (
+              {/* Área de Preview da Imagem com Suporte Completo a Drag & Drop */}
+              <div 
+                onDragOver={handlePhotoDragOver}
+                onDragEnter={handlePhotoDragOver}
+                onDragLeave={handlePhotoDragLeave}
+                onDrop={handlePhotoDrop}
+                onClick={() => {
+                  if (!photoPreview && !isProcessingPhoto) {
+                    photoFileInputRef.current?.click();
+                  }
+                }}
+                className={`w-full h-48 rounded-2xl border-2 border-dashed transition-all overflow-hidden flex flex-col items-center justify-center relative group select-none ${
+                  isDraggingPhoto
+                    ? 'border-emerald-500 bg-emerald-50/90 dark:bg-emerald-950/80 ring-4 ring-emerald-500/20 scale-[1.01]'
+                    : photoPreview
+                    ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 cursor-default'
+                    : 'border-indigo-300/80 dark:border-indigo-800/80 bg-indigo-50/40 dark:bg-indigo-950/30 hover:bg-indigo-50/70 hover:border-indigo-400 cursor-pointer'
+                }`}
+              >
+                {isProcessingPhoto ? (
+                  <div className="text-center p-4 space-y-2 text-indigo-600 dark:text-indigo-400">
+                    <Loader2 className="w-8 h-8 mx-auto animate-spin" />
+                    <p className="text-xs font-bold">Otimizando e carregando foto...</p>
+                  </div>
+                ) : isDraggingPhoto ? (
+                  <div className="text-center p-4 space-y-2 text-emerald-600 dark:text-emerald-400 animate-pulse">
+                    <UploadCloud className="w-12 h-12 mx-auto stroke-2" />
+                    <p className="text-sm font-extrabold">Solte a imagem aqui para importar!</p>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300">Formatos aceitos: JPG, PNG, WEBP, GIF</p>
+                  </div>
+                ) : photoPreview ? (
                   <>
-                    <img src={photoPreview} alt="Preview" className="w-full h-full object-contain" />
-                    <button
-                      type="button"
-                      onClick={handleRemovePhotoFromModal}
-                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-rose-600 text-white shadow-md hover:bg-rose-700 transition cursor-pointer"
-                      title="Remover Imagem"
-                    >
-                      <Trash className="w-3.5 h-3.5" />
-                    </button>
+                    <img src={photoPreview} alt="Preview" className="w-full h-full object-contain p-2" />
+                    <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          photoFileInputRef.current?.click();
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-white/95 text-slate-800 text-xs font-bold shadow-md hover:bg-white flex items-center gap-1.5 transition cursor-pointer"
+                        title="Trocar por outra foto"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Trocar Foto</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemovePhotoFromModal();
+                        }}
+                        className="p-1.5 rounded-xl bg-rose-600 text-white shadow-md hover:bg-rose-700 transition cursor-pointer"
+                        title="Remover Imagem"
+                      >
+                        <Trash className="w-4 h-4" />
+                      </button>
+                    </div>
                   </>
                 ) : (
-                  <div className="text-center p-4 space-y-1.5 text-slate-400">
-                    <ImageIcon className="w-10 h-10 mx-auto stroke-1 text-slate-300 dark:text-slate-600" />
-                    <p className="text-xs font-medium">Nenhuma foto selecionada</p>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                      Envie um arquivo ou cole um link web abaixo
-                    </p>
+                  <div className="text-center p-4 space-y-2 text-slate-400">
+                    <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center mx-auto shadow-xs group-hover:scale-110 transition-transform">
+                      <ImageIcon className="w-6 h-6 text-indigo-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                        Arraste e solte a imagem aqui
+                      </p>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                        ou clique para escolher do computador / celular
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2269,6 +2382,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                   <button
                     type="button"
                     onClick={() => photoFileInputRef.current?.click()}
+                    onDragOver={handlePhotoDragOver}
+                    onDrop={handlePhotoDrop}
                     className="w-full py-2.5 px-4 rounded-xl border border-dashed border-indigo-300 dark:border-indigo-800 hover:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
                   >
                     <Upload className="w-4 h-4" />

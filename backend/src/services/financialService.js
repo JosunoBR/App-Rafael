@@ -268,6 +268,67 @@ class FinancialService {
   }
 
   /**
+   * Sincroniza automaticamente as parcelas de um pedido específico com o Financeiro
+   */
+  async syncSingleOrder(order) {
+    if (!order || !order.id) return;
+
+    // Buscar lançamentos existentes para preservar status se alguma parcela já foi baixada como Paga
+    const existingEntries = await financialRepo.findByOrderId(order.id);
+    const existingMap = new Map();
+    for (const ent of existingEntries) {
+      if (ent.installmentId) {
+        existingMap.set(ent.installmentId, ent);
+      } else if (ent.parcelaNumero) {
+        existingMap.set(String(ent.parcelaNumero), ent);
+      }
+    }
+
+    // Remover lançamentos antigos deste pedido para recriar sincronizado
+    await financialRepo.deleteByOrderId(order.id);
+
+    const installments = (order.installments && order.installments.length > 0)
+      ? order.installments
+      : [];
+
+    const fornecedor = order.header?.fornecedor || 'Fornecedor';
+    const numPedido = order.header?.numeroPedido || 'S/N';
+    const formaPgto = order.header?.formaPagamento || 'BOLETO';
+    const condicao = order.header?.condicaoPagamento || '';
+
+    for (const inst of installments) {
+      const existing = existingMap.get(inst.id) || existingMap.get(String(inst.numeroParcela));
+      const isPaid = inst.status === 'Pago' || existing?.status === 'Pago';
+      const dataPagamento = inst.dataPagamento || existing?.dataPagamento || null;
+      const valorPago = isPaid ? (inst.valorPago || existing?.valorPago || inst.valor) : 0;
+
+      await financialRepo.create({
+        tipo: 'pedido_parcela',
+        orderId: order.id,
+        installmentId: inst.id,
+        descricao: `${fornecedor} - Pedido ${numPedido} (${inst.numeroParcela}/${inst.totalParcelas})`,
+        categoria: 'PRODUTOS',
+        fornecedor: fornecedor,
+        storeId: 'matriz',
+        lojaNome: 'Depósito Central / Matriz',
+        empresa: 'ALS',
+        formaPagamento: (inst.metodoPagamento || formaPgto).toUpperCase(),
+        bancoConta: '',
+        documentoRef: inst.documentoRef || numPedido,
+        parcelaNumero: inst.numeroParcela,
+        parcelaTotal: inst.totalParcelas,
+        parcelaDesc: `${inst.numeroParcela}/${inst.totalParcelas}`,
+        dataVencimento: inst.dataVencimento,
+        valor: inst.valor,
+        status: isPaid ? 'Pago' : 'A Vencer',
+        dataPagamento: dataPagamento,
+        valorPago: valorPago,
+        observacao: inst.observacao || existing?.observacao || `Condição: ${condicao}`
+      });
+    }
+  }
+
+  /**
    * Sincroniza parcelas dos pedidos de compra existentes no banco com o Financeiro
    */
   async syncOrdersToFinancial() {

@@ -898,7 +898,11 @@ export function App() {
           await saveProductToDb(p).catch(() => {});
         }
       }
-      saveBatchProductsToStorage(prodsToSync);
+      try {
+        saveBatchProductsToStorage(prodsToSync);
+      } catch (storageErr) {
+        console.warn('Aviso: falha ao sincronizar produtos no cache local:', storageErr);
+      }
       const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
       setProducts(refreshed);
     }
@@ -1009,7 +1013,11 @@ export function App() {
 
     try {
       await saveOrderToDb(orderWithInstallments);
-      saveOrderToHistory(orderWithInstallments);
+      try {
+        saveOrderToHistory(orderWithInstallments);
+      } catch (localErr) {
+        console.warn('Aviso: cópia em localStorage não pôde ser salva (cota):', localErr);
+      }
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
       setOrder({
@@ -1075,7 +1083,11 @@ export function App() {
 
     try {
       await saveOrderToDb(orderWithInstallments);
-      saveOrderToHistory(orderWithInstallments);
+      try {
+        saveOrderToHistory(orderWithInstallments);
+      } catch (localErr) {
+        console.warn('Aviso: cópia em localStorage não pôde ser salva (cota):', localErr);
+      }
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
       clearCurrentDraft();

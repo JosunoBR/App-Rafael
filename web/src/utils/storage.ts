@@ -18,6 +18,101 @@ const STORAGE_KEYS = {
   THEME: 'mega12_theme_v1'
 };
 
+/**
+ * Salva no localStorage de forma segura contra QuotaExceededError (cota estourada no navegador).
+ * Se o limite de 5MB for atingido, executa estratégias de contingência (poda de fotos pesadas em Base64
+ * e de históricos antigos) para salvar com sucesso sem quebrar a execução da aplicação.
+ */
+export function safeSetItem(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err: any) {
+    const isQuota = err?.name === 'QuotaExceededError' || 
+                    err?.name === 'NS_ERROR_DOM_QUOTA_REACHED' || 
+                    err?.message?.toLowerCase().includes('quota') ||
+                    err?.code === 22 || 
+                    err?.code === 1014;
+
+    if (!isQuota) {
+      console.warn(`[storage] Erro ao salvar chave "${key}":`, err);
+      return false;
+    }
+
+    console.warn(`[storage] Cota de 5MB do localStorage atingida ao salvar "${key}". Aplicando limpeza defensiva...`);
+
+    try {
+      // 1. Se estiver tentando salvar histórico de pedidos, remove fotos Base64 gigantes dos itens
+      if (key === STORAGE_KEYS.SAVED_ORDERS) {
+        try {
+          const list: PurchaseOrder[] = JSON.parse(value);
+          const sanitizedList = list.slice(0, 30).map(ord => ({
+            ...ord,
+            items: (ord.items || []).map(it => ({
+              ...it,
+              fotoUrl: (it.fotoUrl && it.fotoUrl.startsWith('data:') && it.fotoUrl.length > 500) ? '' : it.fotoUrl
+            }))
+          }));
+          localStorage.setItem(key, JSON.stringify(sanitizedList));
+          return true;
+        } catch {}
+      }
+
+      // 2. Se for rascunho de pedido ativo, remove fotos Base64 pesadas
+      if (key === STORAGE_KEYS.CURRENT_ORDER) {
+        try {
+          const ord: PurchaseOrder = JSON.parse(value);
+          const sanitized = {
+            ...ord,
+            items: (ord.items || []).map(it => ({
+              ...it,
+              fotoUrl: (it.fotoUrl && it.fotoUrl.startsWith('data:') && it.fotoUrl.length > 500) ? '' : it.fotoUrl
+            }))
+          };
+          localStorage.setItem(key, JSON.stringify(sanitized));
+          return true;
+        } catch {}
+      }
+
+      // 3. Libera espaço limpando fotos pesadas do histórico existente
+      const existingOrders = localStorage.getItem(STORAGE_KEYS.SAVED_ORDERS);
+      if (existingOrders && key !== STORAGE_KEYS.SAVED_ORDERS) {
+        try {
+          const orders: PurchaseOrder[] = JSON.parse(existingOrders);
+          const slimmed = orders.slice(0, 15).map(o => ({
+            ...o,
+            items: (o.items || []).map(it => ({
+              ...it,
+              fotoUrl: (it.fotoUrl && it.fotoUrl.startsWith('data:') && it.fotoUrl.length > 500) ? '' : it.fotoUrl
+            }))
+          }));
+          localStorage.setItem(STORAGE_KEYS.SAVED_ORDERS, JSON.stringify(slimmed));
+          localStorage.setItem(key, value);
+          return true;
+        } catch {}
+      }
+
+      // 4. Se for produtos, remove fotos base64 pesadas
+      if (key === STORAGE_KEYS.PRODUCTS) {
+        try {
+          const prods: Product[] = JSON.parse(value);
+          const slimProds = prods.map(p => ({
+            ...p,
+            fotoUrl: (p.fotoUrl && p.fotoUrl.startsWith('data:') && p.fotoUrl.length > 500) ? '' : p.fotoUrl
+          }));
+          localStorage.setItem(key, JSON.stringify(slimProds));
+          return true;
+        } catch {}
+      }
+    } catch (cleanErr) {
+      console.error('[storage] Erro na limpeza de quota:', cleanErr);
+    }
+
+    console.warn(`[storage] Não foi possível persistir "${key}" no localStorage local. Dados permanecem íntegros no banco SQLite.`);
+    return false;
+  }
+}
+
 export const INITIAL_PRODUCTS: Product[] = [];
 
 export const INITIAL_SUPPLIERS: Supplier[] = [];
@@ -42,7 +137,7 @@ export function getNextOrderNumber(): string {
     const seqNum = storedSeq ? parseInt(storedSeq, 10) : 0;
     const nextNum = Math.max(maxNum, seqNum) + 1;
     
-    localStorage.setItem(STORAGE_KEYS.ORDER_SEQUENCE, nextNum.toString());
+    safeSetItem(STORAGE_KEYS.ORDER_SEQUENCE, nextNum.toString());
     return `PED-${String(nextNum).padStart(4, '0')}`;
   } catch {
     return 'PED-0001';
@@ -88,7 +183,7 @@ export function getSuppliersList(): Supplier[] {
 }
 
 export function saveSuppliersList(suppliers: Supplier[]): void {
-  localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers));
+  safeSetItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers));
 }
 
 export function saveSupplier(supplier: Supplier): Supplier[] {
@@ -165,11 +260,7 @@ export function getProductsList(): Product[] {
 }
 
 export function saveProductsList(products: Product[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
-  } catch (err) {
-    console.warn('Aviso: Limite de armazenamento local excedido, produtos preservados no banco SQLite:', err);
-  }
+  safeSetItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
 }
 
 export function saveProduct(product: Product): Product[] {
@@ -289,7 +380,7 @@ export function getInitialFiscalConfig(): FiscalConfig {
 }
 
 export function saveFiscalConfig(config: FiscalConfig): void {
-  localStorage.setItem(STORAGE_KEYS.GLOBAL_FISCAL, JSON.stringify(config));
+  safeSetItem(STORAGE_KEYS.GLOBAL_FISCAL, JSON.stringify(config));
 }
 
 export function getInitialStoresConfig(): StoreConfig[] {
@@ -302,7 +393,7 @@ export function getInitialStoresConfig(): StoreConfig[] {
 }
 
 export function saveStoresConfig(stores: StoreConfig[]): void {
-  localStorage.setItem(STORAGE_KEYS.GLOBAL_STORES, JSON.stringify(stores));
+  safeSetItem(STORAGE_KEYS.GLOBAL_STORES, JSON.stringify(stores));
 }
 
 export const DEFAULT_SEPARATION_PRESETS: SeparationPreset[] = [
@@ -328,7 +419,7 @@ export function getInitialSeparationPresets(): SeparationPreset[] {
 }
 
 export function saveSeparationPresetsList(presets: SeparationPreset[]): void {
-  localStorage.setItem(STORAGE_KEYS.SEPARATION_PRESETS, JSON.stringify(presets));
+  safeSetItem(STORAGE_KEYS.SEPARATION_PRESETS, JSON.stringify(presets));
 }
 
 export function getInitialFiscalPresets(): FiscalPreset[] {
@@ -346,7 +437,7 @@ export function getInitialFiscalPresets(): FiscalPreset[] {
 }
 
 export function saveFiscalPresetsList(presets: FiscalPreset[]): void {
-  localStorage.setItem(STORAGE_KEYS.FISCAL_PRESETS, JSON.stringify(presets));
+  safeSetItem(STORAGE_KEYS.FISCAL_PRESETS, JSON.stringify(presets));
 }
 
 export function createNewOrder(
@@ -442,7 +533,7 @@ export function saveCurrentOrder(order: PurchaseOrder): void {
     ...order,
     items: (order.items || []).map(it => ({ ...it, pdvAlvo: 12.00 }))
   };
-  localStorage.setItem(STORAGE_KEYS.CURRENT_ORDER, JSON.stringify(orderWithFixedPdv));
+  safeSetItem(STORAGE_KEYS.CURRENT_ORDER, JSON.stringify(orderWithFixedPdv));
 }
 
 export function clearCurrentDraft(): void {
@@ -565,7 +656,7 @@ export function saveSavedOrdersList(orders: PurchaseOrder[]): void {
     }
   });
   const uniqueList = Array.from(map.values());
-  localStorage.setItem(STORAGE_KEYS.SAVED_ORDERS, JSON.stringify(uniqueList));
+  safeSetItem(STORAGE_KEYS.SAVED_ORDERS, JSON.stringify(uniqueList));
 }
 
 export function loadSavedOrdersList(): PurchaseOrder[] {
@@ -645,7 +736,7 @@ export function loadCentralStock(): CentralStockItem[] {
 }
 
 export function saveCentralStock(stockList: CentralStockItem[]): void {
-  localStorage.setItem(STORAGE_KEYS.CENTRAL_STOCK, JSON.stringify(stockList));
+  safeSetItem(STORAGE_KEYS.CENTRAL_STOCK, JSON.stringify(stockList));
 }
 
 export function updateStockBalance(stockId: string, deltaCaixas: number, newLocation?: string): CentralStockItem[] {

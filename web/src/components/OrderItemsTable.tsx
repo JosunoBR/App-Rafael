@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { optimizeImageFile } from '../utils/imageUtils';
 import { OrderItem, FiscalConfig, StoreConfig, Product, Supplier } from '../shared/types';
-import { calculateItemFiscal } from '../shared/fiscalEngine';
+import { calculateItemFiscal, normalizeRateToDecimal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
 import { isOrderItemBlank, generateNextProductCode } from '../utils/orderItemUtils';
 import { handleCurrencyInput, formatCurrency } from '../utils/masks';
@@ -466,7 +466,10 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const valorDesc = Number((totalBruto * (descPct / 100)).toFixed(2));
     const valorLiquido = Number((totalBruto - valorDesc).toFixed(2));
     const precoEfetivo = preco * (1 - descPct / 100);
-    const ipiPct = (prod as any).aliquotaIpi || (prod as any).ipi || 0;
+    const defaultGlobalIpiPct = normalizeRateToDecimal(globalFiscal?.ipiAliquota) * 100;
+    const ipiPct = (prod as any).aliquotaIpi !== undefined && (prod as any).aliquotaIpi !== null
+      ? Number((prod as any).aliquotaIpi)
+      : ((prod as any).ipi !== undefined && (prod as any).ipi !== null ? Number((prod as any).ipi) : defaultGlobalIpiPct);
     const valorIpi = Number((valorLiquido * (ipiPct / 100)).toFixed(2));
     const ipiUnit = qtdTotal > 0 ? Number((valorIpi / qtdTotal).toFixed(4)) : 0;
 
@@ -526,8 +529,15 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const valorDesc = Number((totalBruto * (descPct / 100)).toFixed(2));
     const totalLiquido = Number((totalBruto - valorDesc).toFixed(2));
     const precoEfetivo = preco * (1 - descPct / 100);
+    const defaultGlobalIpiPct = normalizeRateToDecimal(globalFiscal?.ipiAliquota) * 100;
 
-    const ipiPct = item.aliquotaIpi !== undefined ? item.aliquotaIpi : ((prod as any).aliquotaIpi || (prod as any).ipi || 0);
+    const ipiPct = (item.aliquotaIpi !== undefined && item.aliquotaIpi !== null && item.aliquotaIpi > 0)
+      ? item.aliquotaIpi
+      : ((prod as any).aliquotaIpi !== undefined && (prod as any).aliquotaIpi !== null
+          ? Number((prod as any).aliquotaIpi)
+          : ((prod as any).ipi !== undefined && (prod as any).ipi !== null
+              ? Number((prod as any).ipi)
+              : defaultGlobalIpiPct));
     const valorIpi = Number((totalLiquido * (ipiPct / 100)).toFixed(2));
     const ipiUnit = qtdTotal > 0 ? Number((valorIpi / qtdTotal).toFixed(4)) : 0;
 
@@ -799,10 +809,15 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     updatedItem.valorDescontoItem = valorDesc;
     updatedItem.valorTotalLiquido = valorLiquido;
 
-    // Cálculo do IPI do item
+    // Cálculo do IPI do item respeitando a alíquota global do pedido
+    const defaultGlobalIpiPct = normalizeRateToDecimal(globalFiscal?.ipiAliquota) * 100;
     const ipiPct = field === 'aliquotaIpi' 
       ? Number(value) 
-      : (updatedItem.aliquotaIpi !== undefined ? updatedItem.aliquotaIpi : (updatedItem.fiscalOverride?.ipiAliquota || 0));
+      : (updatedItem.aliquotaIpi !== undefined && updatedItem.aliquotaIpi !== null && updatedItem.aliquotaIpi > 0
+          ? updatedItem.aliquotaIpi 
+          : (updatedItem.fiscalOverride?.useCustomFiscal && updatedItem.fiscalOverride?.ipiAliquota !== undefined
+              ? updatedItem.fiscalOverride.ipiAliquota 
+              : defaultGlobalIpiPct));
     const valorIpi = Number((valorLiquido * (ipiPct / 100)).toFixed(2));
     const ipiUnit = qtd > 0 ? Number((valorIpi / qtd).toFixed(4)) : 0;
     updatedItem.aliquotaIpi = ipiPct;
@@ -853,6 +868,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     let totalIpi = 0;
     let pecas = 0;
     let rupturasCount = 0;
+    const defaultGlobalIpiPct = normalizeRateToDecimal(globalFiscal?.ipiAliquota) * 100;
+
     items.forEach(it => {
       if (isOrderItemBlank(it)) return;
       if (it.ruptura) {
@@ -862,8 +879,17 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
       const d = it.valorDescontoItem !== undefined ? it.valorDescontoItem : (b * ((it.percentualDesconto || 0) / 100));
       const l = it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : (b - d);
-      const ipiAliq = it.aliquotaIpi !== undefined ? it.aliquotaIpi : (it.fiscalOverride?.ipiAliquota || 0);
-      const ipiVal = it.valorIpi !== undefined ? it.valorIpi : (l * (ipiAliq / 100));
+
+      const ipiAliq = (it.aliquotaIpi !== undefined && it.aliquotaIpi !== null && it.aliquotaIpi > 0)
+        ? it.aliquotaIpi
+        : (it.fiscalOverride?.useCustomFiscal && it.fiscalOverride?.ipiAliquota !== undefined
+            ? it.fiscalOverride.ipiAliquota
+            : defaultGlobalIpiPct);
+
+      const ipiVal = (it.valorIpi !== undefined && it.valorIpi !== null && Number(it.valorIpi) > 0)
+        ? Number(it.valorIpi)
+        : Number((l * (ipiAliq / 100)).toFixed(2));
+
       bruto += b;
       desconto += d;
       liquido += l;
@@ -872,7 +898,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     });
     const precoMedio = pecas > 0 ? (liquido / pecas) : 0;
     return { bruto, desconto, liquido, totalIpi, pecas, precoMedio, rupturasCount };
-  }, [items]);
+  }, [items, globalFiscal]);
 
   // Navegação completa por teclado estilo planilha Excel (Setas Cima, Baixo, Esquerda, Direita e Enter)
   const handleExcelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, field: string) => {

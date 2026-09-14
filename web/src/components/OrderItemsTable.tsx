@@ -32,7 +32,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { optimizeImageFile } from '../utils/imageUtils';
-import { OrderItem, FiscalConfig, StoreConfig, Product, Supplier } from '../shared/types';
+import { OrderItem, OrderHeader, FiscalConfig, StoreConfig, Product, Supplier } from '../shared/types';
 import { calculateItemFiscal, normalizeRateToDecimal } from '../shared/fiscalEngine';
 import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
@@ -48,6 +48,7 @@ interface OrderItemsTableProps {
   currentSupplierName?: string;
   currentSupplierId?: string;
   percentualDescontoOff?: number;
+  orderHeader?: Partial<OrderHeader>;
   onUpdateItem: (itemId: string, updatedFields: Partial<OrderItem>) => void;
   onAddItem: (customItem?: OrderItem) => void;
   onDuplicateItem: (item: OrderItem) => void;
@@ -218,6 +219,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   currentSupplierName,
   currentSupplierId,
   percentualDescontoOff = 0,
+  orderHeader,
   onUpdateItem,
   onAddItem,
   onDuplicateItem,
@@ -825,11 +827,37 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     updatedItem.valorIpi = valorIpi;
     updatedItem.ipiUnitario = ipiUnit;
 
-    // Se a separação não for manual, recalcula o rateio automático das 20 lojas
-    if (['qtdTotalUnidades', 'qtdNoPacote', 'qtdPacotes'].includes(field as string) && !updatedItem.separacaoManual) {
-      const autoSep = calculateAutomaticSeparation(Number(updatedItem.qtdTotalUnidades), stores, updatedItem.qtdReservaEstoque || 0);
-      updatedItem.separacaoLojas = autoSep.allocations;
-      updatedItem.qtdReservaEstoque = autoSep.reserveStock;
+    // Recalcula o rateio das lojas se a quantidade mudar
+    if (['qtdTotalUnidades', 'qtdNoPacote', 'qtdPacotes'].includes(field as string)) {
+      const newTotal = Number(updatedItem.qtdTotalUnidades) || 0;
+      if (!updatedItem.separacaoManual) {
+        const autoSep = calculateAutomaticSeparation(newTotal, stores, updatedItem.qtdReservaEstoque || 0);
+        updatedItem.separacaoLojas = autoSep.allocations;
+        updatedItem.qtdReservaEstoque = autoSep.reserveStock;
+      } else if (updatedItem.separacaoLojas) {
+        // Se a separação for manual mas o novo total for menor que o alocado,
+        // ajusta proporcionalmente para nunca ultrapassar a quantidade real comprada
+        const currentSum = Object.values(updatedItem.separacaoLojas).reduce((a, b) => a + (Number(b) || 0), 0);
+        if (currentSum > newTotal && newTotal >= 0) {
+          const adjustedAllocations: Record<string, number> = {};
+          let allocatedSoFar = 0;
+          const storeIds = Object.keys(updatedItem.separacaoLojas);
+          storeIds.forEach((sId, idx) => {
+            const currentVal = Number(updatedItem.separacaoLojas![sId]) || 0;
+            if (idx === storeIds.length - 1) {
+              adjustedAllocations[sId] = Math.max(0, newTotal - allocatedSoFar);
+            } else {
+              const share = currentSum > 0 ? Math.floor((currentVal / currentSum) * newTotal) : 0;
+              adjustedAllocations[sId] = share;
+              allocatedSoFar += share;
+            }
+          });
+          updatedItem.separacaoLojas = adjustedAllocations;
+          updatedItem.qtdReservaEstoque = 0;
+        } else {
+          updatedItem.qtdReservaEstoque = Math.max(0, newTotal - currentSum);
+        }
+      }
     }
 
     // Auto-cálculo do limite de preço e custo real efetivo com preço efetivo com desconto
@@ -863,18 +891,22 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const validItemsCount = useMemo(() => items.filter(it => !isOrderItemBlank(it)).length, [items]);
 
   const totals = useMemo(() => {
-    const res = calculateOrderTotals(items, undefined, globalFiscal);
+    const res = calculateOrderTotals(items, orderHeader, globalFiscal);
     return {
       bruto: res.valorBruto,
       desconto: res.valorDescontoTotal,
+      descontoPercentualMedio: res.descontoPercentualMedio,
       liquido: res.valorLiquido,
       totalIpi: res.totalIpi,
       totalSt: res.totalSt,
+      valorFrete: res.valorFrete,
+      totalGeral: res.totalGeral,
       pecas: res.totalPecas,
       precoMedio: res.precoMedio,
+      precoMedioComImpostos: res.precoMedioComImpostos,
       rupturasCount: res.rupturasCount
     };
-  }, [items, globalFiscal]);
+  }, [items, orderHeader, globalFiscal]);
 
   // Navegação completa por teclado estilo planilha Excel (Setas Cima, Baixo, Esquerda, Direita e Enter)
   const handleExcelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, rowIndex: number, field: string) => {
@@ -1785,7 +1817,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     >
                       <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
                         {prod.fotoUrl ? (
-                          <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover" />
+                          <img src={prod.fotoUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                         ) : (
                           <Package className="w-4 h-4 text-slate-400" />
                         )}
@@ -2047,44 +2079,117 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         </table>
       </div>
 
-      {/* Footer bar com totais dos produtos */}
-      <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200/70 dark:border-slate-700/70 flex flex-wrap items-center justify-end gap-3">
-        <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
-          <div className="text-slate-500 dark:text-slate-400">
-            Itens: <strong className="text-slate-900 dark:text-white font-bold">{validItemsCount}</strong> ({totals.pecas.toLocaleString('pt-BR')} un)
+      {/* Footer bar com resumo financeiro coerente e TOTAL GERAL com máximo destaque */}
+      <div className="px-5 py-3.5 bg-slate-50/70 dark:bg-slate-800/40 border-t border-slate-200/80 dark:border-slate-700/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
+        
+        {/* Lado Esquerdo: Métricas Físicas e Operacionais */}
+        <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 shadow-2xs">
+            <span className="text-slate-400 font-sans">Itens:</span>
+            <strong className="text-slate-900 dark:text-white font-bold">{validItemsCount}</strong>
+            <span className="text-slate-300 dark:text-slate-600">•</span>
+            <span className="font-bold">{totals.pecas.toLocaleString('pt-BR')} un</span>
           </div>
+
           {totals.rupturasCount > 0 && (
-            <div className="text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/60 px-2.5 py-1 rounded-lg border border-rose-200 dark:border-rose-800 flex items-center gap-1">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-bold shadow-2xs">
               <span>🚫 {totals.rupturasCount} em ruptura (descontados)</span>
             </div>
           )}
-          <div className="text-slate-500 dark:text-slate-400">
-            Bruto: <strong className="text-slate-700 dark:text-slate-300 font-bold">R$ {totals.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+
+          <div 
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 shadow-2xs"
+            title="Preço médio por peça: Subtotal de Mercadorias ÷ Total de Peças"
+          >
+            <span className="text-slate-400 font-sans">Preço Médio:</span>
+            <strong className="text-slate-800 dark:text-slate-200 font-bold">
+              R$ {totals.precoMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </strong>
           </div>
-          {totals.desconto > 0 && (
-            <div className="text-emerald-600 dark:text-emerald-400 font-bold">
-              Desc. Itens: -R$ {totals.desconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </div>
+
+        {/* Lado Direito: Resumo Financeiro no Formato Proposta Comercial (Total Líquido | IPI | Desconto Comercial | TOTAL GERAL) */}
+        <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2.5 font-mono">
+          <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-900 px-3.5 py-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+            
+            {/* 1. Total Líquido */}
+            <div className="flex items-center gap-1.5 text-xs border-r border-slate-200 dark:border-slate-700 pr-3" title="Total líquido das mercadorias faturadas">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-sans">
+                Total Líquido:
+              </span>
+              <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                R$ {totals.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
-          )}
-          <div className="text-slate-500 dark:text-slate-400" title="Preço médio por peça/item (Total Líquido ÷ Total de Peças)">
-            Preço Médio: <strong className="text-slate-700 dark:text-slate-300 font-bold">R$ {totals.precoMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-          </div>
-          <div className="flex items-center gap-2.5 bg-emerald-50 dark:bg-emerald-950/60 px-3.5 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-800 shadow-2xs">
-            <div className="text-emerald-900 dark:text-emerald-200 font-extrabold text-xs sm:text-sm border-r border-emerald-300 dark:border-emerald-700 pr-2.5 flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Total IPI:</span>
-              <span className="font-mono">R$ {totals.totalIpi.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+
+            {/* 2. IPI */}
+            <div className="flex items-center gap-1.5 text-xs border-r border-slate-200 dark:border-slate-700 pr-3" title="Imposto sobre Produtos Industrializados">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 font-sans">
+                {totals.totalIpi > 0 ? '+ IPI:' : 'IPI:'}
+              </span>
+              <span className={`font-extrabold ${totals.totalIpi > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-slate-400'}`}>
+                R$ {totals.totalIpi.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
-            <div className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Líquido:</span>
-              <span className="font-mono">R$ {totals.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              {totals.totalIpi > 0 && (
-                <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 block sm:inline sm:ml-1">
-                  (c/ IPI: R$ {(totals.liquido + totals.totalIpi).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+
+            {/* 3. Desconto Comercial */}
+            <div className="flex items-center gap-1.5 text-xs border-r border-slate-200 dark:border-slate-700 pr-3" title={totals.desconto > 0 ? `Desconto comercial negociado já deduzido nas mercadorias` : 'Nenhum desconto comercial aplicado'}>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-sans">
+                Desconto Comercial:
+              </span>
+              {totals.desconto > 0 ? (
+                <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                  -R$ {totals.desconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {totals.descontoPercentualMedio > 0 && (
+                    <span className="ml-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                      ({totals.descontoPercentualMedio.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="font-bold text-slate-400">
+                  0%
                 </span>
               )}
             </div>
+
+            {/* ST (se houver) */}
+            {totals.totalSt > 0 && (
+              <div className="flex items-center gap-1.5 text-xs border-r border-slate-200 dark:border-slate-700 pr-3" title="Substituição Tributária">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 font-sans">
+                  + ST:
+                </span>
+                <span className="font-extrabold text-purple-700 dark:text-purple-300">
+                  R$ {totals.totalSt.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+
+            {/* Frete (se houver) */}
+            {totals.valorFrete > 0 && (
+              <div className="flex items-center gap-1.5 text-xs border-r border-slate-200 dark:border-slate-700 pr-3" title="Valor do frete rateado ou global">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 font-sans">
+                  + Frete:
+                </span>
+                <span className="font-extrabold text-blue-700 dark:text-blue-300">
+                  R$ {totals.valorFrete.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+
+            {/* 4. TOTAL GERAL (Destaque Principal) */}
+            <div className="flex items-center gap-2 pl-0.5 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-800 shadow-2xs" title="Total Geral faturado do pedido">
+              <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-sans">
+                TOTAL GERAL:
+              </span>
+              <span className="text-sm sm:text-base md:text-lg font-black font-mono text-emerald-950 dark:text-emerald-100 tracking-tight">
+                R$ {totals.totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
           </div>
         </div>
+
       </div>
 
       {/* Modal: Seletor de Produtos do Catálogo */}
@@ -2161,7 +2266,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                     {/* Foto */}
                     <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center relative">
                       {prod.fotoUrl ? (
-                        <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition" />
+                        <img src={prod.fotoUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition" />
                       ) : (
                         <ImageIcon className="w-6 h-6 text-slate-400" />
                       )}
@@ -2545,7 +2650,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 {/* Thumbnail com Foto */}
                 <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden flex items-center justify-center">
                   {prod.fotoUrl ? (
-                    <img src={prod.fotoUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
+                    <img src={prod.fotoUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
                   ) : (
                     <Package className="w-5 h-5 text-slate-400" />
                   )}

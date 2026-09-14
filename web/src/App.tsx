@@ -107,7 +107,8 @@ import {
   saveSavedOrdersList,
   saveBatchProductsToStorage,
   saveSuppliersList,
-  saveProductsList
+  saveProductsList,
+  safeSetItem
 } from './utils/storage';
 import { 
   fetchSuppliersFromDb, 
@@ -137,6 +138,7 @@ import {
   fetchFiscalPresetsFromDb,
   saveFiscalPresetToDb,
   deleteFiscalPresetFromDb,
+  fetchPaymentConditionsFromDb,
   isOfflineError,
   fetchHealth,
   duplicateOrderInDb
@@ -278,7 +280,7 @@ export function App() {
   // Carregar dados oficiais do banco de dados SQLite (prioridade máxima)
   const loadFromSqlite = async () => {
     try {
-      const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock, dbPresets, dbFiscalPresets] = await Promise.all([
+      const [dbSuppliers, dbProducts, dbOrders, dbFiscal, dbStores, dbStock, dbPresets, dbFiscalPresets, dbPaymentConditions] = await Promise.all([
         fetchSuppliersFromDb().catch(err => { console.warn('Fornecedores DB:', err); return null; }),
         fetchProductsFromDb().catch(err => { console.warn('Produtos DB:', err); return null; }),
         fetchOrdersFromDb().catch(err => { console.warn('Pedidos DB:', err); return null; }),
@@ -286,7 +288,8 @@ export function App() {
         fetchStoresFromDb().catch(err => { console.warn('Lojas DB:', err); return null; }),
         fetchStockFromDb().catch(err => { console.warn('Estoque DB:', err); return null; }),
         fetchSeparationPresetsFromDb().catch(err => { console.warn('Presets DB:', err); return null; }),
-        fetchFiscalPresetsFromDb().catch(err => { console.warn('Fiscal Presets DB:', err); return null; })
+        fetchFiscalPresetsFromDb().catch(err => { console.warn('Fiscal Presets DB:', err); return null; }),
+        fetchPaymentConditionsFromDb().catch(err => { console.warn('Condições Pagamento DB:', err); return null; })
       ]);
 
       if (dbSuppliers !== null) {
@@ -312,7 +315,6 @@ export function App() {
 
       if (dbProducts !== null) {
         setProducts(dbProducts);
-        saveProductsList(dbProducts);
       }
 
       if (dbStores && dbStores.length > 0) {
@@ -340,6 +342,10 @@ export function App() {
         saveFiscalPresetsList(dbFiscalPresets);
       }
 
+      if (dbPaymentConditions && Array.isArray(dbPaymentConditions) && dbPaymentConditions.length > 0) {
+        safeSetItem('mega12_payment_conditions', JSON.stringify(dbPaymentConditions));
+      }
+
       if (dbOrders !== null) {
         const currentFiscal = dbFiscal || getInitialFiscalConfig();
         const currentStores = (dbStores && dbStores.length > 0) ? dbStores : getInitialStoresConfig();
@@ -349,7 +355,6 @@ export function App() {
           fiscalConfig: o.fiscalConfig || currentFiscal
         }));
         setSavedOrders(hydratedOrders);
-        saveSavedOrdersList(hydratedOrders);
       }
     } catch (err: any) {
       console.warn('Usando armazenamento local de contingência:', err);
@@ -1924,19 +1929,16 @@ export function App() {
     try {
       await deleteOrderFromDb(orderId);
       const updated = await fetchOrdersFromDb().catch(() => null);
-      if (updated && updated.length > 0) {
+      if (updated !== null) {
         setSavedOrders(updated);
-        saveSavedOrdersList(updated);
       } else {
-        const list = loadSavedOrdersList().filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId);
-        saveSavedOrdersList(list);
-        setSavedOrders(list);
+        setSavedOrders(prev => prev.filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId));
       }
       showToast('Pedido excluído do sistema.', 'info');
     } catch (err) {
+      setSavedOrders(prev => prev.filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId));
       const list = loadSavedOrdersList().filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId);
       saveSavedOrdersList(list);
-      setSavedOrders(list);
       showToast('Pedido excluído localmente.', 'info');
     }
   };
@@ -2133,6 +2135,7 @@ export function App() {
 
                   <OrderItemsTable
                     items={order.items}
+                    orderHeader={order.header}
                     globalFiscal={order.fiscalConfig || fiscalConfig}
                     stores={storeConfigs}
                     products={products}

@@ -183,7 +183,15 @@ export function getSuppliersList(): Supplier[] {
 }
 
 export function saveSuppliersList(suppliers: Supplier[]): void {
-  safeSetItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers));
+  // Higieniza fornecedores removendo duplicação redundante de pedidoPadraoJson em localStorage
+  const sanitized = suppliers.map(s => {
+    if (s.pedidoPadrao && s.pedidoPadraoJson) {
+      const { pedidoPadraoJson, ...rest } = s;
+      return rest;
+    }
+    return s;
+  });
+  safeSetItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(sanitized));
 }
 
 export function saveSupplier(supplier: Supplier): Supplier[] {
@@ -191,11 +199,18 @@ export function saveSupplier(supplier: Supplier): Supplier[] {
   const index = list.findIndex(s => s.id === supplier.id);
   let updatedList: Supplier[];
   
-  const pedidoPadraoJson = supplier.pedidoPadraoJson || (supplier.pedidoPadrao ? JSON.stringify(supplier.pedidoPadrao) : undefined);
+  let parsedPadrao = supplier.pedidoPadrao;
+  if (!parsedPadrao && supplier.pedidoPadraoJson) {
+    try {
+      parsedPadrao = JSON.parse(supplier.pedidoPadraoJson);
+    } catch {}
+  }
+
   const normalizedSupplier: Supplier = {
     ...supplier,
-    pedidoPadraoJson
+    pedidoPadrao: parsedPadrao
   };
+  delete normalizedSupplier.pedidoPadraoJson;
   
   if (index >= 0) {
     updatedList = [...list];

@@ -1,7 +1,8 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { PurchaseOrder } from '../shared/types';
-import { calculateOrderNetTotal, generateOrderInstallments } from './installments';
+import { generateOrderInstallments } from './installments';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 
 const MONTH_NAMES_SHORT: Record<string, string> = {
   '01': 'JANEIRO',
@@ -96,8 +97,9 @@ export function buildMonthlyMatrixData(orders: PurchaseOrder[]) {
     if (!empresa) return;
 
     const supplierKey = empresa.toLowerCase();
-    const netTotal = calculateOrderNetTotal(order);
-    const totalPecas = (order.items || []).reduce((acc, i) => acc + (Number(i.qtdTotalUnidades) || 0), 0);
+    const orderTotals = calculateOrderTotals(order);
+    const netTotal = orderTotals.totalGeral;
+    const totalPecas = orderTotals.totalPecas;
     const nota = order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100;
     const valorMenor = nota < 100 ? (netTotal * (100 - nota) / 100) : 0;
 

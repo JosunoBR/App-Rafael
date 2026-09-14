@@ -219,6 +219,28 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       });
       return;
     }
+    if (field === 'percentualDescontoOff') {
+      const pct = Math.max(0, Math.min(100, parseFloat(value) || 0));
+      const descVal = valorBaseMercadoria > 0 ? Number(((valorBaseMercadoria * pct) / 100).toFixed(2)) : 0;
+      onChange({
+        ...header,
+        percentualDescontoOff: pct,
+        descontoComercialTotal: descVal,
+        descontoComercialTipo: '%'
+      });
+      return;
+    }
+    if (field === 'descontoComercialTotal') {
+      const valR$ = Math.max(0, parseFloat(value) || 0);
+      const pct = valorBaseMercadoria > 0 ? Number(((valR$ / valorBaseMercadoria) * 100).toFixed(2)) : 0;
+      onChange({
+        ...header,
+        descontoComercialTotal: valR$,
+        percentualDescontoOff: pct,
+        descontoComercialTipo: 'R$'
+      });
+      return;
+    }
     if (field === 'percentualNota') {
       const pctVal = parseFloat(value) || 0;
       if (isEntradaMista && pctVal > 0 && pctVal <= 100) {
@@ -2174,8 +2196,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
                 )}
 
-                {/* LINHA: FRETE E NOTA FISCAL */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                {/* LINHA: FRETE E DESCONTOS COMERCIAIS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                   {/* 4. Tipo de Frete */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -2223,11 +2245,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     )}
                   </div>
 
-                  {/* 6. Desconto comercial (%) (Desconto Direto no Valor do Pedido) */}
+                  {/* 6. Desconto Comercial (%) */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
                       <span>Desconto comercial (%)</span>
-                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">Desc. Direto</span>
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">% OFF</span>
                     </label>
                     <div className="relative">
                       <input
@@ -2237,7 +2259,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         max="100"
                         value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
                         onFocus={(e) => e.target.select()}
-                        onChange={(e) => handleFieldChange('percentualDescontoOff', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleFieldChange('percentualDescontoOff', e.target.value)}
                         className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs pr-8"
                         placeholder="0"
                       />
@@ -2245,6 +2267,26 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         %
                       </span>
                     </div>
+                  </div>
+
+                  {/* 7. Desconto Comercial (R$) */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Desconto comercial (R$)</span>
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">R$ OFF</span>
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={header.descontoComercialTotal !== undefined && header.descontoComercialTotal !== 0 ? formatCurrency(header.descontoComercialTotal, false) : ''}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const { value } = handleCurrencyInput(e.target.value, true);
+                        handleFieldChange('descontoComercialTotal', value);
+                      }}
+                      placeholder="0,00"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-bold text-emerald-600 dark:text-emerald-400 shadow-2xs"
+                    />
                   </div>
                 </div>
 

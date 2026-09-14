@@ -328,10 +328,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               activeNav === 'suppliers'
             )}
 
-            {/* Configurações Fiscais */}
+            {/* Configurações Gerais */}
             {canAccessFiscal && renderItem(
               'fiscal',
-              'Configurações Fiscais',
+              'Configurações gerais',
               <Settings className={`w-4 h-4 ${activeNav === 'fiscal' ? 'text-white' : 'text-indigo-400'}`} />,
               activeNav === 'fiscal'
             )}

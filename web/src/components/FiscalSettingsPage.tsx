@@ -78,7 +78,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
           </div>
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              Configurações Fiscais & Parâmetros da Rede
+              Configurações Gerais & Parâmetros da Rede
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-mono">
                 {totalPercent.toFixed(1)}% Ativo
               </span>

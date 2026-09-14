@@ -150,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'suppliers':
         return { title: 'Cadastro de Fornecedores & ST', group: 'Cadastros', icon: Building2, color: 'text-emerald-500' };
       case 'fiscal':
-        return { title: 'Configurações Fiscais & Parâmetros', group: 'Cadastros', icon: Settings, color: 'text-indigo-500' };
+        return { title: 'Configurações Gerais & Parâmetros', group: 'Cadastros', icon: Settings, color: 'text-indigo-500' };
       case 'users':
         return { title: 'Gestão de Usuários & Acessos (RBAC)', group: 'Sistema', icon: UsersIcon, color: 'text-pink-500' };
       default:

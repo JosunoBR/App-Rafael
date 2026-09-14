@@ -283,6 +283,41 @@ async function getDatabase() {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS financial_entries (
+      id TEXT PRIMARY KEY,
+      tipo TEXT NOT NULL DEFAULT 'despesa', -- 'despesa' | 'pedido_parcela'
+      orderId TEXT,
+      installmentId TEXT,
+      descricao TEXT NOT NULL,
+      categoria TEXT NOT NULL DEFAULT 'OPERACIONAL', -- 'FIXO', 'PRODUTOS', 'RH', 'OPERACIONAL', 'IMPOSTOS', 'INVESTIMENTOS', 'OUTROS'
+      fornecedor TEXT,
+      storeId TEXT,
+      lojaNome TEXT,
+      empresa TEXT DEFAULT 'ALS', -- 'ALS', 'CONECTA', 'MEGA 12 MATRIZ'
+      formaPagamento TEXT NOT NULL DEFAULT 'BOLETO', -- 'BOLETO', 'DINHEIRO', 'PIX', 'DEPOSITO', 'CARTAO', 'CHEQUE'
+      bancoConta TEXT DEFAULT '',
+      documentoRef TEXT DEFAULT '',
+      parcelaNumero INTEGER DEFAULT 1,
+      parcelaTotal INTEGER DEFAULT 1,
+      parcelaDesc TEXT DEFAULT 'Única',
+      dataVencimento TEXT NOT NULL, -- YYYY-MM-DD
+      valor REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'A Vencer', -- 'A Vencer', 'Vence Hoje', 'Em Atraso', 'Pago', 'Cancelado'
+      dataPagamento TEXT, -- YYYY-MM-DD
+      valorPago REAL DEFAULT 0,
+      observacao TEXT DEFAULT '',
+      recorrente INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_fin_vencimento ON financial_entries(dataVencimento);
+    CREATE INDEX IF NOT EXISTS idx_fin_status ON financial_entries(status);
+    CREATE INDEX IF NOT EXISTS idx_fin_categoria ON financial_entries(categoria);
+    CREATE INDEX IF NOT EXISTS idx_fin_loja ON financial_entries(lojaNome);
+    CREATE INDEX IF NOT EXISTS idx_fin_order ON financial_entries(orderId);
   `);
 
   // Migrações automáticas de colunas

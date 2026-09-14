@@ -2179,6 +2179,7 @@ export function App() {
                 <FinancialBoletosPage
                   orders={effectiveOrders}
                   suppliers={suppliers}
+                  stores={storeConfigs}
                   onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
                   onUpdateInstallment={handleUpdateInstallment}
                   onSaveOrder={handleSaveOrderDirect}

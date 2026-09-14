@@ -1,4 +1,4 @@
-import { PurchaseOrder, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition } from '../shared/types';
+import { PurchaseOrder, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition, FinancialEntry, FinancialSummary } from '../shared/types';
 import { API_BASE_URL } from './config';
 
 export class ApiError extends Error {
@@ -352,5 +352,96 @@ export async function deletePaymentConditionFromDb(id: string): Promise<void> {
     method: 'DELETE'
   });
 }
+
+// -------------------------------------------------------------
+// GESTÃO FINANCEIRA ERP & CONTAS A PAGAR
+// -------------------------------------------------------------
+
+export interface FinancialFilters {
+  month?: string;
+  year?: string;
+  storeId?: string;
+  lojaNome?: string;
+  categoria?: string;
+  status?: string;
+  tipo?: string;
+  search?: string;
+  empresa?: string;
+}
+
+export async function fetchFinancialEntriesFromDb(filters: FinancialFilters = {}): Promise<FinancialEntry[]> {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '' && v !== 'all') {
+      params.append(k, String(v));
+    }
+  });
+  const queryString = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiFetch(`/financial/entries${queryString}`);
+  const json = await res.json();
+  return json.data || [];
+}
+
+export async function fetchFinancialSummaryFromDb(filters: FinancialFilters = {}): Promise<FinancialSummary> {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '' && v !== 'all') {
+      params.append(k, String(v));
+    }
+  });
+  const queryString = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiFetch(`/financial/summary${queryString}`);
+  const json = await res.json();
+  return json.data;
+}
+
+export async function saveFinancialEntryToDb(entryData: any): Promise<FinancialEntry | FinancialEntry[]> {
+  const isUpdate = Boolean(entryData.id);
+  const url = isUpdate ? `/financial/entries/${entryData.id}` : '/financial/entries';
+  const method = isUpdate ? 'PUT' : 'POST';
+
+  const res = await apiFetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entryData)
+  });
+  const json = await res.json();
+  return json.data;
+}
+
+export async function payFinancialEntryInDb(id: string, paymentData: { dataPagamento?: string; valorPago?: number; observacao?: string } = {}): Promise<FinancialEntry> {
+  const res = await apiFetch(`/financial/entries/${id}/pay`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(paymentData)
+  });
+  const json = await res.json();
+  return json.data;
+}
+
+export async function deleteFinancialEntryFromDb(id: string): Promise<void> {
+  await apiFetch(`/financial/entries/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function syncFinancialOrdersInDb(): Promise<{ createdCount: number; message: string }> {
+  const res = await apiFetch('/financial/sync-orders', {
+    method: 'POST'
+  });
+  const json = await res.json();
+  return json.data;
+}
+
+export async function importFinancialClientSheetInDb(customFilePath?: string): Promise<{ importedCount: number; totalValor: number; message: string }> {
+  const res = await apiFetch('/financial/import-sheet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customFilePath })
+  });
+  const json = await res.json();
+  return json.data;
+}
+
 
 

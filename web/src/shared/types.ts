@@ -333,3 +333,62 @@ export interface PaymentCondition {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// 9. Módulo Financeiro ERP & Contas a Pagar
+export type FinancialCategory = 'FIXO' | 'PRODUTOS' | 'RH' | 'OPERACIONAL' | 'IMPOSTOS' | 'INVESTIMENTOS' | 'OUTROS';
+
+export type FinancialPaymentMethod = 'BOLETO' | 'DINHEIRO' | 'PIX' | 'DEPÓSITO' | 'CARTAO' | 'CHEQUE' | string;
+
+export type FinancialStatus = 'A Vencer' | 'Vence Hoje' | 'Em Atraso' | 'Pago' | 'Cancelado';
+
+export interface FinancialEntry {
+  id: string;
+  tipo: 'despesa' | 'pedido_parcela';
+  orderId?: string | null;
+  installmentId?: string | null;
+  descricao: string;
+  categoria: FinancialCategory;
+  fornecedor?: string;
+  storeId?: string;
+  lojaNome?: string;
+  empresa?: string; // 'ALS' | 'CONECTA' | 'MEGA 12 MATRIZ'
+  formaPagamento: FinancialPaymentMethod;
+  bancoConta?: string;
+  documentoRef?: string;
+  parcelaNumero: number;
+  parcelaTotal: number;
+  parcelaDesc: string; // ex: "1/3", "5/9" ou "Única"
+  dataVencimento: string; // YYYY-MM-DD
+  valor: number;
+  status: FinancialStatus;
+  dataPagamento?: string | null; // YYYY-MM-DD
+  valorPago?: number;
+  observacao?: string;
+  recorrente?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface FinancialDaySummary {
+  dia: number;
+  dataIso: string;
+  total: number;
+  pago: number;
+  aPagar: number;
+  count: number;
+}
+
+export interface FinancialSummary {
+  totalGeral: number;
+  totalPago: number;
+  totalAberto: number;
+  totalVenceHoje: number;
+  countVenceHoje: number;
+  totalEmAtraso: number;
+  countEmAtraso: number;
+  totalEntries: number;
+  byCategory: Record<string, { total: number; count: number; pago: number }>;
+  byStore: Record<string, { total: number; count: number; pago: number }>;
+  dailyList: FinancialDaySummary[];
+}
+

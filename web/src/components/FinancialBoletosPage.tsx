@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   DollarSign, 
   Calendar, 
@@ -11,7 +11,6 @@ import {
   ArrowRight, 
   Edit3, 
   FileSpreadsheet, 
-  ExternalLink, 
   Receipt, 
   Sparkles, 
   Plus, 
@@ -21,365 +20,784 @@ import {
   Check,
   TrendingUp,
   CreditCard,
-  FileText
+  FileText,
+  Upload,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Store,
+  Layers,
+  Trash2,
+  Download
 } from 'lucide-react';
-import { PurchaseOrder, PaymentInstallment, Supplier } from '../shared/types';
-import { generateOrderInstallments, calculateOrderNetTotal, getInstallmentStatus } from '../utils/installments';
-import { toBrDate, toIsoDate } from '../utils/masks';
+import { 
+  PurchaseOrder, 
+  PaymentInstallment, 
+  Supplier, 
+  StoreConfig, 
+  FinancialEntry, 
+  FinancialSummary, 
+  FinancialCategory, 
+  FinancialStatus 
+} from '../shared/types';
+import { 
+  fetchFinancialEntriesFromDb, 
+  fetchFinancialSummaryFromDb, 
+  saveFinancialEntryToDb, 
+  payFinancialEntryInDb, 
+  deleteFinancialEntryFromDb, 
+  syncFinancialOrdersInDb, 
+  importFinancialClientSheetInDb 
+} from '../utils/api';
+import { toBrDate } from '../utils/masks';
 import { MonthlyPurchasesMatrixView } from './MonthlyPurchasesMatrixView';
+import { FinancialEntryModal } from './FinancialEntryModal';
+import { FinancialDailyView } from './FinancialDailyView';
 import * as XLSX from 'xlsx';
 
 interface FinancialBoletosPageProps {
   orders: PurchaseOrder[];
   suppliers: Supplier[];
+  stores?: StoreConfig[];
   onSelectOrder: (order: PurchaseOrder) => void;
   onUpdateInstallment: (orderId: string, updatedInstallment: PaymentInstallment) => void;
   onSaveOrder: (updatedOrder: PurchaseOrder) => void;
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
 }
 
+const MONTHS_NAMES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
 export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   orders,
   suppliers,
+  stores = [],
   onSelectOrder,
-  onUpdateInstallment,
-  onSaveOrder,
+  onUpdateInstallment: _onUpdateInstallment,
+  onSaveOrder: _onSaveOrder,
   showToast
 }) => {
-  // Aba ativa: 'matrix' (Matriz Mensal de Compras) ou 'list' (Boletos Analíticos)
-  const [activeTab, setActiveTab] = useState<'matrix' | 'list'>('matrix');
+  // Aba ativa: 'daily' (Visão Diária da Planilha), 'list' (Contas a Pagar Analítico), 'stores' (Por Loja), 'matrix' (Matriz Mensal de Compras)
+  const [activeTab, setActiveTab] = useState<'daily' | 'list' | 'stores' | 'matrix'>('daily');
 
-  // Filtros
-  const [selectedMonth, setSelectedMonth] = useState<string>('all'); // YYYY-MM ou 'all'
-  const [selectedSupplier, setSelectedSupplier] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all'); // 'all' | 'A Vencer' | 'Vence Hoje' | 'Em Atraso' | 'Pago'
+  // Filtros de Período (padrão 2026-08 para casar com a planilha do cliente ou data corrente)
+  const [selectedYear, setSelectedYear] = useState<string>('2026');
+  const [selectedMonth, setSelectedMonth] = useState<string>('08');
+  const [selectedStore, setSelectedStore] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Modal de Acordo / Edição de Parcela
-  const [editingInstallment, setEditingInstallment] = useState<{
-    order: PurchaseOrder;
-    installment: PaymentInstallment;
-  } | null>(null);
+  // Estados de Dados do Backend
+  const [entries, setEntries] = useState<FinancialEntry[]>([]);
+  const [summary, setSummary] = useState<FinancialSummary | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [syncing, setSyncing] = useState<boolean>(false);
+  const [importing, setImporting] = useState<boolean>(false);
 
-  const [modalForm, setModalForm] = useState<{
-    valor: number;
-    dataVencimento: string;
-    status: 'A Vencer' | 'Vence Hoje' | 'Em Atraso' | 'Pago';
-    dataPagamento: string;
-    observacao: string;
-    documentoRef: string;
-  }>({
-    valor: 0,
-    dataVencimento: '',
-    status: 'A Vencer',
-    dataPagamento: '',
-    observacao: '',
-    documentoRef: ''
+  // Modais
+  const [isEntryModalOpen, setIsEntryModalOpen] = useState<boolean>(false);
+  const [payingEntry, setPayingEntry] = useState<FinancialEntry | null>(null);
+  const [payForm, setPayForm] = useState<{ dataPagamento: string; valorPago: number; observacao: string }>({
+    dataPagamento: new Date().toISOString().substring(0, 10),
+    valorPago: 0,
+    observacao: ''
   });
 
-  // Consolidar todas as parcelas de todos os pedidos
-  const allInstallments = useMemo(() => {
-    const list: { order: PurchaseOrder; installment: PaymentInstallment }[] = [];
+  // Carregar lançamentos e resumo do SQLite
+  const loadFinancialData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const filters = {
+        year: selectedYear,
+        month: selectedMonth,
+        lojaNome: selectedStore !== 'all' ? selectedStore : undefined,
+        categoria: selectedCategory !== 'all' ? selectedCategory : undefined,
+        status: selectedStatus !== 'all' ? selectedStatus : undefined,
+        search: searchQuery.trim() || undefined
+      };
 
-    orders.forEach(ord => {
-      // Se o pedido já tem parcelas salvas no SQLite, usa elas; caso contrário gera dinamicamente
-      const insts = (ord.installments && ord.installments.length > 0)
-        ? ord.installments
-        : generateOrderInstallments(ord);
+      const [entriesData, summaryData] = await Promise.all([
+        fetchFinancialEntriesFromDb(filters),
+        fetchFinancialSummaryFromDb(filters)
+      ]);
 
-      insts.forEach(inst => {
-        // Atualizar status dinâmico se não estiver pago
-        const dynStatus = getInstallmentStatus(inst.dataVencimento, inst.dataPagamento);
-        list.push({
-          order: ord,
-          installment: {
-            ...inst,
-            status: inst.dataPagamento ? 'Pago' : dynStatus,
-            fornecedor: inst.fornecedor || ord.header.fornecedor,
-            numeroPedido: inst.numeroPedido || ord.header.numeroPedido
-          }
-        });
-      });
-    });
+      setEntries(entriesData);
+      setSummary(summaryData);
+    } catch (err: any) {
+      console.error('Erro ao carregar financeiro:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedYear, selectedMonth, selectedStore, selectedCategory, selectedStatus, searchQuery]);
 
-    // Ordenar por data de vencimento crescente
-    return list.sort((a, b) => a.installment.dataVencimento.localeCompare(b.installment.dataVencimento));
-  }, [orders]);
+  useEffect(() => {
+    loadFinancialData();
+  }, [loadFinancialData]);
 
-  // Lista de meses disponíveis para filtro
-  const availableMonths = useMemo(() => {
-    const monthsSet = new Set<string>();
-    allInstallments.forEach(({ installment }) => {
-      if (installment.dataVencimento && installment.dataVencimento.length >= 7) {
-        monthsSet.add(installment.dataVencimento.substring(0, 7));
-      }
-    });
-    return Array.from(monthsSet).sort();
-  }, [allInstallments]);
-
-  // Filtragem dos boletos
-  const filteredInstallments = useMemo(() => {
-    return allInstallments.filter(({ order, installment }) => {
-      // Filtro por Mês
-      if (selectedMonth !== 'all') {
-        if (!installment.dataVencimento.startsWith(selectedMonth)) return false;
-      }
-
-      // Filtro por Fornecedor
-      if (selectedSupplier !== 'all') {
-        const supName = (order.header.fornecedor || '').toLowerCase();
-        if (supName !== selectedSupplier.toLowerCase()) return false;
-      }
-
-      // Filtro por Status
-      if (selectedStatus !== 'all') {
-        if (installment.status !== selectedStatus) return false;
-      }
-
-      // Busca por texto
-      if (searchQuery.trim() !== '') {
-        const q = searchQuery.toLowerCase();
-        const matchesPedido = (order.header.numeroPedido || '').toLowerCase().includes(q);
-        const matchesFornec = (order.header.fornecedor || '').toLowerCase().includes(q);
-        const matchesObs = (installment.observacao || '').toLowerCase().includes(q);
-        const matchesDoc = (installment.documentoRef || '').toLowerCase().includes(q);
-        if (!matchesPedido && !matchesFornec && !matchesObs && !matchesDoc) return false;
-      }
-
-      return true;
-    });
-  }, [allInstallments, selectedMonth, selectedSupplier, selectedStatus, searchQuery]);
-
-  // Totais e KPIs do período filtrado
-  const kpis = useMemo(() => {
-    let totalGeral = 0;
-    let totalPago = 0;
-    let totalAVencer = 0;
-    let totalVencido = 0;
-    let totalVenceHoje = 0;
-
-    filteredInstallments.forEach(({ installment }) => {
-      const val = Number(installment.valor) || 0;
-      totalGeral += val;
-      if (installment.status === 'Pago') {
-        totalPago += val;
-      } else if (installment.status === 'Em Atraso') {
-        totalVencido += val;
-      } else if (installment.status === 'Vence Hoje') {
-        totalVenceHoje += val;
-        totalAVencer += val;
-      } else {
-        totalAVencer += val;
-      }
-    });
-
-    return { totalGeral, totalPago, totalAVencer, totalVencido, totalVenceHoje };
-  }, [filteredInstallments]);
-
-  // Abrir Modal de Edição de Parcela / Acordo
-  const handleOpenEditModal = (order: PurchaseOrder, inst: PaymentInstallment) => {
-    setEditingInstallment({ order, installment: inst });
-    setModalForm({
-      valor: inst.valor,
-      dataVencimento: toIsoDate(inst.dataVencimento),
-      status: inst.status,
-      dataPagamento: inst.dataPagamento || '',
-      observacao: inst.observacao || '',
-      documentoRef: inst.documentoRef || ''
-    });
+  // Navegação de Mês
+  const handlePrevMonth = () => {
+    let m = parseInt(selectedMonth, 10) - 1;
+    let y = parseInt(selectedYear, 10);
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    }
+    setSelectedMonth(String(m).padStart(2, '0'));
+    setSelectedYear(String(y));
   };
 
-  // Salvar Edição de Parcela / Acordo Comercial
-  const handleSaveModal = () => {
-    if (!editingInstallment) return;
-    const { order, installment } = editingInstallment;
+  const handleNextMonth = () => {
+    let m = parseInt(selectedMonth, 10) + 1;
+    let y = parseInt(selectedYear, 10);
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    setSelectedMonth(String(m).padStart(2, '0'));
+    setSelectedYear(String(y));
+  };
 
-    const updatedInst: PaymentInstallment = {
-      ...installment,
-      valor: Number(modalForm.valor) || 0,
-      dataVencimento: modalForm.dataVencimento,
-      status: modalForm.status,
-      dataPagamento: modalForm.status === 'Pago' ? (modalForm.dataPagamento || new Date().toISOString().split('T')[0]) : undefined,
-      observacao: modalForm.observacao.trim() || undefined,
-      documentoRef: modalForm.documentoRef.trim() || undefined,
-      updatedAt: new Date().toISOString()
-    };
+  // Sincronizar Pedidos de Compras com o Financeiro
+  const handleSyncOrders = async () => {
+    setSyncing(true);
+    try {
+      const res = await syncFinancialOrdersInDb();
+      showToast(res.message || 'Sincronização concluída com sucesso!', 'success');
+      await loadFinancialData();
+    } catch (err: any) {
+      showToast(err.message || 'Erro ao sincronizar pedidos.', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
-    // Atualizar no pedido
-    const currentList = (order.installments && order.installments.length > 0)
-      ? [...order.installments]
-      : generateOrderInstallments(order);
-
-    const targetIdx = currentList.findIndex(i => i.numeroParcela === installment.numeroParcela);
-    if (targetIdx >= 0) {
-      currentList[targetIdx] = updatedInst;
-    } else {
-      currentList.push(updatedInst);
+  // Importar Planilha do Cliente
+  const handleImportClientSheet = async () => {
+    if (!confirm('Deseja importar os lançamentos da planilha "PLANILHA DE PAGAMENTO AGOSTO.xlsx" para o banco de dados?')) {
+      return;
     }
 
-    const updatedOrder: PurchaseOrder = {
-      ...order,
-      installments: currentList
-    };
-
-    onSaveOrder(updatedOrder);
-    onUpdateInstallment(order.header.id, updatedInst);
-    setEditingInstallment(null);
-    showToast(`Parcela ${installment.numeroParcela}ª do pedido ${order.header.numeroPedido} atualizada!`, 'success');
-  };
-
-  // Alternar Liquidação / Pagamento Rápido
-  const handleTogglePayment = (order: PurchaseOrder, inst: PaymentInstallment) => {
-    const isCurrentlyPaid = inst.status === 'Pago';
-    const newStatus = isCurrentlyPaid 
-      ? getInstallmentStatus(inst.dataVencimento) 
-      : 'Pago';
-    const newPaymentDate = isCurrentlyPaid 
-      ? undefined 
-      : new Date().toISOString().split('T')[0];
-
-    const updatedInst: PaymentInstallment = {
-      ...inst,
-      status: newStatus,
-      dataPagamento: newPaymentDate,
-      updatedAt: new Date().toISOString()
-    };
-
-    const currentList = (order.installments && order.installments.length > 0)
-      ? [...order.installments]
-      : generateOrderInstallments(order);
-
-    const targetIdx = currentList.findIndex(i => i.numeroParcela === inst.numeroParcela);
-    if (targetIdx >= 0) {
-      currentList[targetIdx] = updatedInst;
-    } else {
-      currentList.push(updatedInst);
+    setImporting(true);
+    try {
+      const res = await importFinancialClientSheetInDb();
+      showToast(res.message || 'Planilha importada com sucesso!', 'success');
+      setSelectedYear('2026');
+      setSelectedMonth('08');
+      await loadFinancialData();
+    } catch (err: any) {
+      showToast(err.message || 'Erro ao importar planilha do cliente.', 'error');
+    } finally {
+      setImporting(false);
     }
-
-    const updatedOrder: PurchaseOrder = {
-      ...order,
-      installments: currentList
-    };
-
-    onSaveOrder(updatedOrder);
-    onUpdateInstallment(order.header.id, updatedInst);
-    showToast(
-      isCurrentlyPaid 
-        ? `Pagamento da parcela ${inst.numeroParcela}ª desfeito.` 
-        : `Boleto parcela ${inst.numeroParcela}ª marcado como PAGO!`,
-      'success'
-    );
   };
 
-  // Exportar Listagem para Excel
+  // Baixa rápida de Pagamento
+  const handleOpenPayModal = (entry: FinancialEntry) => {
+    setPayingEntry(entry);
+    setPayForm({
+      dataPagamento: new Date().toISOString().substring(0, 10),
+      valorPago: entry.valor,
+      observacao: ''
+    });
+  };
+
+  const handleConfirmPay = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payingEntry) return;
+
+    try {
+      await payFinancialEntryInDb(payingEntry.id, payForm);
+      showToast(`Pagamento de R$ ${payForm.valorPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} baixado com sucesso!`, 'success');
+      setPayingEntry(null);
+      await loadFinancialData();
+    } catch (err: any) {
+      showToast(err.message || 'Erro ao liquidar pagamento.', 'error');
+    }
+  };
+
+  // Exclusão de Lançamento
+  const handleDeleteEntry = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este lançamento financeiro?')) return;
+    try {
+      await deleteFinancialEntryFromDb(id);
+      showToast('Lançamento excluído com sucesso.', 'info');
+      await loadFinancialData();
+    } catch (err: any) {
+      showToast(err.message || 'Erro ao excluir lançamento.', 'error');
+    }
+  };
+
+  // Exportar Excel
   const handleExportExcel = () => {
-    try {
-      const data = filteredInstallments.map(({ order, installment }) => ({
-        'Nº Pedido': order.header.numeroPedido,
-        'Fornecedor': order.header.fornecedor,
-        'Parcela': `${installment.numeroParcela}/${installment.totalParcelas}`,
-        'Vencimento': installment.dataVencimento,
-        'Valor (R$)': installment.valor,
-        'Valor Original (R$)': installment.valorOriginal || installment.valor,
-        'Status': installment.status,
-        'Data Pagamento': installment.dataPagamento || '-',
-        'Acordo / Observação': installment.observacao || '-',
-        'Documento / Boleto': installment.documentoRef || '-'
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Controle_Boletos_Mega12');
-      XLSX.writeFile(wb, `Fluxo_Boletos_Mega12_${new Date().toISOString().split('T')[0]}.xlsx`);
-      showToast('Relatório de boletos exportado em Excel com sucesso!');
-    } catch {
-      showToast('Erro ao exportar relatório em Excel', 'error');
+    if (entries.length === 0) {
+      showToast('Nenhum dado para exportar.', 'info');
+      return;
     }
+
+    const rows = entries.map(item => ({
+      Vencimento: toBrDate(item.dataVencimento),
+      Valor: item.valor,
+      'Fornecedor / Despesa': item.descricao,
+      Categoria: item.categoria,
+      Loja: item.lojaNome || item.empresa || 'ALS',
+      'Forma de Pagamento': item.formaPagamento,
+      NF: item.documentoRef || '',
+      Parcela: item.parcelaDesc,
+      Status: item.status,
+      'Data Pagamento': item.dataPagamento ? toBrDate(item.dataPagamento) : '',
+      Observação: item.observacao || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `Financeiro_${selectedMonth}_${selectedYear}`);
+    XLSX.writeFile(wb, `Mega12_Financeiro_${selectedYear}_${selectedMonth}.xlsx`);
+    showToast('Planilha Excel exportada com sucesso!', 'success');
   };
 
-  const formatMonthName = (yearMonth: string) => {
-    try {
-      const [y, m] = yearMonth.split('-');
-      const date = new Date(Number(y), Number(m) - 1, 1);
-      return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    } catch {
-      return yearMonth;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Pago':
-        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
-      case 'Vence Hoje':
-        return 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border-amber-400 dark:border-amber-700 animate-pulse';
-      case 'Em Atraso':
-        return 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300 dark:border-rose-800 font-bold';
-      default:
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300 dark:border-blue-800';
-    }
-  };
+  // Cálculos consolidados para os cards superiores
+  const totalPrevisto = summary?.totalGeral || 0;
+  const totalPago = summary?.totalPago || 0;
+  const totalAberto = summary?.totalAberto || 0;
+  const totalVenceHoje = summary?.totalVenceHoje || 0;
+  const countVenceHoje = summary?.countVenceHoje || 0;
+  const totalEmAtraso = summary?.totalEmAtraso || 0;
+  const countEmAtraso = summary?.countEmAtraso || 0;
+  const percentPago = totalPrevisto > 0 ? Math.round((totalPago / totalPrevisto) * 100) : 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      
-      {/* 1. Header do Módulo Financeiro */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+
+      {/* 1. Header Principal e Botões de Ação ERP */}
+      <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-3 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5" />
-              Gestão Financeira & Tesouraria
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20">
+              <DollarSign className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                Gestão Financeira & Contas a Pagar
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                  ERP Rede Mega 12
+                </span>
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Controle diário unificado das despesas das lojas, despesas fixas e parcelas de compras
+              </p>
+            </div>
           </div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-            Controle de Boletos & Contas a Pagar
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Acompanhe o vencimento de parcelas por fornecedor e mês. Valores editáveis para acordos comerciais e abatimentos.
-          </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        {/* Botões de Ação do Topo */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Sincronizar Pedidos */}
           <button
-            onClick={handleExportExcel}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-400 text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-700 transition flex items-center gap-2 cursor-pointer shadow-xs"
-            title="Exportar fluxo de boletos para Excel"
+            type="button"
+            disabled={syncing}
+            onClick={handleSyncOrders}
+            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            title="Gera parcelas financeiras para os pedidos de compra ainda não sincronizados"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span>Exportar Excel</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar Pedidos'}
+          </button>
+
+          {/* Importar Planilha do Cliente */}
+          <button
+            type="button"
+            disabled={importing}
+            onClick={handleImportClientSheet}
+            className="px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-400 font-semibold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            title="Importa o arquivo PLANILHA DE PAGAMENTO AGOSTO.xlsx da raiz"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            {importing ? 'Importando Planilha...' : 'Importar Planilha Agosto'}
+          </button>
+
+          {/* Exportar Excel */}
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            Excel
+          </button>
+
+          {/* Novo Lançamento ERP */}
+          <button
+            type="button"
+            onClick={() => setIsEntryModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            + Novo Lançamento ERP
           </button>
         </div>
       </div>
 
-      {/* Seletor de Visualização Financeira */}
-      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit border border-slate-200 dark:border-slate-700">
-        <button
-          onClick={() => setActiveTab('matrix')}
-          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'matrix'
-              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <span>📊</span>
-          <span>Controle Mensal de Compras (Matriz de Fluxo)</span>
-        </button>
+      {/* 2. Cards de Métricas e KPIs Financeiros */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        
+        {/* Total Previsto no Mês */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Total Previsto Mês</span>
+            <DollarSign className="w-4 h-4 text-amber-500" />
+          </div>
+          <div>
+            <div className="text-xl font-black text-slate-900 dark:text-white font-mono">
+              R$ {totalPrevisto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              {summary?.totalEntries || entries.length} compromissos cadastrados
+            </p>
+          </div>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('list')}
-          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'list'
-              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <span>📑</span>
-          <span>Boletos Analíticos & Acordos Comerciais</span>
-        </button>
+        {/* Total Pago / Liquidado */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Total Liquidado</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+          </div>
+          <div>
+            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+              R$ {totalPago.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full mt-2 overflow-hidden">
+              <div
+                className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                style={{ width: `${percentPago}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1 font-semibold">
+              {percentPago}% do volume quitado
+            </p>
+          </div>
+        </div>
+
+        {/* Saldo em Aberto */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">A Pagar / Em Aberto</span>
+            <Clock className="w-4 h-4 text-blue-500" />
+          </div>
+          <div>
+            <div className="text-xl font-black text-slate-900 dark:text-white font-mono">
+              R$ {totalAberto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Restante para quitação
+            </p>
+          </div>
+        </div>
+
+        {/* Vence Hoje */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Vence Hoje</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold">
+              {countVenceHoje} contas
+            </span>
+          </div>
+          <div>
+            <div className="text-xl font-black text-amber-600 dark:text-amber-400 font-mono">
+              R$ {totalVenceHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Prioridade para pagamento hoje
+            </p>
+          </div>
+        </div>
+
+        {/* Em Atraso */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Em Atraso</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-bold">
+              {countEmAtraso} contas
+            </span>
+          </div>
+          <div>
+            <div className="text-xl font-black text-rose-600 dark:text-rose-400 font-mono">
+              R$ {totalEmAtraso.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Requer atenção imediata
+            </p>
+          </div>
+        </div>
+
       </div>
 
-      {/* ABA 1: MATRIZ DE CONTROLE MENSAL DE COMPRAS */}
+      {/* 3. Barra de Navegação de Mês, Filtros e Abas */}
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
+        
+        {/* Linha 1: Navegação de Mês e Abas */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          
+          {/* Seletor de Período Mês / Ano */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              title="Mês Anterior"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold text-sm text-slate-800 dark:text-slate-200">
+              <Calendar className="w-4 h-4 text-amber-500" />
+              <span>{MONTHS_NAMES[parseInt(selectedMonth, 10) - 1]} de {selectedYear}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+              title="Próximo Mês"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Abas Modernas de Visualização */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80 text-xs">
+            
+            <button
+              type="button"
+              onClick={() => setActiveTab('daily')}
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                activeTab === 'daily'
+                  ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              Visão Diária (Planilha)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('list')}
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                activeTab === 'list'
+                  ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              Contas a Pagar (ERP Grid)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('stores')}
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                activeTab === 'stores'
+                  ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              Despesas por Loja
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('matrix')}
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                activeTab === 'matrix'
+                  ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              Matriz de Compras
+            </button>
+
+          </div>
+
+        </div>
+
+        {/* Linha 2: Filtros de Loja, Categoria, Status e Busca */}
+        {activeTab !== 'matrix' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 pt-3 border-t border-slate-100 dark:border-slate-700/60 text-xs">
+            
+            {/* Busca */}
+            <div className="lg:col-span-4 relative">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar fornecedor, despesa, NF ou documento..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            {/* Filtro Loja */}
+            <div className="lg:col-span-3">
+              <select
+                value={selectedStore}
+                onChange={e => setSelectedStore(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="all">Todas as Lojas / Unidades</option>
+                <optgroup label="Empresas Matriz">
+                  <option value="ALS">ALS (Geral)</option>
+                  <option value="CONECTA">CONECTA</option>
+                </optgroup>
+                <optgroup label="Rede Mega 12 (Lojas Físicas)">
+                  {stores.map(st => (
+                    <option key={st.id} value={st.name}>{st.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+
+            {/* Filtro Categoria */}
+            <div className="lg:col-span-3">
+              <select
+                value={selectedCategory}
+                onChange={e => setSelectedCategory(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="all">Todas as Categorias</option>
+                <option value="FIXO">FIXO (Água, Luz, Aluguel...)</option>
+                <option value="PRODUTOS">PRODUTOS (Mercadorias/Fornecedores)</option>
+                <option value="RH">RH (Folha, Retiradas)</option>
+                <option value="OPERACIONAL">OPERACIONAL (Dia a dia loja)</option>
+                <option value="IMPOSTOS">IMPOSTOS & TRIBUTOS</option>
+                <option value="INVESTIMENTOS">INVESTIMENTOS</option>
+                <option value="OUTROS">OUTROS</option>
+              </select>
+            </div>
+
+            {/* Filtro Status */}
+            <div className="lg:col-span-2">
+              <select
+                value={selectedStatus}
+                onChange={e => setSelectedStatus(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="all">Todos os Status</option>
+                <option value="A Vencer">A Vencer</option>
+                <option value="Vence Hoje">Vence Hoje</option>
+                <option value="Em Atraso">Em Atraso</option>
+                <option value="Pago">Pago</option>
+              </select>
+            </div>
+
+          </div>
+        )}
+
+      </div>
+
+      {/* 4. Conteúdo Dinâmico das Abas */}
+
+      {/* ABA 1: Visão Diária de Gastos (Planilha do Cliente) */}
+      {activeTab === 'daily' && (
+        <FinancialDailyView
+          entries={entries}
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          onPayEntry={(id) => {
+            const entry = entries.find(e => e.id === id);
+            if (entry) handleOpenPayModal(entry);
+          }}
+          onSelectEntry={(entry) => console.log('Selecionou:', entry)}
+          onDeleteEntry={handleDeleteEntry}
+        />
+      )}
+
+      {/* ABA 2: Grade Analítica ERP de Contas a Pagar */}
+      {activeTab === 'list' && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Grade Corporativa de Contas ({entries.length} registros)
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50/60 dark:bg-slate-900/40 text-slate-400 uppercase font-semibold text-[10px] border-b border-slate-100 dark:border-slate-700/60">
+                  <th className="py-3 px-4">Vencimento</th>
+                  <th className="py-3 px-4">Descrição / Favorecido</th>
+                  <th className="py-3 px-3">Categoria</th>
+                  <th className="py-3 px-3">Loja / Unidade</th>
+                  <th className="py-3 px-3">Forma Pgto</th>
+                  <th className="py-3 px-3">NF / Doc</th>
+                  <th className="py-3 px-3">Parcela</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-4 text-right">Valor</th>
+                  <th className="py-3 px-4 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
+                {entries.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="py-12 text-center text-slate-400">
+                      Nenhum lançamento financeiro encontrado com os filtros aplicados.
+                    </td>
+                  </tr>
+                ) : (
+                  entries.map(item => {
+                    const isPaid = item.status === 'Pago';
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors ${
+                          isPaid ? 'opacity-65 bg-slate-50/30 dark:bg-slate-800/30' : ''
+                        }`}
+                      >
+                        <td className="py-3 px-4 font-mono font-bold text-slate-800 dark:text-slate-200">
+                          {toBrDate(item.dataVencimento)}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-900 dark:text-white">
+                          <span className={isPaid ? 'line-through text-slate-400' : ''}>
+                            {item.descricao}
+                          </span>
+                          {item.observacao && (
+                            <span className="text-[10px] text-slate-400 block truncate max-w-xs font-normal">
+                              {item.observacao}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                            {item.categoria}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-slate-700 dark:text-slate-300 font-medium">
+                          {item.lojaNome || item.empresa || 'ALS'}
+                        </td>
+                        <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-300 uppercase">
+                          {item.formaPagamento}
+                        </td>
+                        <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-400">
+                          {item.documentoRef || '—'}
+                        </td>
+                        <td className="py-3 px-3 font-mono font-bold text-amber-600 dark:text-amber-400">
+                          {item.parcelaDesc}
+                        </td>
+                        <td className="py-3 px-3">
+                          {isPaid ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                              <Check className="w-2.5 h-2.5" /> Pago
+                            </span>
+                          ) : item.status === 'Vence Hoje' ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 inline-flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5" /> Vence Hoje
+                            </span>
+                          ) : item.status === 'Em Atraso' ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 inline-flex items-center gap-1">
+                              <AlertTriangle className="w-2.5 h-2.5" /> Em Atraso
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                              A Vencer
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
+                          R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {!isPaid && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPayModal(item)}
+                                title="Baixar Pagamento"
+                                className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 hover:text-white transition-all"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteEntry(item.id)}
+                              title="Excluir Lançamento"
+                              className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ABA 3: Despesas Consolidadas por Loja & Centro de Custo */}
+      {activeTab === 'stores' && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">
+              Despesas Consolidadas por Loja da Rede Mega 12
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Distribuição de custos fixos, operacionais e mercadorias por unidade de faturamento
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {summary && Object.entries(summary.byStore).map(([lojaName, info]) => {
+              return (
+                <div
+                  key={lojaName}
+                  className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col justify-between"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-xs">
+                        <Store className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-slate-900 dark:text-white text-sm">
+                        {lojaName}
+                      </span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-400">
+                      {info.count} {info.count === 1 ? 'conta' : 'contas'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">Total Previsto:</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        R$ {info.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-emerald-600">Total Quitado:</span>
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        R$ {info.pago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ABA 4: Matriz Mensal de Compras (Já existente) */}
       {activeTab === 'matrix' && (
         <MonthlyPurchasesMatrixView
           orders={orders}
@@ -388,497 +806,109 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
         />
       )}
 
-      {/* ABA 2: LISTA ANALÍTICA DE BOLETOS & ACORDOS */}
-      {activeTab === 'list' && (
-        <div className="space-y-6">
-          {/* 2. Cards de KPIs Executivos */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        
-        {/* Total a Pagar / Filtrado */}
-        <div className="p-4.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold mb-2">
-            <span>Total no Período</span>
-            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
-              <Receipt className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">
-            R$ {kpis.totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {filteredInstallments.length} boleto(s) listado(s)
-          </div>
-        </div>
+      {/* Modal de Lançamento ERP Padrão */}
+      <FinancialEntryModal
+        isOpen={isEntryModalOpen}
+        onClose={() => setIsEntryModalOpen(false)}
+        onSuccess={() => loadFinancialData()}
+        suppliers={suppliers}
+        stores={stores}
+        showToast={showToast}
+        onSaveEntry={async (payload) => {
+          return await saveFinancialEntryToDb(payload);
+        }}
+      />
 
-        {/* Total A Vencer */}
-        <div className="p-4.5 rounded-2xl bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/80 shadow-xs">
-          <div className="flex items-center justify-between text-blue-600 dark:text-blue-400 text-xs font-semibold mb-2">
-            <span>A Vencer</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 font-mono">
-            R$ {kpis.totalAVencer.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            Compromissos futuros
-          </div>
-        </div>
-
-        {/* Total Vencido / Em Atraso */}
-        <div className="p-4.5 rounded-2xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800/80 shadow-xs">
-          <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 text-xs font-semibold mb-2">
-            <span>Em Atraso / Vencidos</span>
-            <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/60 flex items-center justify-center text-rose-600 dark:text-rose-400">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">
-            R$ {kpis.totalVencido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            Requer atenção imediata
-          </div>
-        </div>
-
-        {/* Total Liquidado / Pago */}
-        <div className="p-4.5 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/80 shadow-xs">
-          <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 text-xs font-semibold mb-2">
-            <span>Liquidado / Pago</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-            R$ {kpis.totalPago.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            Boletos quitados
-          </div>
-        </div>
-
-      </div>
-
-      {/* 3. Barra de Filtros & Pesquisa */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          
-          {/* 1. Filtro por Mês */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-              <span>Mês de Vencimento</span>
-            </label>
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-            >
-              <option value="all">Todos os Meses</option>
-              {availableMonths.map(m => (
-                <option key={m} value={m}>
-                  {formatMonthName(m)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 2. Filtro por Fornecedor */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
-              <Building2 className="w-3.5 h-3.5 text-slate-400" />
-              <span>Fornecedor</span>
-            </label>
-            <select
-              value={selectedSupplier}
-              onChange={(e) => setSelectedSupplier(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-            >
-              <option value="all">Todos os Fornecedores</option>
-              {suppliers.map(s => (
-                <option key={s.id} value={s.razaoSocial}>
-                  {s.razaoSocial}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 3. Filtro por Status */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <span>Status do Boleto</span>
-            </label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-            >
-              <option value="all">Todos os Status</option>
-              <option value="A Vencer">A Vencer</option>
-              <option value="Vence Hoje">Vence Hoje ⚠️</option>
-              <option value="Em Atraso">Em Atraso 🔴</option>
-              <option value="Pago">Liquidado / Pago 🟢</option>
-            </select>
-          </div>
-
-          {/* 4. Campo de Busca Instantânea */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
-              <Search className="w-3.5 h-3.5 text-slate-400" />
-              <span>Buscar Pedido / Código</span>
-            </label>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Ex: PED-1002, Ambev, NF..."
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
-            />
-          </div>
-
-        </div>
-      </div>
-
-      {/* 4. Tabela de Boletos e Parcelas */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
-        {filteredInstallments.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
-              <Receipt className="w-7 h-7" />
-            </div>
-            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
-              Nenhum boleto encontrado com os filtros selecionados
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-              Experimente alterar os filtros de mês, fornecedor ou status para visualizar os boletos da rede.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[850px]">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  <th className="py-3 px-4">Pedido / Emissão</th>
-                  <th className="py-3 px-4">Fornecedor</th>
-                  <th className="py-3 px-4 text-center">Parcela</th>
-                  <th className="py-3 px-4">Vencimento</th>
-                  <th className="py-3 px-4 text-right">Valor da Parcela</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-right">Ações & Acordos</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
-                {filteredInstallments.map(({ order, installment }) => {
-                  const [y, m, d] = installment.dataVencimento.split('-');
-                  const formattedDate = d && m && y ? `${d}/${m}/${y}` : installment.dataVencimento;
-                  const isModified = installment.valorOriginal !== undefined && Math.abs(installment.valor - installment.valorOriginal) > 0.01;
-
-                  return (
-                    <tr 
-                      key={`${order.header.id}_inst_${installment.numeroParcela}`}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
-                    >
-                      {/* Pedido / Emissão */}
-                      <td className="py-3.5 px-4 font-medium">
-                        <button
-                          onClick={() => onSelectOrder(order)}
-                          className="font-mono font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
-                          title="Abrir este pedido na tela de cotação"
-                        >
-                          <span>{order.header.numeroPedido}</span>
-                          <ExternalLink className="w-3 h-3 opacity-60" />
-                        </button>
-                        <div className="text-[10px] text-slate-400 dark:text-slate-500">
-                          Data do pedido: {toBrDate(order.header.dataPedido) || '-'}
-                        </div>
-                      </td>
-
-                      {/* Fornecedor */}
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900 dark:text-white">
-                          {order.header.fornecedor || 'Não informado'}
-                        </div>
-                        {order.header.vendedor && (
-                          <div className="text-[10px] text-slate-400">
-                            Vendedor: {order.header.vendedor}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Parcela */}
-                      <td className="py-3.5 px-4 text-center">
-                        {installment.isBoletoFrete || installment.tipoTitulo === 'frete' ? (
-                          <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-sky-100 dark:bg-sky-950/80 text-sky-800 dark:text-sky-300 font-mono border border-sky-300 dark:border-sky-800">
-                            🚚 Frete (10d)
-                          </span>
-                        ) : installment.metodoPagamento === 'Depósito' || installment.observacao?.toLowerCase().includes('depósito') ? (
-                          <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 font-mono border border-indigo-300 dark:border-indigo-800">
-                            🏦 {installment.observacao || `${installment.numeroParcela}/${installment.totalParcelas} (Depósito)`}
-                          </span>
-                        ) : installment.observacao?.toLowerCase().includes('entrada') ? (
-                          <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-mono border border-emerald-300 dark:border-emerald-800">
-                            1 / {installment.totalParcelas} (Entrada)
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
-                            {installment.numeroParcela} / {installment.totalParcelas}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Vencimento */}
-                      <td className="py-3.5 px-4">
-                        <div className="font-mono font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{formattedDate}</span>
-                        </div>
-                        {installment.status === 'Pago' && installment.dataPagamento && (
-                          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                            Pago em: {installment.dataPagamento}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Valor da Parcela (com indicador de Acordo) */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="font-mono font-extrabold text-sm text-slate-900 dark:text-white">
-                          R$ {installment.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                        {isModified && (
-                          <div className="flex items-center justify-end gap-1 mt-0.5">
-                            <span className="text-[10px] text-slate-400 line-through font-mono">
-                              R$ {installment.valorOriginal?.toFixed(2)}
-                            </span>
-                            <span className="text-[9px] font-extrabold px-1 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30" title={installment.observacao || 'Valor renegociado em acordo'}>
-                              Acordo
-                            </span>
-                          </div>
-                        )}
-                        {installment.observacao && !isModified && (
-                          <div className="text-[10px] text-slate-400 truncate max-w-[150px]" title={installment.observacao}>
-                            💬 {installment.observacao}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-4 text-center">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(installment.status)}`}>
-                          {installment.status}
-                        </span>
-                      </td>
-
-                      {/* Ações */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Botão de Quitar / Desfazer Pagamento */}
-                          <button
-                            onClick={() => handleTogglePayment(order, installment)}
-                            className={`p-1.5 rounded-lg border transition cursor-pointer ${
-                              installment.status === 'Pago'
-                                ? 'bg-emerald-500 text-white hover:bg-emerald-600 border-emerald-600'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-400 border-slate-200 dark:border-slate-700'
-                            }`}
-                            title={installment.status === 'Pago' ? 'Desfazer pagamento' : 'Marcar como pago'}
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Botão de Editar Acordo / Parcela */}
-                          <button
-                            onClick={() => handleOpenEditModal(order, installment)}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-amber-50 hover:text-amber-700 dark:bg-slate-800 dark:hover:bg-amber-950/60 dark:hover:text-amber-400 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition flex items-center gap-1 cursor-pointer"
-                            title="Editar valor, prorrogar vencimento ou registrar acordo"
-                          >
-                            <Edit3 className="w-3.5 h-3.5 text-amber-500" />
-                            <span>Acordo</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      </div>
-      )}
-
-      {/* 5. Modal de Acordo Financeiro & Edição de Parcela */}
-      {editingInstallment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
-            
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/50">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                  <Edit3 className="w-5 h-5" />
+      {/* Modal de Baixa de Pagamento */}
+      {payingEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                  <Check className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Acordo Comercial & Edição de Parcela
+                    Liquidar Pagamento
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Pedido <strong className="font-mono text-emerald-600 dark:text-emerald-400">{editingInstallment.order.header.numeroPedido}</strong> — Parcela {editingInstallment.installment.numeroParcela}ª de {editingInstallment.installment.totalParcelas}
+                  <p className="text-xs text-slate-500">
+                    Dar baixa no compromisso financeiro
                   </p>
                 </div>
               </div>
-
               <button
-                onClick={() => setEditingInstallment(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer"
+                onClick={() => setPayingEntry(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 space-y-4">
-              
-              {/* Fornecedor Info */}
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400">Fornecedor:</span>
-                  <div className="font-bold text-slate-900 dark:text-white">
-                    {editingInstallment.order.header.fornecedor}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-slate-500 dark:text-slate-400">Valor Original:</span>
-                  <div className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                    R$ {(editingInstallment.installment.valorOriginal || editingInstallment.installment.valor).toFixed(2)}
-                  </div>
-                </div>
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 text-xs space-y-1">
+              <p className="font-bold text-slate-900 dark:text-white">{payingEntry.descricao}</p>
+              <p className="text-slate-500">Loja: {payingEntry.lojaNome || payingEntry.empresa || 'ALS'}</p>
+              <p className="text-slate-500">Vencimento: {toBrDate(payingEntry.dataVencimento)}</p>
+            </div>
+
+            <form onSubmit={handleConfirmPay} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Data do Pagamento
+                </label>
+                <input
+                  type="date"
+                  value={payForm.dataPagamento}
+                  onChange={e => setPayForm({ ...payForm, dataPagamento: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium"
+                  required
+                />
               </div>
 
-              {/* Valor da Parcela (Editável) */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                  <span>Valor Negociado / Efetivo da Parcela (R$)</span>
-                  {editingInstallment.installment.valorOriginal && (
-                    <button
-                      type="button"
-                      onClick={() => setModalForm(prev => ({ ...prev, valor: editingInstallment.installment.valorOriginal || 0 }))}
-                      className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Restaurar valor original</span>
-                    </button>
-                  )}
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Valor Pago (R$)
                 </label>
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
-                  value={modalForm.valor === 0 ? '' : modalForm.valor}
-                  placeholder="0.00"
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => setModalForm(prev => ({ ...prev, valor: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-3.5 py-2.5 text-sm font-mono font-black rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                  value={payForm.valorPago}
+                  onChange={e => setPayForm({ ...payForm, valorPago: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-base font-bold font-mono"
+                  required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                {/* Data de Vencimento */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Data de Vencimento
-                  </label>
-                  <input
-                    type="date"
-                    value={toIsoDate(modalForm.dataVencimento)}
-                    onChange={(e) => setModalForm(prev => ({ ...prev, dataVencimento: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                  />
-                </div>
-
-                {/* Status do Boleto */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Status do Pagamento
-                  </label>
-                  <select
-                    value={modalForm.status}
-                    onChange={(e) => setModalForm(prev => ({ ...prev, status: e.target.value as any }))}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer font-bold"
-                  >
-                    <option value="A Vencer">A Vencer</option>
-                    <option value="Vence Hoje">Vence Hoje</option>
-                    <option value="Em Atraso">Em Atraso</option>
-                    <option value="Pago">Liquidado / Pago</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Data de Pagamento se Pago */}
-              {modalForm.status === 'Pago' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Data da Liquidação / Pagamento
-                  </label>
-                  <input
-                    type="date"
-                    value={modalForm.dataPagamento || new Date().toISOString().split('T')[0]}
-                    onChange={(e) => setModalForm(prev => ({ ...prev, dataPagamento: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                  />
-                </div>
-              )}
-
-              {/* Observação / Motivo do Acordo */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Motivo do Acordo Comercial / Anotações
-                </label>
-                <textarea
-                  rows={2}
-                  value={modalForm.observacao}
-                  onChange={(e) => setModalForm(prev => ({ ...prev, observacao: e.target.value }))}
-                  placeholder="Ex: Abatimento de R$ 500 referente a avarias negociadas com o vendedor..."
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden resize-none"
-                />
-              </div>
-
-              {/* Código de Barras / Boleto Ref */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Linha Digitável / Código de Barras / Nº Documento (Opcional)
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Observações / Comprovante
                 </label>
                 <input
                   type="text"
-                  value={modalForm.documentoRef}
-                  onChange={(e) => setModalForm(prev => ({ ...prev, documentoRef: e.target.value }))}
-                  placeholder="Ex: 34191.79001 01043.510047..."
-                  className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                  placeholder="Ex: Pago via Santander, autenticação 123..."
+                  value={payForm.observacao}
+                  onChange={e => setPayForm({ ...payForm, observacao: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                 />
               </div>
 
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setEditingInstallment(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveModal}
-                className="px-5 py-2 rounded-xl text-xs font-extrabold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Salvar Alterações</span>
-              </button>
-            </div>
-
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPayingEntry(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Confirmar Baixa
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -33,24 +33,54 @@ class FiscalRepository {
   }
 
   async getStores() {
-    return await queryAll("SELECT * FROM stores WHERE active = 1 ORDER BY cluster ASC, name ASC");
+    return await queryAll("SELECT * FROM stores ORDER BY cluster ASC, name ASC");
   }
 
   async updateStores(stores) {
-    const now = new Date().toISOString();
+    if (!Array.isArray(stores)) return await this.getStores();
+
+    const incomingIds = stores.map(s => s.id).filter(Boolean);
+
+    // 1. Inserir ou atualizar lojas enviadas
     for (const store of stores) {
-      await execute(`
-        UPDATE stores SET
-          name = ?, cluster = ?, defaultWeight = ?, active = ?
-        WHERE id = ?
-      `, [
-        store.name,
-        store.cluster,
-        Number(store.defaultWeight) || 0,
-        store.active ? 1 : 0,
-        store.id
-      ]);
+      if (!store.id) continue;
+      const existing = await queryOne("SELECT id FROM stores WHERE id = ?", [store.id]);
+      if (existing) {
+        await execute(`
+          UPDATE stores SET
+            name = ?, cluster = ?, defaultWeight = ?, active = ?
+          WHERE id = ?
+        `, [
+          (store.name || '').trim(),
+          store.cluster || 'A',
+          Math.max(0, Number(store.defaultWeight) || 0),
+          store.active ? 1 : 0,
+          store.id
+        ]);
+      } else {
+        await execute(`
+          INSERT INTO stores (id, name, cluster, defaultWeight, active)
+          VALUES (?, ?, ?, ?, ?)
+        `, [
+          store.id,
+          (store.name || '').trim(),
+          store.cluster || 'A',
+          Math.max(0, Number(store.defaultWeight) || 0),
+          store.active ? 1 : 0
+        ]);
+      }
     }
+
+    // 2. Remover lojas que não estão mais presentes na lista (se houver IDs válidos)
+    if (incomingIds.length > 0) {
+      const allCurrent = await queryAll("SELECT id FROM stores");
+      for (const cur of allCurrent) {
+        if (!incomingIds.includes(cur.id)) {
+          await execute("DELETE FROM stores WHERE id = ?", [cur.id]);
+        }
+      }
+    }
+
     return await this.getStores();
   }
 }

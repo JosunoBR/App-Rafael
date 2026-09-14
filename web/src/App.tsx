@@ -443,7 +443,7 @@ export function App() {
           const valorDesc = Number((totalBruto * (descPct / 100)).toFixed(2));
           const valorLiquido = Number((totalBruto - valorDesc).toFixed(2));
           const precoEfetivo = preco * (1 - descPct / 100);
-          const pdv = it.pdvAlvo || 12.00;
+          const pdv = it.pdvAlvo || 0;
           const f = calculateItemFiscal(precoEfetivo, pdv, newFiscal, it.fiscalOverride);
 
           return {
@@ -505,7 +505,7 @@ export function App() {
         if (!it.precoUnitario && !it.descricao) return it;
         const descPct = it.percentualDesconto || 0;
         const precoEfetivo = it.precoUnitario * (1 - descPct / 100);
-        const pdv = it.pdvAlvo || 12.00;
+        const pdv = it.pdvAlvo || 0;
         const f = calculateItemFiscal(precoEfetivo, pdv, newFiscal, it.fiscalOverride);
         return {
           ...it,
@@ -532,15 +532,15 @@ export function App() {
   // Média de preço dos itens e PDV para a simulação ao vivo do card fiscal
   const averageItemPrice = useMemo(() => {
     const validItems = (order.items || []).filter(it => it.descricao && it.precoUnitario > 0);
-    if (validItems.length === 0) return 7.00;
+    if (validItems.length === 0) return 0;
     const sum = validItems.reduce((acc, it) => acc + (it.precoUnitario || 0), 0);
     return Number((sum / validItems.length).toFixed(2));
   }, [order.items]);
 
   const samplePdv = useMemo(() => {
     const validItems = (order.items || []).filter(it => it.descricao && it.pdvAlvo > 0);
-    if (validItems.length === 0) return 12.00;
-    const sum = validItems.reduce((acc, it) => acc + (it.pdvAlvo || 12.00), 0);
+    if (validItems.length === 0) return 0;
+    const sum = validItems.reduce((acc, it) => acc + (it.pdvAlvo || 0), 0);
     return Number((sum / validItems.length).toFixed(2));
   }, [order.items]);
 
@@ -856,7 +856,7 @@ export function App() {
           fotoUrl: it.fotoUrl || '',
           qtdPorPacote: it.qtdNoPacote || it.qtdPorPacote || 1,
           precoUnitarioPadrao: it.precoUnitario || 0,
-          pdvSugerido: it.pdvAlvo || 12.00,
+          pdvSugerido: it.pdvAlvo || 0,
           ncm: '',
           supplierId: assignedSupplierId,
           nomeFornecedor: assignedSupplierNome,
@@ -1249,7 +1249,7 @@ export function App() {
               saldoUnidades: qtdEntrada,
               saldoCaixas: Math.floor(qtdEntrada / pack),
               precoUnitario: it.precoUnitario || 0,
-              pdvSugerido: it.pdvAlvo || 12.00,
+              pdvSugerido: it.pdvAlvo || 0,
               localizacaoGalpao: `Entrada Pedido ${orderToRelease.header.numeroPedido}`,
               fornecedorOrigem: orderToRelease.header.fornecedor || '',
               dataUltimaEntrada: new Date().toISOString().split('T')[0],
@@ -1356,7 +1356,7 @@ export function App() {
             fotoUrl: it.fotoUrl || '',
             qtdPorPacote: it.qtdNoPacote || it.qtdPorPacote || 1,
             precoUnitarioPadrao: it.precoUnitario || 0,
-            pdvSugerido: it.pdvAlvo || 12.00,
+            pdvSugerido: it.pdvAlvo || 0,
             ncm: '',
             supplierId: assignedSupplierId,
             nomeFornecedor: assignedSupplierNome,

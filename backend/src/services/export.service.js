@@ -153,7 +153,7 @@ class ExportService {
       item.valorStTotal || 0,
       item.valorDescontoItem || item.valorDescontoTotal || 0,
       item.valorTotalLiquido || item.custoLiquidoTotalComDesconto || item.valorTotalBruto || 0,
-      item.pdvAlvo || 12.0,
+      item.pdvAlvo || 0,
       `${Number(item.margemPercentual || 0).toFixed(1)}%`
     ]);
 

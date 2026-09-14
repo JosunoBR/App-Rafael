@@ -76,7 +76,7 @@ export function mapParsedExcelToOrder(
       ? rawItem.valorDescontoItem 
       : (percentualDesconto > 0 ? Number((valorTotalBruto * (percentualDesconto / 100)).toFixed(2)) : 0);
     const valorTotalLiquido = Math.max(0, valorTotalBruto - valorDescontoItem);
-    const pdvAlvo = rawItem.pdvSugerido || 12.00;
+    const pdvAlvo = rawItem.pdvSugerido || 0;
 
     // Cálculo fiscal do item
     const fiscalRes = calculateItemFiscal(precoUnitario, pdvAlvo, currentFiscalConfig);

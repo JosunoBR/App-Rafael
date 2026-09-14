@@ -210,7 +210,7 @@ class OrderRepository {
           Number(item.percentualDesconto) || 0,
           Number(item.valorDescontoItem) || 0,
           Number(item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : item.valorTotalBruto) || 0,
-          Number(item.pdvAlvo) || 12.0,
+          Number(item.pdvAlvo) || 0,
           Number(item.custoLoja) || 0,
           Number(item.custoFornecedor) || 0,
           Number(item.despesasPdvUnit) || 0,

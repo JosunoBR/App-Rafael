@@ -75,10 +75,10 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     codigoFornecedor: '',
     codigo: '',
     descricao: '',
-    qtdTotalUnidades: 120,
-    precoUnitario: 5.0,
+    qtdTotalUnidades: 0,
+    precoUnitario: 0,
     percentualDesconto: 0,
-    pdvAlvo: 12.0,
+    pdvAlvo: 0,
     fotoUrl: ''
   });
 
@@ -92,7 +92,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
   const precoEfetivoNovo = precoNovo * (1 - descPctNovo / 100);
   const fiscalNovo = calculateItemFiscal(
     precoEfetivoNovo, 
-    Number(novoItem.pdvAlvo) || 12.0, 
+    Number(novoItem.pdvAlvo) || 0, 
     order.fiscalConfig
   );
 
@@ -155,8 +155,8 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
       codigoFornecedor: prod.codigoFornecedor || prev.codigoFornecedor,
       codigo: codInterno,
       descricao: prod.descricao,
-      precoUnitario: prod.precoUnitarioPadrao || prev.precoUnitario,
-      pdvAlvo: 12.00,
+      precoUnitario: prod.precoUnitarioPadrao || prev.precoUnitario || 0,
+      pdvAlvo: prod.pdvSugerido || prev.pdvAlvo || 0,
       fotoUrl: prod.fotoUrl || prev.fotoUrl
     }));
     setShowProductSuggestions(false);
@@ -179,19 +179,20 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     e.preventDefault();
     if (!novoItem.descricao?.trim()) return;
 
-    const qtdTotal = Number(novoItem.qtdTotalUnidades) || 100;
+    const qtdTotal = Number(novoItem.qtdTotalUnidades) || 0;
     const preco = Number(novoItem.precoUnitario) || 0;
     const descPct = Number(novoItem.percentualDesconto) || 0;
     const valorBruto = qtdTotal * preco;
     const valorDesc = valorBruto * (descPct / 100);
     const valorLiquido = valorBruto - valorDesc;
     const precoEfetivo = preco * (1 - descPct / 100);
+    const itemPdv = Number(novoItem.pdvAlvo) || 0;
 
     if (editingItemId) {
       // Atualizar item existente
       const updatedItems = order.items.map(item => {
         if (item.id !== editingItemId) return item;
-        const fiscal = calculateItemFiscal(precoEfetivo, 12.00, order.fiscalConfig);
+        const fiscal = calculateItemFiscal(precoEfetivo, itemPdv || item.pdvAlvo || 0, order.fiscalConfig);
         
         // Recalcular separação se não for manual
         let separacao = item.separacaoLojas;
@@ -213,7 +214,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
           percentualDesconto: descPct,
           valorDescontoItem: valorDesc,
           valorTotalLiquido: valorLiquido,
-          pdvAlvo: 12.00,
+          pdvAlvo: itemPdv || item.pdvAlvo || 0,
           despesasPdvUnit: fiscal.despesasPdvUnit,
           creditoIcmsUnit: fiscal.creditoIcmsUnit,
           custoRealEfetivo: fiscal.custoRealEfetivo,
@@ -243,7 +244,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
         percentualDesconto: descPct,
         valorDescontoItem: valorDesc,
         valorTotalLiquido: valorLiquido,
-        pdvAlvo: 12.00,
+        pdvAlvo: itemPdv,
         despesasPdvUnit: fiscalNovo.despesasPdvUnit,
         creditoIcmsUnit: fiscalNovo.creditoIcmsUnit,
         custoRealEfetivo: fiscalNovo.custoRealEfetivo,
@@ -262,10 +263,10 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     setNovoItem({
       codigo: '',
       descricao: '',
-      qtdTotalUnidades: 120,
-      precoUnitario: 5.0,
+      qtdTotalUnidades: 0,
+      precoUnitario: 0,
       percentualDesconto: 0,
-      pdvAlvo: 12.0,
+      pdvAlvo: 0,
       fotoUrl: ''
     });
   };

@@ -328,41 +328,6 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       doc.text(lineText, card2X + 3, cardY + 7.8 + idx * card2LineStep);
     });
 
-    // =========================================================================
-    // 3.1 BANNER DE DESTAQUE: DESCRIÇÃO / OBSERVAÇÃO DO PEDIDO (Se houver)
-    // =========================================================================
-    let obsBannerH = 0;
-    if (observacoes && observacoes.trim()) {
-      const obsBannerY = cardY + cardH + 2.2;
-      const maxObsW = 271; // largura útil dentro dos 277 mm
-      const obsLines = doc.splitTextToSize(observacoes.trim(), maxObsW);
-      const lineCount = Array.isArray(obsLines) ? obsLines.length : 1;
-      obsBannerH = Math.max(10, 5.5 + lineCount * 3.6);
-
-      // Caixa destacada com fundo suave âmbar e borda dourada/âmbar vibrante
-      doc.setFillColor(254, 249, 195); // Amber-100 suave
-      doc.setDrawColor(217, 119, 6);   // Amber-600
-      doc.setLineWidth(0.4);
-      doc.roundedRect(10, obsBannerY, 277, obsBannerH, 1.5, 1.5, 'FD');
-
-      // Título do Banner em destaque
-      doc.setTextColor(146, 64, 14); // Amber-800
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.text('📌 DESCRIÇÃO / OBSERVAÇÕES DO PEDIDO:', 13, obsBannerY + 4.2);
-
-      // Texto da observação completo, sem truncar, em alto contraste
-      doc.setTextColor(15, 23, 42); // Slate-900
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.2);
-      if (Array.isArray(obsLines)) {
-        obsLines.forEach((line: string, idx: number) => {
-          doc.text(line, 13, obsBannerY + 8 + idx * 3.6);
-        });
-      } else {
-        doc.text(String(obsLines), 13, obsBannerY + 8);
-      }
-    }
 
     // =========================================================================
     // 4. TABELA DE ITENS (SEM Código Interno e SEM Desconto)
@@ -471,7 +436,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     ];
 
     autoTable(doc, {
-      startY: cardY + cardH + 2.0 + (obsBannerH > 0 ? obsBannerH + 2.0 : 0),
+      startY: cardY + cardH + 2.5,
       head: [headCols],
       body: [...bodyRows, footerRow],
       theme: 'grid',

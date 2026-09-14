@@ -38,7 +38,7 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
 
   // Preço e PDV deste item
   const [precoCompra, setPrecoCompra] = useState<number>(item.precoUnitario);
-  const [pdvAlvo, setPdvAlvo] = useState<number>(item.pdvAlvo || 12.00);
+  const [pdvAlvo, setPdvAlvo] = useState<number>(item.pdvAlvo || 0);
 
   // Flag se este item usa configuração fiscal própria
   const hasInitialCustom = Boolean(item.fiscalOverride?.useCustomFiscal);
@@ -98,7 +98,7 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
   useEffect(() => {
     if (item) {
       setPrecoCompra(item.precoUnitario);
-      setPdvAlvo(item.pdvAlvo || 12.00);
+      setPdvAlvo(item.pdvAlvo || 0);
       const isCust = Boolean(item.fiscalOverride?.useCustomFiscal);
       setUseCustom(isCust);
 

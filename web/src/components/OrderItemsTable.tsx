@@ -517,8 +517,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const codInterno = prod.codigoInterno || prod.codigo || item.codigoInterno || item.codigo || '';
     const codFornecedor = prod.codigoFornecedor || item.codigoFornecedor || '';
     const preco = prod.precoUnitarioPadrao || item.precoUnitario || 0;
-    const pdv = 12.00;
-    const qtdTotal = item.qtdTotalUnidades || 100;
+    const pdv = prod.pdvSugerido || item.pdvAlvo || 0;
+    const qtdTotal = item.qtdTotalUnidades || 0;
     const descPct = (item.percentualDesconto !== undefined && item.percentualDesconto > 0) 
       ? item.percentualDesconto 
       : Math.max(0, Math.min(100, percentualDescontoOff || 0));
@@ -611,7 +611,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       fotoUrl: item.fotoUrl || existing?.fotoUrl || '',
       qtdPorPacote: item.qtdNoPacote || item.qtdPorPacote || existing?.qtdPorPacote || 1,
       precoUnitarioPadrao: item.precoUnitario > 0 ? item.precoUnitario : (existing?.precoUnitarioPadrao || 0),
-      pdvSugerido: item.pdvAlvo || existing?.pdvSugerido || 12.00,
+      pdvSugerido: item.pdvAlvo || existing?.pdvSugerido || 0,
       ncm: existing?.ncm || '',
       supplierId: currentSupplierId || existing?.supplierId || '',
       nomeFornecedor: currentSupplierName || existing?.nomeFornecedor || '',
@@ -668,7 +668,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         fotoUrl: finalPhoto,
         qtdPorPacote: photoModalItem.qtdNoPacote || photoModalItem.qtdPorPacote || existing?.qtdPorPacote || 1,
         precoUnitarioPadrao: photoModalItem.precoUnitario > 0 ? photoModalItem.precoUnitario : (existing?.precoUnitarioPadrao || 0),
-        pdvSugerido: photoModalItem.pdvAlvo || existing?.pdvSugerido || 12.00,
+        pdvSugerido: photoModalItem.pdvAlvo || existing?.pdvSugerido || 0,
         ncm: existing?.ncm || '',
         supplierId: currentSupplierId || existing?.supplierId || '',
         nomeFornecedor: currentSupplierName || existing?.nomeFornecedor || '',
@@ -818,8 +818,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
     // Auto-cálculo do limite de preço e custo real efetivo com preço efetivo com desconto
     const precoCompraEfetivo = precoBruto * (1 - descPct / 100);
-    const pdvNumber = field === 'pdvAlvo' ? Number(value) : (Number(updatedItem.pdvAlvo) || 12.00);
-    const pdv = pdvNumber > 0 ? pdvNumber : 12.00;
+    const pdvNumber = field === 'pdvAlvo' ? Number(value) : (Number(updatedItem.pdvAlvo) || 0);
+    const pdv = pdvNumber > 0 ? pdvNumber : 0;
     const fiscal = calculateItemFiscal(precoCompraEfetivo, pdv, globalFiscal, updatedItem.fiscalOverride);
 
     updatedItem.pdvAlvo = pdv;
@@ -1824,7 +1824,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition cursor-pointer shadow-2xs"
           >
             <Package className="w-3.5 h-3.5" />
-            <span>Catálogo ({products.length || 40})</span>
+            <span>Catálogo ({products.length})</span>
           </button>
         </div>
       </div>

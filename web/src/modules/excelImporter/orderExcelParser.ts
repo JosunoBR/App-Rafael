@@ -518,7 +518,7 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
     }
 
     const valorTotalBruto = (colMap['total'] !== undefined ? parseNumber(row[colMap['total']]) : 0) || (qtdTotalUnidades * precoUnitario);
-    const pdvSugerido = (colMap['pdv'] !== undefined ? parseNumber(row[colMap['pdv']]) : 0) || 12.00;
+    const pdvSugerido = colMap['pdv'] !== undefined ? parseNumber(row[colMap['pdv']]) : 0;
     const ncm = colMap['ncm'] !== undefined ? String(row[colMap['ncm']] || '').trim() : '';
     const eanBarcode = colMap['ean'] !== undefined ? String(row[colMap['ean']] || '').trim() : '';
     const unidadeMedida = colMap['unidade'] !== undefined ? String(row[colMap['unidade']] || '').trim() : undefined;

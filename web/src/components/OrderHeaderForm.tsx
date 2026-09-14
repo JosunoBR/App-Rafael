@@ -222,7 +222,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     if (field === 'percentualNota') {
       const pctVal = parseFloat(value) || 0;
       if (isEntradaMista && pctVal > 0 && pctVal <= 100) {
-        const isCurrentlyInverted = header.percentualEntrada !== undefined && header.percentualEntrada === (header.percentualNota || 70);
+        const isCurrentlyInverted = header.percentualEntrada !== undefined && header.percentualEntrada === (header.percentualNota || 0);
         const newPctDeposito = isCurrentlyInverted ? pctVal : Math.max(0, 100 - pctVal);
         const newValorEntrada = valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (newPctDeposito / 100)).toFixed(2)) : 0;
         const newCondString = formatPaymentConditionString(
@@ -1087,10 +1087,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     ? header.percentualNota
     : (header.percentualDescontoOff !== undefined && header.percentualDescontoOff > 0 && header.percentualDescontoOff < 100
         ? header.percentualDescontoOff
-        : (header.percentualNota || 70));
+        : (header.percentualNota || 0));
 
   const handleSyncWithOff = (invertSplit: boolean = false) => {
-    const rawOff = Math.max(1, Math.min(99, Number(currentOffPct) || 70));
+    const rawOff = Math.max(0, Math.min(100, Number(currentOffPct) || 0));
+    if (rawOff <= 0) return;
     // Padrão: Boleto = rawOff%, Depósito = (100 - rawOff)%
     // Invertido: Boleto = (100 - rawOff)%, Depósito = rawOff%
     const pctBoleto = invertSplit ? (100 - rawOff) : rawOff;

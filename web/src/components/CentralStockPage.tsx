@@ -58,14 +58,14 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   
   // Modal de Ajuste / Entrada de Estoque
   const [editingStockItem, setEditingStockItem] = useState<CentralStockItem | null>(null);
-  const [adjustUnidadesDelta, setAdjustUnidadesDelta] = useState<string>('100');
+  const [adjustUnidadesDelta, setAdjustUnidadesDelta] = useState<string>('0');
   const [adjustLocation, setAdjustLocation] = useState<string>('');
   
   // Modal de Novo Item no CD
   const [isNewItemModalOpen, setIsNewItemModalOpen] = useState(false);
   const [selectedProductToAdd, setSelectedProductToAdd] = useState<string>('');
-  const [newSaldoUnidades, setNewSaldoUnidades] = useState<string>('120');
-  const [newLocationGalpao, setNewLocationGalpao] = useState<string>('Rua A - Palete 01');
+  const [newSaldoUnidades, setNewSaldoUnidades] = useState<string>('0');
+  const [newLocationGalpao, setNewLocationGalpao] = useState<string>('');
 
   // Modal de Zoom de Imagem
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
@@ -104,7 +104,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     const totalItens = list.length;
     const totalUnidades = list.reduce((sum, item) => sum + (Number(item?.saldoUnidades) || 0), 0);
     const valorPatrimonial = list.reduce((sum, item) => sum + ((Number(item?.saldoUnidades) || 0) * (Number(item?.precoUnitario) || 0)), 0);
-    const valorTotalPdv = list.reduce((sum, item) => sum + ((Number(item?.saldoUnidades) || 0) * (Number(item?.pdvSugerido) || 12.0)), 0);
+    const valorTotalPdv = list.reduce((sum, item) => sum + ((Number(item?.saldoUnidades) || 0) * (Number(item?.pdvSugerido) || 0)), 0);
     const itensComSaldoBaixo = list.filter(item => (Number(item?.saldoUnidades) || 0) <= 60).length;
 
     return {
@@ -206,7 +206,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     const prod = products.find(p => p.id === selectedProductToAdd);
     if (!prod) return;
 
-    const unidades = parseInt(newSaldoUnidades, 10) || 120;
+    const unidades = parseInt(newSaldoUnidades, 10) || 0;
     const codInterno = prod.codigoInterno || prod.codigo || '';
     const newItem: CentralStockItem = {
       id: 'stock_' + Date.now(),
@@ -220,9 +220,9 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
       fotoUrl: prod.fotoUrl,
       saldoUnidades: unidades,
       precoUnitario: prod.precoUnitarioPadrao || 0,
-      pdvSugerido: prod.pdvSugerido || 12.0,
-      localizacaoGalpao: newLocationGalpao.trim() || 'Rua A - Palete 01',
-      fornecedorOrigem: prod.nomeFornecedor || 'Fornecedor Cadastrado',
+      pdvSugerido: prod.pdvSugerido || 0,
+      localizacaoGalpao: newLocationGalpao.trim() || 'Depósito Geral',
+      fornecedorOrigem: prod.nomeFornecedor || '',
       dataUltimaEntrada: new Date().toISOString().split('T')[0],
       updatedAt: new Date().toISOString()
     };
@@ -230,7 +230,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     onSaveNewStockItem(newItem);
     setIsNewItemModalOpen(false);
     setSelectedProductToAdd('');
-    setNewSaldoUnidades('120');
+    setNewSaldoUnidades('0');
   };
 
   return (
@@ -568,7 +568,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                           <button
                             onClick={() => {
                               setEditingStockItem(item);
-                              setAdjustUnidadesDelta('50');
+                              setAdjustUnidadesDelta('0');
                               setAdjustLocation(item.localizacaoGalpao || '');
                             }}
                             className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"

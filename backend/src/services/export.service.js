@@ -270,43 +270,10 @@ class ExportService {
     // 3. CARDS DE DADOS: COMPRADOR & FORNECEDOR (Lado a Lado)
     // =========================================================================
     const cardY = 35.5;
-    const cardH = 28.5;
     const cardW = 136;
-
-    // Card 1: Comprador / Faturamento (Esquerda)
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(10, cardY, cardW, cardH, 1.5, 1.5, 'FD');
-
-    doc.setFillColor(241, 245, 249);
-    doc.rect(10.2, cardY + 0.2, cardW - 0.4, 5, 'F');
-    doc.setTextColor(30, 41, 59);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.2);
-    doc.text('DADOS DA EMPRESA COMPRADORA & FATURAMENTO:', 13, cardY + 3.8);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Razão Social: ALS 10 BAZAR E BRINQUEDOS LTDA', 13, cardY + 8.5);
-    doc.text('CNPJ: 37.144.240/0001-70       IE: 90847822-35', 13, cardY + 12.1);
-    doc.text('End. Entrega: Av. José Galiciolli, 152 – BR153 – Centro – Irati – PR (CEP: 84500-009)', 13, cardY + 15.7);
-    doc.text('E-mail para Boletos e XML: als.conecta@gmail.com', 13, cardY + 19.3);
-    doc.text('Compras: (55) 9 9659-6315 (Rafael)  |  Faturamento: (55) 9 99691-0247 (Ketlyn)', 13, cardY + 22.9);
-    doc.text('Financeiro: (55) 9 3618-5609 (Bruna)', 13, cardY + 26.5);
-
-    // Card 2: Fornecedor & Comercial (Direita)
     const card2X = 151;
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(card2X, cardY, cardW, cardH, 1.5, 1.5, 'FD');
-
-    doc.setFillColor(241, 245, 249);
-    doc.rect(card2X + 0.2, cardY + 0.2, cardW - 0.4, 5, 'F');
-    doc.setTextColor(30, 41, 59);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.2);
-    doc.text('DADOS DO FORNECEDOR & CONDIÇÕES COMERCIAIS:', card2X + 3, cardY + 3.8);
+    const maxCardTextW = cardW - 6; // 130 mm (3mm margem esquerda + 3mm margem direita)
+    const baseCardH = 28.5;
 
     // Cálculo do Desconto Comercial como porcentagem
     const offValue = Number(order.header?.percentualDescontoOff || 0);
@@ -327,24 +294,28 @@ class ExportService {
       }
     });
 
+    let totalDescontoComercial = 0;
     let descontoComercialPercent = 0;
     if (order.header?.descontoComercialTotal !== undefined && Number(order.header.descontoComercialTotal) > 0) {
       if (order.header.descontoComercialTipo === '%') {
         descontoComercialPercent = Number(order.header.descontoComercialTotal);
+        totalDescontoComercial = Number(((totalBrutoMercadorias * descontoComercialPercent) / 100).toFixed(2));
       } else {
+        totalDescontoComercial = Number(order.header.descontoComercialTotal);
         descontoComercialPercent = totalBrutoMercadorias > 0
-          ? (Number(order.header.descontoComercialTotal) / totalBrutoMercadorias) * 100
+          ? (totalDescontoComercial / totalBrutoMercadorias) * 100
           : 0;
       }
     } else if (totalDescontoItens > 0 && totalBrutoMercadorias > 0) {
+      totalDescontoComercial = totalDescontoItens;
       descontoComercialPercent = (totalDescontoItens / totalBrutoMercadorias) * 100;
     } else if (offValue > 0) {
       descontoComercialPercent = offValue;
+      totalDescontoComercial = Number(((totalBrutoMercadorias * offValue) / 100).toFixed(2));
     }
 
     const descontoComercialTexto = `${Number(descontoComercialPercent.toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 
-    const maxCardTextW = cardW - 6;
     const offPercent = order.header?.percentualNota !== undefined ? order.header.percentualNota : 100;
 
     const card2Fields = [
@@ -479,7 +450,8 @@ class ExportService {
       const pacotes = Number(item.qtdPacotes) || 0;
       const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
       const precoUnit = Number(item.precoUnitario) || 0;
-      const valorTotal = Number(item.valorTotalLiquido) || Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const valorTotal = valorBruto;
 
       totalVolumesGeral += pacotes;
       totalPecasGeral += pecas;
@@ -616,23 +588,31 @@ class ExportService {
 
     // Destaque do Valor Total
     doc.setFillColor(5, 150, 105); // Emerald-600
-    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 11, 1.5, 1.5, 'F');
+    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
+
+    const valorFrete = Number(order.header?.valorFrete) || 0;
+    const totalGeralFinal = Math.max(0, subtotalGeral + totalIpiGeral - totalDescontoComercial + valorFrete);
+
+    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI aplicado: ${formatCurrency(totalIpiGeral)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)}`;
+    if (valorFrete > 0) {
+      formulaText += ` + Frete: ${formatCurrency(valorFrete)}`;
+    }
+    formulaText += ' =';
 
     doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.8);
-    const totalGeralComIpi = subtotalGeral + totalIpiGeral;
-    const labelTotalGeral = totalIpiGeral > 0
-      ? `TOTAL DO PEDIDO C/ IPI (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX):`
-      : `TOTAL GERAL DO PEDIDO (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX | ${totalPecasGeral.toLocaleString('pt-BR')} UN):`;
-    doc.text(labelTotalGeral, rightX + 6, finalY + 6.8);
+    let formulaFontSize = 6.8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(formulaFontSize);
+    const maxFormulaW = rightW - 10;
+    while (doc.getTextWidth(formulaText) > maxFormulaW && formulaFontSize > 4.5) {
+      formulaFontSize -= 0.2;
+      doc.setFontSize(formulaFontSize);
+    }
+    doc.text(formulaText, rightX + 5, finalY + 6.8);
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(totalIpiGeral > 0 ? 9.5 : 11);
-    const textoValorTotal = totalIpiGeral > 0
-      ? `${formatCurrency(totalGeralComIpi)} (Líq: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)})`
-      : formatCurrency(subtotalGeral);
-    doc.text(textoValorTotal, rightX + 6, finalY + 12.5);
+    doc.setFontSize(11);
+    doc.text(formatCurrency(totalGeralFinal), rightX + 5, finalY + 12.8);
 
     // Linhas de Assinatura
     const sigY = finalY + 20.5;

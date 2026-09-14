@@ -317,19 +317,24 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       }
     });
 
+    let totalDescontoComercial = 0;
     let descontoComercialPercent = 0;
     if (order.header?.descontoComercialTotal !== undefined && Number(order.header.descontoComercialTotal) > 0) {
       if (order.header.descontoComercialTipo === '%') {
         descontoComercialPercent = Number(order.header.descontoComercialTotal);
+        totalDescontoComercial = Number(((totalBrutoMercadorias * descontoComercialPercent) / 100).toFixed(2));
       } else {
+        totalDescontoComercial = Number(order.header.descontoComercialTotal);
         descontoComercialPercent = totalBrutoMercadorias > 0 
-          ? (Number(order.header.descontoComercialTotal) / totalBrutoMercadorias) * 100 
+          ? (totalDescontoComercial / totalBrutoMercadorias) * 100 
           : 0;
       }
     } else if (totalDescontoItens > 0 && totalBrutoMercadorias > 0) {
+      totalDescontoComercial = totalDescontoItens;
       descontoComercialPercent = (totalDescontoItens / totalBrutoMercadorias) * 100;
     } else if (offValue > 0) {
       descontoComercialPercent = offValue;
+      totalDescontoComercial = Number(((totalBrutoMercadorias * offValue) / 100).toFixed(2));
     }
 
     const descontoComercialTexto = `${Number(descontoComercialPercent.toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
@@ -474,7 +479,8 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       const pacotes = Number(item.qtdPacotes) || 0;
       const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
       const precoUnit = Number(item.precoUnitario) || 0;
-      const valorTotal = Number(item.valorTotalLiquido) || Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const valorTotal = valorBruto;
 
       // Determinação da alíquota e do valor de IPI do item
       const ipiAliq = item.aliquotaIpi !== undefined && item.aliquotaIpi !== null
@@ -637,20 +643,31 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
 
     // Destaque do Valor Total
     doc.setFillColor(5, 150, 105); // Emerald-600
-    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 11, 1.5, 1.5, 'F');
+    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
 
-    const totalGeralComIpi = subtotalGeral + totalIpiGeral;
-    const labelTotalGeral = totalIpiGeral > 0
-      ? `TOTAL DO PEDIDO C/ IPI (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX):`
-      : `TOTAL GERAL DO PEDIDO (${bodyRows.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX | ${totalPecasGeral.toLocaleString('pt-BR')} UN):`;
-    doc.text(labelTotalGeral, rightX + 6, finalY + 6.8);
+    const valorFrete = Number(order.header?.valorFrete) || 0;
+    const totalGeralFinal = Math.max(0, subtotalGeral + totalIpiGeral - totalDescontoComercial + valorFrete);
+
+    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI aplicado: ${formatCurrency(totalIpiGeral)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)}`;
+    if (valorFrete > 0) {
+      formulaText += ` + Frete: ${formatCurrency(valorFrete)}`;
+    }
+    formulaText += ' =';
+
+    doc.setTextColor(255, 255, 255);
+    let formulaFontSize = 6.8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(formulaFontSize);
+    const maxFormulaW = rightW - 10;
+    while (doc.getTextWidth(formulaText) > maxFormulaW && formulaFontSize > 4.5) {
+      formulaFontSize -= 0.2;
+      doc.setFontSize(formulaFontSize);
+    }
+    doc.text(formulaText, rightX + 5, finalY + 6.8);
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(totalIpiGeral > 0 ? 9.5 : 11);
-    const textoValorTotal = totalIpiGeral > 0
-      ? `${formatCurrency(totalGeralComIpi)} (Líq: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)})`
-      : formatCurrency(subtotalGeral);
-    doc.text(textoValorTotal, rightX + 6, finalY + 12.5);
+    doc.setFontSize(11);
+    doc.text(formatCurrency(totalGeralFinal), rightX + 5, finalY + 12.8);
 
     // Linhas de Assinatura
     const sigY = finalY + 20.5;

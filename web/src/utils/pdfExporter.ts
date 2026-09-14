@@ -560,7 +560,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       finalY = 12;
     }
 
-    const bottomCardH = 28;
+    const bottomCardH = 32;
 
     // Bloco Esquerdo: Instruções Mandatórias da Loja (ALS 10)
     const leftW = 165;
@@ -591,36 +591,58 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setLineWidth(0.3);
     doc.roundedRect(rightX, finalY, rightW, bottomCardH, 1.5, 1.5, 'FD');
 
-    // Destaque do Valor Total
-    doc.setFillColor(5, 150, 105); // Emerald-600
-    doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
+    // Destaque do Valor Total / Apuração Financeira ("A Conta")
+    const boxX = rightX + 2.5;
+    const boxY = finalY + 2.5;
+    const boxW = rightW - 5; // 103 mm
+    const boxH = 18.5;
 
-    const valorFrete = orderTotals.valorFrete;
+    // Fundo Verde Esmeralda Oficial
+    doc.setFillColor(5, 150, 105); // Emerald-600
+    doc.roundedRect(boxX, boxY, boxW, boxH, 1.5, 1.5, 'F');
+
     const totalGeralFinal = orderTotals.totalGeral;
 
-    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(orderTotals.totalIpi)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)}`;
-    if (valorFrete > 0) {
-      formulaText += ` + Frete: ${formatCurrency(valorFrete)}`;
-    }
-    formulaText += ' =';
-
+    // Lado Esquerdo: A conta detalhada e intuitiva
     doc.setTextColor(255, 255, 255);
-    let formulaFontSize = 6.8;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(formulaFontSize);
-    const maxFormulaW = rightW - 10;
-    while (doc.getTextWidth(formulaText) > maxFormulaW && formulaFontSize > 4.5) {
-      formulaFontSize -= 0.2;
-      doc.setFontSize(formulaFontSize);
-    }
-    doc.text(formulaText, rightX + 5, finalY + 6.8);
+    doc.setFontSize(6.8);
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(formatCurrency(totalGeralFinal), rightX + 5, finalY + 12.8);
+    doc.text(`  ${formatCurrency(subtotalGeral)} - Total`, boxX + 3.5, boxY + 4.2);
+    doc.text(`+ ${formatCurrency(orderTotals.totalIpi)} - IPI`, boxX + 3.5, boxY + 7.8);
+    doc.text(`- ${formatCurrency(totalDescontoComercial)} - Desconto comercial`, boxX + 3.5, boxY + 11.4);
+
+    // Linha divisória sutil da conta
+    doc.setDrawColor(167, 243, 208); // Emerald-200
+    doc.setLineWidth(0.2);
+    doc.line(boxX + 3.5, boxY + 12.8, boxX + 54, boxY + 12.8);
+
+    // Linha de resultado da conta
+    doc.setFontSize(7.2);
+    doc.text(`= ${formatCurrency(totalGeralFinal)} - Total geral`, boxX + 3.5, boxY + 16.2);
+
+    // Lado Direito: Badge de Destaque Master do Total Geral
+    const badgeX = boxX + 57;
+    const badgeW = boxW - 59; // 44 mm
+    doc.setFillColor(4, 120, 87); // Emerald-700
+    doc.roundedRect(badgeX, boxY + 2, badgeW, boxH - 4, 1.5, 1.5, 'F');
+
+    doc.setFontSize(6.2);
+    doc.setTextColor(167, 243, 208);
+    doc.text('TOTAL GERAL DO PEDIDO', badgeX + 3.5, boxY + 6.2);
+
+    let totalGeralFontSize = 10.5;
+    doc.setFontSize(totalGeralFontSize);
+    doc.setTextColor(255, 255, 255);
+    const totalGeralText = formatCurrency(totalGeralFinal);
+    while (doc.getTextWidth(totalGeralText) > badgeW - 7 && totalGeralFontSize > 7) {
+      totalGeralFontSize -= 0.5;
+      doc.setFontSize(totalGeralFontSize);
+    }
+    doc.text(totalGeralText, badgeX + 3.5, boxY + 12.5);
 
     // Linhas de Assinatura
-    const sigY = finalY + 20.5;
+    const sigY = finalY + 25;
     doc.setDrawColor(148, 163, 184);
     doc.setLineWidth(0.2);
     doc.line(rightX + 5, sigY, rightX + 48, sigY);

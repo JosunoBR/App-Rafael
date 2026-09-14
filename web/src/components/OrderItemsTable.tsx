@@ -904,6 +904,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       pecas: res.totalPecas,
       precoMedio: res.precoMedio,
       precoMedioComImpostos: res.precoMedioComImpostos,
+      margemMediaPercentual: res.margemMediaPercentual,
+      margemMediaValor: res.margemMediaValor,
       rupturasCount: res.rupturasCount
     };
   }, [items, orderHeader, globalFiscal]);
@@ -2114,6 +2116,23 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               R$ {totals.precoMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </strong>
           </div>
+
+          <div 
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border shadow-2xs ${
+              totals.margemMediaPercentual >= 0
+                ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300'
+                : 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/80 text-rose-800 dark:text-rose-300'
+            }`}
+            title={`Margem Real Média Ponderada do Pedido: ${totals.margemMediaPercentual.toFixed(1)}% (Lucro médio projetado de R$ ${totals.margemMediaValor.toFixed(2)} por unidade vendida no PDV)`}
+          >
+            <span className="text-slate-400 dark:text-slate-400 font-sans">Margem Média:</span>
+            <strong className="font-extrabold font-mono">
+              {totals.margemMediaPercentual.toFixed(1)}%
+            </strong>
+            <span className="text-[11px] opacity-85 font-mono">
+              (R$ {totals.margemMediaValor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+            </span>
+          </div>
         </div>
 
         {/* Lado Direito: Resumo Financeiro no Formato Proposta Comercial (Total Líquido | IPI | Desconto Comercial | TOTAL GERAL) */}
@@ -2173,17 +2192,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               </div>
             )}
 
-            {/* Frete (se houver) */}
-            {totals.valorFrete > 0 && (
-              <div className="flex items-center gap-1.5 text-xs border-r border-slate-200 dark:border-slate-700 pr-3" title="Valor do frete rateado ou global">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 font-sans">
-                  + Frete:
-                </span>
-                <span className="font-extrabold text-blue-700 dark:text-blue-300">
-                  R$ {totals.valorFrete.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-            )}
 
             {/* 4. TOTAL GERAL (Destaque Principal) */}
             <div className="flex items-center gap-2 pl-0.5 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-800 shadow-2xs" title="Total Geral faturado do pedido">

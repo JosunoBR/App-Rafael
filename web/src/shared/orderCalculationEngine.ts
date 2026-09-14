@@ -1,5 +1,5 @@
 import { PurchaseOrder, OrderItem, OrderHeader, FiscalConfig } from './types';
-import { normalizeRateToDecimal } from './fiscalEngine';
+import { normalizeRateToDecimal, calculateItemFiscal } from './fiscalEngine';
 
 export interface OrderTotalsResult {
   // Quantidades
@@ -25,6 +25,10 @@ export interface OrderTotalsResult {
   totalGeral: number;              // Total final faturado (Líquido + IPI + ST + Frete + Despesas)
   precoMedio: number;              // Preço médio líquido por peça (Líquido ÷ Peças)
   precoMedioComImpostos: number;   // Preço médio por peça com encargos de entrada (IPI + ST)
+
+  // Margem Geral Ponderada
+  margemMediaPercentual: number;   // % de margem líquida média ponderada do pedido
+  margemMediaValor: number;        // R$ de margem média líquida por peça
 }
 
 /**
@@ -79,6 +83,9 @@ export function calculateOrderTotals(
   let somaDescontoItens = 0;
   let totalIpi = 0;
   let totalSt = 0;
+  let somaPdvTotal = 0;
+  let somaMargemRealTotal = 0;
+  let pecasComPdv = 0;
 
   items.forEach(it => {
     if (isBlankItem(it)) return;
@@ -131,6 +138,16 @@ export function calculateOrderTotals(
       ? Number((Number(it.stUnitario) * pecas).toFixed(2))
       : (stAliq > 0 ? Number((liquidoItem * (stAliq / 100)).toFixed(2)) : 0);
 
+    // Apuração de Margem Ponderada do Item
+    const pdv = Number(it.pdvAlvo) || 0;
+    if (pdv > 0 && pecas > 0) {
+      const precoCompraEfetivo = precoUnit * (1 - descPct / 100);
+      const fiscalRes = calculateItemFiscal(precoCompraEfetivo, pdv, fiscal, it.fiscalOverride);
+      somaPdvTotal += pdv * pecas;
+      somaMargemRealTotal += fiscalRes.margemRealUnit * pecas;
+      pecasComPdv += pecas;
+    }
+
     totalVolumes += pacotes;
     totalPecas += pecas;
     valorBruto += bruto;
@@ -169,6 +186,13 @@ export function calculateOrderTotals(
     ? Number(((valorLiquido + totalIpi + totalSt) / totalPecas).toFixed(2))
     : 0;
 
+  const margemMediaPercentual = somaPdvTotal > 0
+    ? Number(((somaMargemRealTotal / somaPdvTotal) * 100).toFixed(1))
+    : 0;
+  const margemMediaValor = pecasComPdv > 0
+    ? Number((somaMargemRealTotal / pecasComPdv).toFixed(2))
+    : 0;
+
   return {
     validItemsCount,
     rupturasCount,
@@ -185,7 +209,9 @@ export function calculateOrderTotals(
     valorOutrasDespesas: Number(valorOutrasDespesas.toFixed(2)),
     totalGeral,
     precoMedio,
-    precoMedioComImpostos
+    precoMedioComImpostos,
+    margemMediaPercentual,
+    margemMediaValor
   };
 }
 

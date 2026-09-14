@@ -507,11 +507,11 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     }
   }
 
-  // Linha de Detalhamento Financeiro (Líquido + IPI)
+  // Linha de Detalhamento Financeiro (Total + IPI - Desconto Comercial)
   const detRow = valRow + 2;
   ws.mergeCells(`G${detRow}:I${detRow}`);
   const detCell = ws.getCell(`G${detRow}`);
-  detCell.value = `(Líquido: ${formatCurrency(orderTotals.valorLiquido)} + IPI: ${formatCurrency(orderTotals.totalIpi)}${orderTotals.valorFrete > 0 ? ` + Frete: ${formatCurrency(orderTotals.valorFrete)}` : ''})`;
+  detCell.value = `(${formatCurrency(subtotalGeral)} - Total | ${formatCurrency(orderTotals.totalIpi)} - IPI | ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto Comercial)`;
   detCell.font = { name: 'Segoe UI', size: 8, color: { argb: 'FF475569' } };
   detCell.alignment = { vertical: 'middle', horizontal: 'center' };
   ws.getRow(detRow).height = 16;

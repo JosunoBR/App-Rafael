@@ -407,7 +407,12 @@ export function loadCurrentOrder(): PurchaseOrder | null {
     const ord: PurchaseOrder = JSON.parse(saved);
     if (ord.header?.status === 'Finalizado') return null;
     if (ord.items) {
-      ord.items = ord.items.map(it => ({ ...it, pdvAlvo: 12.00 }));
+      ord.items = ord.items.map(it => ({
+        ...it,
+        descricao: it.descricao ? it.descricao.replace(/\s*\([Cc][óo]pia\)\s*$/g, '').trim() : '',
+        codigo: it.codigo ? it.codigo.replace(/-C[OÓ]PIA$/i, '').trim() : it.codigo,
+        pdvAlvo: it.pdvAlvo || 0
+      }));
     }
     if (ord.header?.observacoesDescarga && LEGACY_DEFAULT_OBSERVACOES.includes(ord.header.observacoesDescarga.trim())) {
       ord.header.observacoesDescarga = '';

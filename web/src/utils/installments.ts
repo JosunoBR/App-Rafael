@@ -204,24 +204,34 @@ export function formatPaymentConditionString(
   saldoParcelas?: number,
   saldoPrazo?: string | number,
   depositoParcelas?: number,
-  depositoPrazo?: string | number
+  depositoPrazo?: string | number,
+  depositoForma?: string,
+  saldoForma?: string
 ): string {
-  if (prazo === 'vista' || (parcelas === 1 && prazo === 'vista')) {
-    return '100% À Vista (TED/PIX)';
-  }
-  if (prazo === 'entrada_com_parcelamento' || prazo === 'deposito_e_boleto') {
+  const isCombined = 
+    prazo === 'entrada_com_parcelamento' || 
+    prazo === 'deposito_e_boleto' ||
+    (depositoParcelas !== undefined && saldoParcelas !== undefined && depositoParcelas > 0 && saldoParcelas > 0);
+
+  if (isCombined) {
+    const dForma = depositoForma || 'Depósito';
+    const sForma = saldoForma || 'Boleto';
     const dParc = depositoParcelas || 1;
     const sParc = saldoParcelas || 2;
     const sPrazo = saldoPrazo || '30';
     const sPrazoStr = formatPaymentConditionString(sParc, sPrazo);
 
-    if (dParc > 1) {
+    if (dParc > 1 || (depositoPrazo && depositoPrazo !== 'vista' && depositoPrazo !== '0')) {
       const dPrazo = depositoPrazo || '30';
       const dPrazoStr = formatPaymentConditionString(dParc, dPrazo);
-      return `Depósito ${dPrazoStr} + Boleto ${sPrazoStr}`;
+      return `${dForma} ${dParc > 1 ? `${dParc}x (${dPrazoStr})` : dPrazoStr} + ${sForma} ${sParc > 1 ? `${sParc}x (${sPrazoStr})` : sPrazoStr}`;
     }
 
-    return `Depósito À Vista + Boleto ${sPrazoStr}`;
+    return `${dForma} À Vista + ${sForma} ${sParc > 1 ? `${sParc}x (${sPrazoStr})` : sPrazoStr}`;
+  }
+
+  if (prazo === 'vista' || (parcelas === 1 && prazo === 'vista')) {
+    return '100% À Vista (TED/PIX)';
   }
 
   const prazoStr = String(prazo).trim();
@@ -305,14 +315,27 @@ export function parsePaymentConditionString(cond?: string): ParsedPaymentConditi
   }
 
   // 2. Modos especiais
-  if (lower.includes('depósito') && lower.includes('boleto')) {
-    return { parcelas: 3, prazo: 'deposito_e_boleto' };
-  }
-  if (lower.includes('deposito') && lower.includes('boleto')) {
-    return { parcelas: 3, prazo: 'deposito_e_boleto' };
+  if ((lower.includes('depósito') || lower.includes('deposito')) && (lower.includes('boleto') || lower.includes('cheque'))) {
+    const xMatches = [...clean.matchAll(/(\d+)x/gi)];
+    let totalP = 0;
+    if (xMatches.length > 0) {
+      totalP = xMatches.reduce((acc, m) => acc + parseInt(m[1], 10), 0);
+      if (lower.includes('à vista') || lower.includes('a vista')) {
+        totalP += 1;
+      }
+    }
+    return { parcelas: totalP > 0 ? totalP : 3, prazo: 'deposito_e_boleto' };
   }
   if (lower.includes('entrada') && (lower.includes('+') || lower.includes('saldo') || lower.includes('dias') || lower.includes('x'))) {
-    return { parcelas: 3, prazo: 'entrada_com_parcelamento' };
+    const xMatches = [...clean.matchAll(/(\d+)x/gi)];
+    let totalP = 0;
+    if (xMatches.length > 0) {
+      totalP = xMatches.reduce((acc, m) => acc + parseInt(m[1], 10), 0);
+      if (lower.includes('à vista') || lower.includes('a vista')) {
+        totalP += 1;
+      }
+    }
+    return { parcelas: totalP > 0 ? totalP : 3, prazo: 'entrada_com_parcelamento' };
   }
   if (lower.includes('vista') || lower.includes('ted') || lower.includes('pix')) {
     return { parcelas: 1, prazo: 'vista', daysOffsets: [0] };
@@ -546,8 +569,11 @@ export function generateOrderInstallments(
       const customDepDate = customDates?.[String(d)];
 
       let calculatedDueDate = '';
+      const matchedDepPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === depositoPrazo || p.conditionString.toLowerCase() === depositoPrazo.toLowerCase());
       if (depositoPrazo === 'vista') {
         calculatedDueDate = addDaysToDate(orderDate, 0);
+      } else if (matchedDepPreset && matchedDepPreset.daysOffsets && matchedDepPreset.daysOffsets[d - 1] !== undefined) {
+        calculatedDueDate = addDaysToDate(baseDeliveryDate, matchedDepPreset.daysOffsets[d - 1]);
       } else {
         const interval = Number(depositoPrazo) || 30;
         const dueDays = (d - 1) * interval;
@@ -562,6 +588,7 @@ export function generateOrderInstallments(
       const rawDataVenc = customDepDate || calculatedDueDate;
       const dataVencFinal = addDaysToDate(rawDataVenc, 0);
       const statusFinal = existingDep?.status || getInstallmentStatus(dataVencFinal, existingDep?.dataPagamento);
+      const depFormaLabel = order.header.depositoFormaPagamento || 'Depósito';
 
       list.push({
         id: existingDep?.id || `inst_${order.header.id || 'ord'}_dep_${d}_${Date.now()}`,
@@ -575,10 +602,10 @@ export function generateOrderInstallments(
         valorOriginal: isDepManuallyOverridden ? existingDep.valorOriginal : origVal,
         status: statusFinal,
         dataPagamento: existingDep?.dataPagamento,
-        observacao: existingDep?.observacao || (totalParcelasDeposito === 1 && depositoPrazo === 'vista' ? 'Entrada / Sinal À Vista (TED/PIX)' : `Depósito ${d}/${totalParcelasDeposito}`),
+        observacao: existingDep?.observacao || (totalParcelasDeposito === 1 && depositoPrazo === 'vista' ? `Entrada / Sinal À Vista (${depFormaLabel})` : `${depFormaLabel} ${d}/${totalParcelasDeposito}`),
         documentoRef: existingDep?.documentoRef,
         tipoTitulo: 'mercadoria',
-        metodoPagamento: 'Depósito',
+        metodoPagamento: depFormaLabel,
         isBoletoFrete: false,
         updatedAt: new Date().toISOString()
       });
@@ -587,6 +614,8 @@ export function generateOrderInstallments(
     // 2. Parcelas do Saldo em Boleto
     const saldoBaseValue = totalParcelasSaldo > 0 ? Number((saldoRestante / totalParcelasSaldo).toFixed(2)) : saldoRestante;
     const saldoRemainder = totalParcelasSaldo > 0 ? Number((saldoRestante - saldoBaseValue * totalParcelasSaldo).toFixed(2)) : 0;
+    const matchedSalPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === saldoPrazo || p.conditionString.toLowerCase() === saldoPrazo.toLowerCase());
+    const salFormaLabel = order.header.saldoFormaPagamento || 'Boleto';
 
     for (let j = 1; j <= totalParcelasSaldo; j++) {
       const numParcela = totalParcelasDeposito + j;
@@ -595,7 +624,9 @@ export function generateOrderInstallments(
       const intervalNum = Number(saldoPrazo) || 30;
       let calculatedDueDate = '';
 
-      if (totalParcelasDeposito === 1 && depositoPrazo === 'vista') {
+      if (matchedSalPreset && matchedSalPreset.daysOffsets && matchedSalPreset.daysOffsets[j - 1] !== undefined) {
+        calculatedDueDate = addDaysToDate(baseDeliveryDate, matchedSalPreset.daysOffsets[j - 1]);
+      } else if (totalParcelasDeposito === 1 && depositoPrazo === 'vista') {
         // Se a entrada foi à vista, o saldo em boleto inicia no 1º vencimento (10 dias após a entrega por padrão)
         calculatedDueDate = addDaysToDate(firstDueDate, (j - 1) * intervalNum);
       } else if (lastDepositDate && depositoPrazo !== 'vista') {
@@ -626,10 +657,10 @@ export function generateOrderInstallments(
         valorOriginal: isManuallyOverridden ? existing.valorOriginal : originalProportionalVal,
         status: statusFinal,
         dataPagamento: existing?.dataPagamento,
-        observacao: existing?.observacao || `Boleto ${j}/${totalParcelasSaldo}`,
+        observacao: existing?.observacao || `${salFormaLabel} ${j}/${totalParcelasSaldo}`,
         documentoRef: existing?.documentoRef,
         tipoTitulo: 'mercadoria',
-        metodoPagamento: 'Boleto',
+        metodoPagamento: salFormaLabel,
         isBoletoFrete: false,
         updatedAt: new Date().toISOString()
       });

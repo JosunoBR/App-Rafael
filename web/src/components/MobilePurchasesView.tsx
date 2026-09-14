@@ -341,8 +341,8 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     const duplicated: OrderItem = {
       ...item,
       id: 'item_' + Date.now(),
-      codigo: item.codigo ? `${item.codigo}-CÓPIA` : undefined,
-      descricao: `${item.descricao} (Cópia)`
+      codigo: item.codigo,
+      descricao: item.descricao
     };
     onUpdateOrder({
       ...order,

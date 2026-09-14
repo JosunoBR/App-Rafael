@@ -226,16 +226,19 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         const newPctDeposito = isCurrentlyInverted ? pctVal : Math.max(0, 100 - pctVal);
         const newValorEntrada = valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (newPctDeposito / 100)).toFixed(2)) : 0;
         const newCondString = formatPaymentConditionString(
-          currentParcelas,
-          currentPrazo,
+          depositoParcelas + saldoParcelas,
+          'deposito_e_boleto',
           newValorEntrada,
           saldoParcelas,
           saldoPrazo,
           depositoParcelas,
-          depositoPrazo
+          depositoPrazo,
+          header.depositoFormaPagamento || 'Depósito',
+          header.saldoFormaPagamento || 'Boleto'
         );
         onChange({
           ...header,
+          prazoDias: 'deposito_e_boleto',
           percentualNota: pctVal,
           percentualEntrada: newPctDeposito,
           isEntradaProporcional: true,
@@ -245,6 +248,30 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         });
         return;
       }
+    }
+    if (field === 'depositoFormaPagamento' || field === 'saldoFormaPagamento') {
+      const newDepForma = field === 'depositoFormaPagamento' ? value : (header.depositoFormaPagamento || 'Depósito');
+      const newSalForma = field === 'saldoFormaPagamento' ? value : (header.saldoFormaPagamento || 'Boleto');
+      const newFormaGeral = `${newSalForma} / ${newDepForma}`;
+      const newCondString = formatPaymentConditionString(
+        depositoParcelas + saldoParcelas,
+        'deposito_e_boleto',
+        valorEntrada,
+        saldoParcelas,
+        saldoPrazo,
+        depositoParcelas,
+        depositoPrazo,
+        newDepForma,
+        newSalForma
+      );
+      onChange({
+        ...header,
+        [field]: value,
+        formaPagamento: newFormaGeral,
+        prazoDias: 'deposito_e_boleto',
+        condicaoPagamento: newCondString
+      });
+      return;
     }
     if (field === 'dataEntregaPrevista' || field === 'dataPedido') {
       onChange({
@@ -266,13 +293,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       const initSaldoParc = header.saldoParcelasCount || 2;
       const initSaldoPrazo = header.saldoPrazoDias || '30';
       const newCondString = formatPaymentConditionString(
-        currentParcelas, 
+        initDepParc + initSaldoParc, 
         'deposito_e_boleto', 
         initEntrada, 
         initSaldoParc, 
         initSaldoPrazo, 
         initDepParc, 
-        initDepPrazo
+        initDepPrazo,
+        header.depositoFormaPagamento || 'Depósito',
+        header.saldoFormaPagamento || 'Boleto'
       );
       onChange({
         ...header,
@@ -328,10 +357,17 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const currentParcelas = (header.parcelasCount && (header.condicaoPagamento?.includes('/') || header.condicaoPagamento?.toLowerCase().includes('x')) && parsedPayment.parcelas > 1 && header.parcelasCount === 1)
     ? parsedPayment.parcelas
     : (header.parcelasCount ?? parsedPayment.parcelas);
-  const currentPrazo = String(header.prazoDias ?? parsedPayment.prazo);
 
-  const isDepositoEBoleto = currentPrazo === 'deposito_e_boleto' || header.formaPagamento === 'Boleto / Depósito';
-  const isEntradaMista = currentPrazo === 'entrada_com_parcelamento' || isDepositoEBoleto;
+  const isDepositoEBoleto = header.prazoDias === 'deposito_e_boleto' || 
+    header.formaPagamento === 'Boleto / Depósito' || 
+    header.formaPagamento === 'Boleto / Cheque' ||
+    (header.depositoParcelasCount !== undefined && header.saldoParcelasCount !== undefined && (header.depositoParcelasCount > 0 || header.saldoParcelasCount > 0));
+
+  const isEntradaMista = header.prazoDias === 'entrada_com_parcelamento' || isDepositoEBoleto;
+
+  const currentPrazo = isDepositoEBoleto 
+    ? 'deposito_e_boleto' 
+    : (header.prazoDias === 'entrada_com_parcelamento' ? 'entrada_com_parcelamento' : String(header.prazoDias ?? parsedPayment.prazo));
   const isVistaIntegral = currentPrazo === 'vista';
 
   const valorTotalPedido = orderTotal || 0;
@@ -375,6 +411,35 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     }
   }, [valorBaseMercadoria, header.valorEntradaAVista]);
 
+  // Se for pagamento combinado (Depósito + Boleto) e a condicaoPagamento estiver inconsistente/corrompida
+  useEffect(() => {
+    if (isDepositoEBoleto) {
+      const isCorrupted = !header.condicaoPagamento || 
+        !header.condicaoPagamento.includes('+') || 
+        header.prazoDias !== 'deposito_e_boleto';
+      if (isCorrupted) {
+        const correctCond = formatPaymentConditionString(
+          depositoParcelas + saldoParcelas,
+          'deposito_e_boleto',
+          valorEntrada,
+          saldoParcelas,
+          saldoPrazo,
+          depositoParcelas,
+          depositoPrazo,
+          header.depositoFormaPagamento || 'Depósito',
+          header.saldoFormaPagamento || 'Boleto'
+        );
+        if (header.condicaoPagamento !== correctCond || header.prazoDias !== 'deposito_e_boleto') {
+          onChange({
+            ...header,
+            prazoDias: 'deposito_e_boleto',
+            condicaoPagamento: correctCond
+          });
+        }
+      }
+    }
+  }, [isDepositoEBoleto, header.condicaoPagamento, header.prazoDias, depositoParcelas, saldoParcelas, depositoPrazo, saldoPrazo, valorEntrada]);
+
   const handlePaymentParcelasChange = (newParcelas: number) => {
     const rawBase = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
     const baseDate = addDaysToDate(rawBase, 0);
@@ -382,15 +447,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     if (isEntradaMista) {
       const newCondString = formatPaymentConditionString(
         newParcelas, 
-        currentPrazo, 
+        'deposito_e_boleto', 
         valorEntrada, 
         saldoParcelas, 
         saldoPrazo, 
         depositoParcelas, 
-        depositoPrazo
+        depositoPrazo,
+        header.depositoFormaPagamento || 'Depósito',
+        header.saldoFormaPagamento || 'Boleto'
       );
       onChange({
         ...header,
+        prazoDias: 'deposito_e_boleto',
         parcelasCount: newParcelas,
         condicaoPagamento: newCondString,
         datasVencimentoPersonalizadas: undefined
@@ -603,16 +671,19 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const handleEntradaChange = (val: number) => {
     const valFinal = valorBaseMercadoria > 0 ? Math.max(0, Math.min(valorBaseMercadoria, val)) : Math.max(0, val);
     const newCondString = formatPaymentConditionString(
-      currentParcelas, 
-      currentPrazo, 
+      depositoParcelas + saldoParcelas, 
+      'deposito_e_boleto', 
       valFinal, 
       saldoParcelas, 
       saldoPrazo, 
       depositoParcelas, 
-      depositoPrazo
+      depositoPrazo,
+      header.depositoFormaPagamento || 'Depósito',
+      header.saldoFormaPagamento || 'Boleto'
     );
     onChange({
       ...header,
+      prazoDias: 'deposito_e_boleto',
       valorEntradaAVista: valFinal,
       isEntradaProporcional: false,
       percentualEntrada: undefined,
@@ -634,7 +705,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     const newDates: Record<string, string> = {};
 
     // 1. Parcelas de Depósito / Entrada
-    const matchedDepPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === depPrazo);
+    const matchedDepPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === depPrazo || p.conditionString.toLowerCase() === depPrazo.toLowerCase());
     for (let d = 1; d <= depParc; d++) {
       if (depPrazo === 'vista') {
         newDates[String(d)] = addDaysToDate(orderDate, 0);
@@ -647,7 +718,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     }
 
     // 2. Parcelas do Saldo em Boleto
-    const matchedSalPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === salPrazo);
+    const matchedSalPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === salPrazo || p.conditionString.toLowerCase() === salPrazo.toLowerCase());
     for (let b = 1; b <= salParc; b++) {
       const numParcela = depParc + b;
       if (matchedSalPreset && matchedSalPreset.daysOffsets && matchedSalPreset.daysOffsets[b - 1] !== undefined) {
@@ -682,15 +753,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     const newDates = recalculateCombinedDates(newDepParc, newPrazo, saldoParcelas, saldoPrazo);
     const newCondString = formatPaymentConditionString(
       newDepParc + saldoParcelas, 
-      currentPrazo, 
+      'deposito_e_boleto', 
       valorEntrada, 
       saldoParcelas, 
       saldoPrazo, 
       newDepParc, 
-      newPrazo
+      newPrazo,
+      header.depositoFormaPagamento || 'Depósito',
+      header.saldoFormaPagamento || 'Boleto'
     );
     onChange({
       ...header,
+      prazoDias: 'deposito_e_boleto',
       depositoParcelasCount: newDepParc,
       depositoPrazoDias: newPrazo,
       parcelasCount: newDepParc + saldoParcelas,
@@ -701,7 +775,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
   const handleDepositoPrazoChange = (newDepPrazo: string) => {
     let newParc = depositoParcelas;
-    const preset = QUICK_PAYMENT_PRESETS.find(p => p.id === newDepPrazo);
+    const preset = QUICK_PAYMENT_PRESETS.find(p => p.id === newDepPrazo || p.conditionString.toLowerCase() === newDepPrazo.toLowerCase());
     if (preset) {
       newParc = preset.parcelas;
     } else if (newDepPrazo === 'vista') {
@@ -717,15 +791,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     const newDates = recalculateCombinedDates(newParc, newDepPrazo, saldoParcelas, saldoPrazo);
     const newCondString = formatPaymentConditionString(
       newParc + saldoParcelas, 
-      currentPrazo, 
+      'deposito_e_boleto', 
       valorEntrada, 
       saldoParcelas, 
       saldoPrazo, 
       newParc, 
-      newDepPrazo
+      newDepPrazo,
+      header.depositoFormaPagamento || 'Depósito',
+      header.saldoFormaPagamento || 'Boleto'
     );
     onChange({
       ...header,
+      prazoDias: 'deposito_e_boleto',
       depositoParcelasCount: newParc,
       depositoPrazoDias: newDepPrazo,
       parcelasCount: newParc + saldoParcelas,
@@ -746,15 +823,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     const newDates = recalculateCombinedDates(depositoParcelas, depositoPrazo, newSaldoParc, newPrazo);
     const newCondString = formatPaymentConditionString(
       depositoParcelas + newSaldoParc, 
-      currentPrazo, 
+      'deposito_e_boleto', 
       valorEntrada, 
       newSaldoParc, 
       newPrazo, 
       depositoParcelas, 
-      depositoPrazo
+      depositoPrazo,
+      header.depositoFormaPagamento || 'Depósito',
+      header.saldoFormaPagamento || 'Boleto'
     );
     onChange({
       ...header,
+      prazoDias: 'deposito_e_boleto',
       saldoParcelasCount: newSaldoParc,
       saldoPrazoDias: newPrazo,
       parcelasCount: depositoParcelas + newSaldoParc,
@@ -765,7 +845,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
   const handleSaldoPrazoChange = (newSaldoPrazo: string) => {
     let newParc = saldoParcelas;
-    const preset = QUICK_PAYMENT_PRESETS.find(p => p.id === newSaldoPrazo);
+    const preset = QUICK_PAYMENT_PRESETS.find(p => p.id === newSaldoPrazo || p.conditionString.toLowerCase() === newSaldoPrazo.toLowerCase());
     if (preset) {
       newParc = preset.parcelas;
     } else if (newSaldoPrazo === 'vista') {
@@ -781,15 +861,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     const newDates = recalculateCombinedDates(depositoParcelas, depositoPrazo, newParc, newSaldoPrazo);
     const newCondString = formatPaymentConditionString(
       depositoParcelas + newParc, 
-      currentPrazo, 
+      'deposito_e_boleto', 
       valorEntrada, 
       newParc, 
       newSaldoPrazo, 
       depositoParcelas, 
-      depositoPrazo
+      depositoPrazo,
+      header.depositoFormaPagamento || 'Depósito',
+      header.saldoFormaPagamento || 'Boleto'
     );
     onChange({
       ...header,
+      prazoDias: 'deposito_e_boleto',
       saldoParcelasCount: newParc,
       saldoPrazoDias: newSaldoPrazo,
       parcelasCount: depositoParcelas + newParc,

@@ -611,7 +611,7 @@ export function App() {
     const clonedItem: OrderItem = {
       ...itemToClone,
       id: 'item_' + Date.now(),
-      descricao: `${itemToClone.descricao} (Cópia)`
+      descricao: itemToClone.descricao
     };
 
     setOrder(prev => {
@@ -938,6 +938,10 @@ export function App() {
     }
     const today = new Date().toISOString().split('T')[0];
     const targetDate = selected.header.dataPedido || selected.header.dataEmissao || today;
+    const sanitizedItems = (selected.items || []).map(it => ({
+      ...it,
+      descricao: it.descricao ? it.descricao.replace(/\s*\([Cc][óo]pia\)\s*$/g, '').trim() : ''
+    }));
     setOrder({
       ...selected,
       header: {
@@ -945,7 +949,7 @@ export function App() {
         dataPedido: targetDate,
         dataEmissao: selected.header.dataEmissao || targetDate
       },
-      items: ensureTrailingBlankItem(selected.items || [], fiscalConfig, storeConfigs)
+      items: ensureTrailingBlankItem(sanitizedItems, fiscalConfig, storeConfigs)
     });
     let targetTab = destinationTab;
     if (currentUser?.role !== 'diretoria' && (targetTab === 'orders' || targetTab === 'history' || targetTab === 'financial' || targetTab === 'dashboard' || targetTab === 'suppliers' || targetTab === 'users')) {

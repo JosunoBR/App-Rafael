@@ -9,10 +9,31 @@ function formatCurrency(val) {
   return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatPaymentConditionDisplay(cond) {
+function formatPaymentConditionDisplay(cond, parcelas) {
   if (!cond || !String(cond).trim()) return 'A Combinar';
 
   let text = String(cond).trim();
+  if (text.startsWith('preset:')) {
+    text = text.replace(/^preset:/, '');
+  }
+  if (text === '30_90' || text === '30/90' || text.toLowerCase() === '30/90 dias') {
+    return (parcelas === 3) ? '30/60/90 Dias' : '30/90 Dias';
+  }
+  if (text === '30_60_90' || text === '30/60/90' || text.toLowerCase() === '30/60/90 dias') {
+    return '30/60/90 Dias';
+  }
+  if (text === '30_60' || text === '30/60' || text.toLowerCase() === '30/60 dias') {
+    return '30/60 Dias';
+  }
+  if (text === '30_30' || text.toLowerCase() === '30 dias') {
+    return '30 Dias';
+  }
+  if (text === '30_120' || text === '30/60/90/120' || text.toLowerCase() === '30/60/90/120 dias') {
+    return '30/60/90/120 Dias';
+  }
+  if (text === '30_150' || text === '30/60/90/120/150' || text.toLowerCase() === '30/60/90/120/150 dias') {
+    return '30/60/90/120/150 Dias';
+  }
 
   // 1. Caso legado '3x (30/60/90 Dias - de 30 em 30 dias)', extrair '30/60/90 Dias'
   text = text.replace(/(\d+x)\s*\(\s*([^)]+?)\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '$2');
@@ -108,7 +129,7 @@ class ExportService {
       [],
       ['Número do Pedido:', order.header?.numeroPedido || '', 'Status:', order.header?.status || 'Em Cotação'],
       ['Fornecedor:', order.header?.fornecedor || '', 'Vendedor:', order.header?.vendedor || ''],
-      ['Contato Vendedor:', order.header?.contatoVendedor || '', 'Condição Pagto:', formatPaymentConditionDisplay(order.header?.condicaoPagamento)],
+      ['Contato Vendedor:', order.header?.contatoVendedor || '', 'Condição Pagto:', formatPaymentConditionDisplay(order.header?.condicaoPagamento || order.header?.prazoDias, order.header?.parcelasCount)],
       ['Data Emissão:', order.header?.dataEmissao || '', 'Entrega Prevista:', order.header?.dataEntregaPrevista || ''],
       ['OFF %:', `${order.header?.percentualNota !== undefined ? order.header.percentualNota : 100}%`, 'Alíquota ST (%):', `${order.header?.aliquotaSt || 0}%`],
       ['Descrição / Obs do Pedido:', order.header?.observacoes || order.header?.observacoesDescarga || ''],
@@ -189,7 +210,7 @@ class ExportService {
     const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
-    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
+    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento || order.header?.prazoDias, order.header?.parcelasCount);
     const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento);
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
     const observacoes = order.header?.observacoes || order.header?.observacoesDescarga || '';
@@ -287,18 +308,87 @@ class ExportService {
     doc.setFontSize(7.2);
     doc.text('DADOS DO FORNECEDOR & CONDIÇÕES COMERCIAIS:', card2X + 3, cardY + 3.8);
 
+    // Cálculo do Desconto Comercial como porcentagem
+    const offValue = Number(order.header?.percentualDescontoOff || 0);
+    let totalBrutoMercadorias = 0;
+    let totalDescontoItens = 0;
+    (order.items || []).forEach(item => {
+      const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
+      const pacotes = Number(item.qtdPacotes) || 0;
+      const pecas = Number(item.qtdTotalUnidades) || (pacotes * pack);
+      const precoUnit = Number(item.precoUnitario) || 0;
+      const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
+      const valorLiquido = Number(item.valorTotalLiquido) || valorBruto;
+      totalBrutoMercadorias += valorBruto;
+      if (item.valorDescontoItem !== undefined && Number(item.valorDescontoItem) > 0) {
+        totalDescontoItens += Number(item.valorDescontoItem);
+      } else if (valorBruto > valorLiquido) {
+        totalDescontoItens += (valorBruto - valorLiquido);
+      }
+    });
+
+    let descontoComercialPercent = 0;
+    if (order.header?.descontoComercialTotal !== undefined && Number(order.header.descontoComercialTotal) > 0) {
+      if (order.header.descontoComercialTipo === '%') {
+        descontoComercialPercent = Number(order.header.descontoComercialTotal);
+      } else {
+        descontoComercialPercent = totalBrutoMercadorias > 0
+          ? (Number(order.header.descontoComercialTotal) / totalBrutoMercadorias) * 100
+          : 0;
+      }
+    } else if (totalDescontoItens > 0 && totalBrutoMercadorias > 0) {
+      descontoComercialPercent = (totalDescontoItens / totalBrutoMercadorias) * 100;
+    } else if (offValue > 0) {
+      descontoComercialPercent = offValue;
+    }
+
+    const descontoComercialTexto = `${Number(descontoComercialPercent.toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
+
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 8.5);
-    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 12.1);
+    doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 7.5);
+    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 10.8);
 
     const offPercent = order.header?.percentualNota !== undefined ? order.header.percentualNota : 100;
-    doc.text(`OFF %: ${offPercent}%`, card2X + 3, cardY + 15.7);
+    doc.text(`OFF %: ${offPercent}%`, card2X + 3, cardY + 14.1);
+    doc.text(`Desconto Comercial: ${descontoComercialTexto}`, card2X + 3, cardY + 17.4);
+    doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 20.7);
+    doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 24.0);
+    doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 27.3);
 
-    doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 19.3);
-    doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 22.9);
-    doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 26.5);
+    // =========================================================================
+    // 3.1 BANNER DE DESTAQUE: DESCRIÇÃO / OBSERVAÇÕES DO PEDIDO (Se houver)
+    // =========================================================================
+    let obsBannerH = 0;
+    if (observacoes && observacoes.trim()) {
+      const obsBannerY = cardY + cardH + 2.2;
+      const maxObsW = 271;
+      const obsLines = doc.splitTextToSize(observacoes.trim(), maxObsW);
+      const lineCount = Array.isArray(obsLines) ? obsLines.length : 1;
+      obsBannerH = Math.max(10, 5.5 + lineCount * 3.6);
+
+      doc.setFillColor(254, 249, 195); // Amber-100
+      doc.setDrawColor(217, 119, 6);   // Amber-600
+      doc.setLineWidth(0.4);
+      doc.roundedRect(10, obsBannerY, 277, obsBannerH, 1.5, 1.5, 'FD');
+
+      doc.setTextColor(146, 64, 14); // Amber-800
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.text('📌 DESCRIÇÃO / OBSERVAÇÕES DO PEDIDO:', 13, obsBannerY + 4.2);
+
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.2);
+      if (Array.isArray(obsLines)) {
+        obsLines.forEach((line, idx) => {
+          doc.text(line, 13, obsBannerY + 8 + idx * 3.6);
+        });
+      } else {
+        doc.text(String(obsLines), 13, obsBannerY + 8);
+      }
+    }
 
     // =========================================================================
     // 4. TABELA DE ITENS (SEM Código Interno e SEM Desconto)
@@ -381,7 +471,7 @@ class ExportService {
     ];
 
     autoTable(doc, {
-      startY: 66,
+      startY: cardY + cardH + 2.0 + (obsBannerH > 0 ? obsBannerH + 2.0 : 0),
       head: [headCols],
       body: [...bodyRows, footerRow],
       theme: 'grid',
@@ -457,10 +547,22 @@ class ExportService {
     doc.text('3. Pagamento de Parte Especial exclusivamente via depósitos bancários autorizados.', 13, finalY + 15.6);
     doc.text('4. Os pedidos seguem espelho oficial da empresa. Favor conferir e avisar imediatamente se houver desacordo.', 13, finalY + 19.4);
     doc.text('5. Descarregamento no local de entrega sob responsabilidade do fornecedor / transportadora.', 13, finalY + 23.2);
-    if (observacoes) {
-      doc.setTextColor(71, 85, 105);
-      doc.setFont('helvetica', 'italic');
-      doc.text(`Descrição do Pedido: ${observacoes.substring(0, 115)}`, 13, finalY + 27.2);
+    if (observacoes && observacoes.trim()) {
+      doc.setFillColor(254, 243, 199); // Amber-100
+      doc.setDrawColor(217, 119, 6);   // Amber-600
+      doc.setLineWidth(0.3);
+      doc.roundedRect(12, finalY + 24.5, leftW - 4, 6.2, 1, 1, 'FD');
+
+      doc.setTextColor(146, 64, 14); // Amber-800
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.8);
+      doc.text('OBSERVAÇÕES DO PEDIDO:', 14, finalY + 28.5);
+
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.8);
+      const obsResumo = observacoes.length > 105 ? `${observacoes.substring(0, 102)}...` : observacoes;
+      doc.text(obsResumo, 54, finalY + 28.5);
     }
 
     // Bloco Direito: Resumo Financeiro & Assinaturas
@@ -556,7 +658,7 @@ class ExportService {
     const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
-    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
+    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento || order.header?.prazoDias, order.header?.parcelasCount);
     const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento);
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
 
@@ -844,4 +946,8 @@ class ExportService {
   }
 }
 
-module.exports = new ExportService();
+const exportServiceInstance = new ExportService();
+exportServiceInstance.formatPaymentConditionDisplay = formatPaymentConditionDisplay;
+exportServiceInstance.cleanPaymentFormDisplay = cleanPaymentFormDisplay;
+
+module.exports = exportServiceInstance;

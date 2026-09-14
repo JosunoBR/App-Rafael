@@ -65,10 +65,11 @@ export const QUICK_PAYMENT_PRESETS: QuickPaymentPreset[] = [
   { id: '28_42', label: '28/35/42 (3x)', conditionString: '28/35/42 Dias', parcelas: 3, daysOffsets: [28, 35, 42], category: 'semanal' },
   { id: '28_56', label: '28/35/42/49/56 (5x)', conditionString: '28/35/42/49/56 Dias', parcelas: 5, daysOffsets: [28, 35, 42, 49, 56], category: 'semanal' },
 
-  // 2. Iniciando em 30 Dias (30 em 30)
+  // 2. Iniciando em 30 Dias (30 em 30 / intervalos clássicos)
   { id: '30_30', label: '30 Dias (1x)', conditionString: '30 Dias', parcelas: 1, daysOffsets: [30], category: '30_dias' },
   { id: '30_60', label: '30/60 (2x)', conditionString: '30/60 Dias', parcelas: 2, daysOffsets: [30, 60], category: '30_dias' },
-  { id: '30_90', label: '30/60/90 (3x)', conditionString: '30/60/90 Dias', parcelas: 3, daysOffsets: [30, 60, 90], category: '30_dias' },
+  { id: '30_90', label: '30/90 (2x)', conditionString: '30/90 Dias', parcelas: 2, daysOffsets: [30, 90], category: '30_dias' },
+  { id: '30_60_90', label: '30/60/90 (3x)', conditionString: '30/60/90 Dias', parcelas: 3, daysOffsets: [30, 60, 90], category: '30_dias' },
   { id: '30_120', label: '30/60/90/120 (4x)', conditionString: '30/60/90/120 Dias', parcelas: 4, daysOffsets: [30, 60, 90, 120], category: '30_dias' },
   { id: '30_150', label: '30/60/90/120/150 (5x)', conditionString: '30/60/90/120/150 Dias', parcelas: 5, daysOffsets: [30, 60, 90, 120, 150], category: '30_dias' },
 
@@ -223,10 +224,24 @@ export function formatPaymentConditionString(
     return `Depósito À Vista + Boleto ${sPrazoStr}`;
   }
 
+  const prazoStr = String(prazo).trim();
+  if (prazoStr === '30_90' || prazoStr.replace(/\s*dias$/i, '').trim() === '30/90') {
+    return parcelas === 3 ? '30/60/90 Dias' : '30/90 Dias';
+  }
+  if (prazoStr === '30_60_90' || prazoStr.replace(/\s*dias$/i, '').trim() === '30/60/90') {
+    return '30/60/90 Dias';
+  }
+
   // Verifica se o prazo corresponde a um dos modelos pré-definidos
-  const matchedPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === String(prazo) || p.conditionString.toLowerCase() === String(prazo).toLowerCase());
+  const matchedPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === prazoStr || p.conditionString.toLowerCase() === prazoStr.toLowerCase());
   if (matchedPreset) {
     return matchedPreset.conditionString;
+  }
+
+  // Se o prazo é uma sequência explícita com barras (ex: "30/90", "30/60/90", "15/30/45")
+  if (prazoStr.includes('/')) {
+    const cleanSeq = prazoStr.replace(/\s*dias$/i, '').trim();
+    return `${cleanSeq} Dias`;
   }
 
   const intervalo = Number(prazo);
@@ -282,10 +297,9 @@ export function parsePaymentConditionString(cond?: string): ParsedPaymentConditi
         daysOffsets: [offset]
       };
     }
-    const step = matchedPreset.daysOffsets[1] ? matchedPreset.daysOffsets[1] - matchedPreset.daysOffsets[0] : 30;
     return {
       parcelas: matchedPreset.parcelas,
-      prazo: String(step),
+      prazo: matchedPreset.id,
       daysOffsets: [...matchedPreset.daysOffsets]
     };
   }
@@ -304,7 +318,7 @@ export function parsePaymentConditionString(cond?: string): ParsedPaymentConditi
     return { parcelas: 1, prazo: 'vista', daysOffsets: [0] };
   }
 
-  // 3. Sequência de dias com barra (ex: "30/40/50/60/70/80/90/100/110/120 Dias" ou "30/45/60/75")
+  // 3. Sequência de dias com barra (ex: "30/90", "30/60/90 Dias", "30/40/50/60/70/80/90/100/110/120 Dias")
   const cleanWithoutNotes = clean.replace(/\(\s*\d+\/\d+d?[^)]*\)/gi, '');
   if (cleanWithoutNotes.includes('/')) {
     const parts = cleanWithoutNotes.split('/').map(p => {
@@ -313,10 +327,22 @@ export function parsePaymentConditionString(cond?: string): ParsedPaymentConditi
     }).filter((n): n is number => n !== null && n > 0 && n <= 720);
 
     if (parts.length >= 2) {
-      const step = parts[1] - parts[0];
+      // 3.1 Procura se bate com um preset pré-definido pelos offsets exatos
+      const matchingPreset = QUICK_PAYMENT_PRESETS.find(p => 
+        p.daysOffsets && p.daysOffsets.length === parts.length &&
+        p.daysOffsets.every((d, idx) => d === parts[idx])
+      );
+      if (matchingPreset) {
+        return {
+          parcelas: matchingPreset.parcelas,
+          prazo: matchingPreset.id,
+          daysOffsets: [...matchingPreset.daysOffsets]
+        };
+      }
+
       return {
         parcelas: parts.length,
-        prazo: step > 0 ? String(step) : '30',
+        prazo: parts.join('/'),
         daysOffsets: parts
       };
     }

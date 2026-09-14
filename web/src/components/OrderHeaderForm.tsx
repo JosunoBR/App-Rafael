@@ -347,11 +347,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     ? header.percentualEntrada
     : pctDepositoFromOff;
 
-  const valorEntrada = (isProporcional && valorBaseMercadoria > 0)
-    ? Number((valorBaseMercadoria * (targetPctDeposito / 100)).toFixed(2))
-    : (header.valorEntradaAVista !== undefined 
-        ? header.valorEntradaAVista 
-        : (valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (targetPctDeposito / 100)).toFixed(2)) : 0));
+  const valorEntrada = valorBaseMercadoria > 0
+    ? (isProporcional
+        ? Number((valorBaseMercadoria * (targetPctDeposito / 100)).toFixed(2))
+        : Math.min(valorBaseMercadoria, Math.max(0, header.valorEntradaAVista || 0)))
+    : 0;
 
   const depositoParcelas = Math.max(1, header.depositoParcelasCount || (currentPrazo === 'deposito_e_boleto' ? 2 : 1));
   const depositoPrazo = String(header.depositoPrazoDias || (currentPrazo === 'entrada_com_parcelamento' ? 'vista' : '30'));
@@ -360,10 +360,20 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const saldoParcelas = Math.max(1, header.saldoParcelasCount || 2);
   const saldoPrazo = String(header.saldoPrazoDias || '30');
 
-  const baseReferenciaTotal = valorBaseMercadoria > 0 ? valorBaseMercadoria : (valorEntrada > 0 ? (valorEntrada <= 1000 ? 1000 : valorEntrada * 2) : 0);
+  const baseReferenciaTotal = valorBaseMercadoria > 0 ? valorBaseMercadoria : 0;
   const saldoRestante = Math.max(0, baseReferenciaTotal - valorEntrada);
-  const valorPorParcelaSaldo = saldoParcelas > 0 ? (saldoRestante / saldoParcelas) : 0;
-  const baseReferenciaPercentual = valorBaseMercadoria > 0 ? valorBaseMercadoria : (valorEntrada + saldoRestante);
+  const valorPorParcelaSaldo = (saldoParcelas > 0 && saldoRestante > 0) ? (saldoRestante / saldoParcelas) : 0;
+  const baseReferenciaPercentual = valorBaseMercadoria > 0 ? valorBaseMercadoria : 0;
+
+  // Sanitiza valorEntradaAVista se o pedido estiver com total de mercadorias zerado
+  useEffect(() => {
+    if (valorBaseMercadoria === 0 && header.valorEntradaAVista !== undefined && header.valorEntradaAVista > 0) {
+      onChange({
+        ...header,
+        valorEntradaAVista: 0
+      });
+    }
+  }, [valorBaseMercadoria, header.valorEntradaAVista]);
 
   const handlePaymentParcelasChange = (newParcelas: number) => {
     const rawBase = header.dataEntregaPrevista || header.dataPedido || new Date().toISOString().split('T')[0];
@@ -797,10 +807,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         <option value="preset:28_56">28/35/42/49/56 (5x)</option>
       </optgroup>
 
-      <optgroup label="⚡ Modelos de 30 em 30 Dias">
+      <optgroup label="⚡ Modelos de 30 em 30 / Clássicos">
         <option value="preset:30_30">30 Dias (1x)</option>
         <option value="preset:30_60">30/60 (2x)</option>
-        <option value="preset:30_90">30/60/90 (3x)</option>
+        <option value="preset:30_90">30/90 (2x)</option>
+        <option value="preset:30_60_90">30/60/90 (3x)</option>
         <option value="preset:30_120">30/60/90/120 (4x)</option>
         <option value="preset:30_150">30/60/90/120/150 (5x)</option>
       </optgroup>
@@ -1085,9 +1096,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     const pctBoleto = invertSplit ? (100 - rawOff) : rawOff;
     const pctDeposito = 100 - pctBoleto;
 
-    // Base de cálculo: usa o valor das mercadorias do pedido ou R$ 1.000,00 como base padrão para testes imediatos
-    const baseParaCalculo = valorBaseMercadoria > 0 ? valorBaseMercadoria : 1000;
-    const newEntrada = Number((baseParaCalculo * (pctDeposito / 100)).toFixed(2));
+    // Base de cálculo: usa estritamente o valor real das mercadorias do pedido (sem inventar base de 1.000)
+    const baseParaCalculo = valorBaseMercadoria > 0 ? valorBaseMercadoria : 0;
+    const newEntrada = baseParaCalculo > 0 ? Number((baseParaCalculo * (pctDeposito / 100)).toFixed(2)) : 0;
     const newSaldo = Math.max(0, Number((baseParaCalculo - newEntrada).toFixed(2)));
 
     // Recalcular cronograma completo de datas de vencimento
@@ -1112,7 +1123,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       datasVencimentoPersonalizadas: newCustomDates
     });
 
-    const successMsg = `✨ Sincronizado: ${pctBoleto}% Boleto (R$ ${newSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) + ${pctDeposito}% Depósito (R$ ${newEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
+    const successMsg = baseParaCalculo > 0
+      ? `✨ Sincronizado: ${pctBoleto}% Boleto (R$ ${newSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) + ${pctDeposito}% Depósito (R$ ${newEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
+      : `✨ Proporção ajustada: ${pctBoleto}% Boleto + ${pctDeposito}% Depósito (Total do pedido zerado)`;
     setSyncFeedback({ message: successMsg, type: 'success' });
     showToast?.(successMsg, 'success');
     setTimeout(() => setSyncFeedback(null), 5000);
@@ -1894,11 +1907,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span>
                           1ª Condição: Depósito / Entrada
                         </span>
-                        {baseReferenciaPercentual > 0 && (
-                          <span className="font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-900">
-                            {isProporcional ? targetPctDeposito : ((valorEntrada / baseReferenciaPercentual) * 100).toFixed(0)}% do Pedido
-                          </span>
-                        )}
+                        <span className="font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-900">
+                          {isProporcional ? targetPctDeposito : (baseReferenciaPercentual > 0 ? ((valorEntrada / baseReferenciaPercentual) * 100).toFixed(0) : 0)}% do Pedido
+                        </span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
                         {/* 1. Forma */}
@@ -1982,11 +1993,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
                           2ª Condição: Saldo Boleto
                         </span>
-                        {baseReferenciaPercentual > 0 && (
-                          <span className="font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
-                            {isProporcional ? (100 - targetPctDeposito) : ((saldoRestante / baseReferenciaPercentual) * 100).toFixed(0)}% do Pedido
-                          </span>
-                        )}
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
+                          {isProporcional ? (100 - targetPctDeposito) : (baseReferenciaPercentual > 0 ? ((saldoRestante / baseReferenciaPercentual) * 100).toFixed(0) : 0)}% do Pedido
+                        </span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
                         {/* 1. Forma */}

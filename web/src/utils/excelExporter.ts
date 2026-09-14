@@ -18,7 +18,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
   const vendedor = order.header?.vendedor || 'N/A';
   const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
-  const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
+  const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento || order.header?.prazoDias, order.header?.parcelasCount);
   const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento) || 'Boleto Bancário';
   const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
   const percentualOff = Number(order.header?.percentualDescontoOff || 0);
@@ -228,19 +228,22 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     }
   });
 
-  let descontoComercialTexto = 'R$ 0,00';
+  let descontoComercialPercent = 0;
   if (order.header?.descontoComercialTotal !== undefined && Number(order.header.descontoComercialTotal) > 0) {
     if (order.header.descontoComercialTipo === '%') {
-      const valR = (totalBrutoMercadorias * Number(order.header.descontoComercialTotal)) / 100;
-      descontoComercialTexto = `${Number(order.header.descontoComercialTotal)}% (${formatCurrency(valR)})`;
+      descontoComercialPercent = Number(order.header.descontoComercialTotal);
     } else {
-      descontoComercialTexto = formatCurrency(Number(order.header.descontoComercialTotal));
+      descontoComercialPercent = totalBrutoMercadorias > 0
+        ? (Number(order.header.descontoComercialTotal) / totalBrutoMercadorias) * 100
+        : 0;
     }
-  } else if (totalDescontoItens > 0) {
-    descontoComercialTexto = formatCurrency(totalDescontoItens);
-  } else if (percentualOff > 0 && totalBrutoMercadorias > 0) {
-    descontoComercialTexto = formatCurrency((totalBrutoMercadorias * percentualOff) / 100);
+  } else if (totalDescontoItens > 0 && totalBrutoMercadorias > 0) {
+    descontoComercialPercent = (totalDescontoItens / totalBrutoMercadorias) * 100;
+  } else if (percentualOff > 0) {
+    descontoComercialPercent = percentualOff;
   }
+
+  const descontoComercialTexto = `${Number(descontoComercialPercent.toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 
   // Linhas de dados dos dois cards
   const cardRows = [
@@ -310,7 +313,30 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     }
   });
 
-  const spacerRowNum = 8 + cardRows.length;
+  let currentRow = 8 + cardRows.length;
+
+  if (observacoes && observacoes.trim()) {
+    const obsRowNum = currentRow;
+    const obsRow = ws.getRow(obsRowNum);
+    obsRow.height = 24;
+    ws.mergeCells(`A${obsRowNum}:I${obsRowNum}`);
+    const obsCell = obsRow.getCell(1);
+    obsCell.value = `📌 DESCRIÇÃO / OBSERVAÇÕES DO PEDIDO: ${observacoes.trim()}`;
+    obsCell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF92400E' } }; // Amber-800
+    obsCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF9C3' } }; // Amber-100
+    obsCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    for (let c = 1; c <= 9; c++) {
+      obsRow.getCell(c).border = {
+        top: { style: 'thin', color: { argb: 'FFD97706' } },
+        bottom: { style: 'thin', color: { argb: 'FFD97706' } },
+        left: { style: 'thin', color: { argb: 'FFD97706' } },
+        right: { style: 'thin', color: { argb: 'FFD97706' } }
+      };
+    }
+    currentRow++;
+  }
+
+  const spacerRowNum = currentRow;
   ws.getRow(spacerRowNum).height = 10; // Espaçador
 
   // ===========================================================================
@@ -473,7 +499,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     '3. Pagamento de Parte Especial exclusivamente via depósitos bancários autorizados.',
     '4. Os pedidos seguem espelho oficial da empresa. Favor conferir e avisar imediatamente se houver desacordo.',
     '5. Descarregamento no local de entrega sob responsabilidade do fornecedor / transportadora.',
-    observacoes ? `Obs: ${observacoes}` : 'Obs: Descarregamento e entrega sob responsabilidade do fornecedor.'
+    observacoes ? `📌 OBSERVAÇÃO DO PEDIDO: ${observacoes}` : 'Obs: Descarregamento e entrega sob responsabilidade do fornecedor.'
   ];
 
   rulesList.forEach((rule, rIdx) => {
@@ -481,16 +507,27 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     ws.mergeCells(`A${rNum}:E${rNum}`);
     const rCell = ws.getCell(`A${rNum}`);
     rCell.value = rule;
-    rCell.font = { name: 'Segoe UI', size: 7.5, italic: rIdx === 5, color: { argb: rIdx === 5 ? 'FF475569' : 'FF1E293B' } };
-    rCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF2F2' } };
+    const isObsRow = rIdx === 5;
+    rCell.font = { 
+      name: 'Segoe UI', 
+      size: isObsRow && observacoes ? 8 : 7.5, 
+      bold: Boolean(isObsRow && observacoes), 
+      italic: Boolean(isObsRow && !observacoes), 
+      color: { argb: isObsRow && observacoes ? 'FF92400E' : isObsRow ? 'FF475569' : 'FF1E293B' } 
+    };
+    rCell.fill = { 
+      type: 'pattern', 
+      pattern: 'solid', 
+      fgColor: { argb: isObsRow && observacoes ? 'FFFEF3C7' : 'FFFEF2F2' } 
+    };
     rCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
     ws.getRow(rNum).height = 16;
 
     for (let c = 1; c <= 5; c++) {
       ws.getRow(rNum).getCell(c).border = {
-        left: { style: 'thin', color: { argb: 'FFEF4444' } },
-        right: { style: 'thin', color: { argb: 'FFEF4444' } },
-        bottom: rIdx === 5 ? { style: 'thin', color: { argb: 'FFEF4444' } } : undefined
+        left: { style: 'thin', color: { argb: isObsRow && observacoes ? 'FFD97706' : 'FFEF4444' } },
+        right: { style: 'thin', color: { argb: isObsRow && observacoes ? 'FFD97706' : 'FFEF4444' } },
+        bottom: rIdx === 5 ? { style: 'thin', color: { argb: isObsRow && observacoes ? 'FFD97706' : 'FFEF4444' } } : undefined
       };
     }
   });

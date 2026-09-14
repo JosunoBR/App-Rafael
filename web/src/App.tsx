@@ -947,8 +947,12 @@ export function App() {
       },
       items: ensureTrailingBlankItem(selected.items || [], fiscalConfig, storeConfigs)
     });
-    if (activeNav !== destinationTab) {
-      setActiveNav(destinationTab);
+    let targetTab = destinationTab;
+    if (currentUser?.role !== 'diretoria' && (targetTab === 'orders' || targetTab === 'history' || targetTab === 'financial' || targetTab === 'dashboard' || targetTab === 'suppliers' || targetTab === 'users')) {
+      targetTab = 'separation';
+    }
+    if (activeNav !== targetTab) {
+      setActiveNav(targetTab);
     }
     showToast(`Pedido ${selected.header.numeroPedido} carregado com sucesso.`);
   };
@@ -1959,7 +1963,7 @@ export function App() {
           hasActiveDraft={hasActiveDraft}
           isSavedOrder={isCurrentOrderSaved}
           savedOrders={savedOrders}
-          onSelectOrder={(selected) => handleOpenSelectedOrder(selected)}
+          onSelectOrder={(selected) => handleOpenSelectedOrder(selected, currentUser?.role === 'diretoria' ? 'orders' : 'separation')}
           onNewOrder={handleNewOrder}
           onSaveOrder={handleSaveDraftOrder}
           onCloseOrder={handleCloseOrder}
@@ -1973,8 +1977,8 @@ export function App() {
 
         <main className="flex-1 w-full max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-all duration-300">
           
-          {/* MODO MOBILE 1: COMPRAS EM VIAGENS / FEIRAS */}
-          {viewMode === 'mobile_purchases' && (
+          {/* MODO MOBILE 1: COMPRAS EM VIAGENS / FEIRAS (Apenas Diretoria) */}
+          {viewMode === 'mobile_purchases' && currentUser?.role === 'diretoria' && (
             <MobilePurchasesView
               order={order}
               suppliers={suppliers}
@@ -2018,13 +2022,13 @@ export function App() {
                   onNewOrder={handleNewOrder}
                   onContinueDraft={handleContinueDraft}
                   onDiscardDraft={handleDiscardDraft}
-                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
+                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, currentUser?.role === 'diretoria' ? 'orders' : 'separation')}
                   onSwitchViewMode={(mode) => setViewMode(mode)}
                 />
               )}
 
-              {/* PÁGINA 1: COTAÇÃO E PEDIDOS */}
-              {activeNav === 'orders' && (
+              {/* PÁGINA 1: COTAÇÃO E PEDIDOS (Apenas Diretoria de Compras) */}
+              {activeNav === 'orders' && currentUser?.role === 'diretoria' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
                   {/* Esteira Operacional Visual do Pedido (Compras ➔ Depósito ➔ Separação ➔ Finalizado) */}
                   <OrderPipelineStepper
@@ -2134,7 +2138,7 @@ export function App() {
                   onNavigateToOrders={() => setActiveNav('orders')}
                   onNavigateToHistory={() => setActiveNav('separationHistory')}
                   onChangeOrder={setOrder}
-                  onSelectOrder={setOrder}
+                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
                   onFinalizeOrder={handleFinalizeSeparation}
                   onReleaseToSeparation={handleReleaseToSeparation}
                   onApproveOrder={handleApproveOrder}
@@ -2164,8 +2168,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 4: DASHBOARD EXECUTIVO & BI */}
-              {activeNav === 'dashboard' && (
+              {/* PÁGINA 4: DASHBOARD EXECUTIVO & BI (Apenas Diretoria) */}
+              {activeNav === 'dashboard' && currentUser?.role === 'diretoria' && (
                 <DashboardView
                   orders={savedOrders}
                   suppliers={suppliers}
@@ -2174,8 +2178,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 4.1: GESTÃO FINANCEIRA DE BOLETOS & CONTAS A PAGAR */}
-              {activeNav === 'financial' && (
+              {/* PÁGINA 4.1: GESTÃO FINANCEIRA DE BOLETOS & CONTAS A PAGAR (Apenas Diretoria) */}
+              {activeNav === 'financial' && currentUser?.role === 'diretoria' && (
                 <FinancialBoletosPage
                   orders={effectiveOrders}
                   suppliers={suppliers}
@@ -2187,8 +2191,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 5: GESTÃO COMPLETA DE FORNECEDORES */}
-              {activeNav === 'suppliers' && (
+              {/* PÁGINA 5: GESTÃO COMPLETA DE FORNECEDORES (Apenas Diretoria) */}
+              {activeNav === 'suppliers' && currentUser?.role === 'diretoria' && (
                 <SuppliersPage
                   suppliers={suppliers}
                   products={products}
@@ -2210,8 +2214,8 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 5: HISTÓRICO & ARQUIVO DE PEDIDOS */}
-              {activeNav === 'history' && (
+              {/* PÁGINA 5: HISTÓRICO & ARQUIVO DE PEDIDOS (Apenas Diretoria) */}
+              {activeNav === 'history' && currentUser?.role === 'diretoria' && (
                 <OrderHistoryPage
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
                   onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
@@ -2232,7 +2236,7 @@ export function App() {
               )}
 
               {/* PÁGINA 7: GESTÃO DE USUÁRIOS & PERMISSÕES (DIRETORIA) */}
-              {activeNav === 'users' && (
+              {activeNav === 'users' && currentUser?.role === 'diretoria' && (
                 <UsersPage currentUser={currentUser} />
               )}
             </>

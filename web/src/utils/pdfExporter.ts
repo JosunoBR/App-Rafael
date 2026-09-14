@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { PurchaseOrder, StoreConfig } from '../shared/types';
 import { DEFAULT_STORES } from '../shared/constants';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
+import { QUICK_PAYMENT_PRESETS } from './installments';
 
 function formatCurrency(val: number | string): string {
   const num = Number(val) || 0;
@@ -14,10 +15,26 @@ function formatCurrency(val: number | string): string {
  * removendo qualquer texto redundante de periodicidade "( x em x dias)" ou "- de x em x dias",
  * e removendo valores monetários "(R$ ...)" ou "R$ ..." para manter a proposta 100% limpa.
  */
-export function formatPaymentConditionDisplay(cond?: string): string {
+export function formatPaymentConditionDisplay(cond?: string | number, parcelas?: number): string {
   if (!cond || !String(cond).trim()) return 'A Combinar';
 
   let text = String(cond).trim();
+
+  // Tratamento de IDs de presets (ex: "preset:30_90", "30_90", "30_60_90")
+  if (text.startsWith('preset:')) {
+    text = text.replace(/^preset:/, '');
+  }
+  if (text === '30_90' || text === '30/90' || text.toLowerCase() === '30/90 dias') {
+    return (parcelas === 3) ? '30/60/90 Dias' : '30/90 Dias';
+  }
+  if (text === '30_60_90' || text === '30/60/90' || text.toLowerCase() === '30/60/90 dias') {
+    return '30/60/90 Dias';
+  }
+
+  const matchedPreset = QUICK_PAYMENT_PRESETS.find(p => p.id === text);
+  if (matchedPreset) {
+    return matchedPreset.conditionString;
+  }
 
   // 1. Caso legado '3x (30/60/90 Dias - de 30 em 30 dias)', extrair '30/60/90 Dias'
   text = text.replace(/(\d+x)\s*\(\s*([^)]+?)\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '$2');
@@ -135,7 +152,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
-    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
+    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento || order.header?.prazoDias, order.header?.parcelasCount);
     const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento) || 'Boleto Bancário';
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
     const observacoes = order.header?.observacoes || order.header?.observacoesDescarga || '';
@@ -219,20 +236,22 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       }
     });
 
-    let descontoComercialTexto = 'R$ 0,00';
+    let descontoComercialPercent = 0;
     if (order.header?.descontoComercialTotal !== undefined && Number(order.header.descontoComercialTotal) > 0) {
       if (order.header.descontoComercialTipo === '%') {
-        const valR = (totalBrutoMercadorias * Number(order.header.descontoComercialTotal)) / 100;
-        descontoComercialTexto = `${Number(order.header.descontoComercialTotal)}% (${formatCurrency(valR)})`;
+        descontoComercialPercent = Number(order.header.descontoComercialTotal);
       } else {
-        descontoComercialTexto = formatCurrency(Number(order.header.descontoComercialTotal));
+        descontoComercialPercent = totalBrutoMercadorias > 0 
+          ? (Number(order.header.descontoComercialTotal) / totalBrutoMercadorias) * 100 
+          : 0;
       }
-    } else if (totalDescontoItens > 0) {
-      descontoComercialTexto = formatCurrency(totalDescontoItens);
-    } else if (offValue > 0 && totalBrutoMercadorias > 0) {
-      const valOff = (totalBrutoMercadorias * offValue) / 100;
-      descontoComercialTexto = formatCurrency(valOff);
+    } else if (totalDescontoItens > 0 && totalBrutoMercadorias > 0) {
+      descontoComercialPercent = (totalDescontoItens / totalBrutoMercadorias) * 100;
+    } else if (offValue > 0) {
+      descontoComercialPercent = offValue;
     }
+
+    const descontoComercialTexto = `${Number(descontoComercialPercent.toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
 
     // Medir e quebrar linhas do Card 2 com quebra automática caso qualquer campo seja longo
     doc.setFont('helvetica', 'normal');
@@ -308,6 +327,42 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     card2Lines.forEach((lineText, idx) => {
       doc.text(lineText, card2X + 3, cardY + 7.8 + idx * card2LineStep);
     });
+
+    // =========================================================================
+    // 3.1 BANNER DE DESTAQUE: DESCRIÇÃO / OBSERVAÇÃO DO PEDIDO (Se houver)
+    // =========================================================================
+    let obsBannerH = 0;
+    if (observacoes && observacoes.trim()) {
+      const obsBannerY = cardY + cardH + 2.2;
+      const maxObsW = 271; // largura útil dentro dos 277 mm
+      const obsLines = doc.splitTextToSize(observacoes.trim(), maxObsW);
+      const lineCount = Array.isArray(obsLines) ? obsLines.length : 1;
+      obsBannerH = Math.max(10, 5.5 + lineCount * 3.6);
+
+      // Caixa destacada com fundo suave âmbar e borda dourada/âmbar vibrante
+      doc.setFillColor(254, 249, 195); // Amber-100 suave
+      doc.setDrawColor(217, 119, 6);   // Amber-600
+      doc.setLineWidth(0.4);
+      doc.roundedRect(10, obsBannerY, 277, obsBannerH, 1.5, 1.5, 'FD');
+
+      // Título do Banner em destaque
+      doc.setTextColor(146, 64, 14); // Amber-800
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.text('📌 DESCRIÇÃO / OBSERVAÇÕES DO PEDIDO:', 13, obsBannerY + 4.2);
+
+      // Texto da observação completo, sem truncar, em alto contraste
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.2);
+      if (Array.isArray(obsLines)) {
+        obsLines.forEach((line: string, idx: number) => {
+          doc.text(line, 13, obsBannerY + 8 + idx * 3.6);
+        });
+      } else {
+        doc.text(String(obsLines), 13, obsBannerY + 8);
+      }
+    }
 
     // =========================================================================
     // 4. TABELA DE ITENS (SEM Código Interno e SEM Desconto)
@@ -416,7 +471,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     ];
 
     autoTable(doc, {
-      startY: cardY + cardH + 2.0,
+      startY: cardY + cardH + 2.0 + (obsBannerH > 0 ? obsBannerH + 2.0 : 0),
       head: [headCols],
       body: [...bodyRows, footerRow],
       theme: 'grid',
@@ -492,10 +547,22 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.text('3. Pagamento de Parte Especial exclusivamente via depósitos bancários autorizados.', 13, finalY + 15.6);
     doc.text('4. Os pedidos seguem espelho oficial da empresa. Favor conferir e avisar imediatamente se houver desacordo.', 13, finalY + 19.4);
     doc.text('5. Descarregamento no local de entrega sob responsabilidade do fornecedor / transportadora.', 13, finalY + 23.2);
-    if (observacoes) {
-      doc.setTextColor(71, 85, 105);
-      doc.setFont('helvetica', 'italic');
-      doc.text(`Descrição do Pedido: ${observacoes.substring(0, 115)}`, 13, finalY + 27.2);
+    if (observacoes && observacoes.trim()) {
+      doc.setFillColor(254, 243, 199); // Amber-100
+      doc.setDrawColor(217, 119, 6);   // Amber-600
+      doc.setLineWidth(0.3);
+      doc.roundedRect(12, finalY + 24.5, leftW - 4, 6.2, 1, 1, 'FD');
+
+      doc.setTextColor(146, 64, 14); // Amber-800
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.8);
+      doc.text('OBSERVAÇÕES DO PEDIDO:', 14, finalY + 28.5);
+
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.8);
+      const obsResumo = observacoes.length > 105 ? `${observacoes.substring(0, 102)}...` : observacoes;
+      doc.text(obsResumo, 54, finalY + 28.5);
     }
 
     // Bloco Direito: Resumo Financeiro & Assinaturas
@@ -608,7 +675,7 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
-    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
+    const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento || order.header?.prazoDias, order.header?.parcelasCount);
     const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento) || 'Boleto Bancário';
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
 

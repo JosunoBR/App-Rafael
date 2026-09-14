@@ -187,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
               <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-tight whitespace-nowrap">
                 {activeNav === 'orders' ? 'Cotação & Pedidos' : navMeta.title}
               </h1>
-              {(activeNav === 'orders' || activeNav === 'separation') && order?.header?.numeroPedido && (
+              {activeNav === 'orders' && canAccessOrders && order?.header?.numeroPedido && (
                 <div className="relative" ref={ordersDropdownRef}>
                   <button
                     type="button"
@@ -351,18 +351,20 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden sm:inline">Desktop</span>
               </button>
 
-              <button
-                onClick={() => onChangeViewMode('mobile_purchases')}
-                className={`px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'mobile_purchases'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-                title="Modo Mobile: Digitação Rápida para Feiras e Viagens"
-              >
-                <Smartphone className="w-3.5 h-3.5 text-emerald-300" />
-                <span className="hidden sm:inline">Viagens</span>
-              </button>
+              {canAccessOrders && (
+                <button
+                  onClick={() => onChangeViewMode('mobile_purchases')}
+                  className={`px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                    viewMode === 'mobile_purchases'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Modo Mobile: Digitação Rápida para Feiras e Viagens"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-300" />
+                  <span className="hidden sm:inline">Viagens</span>
+                </button>
+              )}
 
               <button
                 onClick={() => onChangeViewMode('mobile_separation')}

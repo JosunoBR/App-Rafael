@@ -120,7 +120,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             </h1>
             <p className="text-sm text-slate-300 mt-1 max-w-xl">
               {currentUser.role === 'deposito' 
-                ? 'Gestão de estoque central CD, controle de saldos, transferências para as lojas e rateio dos pedidos aprovados.'
+                ? 'Gestão de estoque central CD, controle de saldos, transferências para as lojas e conferência de separação.'
                 : 'Central de compras, simulação fiscal, rateio para 20 lojas e controle de separação da matriz.'}
             </p>
           </div>
@@ -150,8 +150,8 @@ export const HomePage: React.FC<HomePageProps> = ({
         </div>
       </div>
 
-      {/* 2. CARD DE RASCUNHO EM ANDAMENTO (Se houver pedido digitado não finalizado) */}
-      {hasValidDraft && (
+      {/* 2. CARD DE RASCUNHO EM ANDAMENTO (Apenas Diretoria de Compras) */}
+      {hasValidDraft && currentUser.role === 'diretoria' && (
         <div className="p-5 rounded-3xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700/60 shadow-lg relative overflow-hidden animate-in slide-in-from-top-3 duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
@@ -240,15 +240,15 @@ export const HomePage: React.FC<HomePageProps> = ({
                 : 'Nenhum rascunho'}
             </span>
             <button
-              onClick={hasValidDraft ? onContinueDraft : () => onNavigate('orders')}
+              onClick={currentUser.role === 'diretoria' ? (hasValidDraft ? onContinueDraft : () => onNavigate('orders')) : () => onNavigate('separation')}
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
                 hasValidDraft
                   ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xs'
                   : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
               }`}
-              title={hasValidDraft ? 'Acessar e continuar pedido em aberto' : 'Ir para página de pedidos'}
+              title={currentUser.role === 'diretoria' ? (hasValidDraft ? 'Acessar e continuar pedido em aberto' : 'Ir para página de pedidos') : 'Acessar painel de separação e distribuição'}
             >
-              <span>{hasValidDraft ? 'Acessar' : 'Abrir'}</span>
+              <span>{hasValidDraft && currentUser.role === 'diretoria' ? 'Acessar' : 'Abrir'}</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -277,9 +277,9 @@ export const HomePage: React.FC<HomePageProps> = ({
               Salvos no SQLite
             </span>
             <button
-              onClick={() => onNavigate('history')}
+              onClick={() => onNavigate(currentUser.role === 'diretoria' ? 'history' : 'separation')}
               className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-blue-50 hover:text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-950/60 dark:hover:text-blue-400 text-slate-700 dark:text-slate-300 transition flex items-center gap-1 cursor-pointer"
-              title="Acessar histórico de cotações"
+              title={currentUser.role === 'diretoria' ? 'Acessar histórico de cotações' : 'Acessar painel de separação e distribuição'}
             >
               <span>Ver</span>
               <ArrowRight className="w-3 h-3" />
@@ -368,7 +368,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           
-          {/* Card 1: Novo Pedido (Diretoria) */}
+          {/* Card 1: Novo Pedido (Apenas Diretoria de Compras) */}
           {currentUser.role === 'diretoria' && (
             <div 
               onClick={onNewOrder}
@@ -511,7 +511,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             </p>
           </div>
 
-          {/* Card 8: Histórico Geral de Pedidos (Diretoria) */}
+          {/* Card 8: Histórico Geral de Pedidos (Apenas Diretoria de Compras) */}
           {currentUser.role === 'diretoria' && (
             <div 
               onClick={() => onNavigate('history')}
@@ -553,7 +553,7 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
 
           <button
-            onClick={() => onNavigate('history')}
+            onClick={() => onNavigate(currentUser.role === 'diretoria' ? 'history' : 'separationHistory')}
             className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
           >
             <span>Ver Todos</span>
@@ -572,13 +572,15 @@ export const HomePage: React.FC<HomePageProps> = ({
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
               Inicie um novo pedido de compras para salvar cotações e gerar separação para as lojas.
             </p>
-            <button
-              onClick={onNewOrder}
-              className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
-            >
-              <ShoppingCart className="w-3.5 h-3.5" />
-              Criar Primeiro Pedido
-            </button>
+            {currentUser.role === 'diretoria' && (
+              <button
+                onClick={onNewOrder}
+                className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <ShoppingCart className="w-3.5 h-3.5" />
+                Criar Primeiro Pedido
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">

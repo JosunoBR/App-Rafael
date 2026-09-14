@@ -210,9 +210,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     }
   };
 
-  // Filtrar pedidos que estão com status Aprovados, Em Distribuição ou Em Separação para o depósito
+  // Inclui pedidos salvos (Em Cotação, Rascunho) e pedidos fechados (Aprovado, Em Distribuição, Em Separação) para o depósito
   const availableDepositOrders = useMemo(() => {
-    const list = orders.filter(o => o.header.status === 'Aprovado' || o.header.status === 'Em Distribuição' || o.header.status === 'Em Separação');
+    const list = orders.filter(o => 
+      !o.header.status ||
+      o.header.status === 'Em Cotação' ||
+      o.header.status === 'Rascunho' ||
+      o.header.status === 'Aprovado' || 
+      o.header.status === 'Em Distribuição' || 
+      o.header.status === 'Em Separação'
+    );
     const currentId = order.header.id || order.header.numeroPedido;
     if (currentId && !list.some(o => (o.header.id || o.header.numeroPedido) === currentId)) {
       return [order, ...list];
@@ -563,13 +570,40 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
-            <button
-              onClick={onNavigateToOrders}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 transition flex items-center gap-2 cursor-pointer"
-            >
-              <PackageCheck className="w-4 h-4" />
-              <span>Ir para Cotação & Adicionar Itens</span>
-            </button>
+            {currentUser?.role === 'diretoria' && onNavigateToOrders && (
+              <button
+                onClick={onNavigateToOrders}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 transition flex items-center gap-2 cursor-pointer"
+              >
+                <PackageCheck className="w-4 h-4" />
+                <span>Ir para Cotação & Adicionar Itens</span>
+              </button>
+            )}
+
+            {availableDepositOrders.length > 1 && (
+              <div className="relative inline-flex items-center">
+                <select
+                  value={order.header.id || order.header.numeroPedido}
+                  onChange={(e) => {
+                    const found = availableDepositOrders.find(o => (o.header.id || o.header.numeroPedido) === e.target.value);
+                    if (found && onSelectOrder) onSelectOrder(found);
+                  }}
+                  className="appearance-none bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold text-xs px-3 py-2 pr-7 rounded-xl shadow-xs cursor-pointer outline-hidden transition focus:ring-2 focus:ring-emerald-500"
+                  title="Alternar para outro pedido disponível"
+                >
+                  {availableDepositOrders.map(o => (
+                    <option 
+                      key={o.header.id || o.header.numeroPedido} 
+                      value={o.header.id || o.header.numeroPedido}
+                      className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-sans font-bold"
+                    >
+                      {o.header.numeroPedido} {o.header.fornecedor ? `• ${o.header.fornecedor}` : ''} ({o.header.status})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 pointer-events-none absolute right-2.5" />
+              </div>
+            )}
 
             {onNavigateToHistory && (
               <button

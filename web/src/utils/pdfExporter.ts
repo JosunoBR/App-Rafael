@@ -351,25 +351,47 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       `Tipo de Frete: ${tipoFrete}`
     ];
 
-    if (observacoes && observacoes.trim()) {
-      card2Fields.push(`Obs. do Pedido: ${observacoes.trim()}`);
-    }
-
-    const card2Lines: string[] = [];
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    const card2Lines: { text: string; isObs?: boolean }[] = [];
     card2Fields.forEach(field => {
       const split = doc.splitTextToSize(field, maxCardTextW);
       if (Array.isArray(split)) {
         split.forEach((s: string, idx: number) => {
-          card2Lines.push(idx > 0 ? `  ${s.trim()}` : s.trim());
+          card2Lines.push({ text: idx > 0 ? `  ${s.trim()}` : s.trim(), isObs: false });
         });
       } else if (split) {
-        card2Lines.push(split);
+        card2Lines.push({ text: split, isObs: false });
       }
     });
 
-    // Altura calculada e espaçamento vertical entre linhas dinâmico
-    const card2LineStep = card2Lines.length > 7 ? 2.85 : 3.1;
-    const neededCard2H = 7.8 + (card2Lines.length - 1) * card2LineStep + 2.1;
+    if (observacoes && observacoes.trim()) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      const obsFullText = `Obs. do Pedido: ${observacoes.trim()}`;
+      const splitObs = doc.splitTextToSize(obsFullText, maxCardTextW);
+      if (Array.isArray(splitObs)) {
+        splitObs.forEach((s: string, idx: number) => {
+          card2Lines.push({ text: idx > 0 ? `  ${s.trim()}` : s.trim(), isObs: true });
+        });
+      } else if (splitObs) {
+        card2Lines.push({ text: splitObs, isObs: true });
+      }
+    }
+
+    // Altura calculada e posicionamento dinâmico
+    let currentLineY = cardY + 7.8;
+    const card2RenderList: { text: string; isObs: boolean; y: number }[] = [];
+    card2Lines.forEach((item, idx) => {
+      const step = item.isObs ? 3.8 : 3.05;
+      if (item.isObs && idx > 0 && !card2Lines[idx - 1].isObs) {
+        currentLineY += 0.8;
+      }
+      card2RenderList.push({ text: item.text, isObs: Boolean(item.isObs), y: currentLineY });
+      currentLineY += step;
+    });
+
+    const neededCard2H = currentLineY - cardY + 1.8;
     const cardH = Math.max(baseCardH, neededCard2H);
 
     // Card 1: Comprador / Faturamento (Esquerda)
@@ -406,24 +428,17 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setFontSize(7.2);
     doc.text('DADOS DO FORNECEDOR & CONDIÇÕES COMERCIAIS:', card2X + 3, cardY + 3.8);
 
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    card2Lines.forEach((lineText, idx) => {
-      const lineY = cardY + 7.8 + idx * card2LineStep;
-      if (lineText.startsWith('Obs. do Pedido:')) {
+    card2RenderList.forEach(item => {
+      if (item.isObs) {
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
-        doc.text('Obs. do Pedido:', card2X + 3, lineY);
-        const prefixW = doc.getTextWidth('Obs. do Pedido: ');
-        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
         doc.setTextColor(15, 23, 42);
-        const rest = lineText.replace(/^Obs\. do Pedido:\s*/, '');
-        doc.text(rest, card2X + 3 + prefixW, lineY);
+        doc.text(item.text, card2X + 3, item.y);
       } else {
         doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
         doc.setTextColor(15, 23, 42);
-        doc.text(lineText, card2X + 3, lineY);
+        doc.text(item.text, card2X + 3, item.y);
       }
     });
 

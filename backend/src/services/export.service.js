@@ -593,7 +593,7 @@ class ExportService {
     const valorFrete = Number(order.header?.valorFrete) || 0;
     const totalGeralFinal = Math.max(0, subtotalGeral + totalIpiGeral - totalDescontoComercial + valorFrete);
 
-    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI aplicado: ${formatCurrency(totalIpiGeral)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)}`;
+    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)}`;
     if (valorFrete > 0) {
       formulaText += ` + Frete: ${formatCurrency(valorFrete)}`;
     }

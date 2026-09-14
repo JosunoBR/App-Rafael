@@ -4,7 +4,7 @@ import { PurchaseOrder, StoreConfig } from '../shared/types';
 import { DEFAULT_STORES } from '../shared/constants';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 import { QUICK_PAYMENT_PRESETS, formatPaymentConditionString } from './installments';
-import { calculateOrderTotals } from '../shared/orderCalculationEngine';
+import { calculateOrderTotals, calculateItemIpi } from '../shared/orderCalculationEngine';
 
 function formatCurrency(val: number | string): string {
   const num = Number(val) || 0;
@@ -449,22 +449,8 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       const valorBruto = Number(item.valorTotalBruto) || (pecas * precoUnit);
       const valorTotal = valorBruto;
 
-      // Determinação da alíquota e do valor de IPI do item
-      const ipiAliq = item.aliquotaIpi !== undefined && item.aliquotaIpi !== null
-        ? Number(item.aliquotaIpi)
-        : (item.fiscalOverride?.ipiAliquota !== undefined && item.fiscalOverride?.ipiAliquota !== null
-            ? Number(item.fiscalOverride.ipiAliquota)
-            : (order.header?.aliquotaIpi !== undefined && order.header?.aliquotaIpi !== null
-                ? Number(order.header.aliquotaIpi)
-                : (order.fiscalConfig?.ipiAliquota !== undefined && order.fiscalConfig?.ipiAliquota !== null
-                    ? Number(order.fiscalConfig.ipiAliquota)
-                    : 0)));
-
-      const valorIpi = item.valorIpi !== undefined && item.valorIpi !== null && Number(item.valorIpi) > 0
-        ? Number(item.valorIpi)
-        : (item.ipiUnitario !== undefined && item.ipiUnitario !== null && Number(item.ipiUnitario) > 0
-            ? Number(item.ipiUnitario) * pecas
-            : (valorTotal * (ipiAliq / 100)));
+      // Determinação unificada do IPI do item via orderCalculationEngine (Single Source of Truth)
+      const { valorIpi } = calculateItemIpi(item, order.header, order.fiscalConfig);
 
       totalVolumesGeral += pacotes;
       totalPecasGeral += pecas;
@@ -472,9 +458,8 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       totalIpiGeral += valorIpi;
       somaPrecoUnitario += precoUnit;
 
-      const ipiDisplay = valorIpi > 0
-        ? (ipiAliq > 0 ? `${formatCurrency(valorIpi)} (${ipiAliq}%)` : formatCurrency(valorIpi))
-        : (ipiAliq > 0 ? `${ipiAliq}%` : 'R$ 0,00');
+      // Exibe apenas o valor monetário formatado, sem o texto de porcentagem dentro das células na proposta
+      const ipiDisplay = formatCurrency(valorIpi);
 
       return [
         String(idx + 1),
@@ -511,7 +496,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
         styles: { halign: 'right', fontStyle: 'bold' }
       },
       {
-        content: formatCurrency(totalIpiGeral),
+        content: formatCurrency(orderTotals.totalIpi),
         styles: { halign: 'right', fontStyle: 'bold' }
       },
       {
@@ -613,7 +598,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     const valorFrete = orderTotals.valorFrete;
     const totalGeralFinal = orderTotals.totalGeral;
 
-    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)}`;
+    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(orderTotals.totalIpi)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)}`;
     if (valorFrete > 0) {
       formulaText += ` + Frete: ${formatCurrency(valorFrete)}`;
     }

@@ -1453,7 +1453,14 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           </td>
         );
 
-      case 'aliquotaIpi':
+      case 'aliquotaIpi': {
+        const globalIpi = normalizeRateToDecimal(globalFiscal?.ipiAliquota) * 100;
+        const effectiveIpi = item.aliquotaIpi !== undefined && item.aliquotaIpi !== null && item.aliquotaIpi > 0
+          ? item.aliquotaIpi
+          : (item.fiscalOverride?.useCustomFiscal && item.fiscalOverride?.ipiAliquota !== undefined
+              ? Number(item.fiscalOverride.ipiAliquota)
+              : globalIpi);
+
         return (
           <td key="aliquotaIpi" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-amber-50/20 dark:bg-amber-950/10">
             <input
@@ -1463,15 +1470,16 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               data-excel-row={index}
               data-excel-field="aliquotaIpi"
               value={item.aliquotaIpi === 0 || item.aliquotaIpi === undefined ? '' : item.aliquotaIpi}
-              placeholder="0%"
+              placeholder={globalIpi > 0 ? `${globalIpi}%` : '0%'}
               onKeyDown={(e) => handleExcelKeyDown(e, index, 'aliquotaIpi')}
               onFocus={(e) => e.target.select()}
               onChange={(e) => handleFieldChange(item, 'aliquotaIpi', e.target.value)}
               className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-bold font-mono text-amber-700 dark:text-amber-400 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-amber-500 transition-colors whitespace-nowrap"
-              title={item.valorIpi ? `IPI: ${item.aliquotaIpi || 0}% (R$ ${item.valorIpi.toFixed(2)})` : 'Alíquota de IPI (%)'}
+              title={item.valorIpi ? `IPI: ${effectiveIpi}% (R$ ${item.valorIpi.toFixed(2)})` : `Alíquota IPI: ${effectiveIpi}%`}
             />
           </td>
         );
+      }
 
       case 'precoUnitario': {
         const isEditing = item.id in editingPriceMap;

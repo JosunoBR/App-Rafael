@@ -188,3 +188,48 @@ export function calculateOrderTotals(
     precoMedioComImpostos
   };
 }
+
+/**
+ * Calcula a alíquota e o valor exato de IPI de um item individual do pedido,
+ * respeitando estritamente a cascata unificada: item -> fiscalOverride -> header -> fiscalConfig.
+ */
+export function calculateItemIpi(
+  it: OrderItem,
+  header?: Partial<OrderHeader>,
+  fiscal?: FiscalConfig
+): { ipiAliq: number; valorIpi: number } {
+  const pack = Number(it.qtdNoPacote) || Number(it.qtdPorPacote) || 1;
+  const pacotes = Number(it.qtdPacotes) || 0;
+  const pecas = Number(it.qtdTotalUnidades) || (pacotes * pack);
+  const preco = Number(it.precoUnitario) || 0;
+  const bruto = Number(it.valorTotalBruto) || (pecas * preco);
+
+  const descPct = Math.max(0, Math.min(100, Number(it.percentualDesconto) || 0));
+  const hasItemDesc = descPct > 0 || Boolean(it.valorDescontoItem && Number(it.valorDescontoItem) > 0);
+  const valorDesc = (it.valorDescontoItem !== undefined && it.valorDescontoItem !== null && Number(it.valorDescontoItem) > 0)
+    ? Number(it.valorDescontoItem)
+    : (descPct > 0 ? Number((bruto * (descPct / 100)).toFixed(2)) : 0);
+
+  const liquidoItem = (it.valorTotalLiquido !== undefined && it.valorTotalLiquido !== null && hasItemDesc)
+    ? Number(it.valorTotalLiquido)
+    : Math.max(0, Number((bruto - valorDesc).toFixed(2)));
+
+  const defaultGlobalIpiPct = normalizeRateToDecimal(fiscal?.ipiAliquota) * 100;
+  const headerIpiPct = header?.aliquotaIpi !== undefined && header.aliquotaIpi !== null && Number(header.aliquotaIpi) > 0
+    ? Number(header.aliquotaIpi)
+    : defaultGlobalIpiPct;
+
+  const ipiAliq = (it.aliquotaIpi !== undefined && it.aliquotaIpi !== null && Number(it.aliquotaIpi) > 0)
+    ? Number(it.aliquotaIpi)
+    : (it.fiscalOverride?.useCustomFiscal && it.fiscalOverride?.ipiAliquota !== undefined
+        ? Number(it.fiscalOverride.ipiAliquota)
+        : headerIpiPct);
+
+  const valorIpi = (it.valorIpi !== undefined && it.valorIpi !== null && Number(it.valorIpi) > 0)
+    ? Number(it.valorIpi)
+    : (it.ipiUnitario !== undefined && it.ipiUnitario !== null && Number(it.ipiUnitario) > 0
+        ? Number((Number(it.ipiUnitario) * pecas).toFixed(2))
+        : (ipiAliq > 0 ? Number((liquidoItem * (ipiAliq / 100)).toFixed(2)) : 0));
+
+  return { ipiAliq, valorIpi };
+}

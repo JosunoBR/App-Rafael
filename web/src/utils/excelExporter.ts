@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { PurchaseOrder, StoreConfig, FiscalConfig } from '../shared/types';
 import { formatPaymentConditionDisplay, cleanPaymentFormDisplay, resolveOrderPaymentCondition } from './pdfExporter';
-import { calculateOrderTotals } from '../shared/orderCalculationEngine';
+import { calculateOrderTotals, calculateItemIpi } from '../shared/orderCalculationEngine';
 
 function formatCurrency(val: number): string {
   return `R$ ${Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -43,21 +43,8 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     const precoUnit = Number(item.precoUnitario) || 0;
     const valorTotal = Number(item.valorTotalLiquido) || Number(item.valorTotalBruto) || (pecas * precoUnit);
 
-    const ipiAliq = item.aliquotaIpi !== undefined && item.aliquotaIpi !== null
-      ? Number(item.aliquotaIpi)
-      : (item.fiscalOverride?.ipiAliquota !== undefined && item.fiscalOverride?.ipiAliquota !== null
-          ? Number(item.fiscalOverride.ipiAliquota)
-          : (order.header?.aliquotaIpi !== undefined && order.header?.aliquotaIpi !== null
-              ? Number(order.header.aliquotaIpi)
-              : (order.fiscalConfig?.ipiAliquota !== undefined && order.fiscalConfig?.ipiAliquota !== null
-                  ? Number(order.fiscalConfig.ipiAliquota)
-                  : 0)));
-
-    const valorIpi = item.valorIpi !== undefined && item.valorIpi !== null && Number(item.valorIpi) > 0
-      ? Number(item.valorIpi)
-      : (item.ipiUnitario !== undefined && item.ipiUnitario !== null && Number(item.ipiUnitario) > 0
-          ? Number(item.ipiUnitario) * pecas
-          : (valorTotal * (ipiAliq / 100)));
+    // Determinação unificada do IPI do item via orderCalculationEngine (Single Source of Truth)
+    const { valorIpi } = calculateItemIpi(item, order.header, order.fiscalConfig);
 
     totalVolumesGeral += pacotes;
     totalPecasGeral += pecas;
@@ -65,9 +52,8 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     totalIpiGeral += valorIpi;
     somaPrecoUnitario += precoUnit;
 
-    const ipiDisplay = valorIpi > 0
-      ? (ipiAliq > 0 ? `${formatCurrency(valorIpi)} (${ipiAliq}%)` : formatCurrency(valorIpi))
-      : (ipiAliq > 0 ? `${ipiAliq}%` : 'R$ 0,00');
+    // Exibe apenas o valor monetário formatado, sem o texto de porcentagem dentro das células
+    const ipiDisplay = formatCurrency(valorIpi);
 
     return {
       idx: idx + 1,
@@ -400,7 +386,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   footerRow.getCell(7).value = formatCurrency(precoMedioGeral);
   footerRow.getCell(7).alignment = { vertical: 'middle', horizontal: 'right' };
 
-  footerRow.getCell(8).value = formatCurrency(totalIpiGeral);
+  footerRow.getCell(8).value = formatCurrency(orderTotals.totalIpi);
   footerRow.getCell(8).alignment = { vertical: 'middle', horizontal: 'right' };
 
   footerRow.getCell(9).value = formatCurrency(subtotalGeral);

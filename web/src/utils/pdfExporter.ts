@@ -10,43 +10,89 @@ function formatCurrency(val: number | string): string {
 }
 
 /**
- * Formata a condição de pagamento para exibição na proposta comercial,
- * incluindo o período (ex: "de 15 em 15 dias", "de 7 em 7 dias", "de 30 em 30 dias")
- * para que não haja margem de dúvida ou confusão para o fornecedor.
+ * Higieniza e formata a condição de pagamento para exibição na proposta comercial,
+ * removendo qualquer texto redundante de periodicidade "( x em x dias)" ou "- de x em x dias",
+ * e removendo valores monetários "(R$ ...)" ou "R$ ..." para manter a proposta 100% limpa.
  */
 export function formatPaymentConditionDisplay(cond?: string): string {
-  if (!cond || !cond.trim()) return 'A Combinar';
+  if (!cond || !String(cond).trim()) return 'A Combinar';
 
-  let text = cond.trim();
+  let text = String(cond).trim();
 
-  // Se já contém a especificação de período explícita, retorna
-  if (/de\s+\d+\s+em\s+\d+\s+dias/i.test(text)) {
-    return text;
+  // 1. Caso legado '3x (30/60/90 Dias - de 30 em 30 dias)', extrair '30/60/90 Dias'
+  text = text.replace(/(\d+x)\s*\(\s*([^)]+?)\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '$2');
+
+  // 2. Remove valores monetários anexados à forma/condição (ex: "(R$ 5.000,00)", "R$ 5.000,00")
+  text = text.replace(/\s*\(\s*R\$\s*[\d.,]+\s*\)/gi, '');
+  text = text.replace(/\s+R\$\s*[\d.,]+/gi, '');
+
+  // 3. Remove menções a "(de X em X dias)", "(X em X dias)", "- de X em X dias", etc.
+  text = text.replace(/\s*[-–—]?\s*\(\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '');
+  text = text.replace(/\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\b/gi, '');
+  text = text.replace(/\s*\b(?:de\s+)?\d+\s+em\s+\d+\s+dias?\b/gi, '');
+
+  // 4. Limpa parênteses vazios residuais como "()" ou "( )" ou "- ()"
+  text = text.replace(/\s*[-–—]?\s*\(\s*\)/g, '');
+
+  // 5. Remove qualquer resquício de R$ isolado
+  text = text.replace(/R\$\s*[\d.,]+/gi, '');
+
+  // 6. Limpa parênteses não balanceados residuais
+  if (text.includes('(') && !text.includes(')')) {
+    text = text.replace(/\(/g, '');
+  }
+  if (text.includes(')') && !text.includes('(')) {
+    text = text.replace(/\)/g, '');
   }
 
-  // Substitui grupos entre parênteses: ex: "(15/30/45 Dias)" -> "(15/30/45 Dias - de 15 em 15 dias)"
-  text = text.replace(/\(([\d\/]+)\s*Dias\)/gi, (m: string, slashGroup: string) => {
-    const nums = slashGroup.split('/').map((n: string) => parseInt(n, 10)).filter((n: number) => !isNaN(n));
-    if (nums.length >= 2) {
-      const step = nums[1] - nums[0];
-      if (step > 0) return `(${slashGroup} Dias - de ${step} em ${step} dias)`;
-    }
-    return m;
-  });
+  // 7. Normaliza espaços múltiplos e operadores de soma
+  text = text.replace(/\s*[-–—]\s*(\+|$)/g, '$1').trim();
+  text = text.replace(/\s*\+\s*/g, ' + ').trim();
+  text = text.replace(/\s+/g, ' ').trim();
 
-  // Se não estava entre parênteses: ex: "15/30/45 Dias" -> "15/30/45 Dias (de 15 em 15 dias)"
-  if (!/de\s+\d+\s+em\s+\d+\s+dias/i.test(text)) {
-    text = text.replace(/(\b\d+(?:\/\d+)+\b)\s*Dias?/gi, (m: string, slashGroup: string) => {
-      const nums = slashGroup.split('/').map((n: string) => parseInt(n, 10)).filter((n: number) => !isNaN(n));
-      if (nums.length >= 2) {
-        const step = nums[1] - nums[0];
-        if (step > 0) return `${slashGroup} Dias (de ${step} em ${step} dias)`;
-      }
-      return m;
-    });
+  return text || 'A Combinar';
+}
+
+/**
+ * Higieniza a forma de pagamento para a proposta comercial, removendo valores e periodicidades.
+ */
+export function cleanPaymentFormDisplay(forma?: string): string {
+  if (!forma || !String(forma).trim()) return 'Boleto Bancário';
+
+  let text = String(forma).trim();
+
+  // 1. Caso legado '3x (...)'
+  text = text.replace(/(\d+x)\s*\(\s*([^)]+?)\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '$2');
+
+  // 2. Remove valores monetários anexados à forma (ex: "(R$ 5.000,00)", "R$ 5.000,00")
+  text = text.replace(/\s*\(\s*R\$\s*[\d.,]+\s*\)/gi, '');
+  text = text.replace(/\s+R\$\s*[\d.,]+/gi, '');
+
+  // 3. Remove menções a "(de X em X dias)", "(X em X dias)", "- de X em X dias", etc.
+  text = text.replace(/\s*[-–—]?\s*\(\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '');
+  text = text.replace(/\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\b/gi, '');
+  text = text.replace(/\s*\b(?:de\s+)?\d+\s+em\s+\d+\s+dias?\b/gi, '');
+
+  // 4. Limpa parênteses vazios residuais como "()" ou "( )" ou "- ()"
+  text = text.replace(/\s*[-–—]?\s*\(\s*\)/g, '');
+
+  // 5. Remove qualquer resquício de R$ isolado
+  text = text.replace(/R\$\s*[\d.,]+/gi, '');
+
+  // 6. Limpa parênteses não balanceados residuais
+  if (text.includes('(') && !text.includes(')')) {
+    text = text.replace(/\(/g, '');
+  }
+  if (text.includes(')') && !text.includes('(')) {
+    text = text.replace(/\)/g, '');
   }
 
-  return text;
+  // 7. Normaliza espaços múltiplos e operadores de soma
+  text = text.replace(/\s*[-–—]\s*(\+|$)/g, '$1').trim();
+  text = text.replace(/\s*\+\s*/g, ' + ').trim();
+  text = text.replace(/\s+/g, ' ').trim();
+
+  return text || 'Boleto Bancário';
 }
 
 function getAvariaUnits(quantidade: number, unidadeMedida?: string, qtdPorPacote: number = 1): number {
@@ -90,7 +136,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
     const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
-    const formaPagamento = order.header?.formaPagamento || 'Boleto Bancário';
+    const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento) || 'Boleto Bancário';
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
     const observacoes = order.header?.observacoes || order.header?.observacoesDescarga || '';
 
@@ -563,7 +609,7 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
     const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
-    const formaPagamento = order.header?.formaPagamento || 'Boleto Bancário';
+    const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento) || 'Boleto Bancário';
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
 
     // =========================================================================

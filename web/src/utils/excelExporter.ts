@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { PurchaseOrder, StoreConfig, FiscalConfig } from '../shared/types';
-import { formatPaymentConditionDisplay } from './pdfExporter';
+import { formatPaymentConditionDisplay, cleanPaymentFormDisplay } from './pdfExporter';
 
 function formatCurrency(val: number): string {
   return `R$ ${Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -19,7 +19,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   const vendedor = order.header?.vendedor || 'N/A';
   const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
   const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
-  const formaPagamento = order.header?.formaPagamento || 'Boleto Bancário';
+  const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento) || 'Boleto Bancário';
   const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
   const percentualOff = Number(order.header?.percentualDescontoOff || 0);
   const observacoes = order.header?.observacoes || order.header?.observacoesDescarga || '';

@@ -59,6 +59,7 @@ function isBuyerCompanyData(val) {
   const str = String(val).trim();
   if (!str) return false;
   if (str.includes('37.144.240/0001-70') || str.replace(/\D/g, '') === '37144240000170') return true;
+  if (/ALS\s*10\s*BAZAR/i.test(str) || /MEGA\s*12/i.test(str) || /ALS\s*CONECTA/i.test(str)) return true;
   if (/als\.conecta@gmail\.com/i.test(str) || /@mega12\./i.test(str)) return true;
   if (str.includes('9136-5009') || str.replace(/\D/g, '').includes('42991365009')) return true;
   if (/^Rafael\s*\(?55\)?/i.test(str) || str.includes('9659-6315') || str.replace(/\D/g, '').includes('55996596315')) return true;

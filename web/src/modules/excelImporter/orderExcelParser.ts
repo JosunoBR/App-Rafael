@@ -104,6 +104,9 @@ function isBuyerCompanyData(val: any): boolean {
   // CNPJ da nossa empresa (Mega 12 / ALS Conecta)
   if (str.includes('37.144.240/0001-70') || str.replace(/\D/g, '') === '37144240000170') return true;
 
+  // Nomes da nossa empresa compradora
+  if (/ALS\s*10\s*BAZAR/i.test(str) || /MEGA\s*12/i.test(str) || /ALS\s*CONECTA/i.test(str)) return true;
+
   // E-mails da nossa empresa
   if (/als\.conecta@gmail\.com/i.test(str) || /@mega12\./i.test(str)) return true;
 

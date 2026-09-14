@@ -11,33 +11,80 @@ function formatCurrency(val) {
 
 function formatPaymentConditionDisplay(cond) {
   if (!cond || !String(cond).trim()) return 'A Combinar';
+
   let text = String(cond).trim();
 
-  if (/de\s+\d+\s+em\s+\d+\s+dias/i.test(text)) {
-    return text;
+  // 1. Caso legado '3x (30/60/90 Dias - de 30 em 30 dias)', extrair '30/60/90 Dias'
+  text = text.replace(/(\d+x)\s*\(\s*([^)]+?)\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '$2');
+
+  // 2. Remove valores monetários anexados à forma/condição (ex: "(R$ 5.000,00)", "R$ 5.000,00")
+  text = text.replace(/\s*\(\s*R\$\s*[\d.,]+\s*\)/gi, '');
+  text = text.replace(/\s+R\$\s*[\d.,]+/gi, '');
+
+  // 3. Remove menções a "(de X em X dias)", "(X em X dias)", "- de X em X dias", etc.
+  text = text.replace(/\s*[-–—]?\s*\(\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '');
+  text = text.replace(/\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\b/gi, '');
+  text = text.replace(/\s*\b(?:de\s+)?\d+\s+em\s+\d+\s+dias?\b/gi, '');
+
+  // 4. Limpa parênteses vazios residuais como "()" ou "( )" ou "- ()"
+  text = text.replace(/\s*[-–—]?\s*\(\s*\)/g, '');
+
+  // 5. Remove qualquer resquício de R$ isolado
+  text = text.replace(/R\$\s*[\d.,]+/gi, '');
+
+  // 6. Limpa parênteses não balanceados residuais
+  if (text.includes('(') && !text.includes(')')) {
+    text = text.replace(/\(/g, '');
+  }
+  if (text.includes(')') && !text.includes('(')) {
+    text = text.replace(/\)/g, '');
   }
 
-  text = text.replace(/\(([\d\/]+)\s*Dias\)/gi, (m, slashGroup) => {
-    const nums = slashGroup.split('/').map((n) => parseInt(n, 10)).filter((n) => !isNaN(n));
-    if (nums.length >= 2) {
-      const step = nums[1] - nums[0];
-      if (step > 0) return `(${slashGroup} Dias - de ${step} em ${step} dias)`;
-    }
-    return m;
-  });
+  // 7. Normaliza espaços múltiplos e operadores de soma
+  text = text.replace(/\s*[-–—]\s*(\+|$)/g, '$1').trim();
+  text = text.replace(/\s*\+\s*/g, ' + ').trim();
+  text = text.replace(/\s+/g, ' ').trim();
 
-  if (!/de\s+\d+\s+em\s+\d+\s+dias/i.test(text)) {
-    text = text.replace(/(\b\d+(?:\/\d+)+\b)\s*Dias?/gi, (m, slashGroup) => {
-      const nums = slashGroup.split('/').map((n) => parseInt(n, 10)).filter((n) => !isNaN(n));
-      if (nums.length >= 2) {
-        const step = nums[1] - nums[0];
-        if (step > 0) return `${slashGroup} Dias (de ${step} em ${step} dias)`;
-      }
-      return m;
-    });
+  return text || 'A Combinar';
+}
+
+function cleanPaymentFormDisplay(forma) {
+  if (!forma || !String(forma).trim()) return 'Boleto Bancário';
+
+  let text = String(forma).trim();
+
+  // 1. Caso legado '3x (...)'
+  text = text.replace(/(\d+x)\s*\(\s*([^)]+?)\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '$2');
+
+  // 2. Remove valores monetários anexados à forma (ex: "(R$ 5.000,00)", "R$ 5.000,00")
+  text = text.replace(/\s*\(\s*R\$\s*[\d.,]+\s*\)/gi, '');
+  text = text.replace(/\s+R\$\s*[\d.,]+/gi, '');
+
+  // 3. Remove menções a "(de X em X dias)", "(X em X dias)", "- de X em X dias", etc.
+  text = text.replace(/\s*[-–—]?\s*\(\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\s*\)/gi, '');
+  text = text.replace(/\s*[-–—]\s*(?:de\s+)?\d+\s+em\s+\d+\s+dias?\b/gi, '');
+  text = text.replace(/\s*\b(?:de\s+)?\d+\s+em\s+\d+\s+dias?\b/gi, '');
+
+  // 4. Limpa parênteses vazios residuais como "()" ou "( )" ou "- ()"
+  text = text.replace(/\s*[-–—]?\s*\(\s*\)/g, '');
+
+  // 5. Remove qualquer resquício de R$ isolado
+  text = text.replace(/R\$\s*[\d.,]+/gi, '');
+
+  // 6. Limpa parênteses não balanceados residuais
+  if (text.includes('(') && !text.includes(')')) {
+    text = text.replace(/\(/g, '');
+  }
+  if (text.includes(')') && !text.includes('(')) {
+    text = text.replace(/\)/g, '');
   }
 
-  return text;
+  // 7. Normaliza espaços múltiplos e operadores de soma
+  text = text.replace(/\s*[-–—]\s*(\+|$)/g, '$1').trim();
+  text = text.replace(/\s*\+\s*/g, ' + ').trim();
+  text = text.replace(/\s+/g, ' ').trim();
+
+  return text || 'Boleto Bancário';
 }
 
 function getAvariaUnits(quantidade, unidadeMedida, qtdPorPacote = 1) {
@@ -61,7 +108,7 @@ class ExportService {
       [],
       ['Número do Pedido:', order.header?.numeroPedido || '', 'Status:', order.header?.status || 'Em Cotação'],
       ['Fornecedor:', order.header?.fornecedor || '', 'Vendedor:', order.header?.vendedor || ''],
-      ['Contato Vendedor:', order.header?.contatoVendedor || '', 'Condição Pagto:', order.header?.condicaoPagamento || ''],
+      ['Contato Vendedor:', order.header?.contatoVendedor || '', 'Condição Pagto:', formatPaymentConditionDisplay(order.header?.condicaoPagamento)],
       ['Data Emissão:', order.header?.dataEmissao || '', 'Entrega Prevista:', order.header?.dataEntregaPrevista || ''],
       ['OFF %:', `${order.header?.percentualNota !== undefined ? order.header.percentualNota : 100}%`, 'Alíquota ST (%):', `${order.header?.aliquotaSt || 0}%`],
       ['Descrição / Obs do Pedido:', order.header?.observacoes || order.header?.observacoesDescarga || ''],
@@ -143,7 +190,7 @@ class ExportService {
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
     const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
-    const formaPagamento = order.header?.formaPagamento || 'Boleto Bancário';
+    const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento);
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
     const observacoes = order.header?.observacoes || order.header?.observacoesDescarga || '';
 
@@ -510,7 +557,7 @@ class ExportService {
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
     const condicaoPagamento = formatPaymentConditionDisplay(order.header?.condicaoPagamento);
-    const formaPagamento = order.header?.formaPagamento || 'Boleto Bancário';
+    const formaPagamento = cleanPaymentFormDisplay(order.header?.formaPagamento);
     const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
 
     // =========================================================================

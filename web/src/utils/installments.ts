@@ -217,16 +217,10 @@ export function formatPaymentConditionString(
     if (dParc > 1) {
       const dPrazo = depositoPrazo || '30';
       const dPrazoStr = formatPaymentConditionString(dParc, dPrazo);
-      const valStr = valorEntrada && valorEntrada > 0 
-        ? ` (R$ ${valorEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
-        : '';
-      return `Depósito ${dPrazoStr}${valStr} + Boleto ${sPrazoStr}`;
+      return `Depósito ${dPrazoStr} + Boleto ${sPrazoStr}`;
     }
 
-    const entradaStr = valorEntrada && valorEntrada > 0 
-      ? `Depósito R$ ${valorEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
-      : 'Entrada À Vista';
-    return `${entradaStr} + Boleto ${sPrazoStr}`;
+    return `Depósito À Vista + Boleto ${sPrazoStr}`;
   }
 
   // Verifica se o prazo corresponde a um dos modelos pré-definidos
@@ -244,7 +238,7 @@ export function formatPaymentConditionString(
     for (let i = 1; i <= parcelas; i++) {
       days.push(i * intervalo);
     }
-    return `${parcelas}x (${days.join('/')} Dias - de ${intervalo} em ${intervalo} dias)`;
+    return `${days.join('/')} Dias`;
   }
   if (prazo === 'custom') {
     return `${parcelas}x Personalizado`;

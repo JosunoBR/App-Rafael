@@ -23,6 +23,8 @@ class OrderRepository {
   async save(order) {
     const existing = await queryOne("SELECT id, numeroPedido FROM purchase_orders WHERE id = ? OR numeroPedido = ?", [order.header.id, order.header.numeroPedido]);
     const now = new Date().toISOString();
+    const targetId = existing ? existing.id : (order.header.id || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+    order.header.id = targetId;
 
     const items = order.items || [];
     const installments = order.installments || [];
@@ -69,7 +71,6 @@ class OrderRepository {
     const dataEmissao = order.header.dataEmissao || order.header.dataPedido || today;
 
     if (existing) {
-      const targetId = existing.id;
       const sql = `
         UPDATE purchase_orders SET
           numeroPedido = ?, fornecedor = ?, supplierId = ?, aliquotaSt = ?,
@@ -125,19 +126,29 @@ class OrderRepository {
     } else {
       const sql = `
         INSERT INTO purchase_orders (
-          id, numeroPedido, fornecedor, supplierId, aliquotaSt, vendedor,
-          contatoVendedor, condicaoPagamento, formaPagamento, previsaoPagamento,
-          tipoFrete, valorFrete, descontoComercialTotal, descontoComercialTipo,
-          isDraft, dataPedido, dataEmissao, dataEntregaPrevista, percentualDescontoOff,
-          percentualNota, observacoes, status, separationStatus, totalLiquido,
-          totalPecas, installmentsJson, fiscalConfigJson, aliquotaIpi,
-          aliquotaFrete, aliquotaIcmsEntrada, aliquotaCustoFixo, aliquotaIcmsSaida,
-          aliquotaPisCofinsIr, itemsJson, separationDistributionJson, paymentConfigJson,
-          createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, numeroPedido, fornecedor, supplierId, aliquotaSt,
+          vendedor, contatoVendedor, condicaoPagamento, formaPagamento,
+          previsaoPagamento, tipoFrete, valorFrete, descontoComercialTotal,
+          descontoComercialTipo, isDraft, dataPedido, dataEmissao, dataEntregaPrevista,
+          percentualDescontoOff, percentualNota, observacoes, status,
+          separationStatus, totalLiquido, totalPecas, installmentsJson,
+          fiscalConfigJson, aliquotaIpi, aliquotaFrete, aliquotaIcmsEntrada,
+          aliquotaCustoFixo, aliquotaIcmsSaida, aliquotaPisCofinsIr,
+          itemsJson, separationDistributionJson, paymentConfigJson, createdAt, updatedAt
+        ) VALUES (
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?, ?, ?
+        )
       `;
       await execute(sql, [
-        order.header.id,
+        targetId,
         order.header.numeroPedido,
         order.header.fornecedor,
         order.header.supplierId || null,
@@ -180,9 +191,10 @@ class OrderRepository {
 
     // Persistência relacional normalizada nas tabelas order_items e order_installments
     try {
-      await execute("DELETE FROM order_items WHERE orderId = ?", [order.header.id]);
-      for (const item of items) {
-        const itemId = item.id || `it_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      await execute("DELETE FROM order_items WHERE orderId = ?", [targetId]);
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const itemId = `it_${targetId}_${idx}_${Math.random().toString(36).substring(2, 7)}`;
         const packVal = Number(item.qtdNoPacote !== undefined ? item.qtdNoPacote : (item.qtdPorPacote || 1)) || 1;
         await execute(`
           INSERT INTO order_items (
@@ -194,7 +206,7 @@ class OrderRepository {
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           itemId,
-          order.header.id,
+          targetId,
           item.codigoInterno || item.codigo || '',
           item.codigoFornecedor || '',
           item.codigoBarras || item.eanBarcode || '',
@@ -227,9 +239,10 @@ class OrderRepository {
         ]);
       }
 
-      await execute("DELETE FROM order_installments WHERE orderId = ?", [order.header.id]);
-      for (const inst of installments) {
-        const instId = inst.id || `inst_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      await execute("DELETE FROM order_installments WHERE orderId = ?", [targetId]);
+      for (let instIdx = 0; instIdx < installments.length; instIdx++) {
+        const inst = installments[instIdx];
+        const instId = `inst_${targetId}_${instIdx}_${Math.random().toString(36).substring(2, 7)}`;
         await execute(`
           INSERT INTO order_installments (
             id, orderId, numeroParcela, totalParcelas, dataVencimento, valor,
@@ -238,9 +251,9 @@ class OrderRepository {
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           instId,
-          order.header.id,
-          Number(inst.numeroParcela) || 1,
-          Number(inst.totalParcelas) || 1,
+          targetId,
+          Number(inst.numeroParcela) || (instIdx + 1),
+          Number(inst.totalParcelas) || installments.length,
           inst.dataVencimento || '',
           Number(inst.valor) || 0,
           Number(inst.valorOriginal) || Number(inst.valor) || 0,
@@ -257,9 +270,10 @@ class OrderRepository {
 
       // Persistência relacional de avarias registradas
       if (order.inspection && Array.isArray(order.inspection.avarias)) {
-        await execute("DELETE FROM order_avarias WHERE orderId = ?", [order.header.id]);
-        for (const av of order.inspection.avarias) {
-          const avId = av.id || `av_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        await execute("DELETE FROM order_avarias WHERE orderId = ?", [targetId]);
+        for (let avIdx = 0; avIdx < order.inspection.avarias.length; avIdx++) {
+          const av = order.inspection.avarias[avIdx];
+          const avId = `av_${targetId}_${avIdx}_${Math.random().toString(36).substring(2, 7)}`;
           await execute(`
             INSERT INTO order_avarias (
               id, orderId, itemId, codigoProduto, descricaoProduto, storeId, nomeLoja,
@@ -268,7 +282,7 @@ class OrderRepository {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
             avId,
-            order.header.id,
+            targetId,
             av.itemId || '',
             av.codigoProduto || '',
             av.descricaoProduto || '',
@@ -289,7 +303,7 @@ class OrderRepository {
       console.warn('Aviso na persistência relacional normalizada de itens/avarias:', e.message);
     }
 
-    return await this.findById(order.header.id);
+    return await this.findById(targetId);
   }
 
   async updateInstallments(orderId, installments) {
@@ -343,10 +357,15 @@ class OrderRepository {
     let separationDistribution = null;
     let inspection = null;
 
-    // 1. Tenta carregar das tabelas relacionais normalizadas
+    // 1. Carrega itens com proteção absoluta contra perda de dados:
+    let jsonItems = [];
+    if (r.itemsJson) {
+      try { jsonItems = JSON.parse(r.itemsJson) || []; } catch (e) { jsonItems = []; }
+    }
+
     try {
       const dbItems = await queryAll("SELECT * FROM order_items WHERE orderId = ?", [r.id]);
-      if (dbItems && dbItems.length > 0) {
+      if (dbItems && dbItems.length >= jsonItems.length && dbItems.length > 0) {
         items = dbItems.map(it => ({
           id: it.id,
           codigoInterno: it.codigoInterno,
@@ -376,11 +395,41 @@ class OrderRepository {
           separacaoLojas: it.separacaoLojasJson ? JSON.parse(it.separacaoLojasJson) : {},
           ruptura: it.ruptura === 1 || it.ruptura === true
         }));
-      } else if (r.itemsJson) {
-        items = JSON.parse(r.itemsJson);
+      } else if (jsonItems.length > 0) {
+        items = jsonItems;
+      } else if (dbItems && dbItems.length > 0) {
+        items = dbItems.map(it => ({
+          id: it.id,
+          codigoInterno: it.codigoInterno,
+          codigoFornecedor: it.codigoFornecedor,
+          codigoBarras: it.codigoBarras || '',
+          codigo: it.codigo,
+          descricao: it.descricao,
+          fotoUrl: it.fotoUrl,
+          qtdNoPacote: it.qtdNoPacote !== undefined ? it.qtdNoPacote : (it.qtdPorPacote || 1),
+          qtdPacotes: it.qtdPacotes !== undefined ? it.qtdPacotes : 0,
+          qtdTotalUnidades: it.qtdTotalUnidades,
+          precoUnitario: it.precoUnitario,
+          valorTotalBruto: it.valorTotalBruto,
+          percentualDesconto: it.percentualDesconto || 0,
+          valorDescontoItem: it.valorDescontoItem || 0,
+          valorTotalLiquido: it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : it.valorTotalBruto,
+          pdvAlvo: it.pdvAlvo,
+          custoLoja: it.custoLoja || 0,
+          custoFornecedor: it.custoFornecedor || 0,
+          despesasPdvUnit: it.despesasPdvUnit,
+          creditoIcmsUnit: it.creditoIcmsUnit,
+          custoRealEfetivo: it.custoRealEfetivo,
+          margemRealUnit: it.margemRealUnit,
+          margemPercentual: it.margemPercentual,
+          qtdReservaEstoque: it.qtdReservaEstoque,
+          separacaoManual: it.separacaoManual === 1,
+          separacaoLojas: it.separacaoLojasJson ? JSON.parse(it.separacaoLojasJson) : {},
+          ruptura: it.ruptura === 1 || it.ruptura === true
+        }));
       }
     } catch {
-      try { items = JSON.parse(r.itemsJson || '[]'); } catch {}
+      items = jsonItems;
     }
 
     try {

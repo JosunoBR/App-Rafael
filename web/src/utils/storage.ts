@@ -384,7 +384,7 @@ export function createNewOrder(
     },
     items: [
       {
-        id: 'item_' + Date.now(),
+        id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         codigo: '',
         codigoInterno: '',
         codigoFornecedor: '',

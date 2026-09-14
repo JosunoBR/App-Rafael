@@ -471,7 +471,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const ipiUnit = qtdTotal > 0 ? Number((valorIpi / qtdTotal).toFixed(4)) : 0;
 
     const defaultItem: OrderItem = {
-      id: 'item_' + Date.now(),
+      id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       codigoInterno: codInterno,
       codigoFornecedor: codFornecedor,
       codigoBarras: prod.codigoBarras || prod.eanBarcode || '',
@@ -2021,7 +2021,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
               return (
                 <tr 
-                  key={item.id}
+                  key={item.id ? `${item.id}_${index}` : `row_${index}`}
                   className={`${
                     item.ruptura 
                       ? 'bg-rose-50/60 dark:bg-rose-950/25 hover:bg-rose-100/60 dark:hover:bg-rose-950/40' 

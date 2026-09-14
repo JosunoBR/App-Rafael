@@ -11,9 +11,12 @@ export function isOrderItemBlank(item: OrderItem): boolean {
   const hasCod = Boolean(item.codigo && item.codigo.trim() !== '');
   const hasCodInt = Boolean(item.codigoInterno && item.codigoInterno.trim() !== '');
   const hasCodForn = Boolean(item.codigoFornecedor && item.codigoFornecedor.trim() !== '');
+  const hasBarras = Boolean(item.codigoBarras && item.codigoBarras.trim() !== '');
+  const hasFoto = Boolean(item.fotoUrl && item.fotoUrl.trim() !== '');
   const hasQtd = Boolean(item.qtdTotalUnidades && item.qtdTotalUnidades > 0);
+  const hasPacotes = Boolean(item.qtdPacotes && item.qtdPacotes > 0);
   const hasPreco = Boolean(item.precoUnitario && item.precoUnitario > 0);
-  return !hasDesc && !hasCod && !hasCodInt && !hasCodForn && !hasQtd && !hasPreco;
+  return !hasDesc && !hasCod && !hasCodInt && !hasCodForn && !hasBarras && !hasFoto && !hasQtd && !hasPacotes && !hasPreco;
 }
 
 /**
@@ -21,7 +24,7 @@ export function isOrderItemBlank(item: OrderItem): boolean {
  */
 export function createBlankOrderItem(fiscalConfig?: FiscalConfig, storeConfigs?: StoreConfig[]): OrderItem {
   const item: OrderItem = {
-    id: 'item_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+    id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
     codigo: '',
     codigoInterno: '',
     codigoFornecedor: '',

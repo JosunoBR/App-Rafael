@@ -418,6 +418,7 @@ async function getDatabase() {
         valorDescontoItem: "REAL DEFAULT 0",
         valorTotalLiquido: "REAL DEFAULT 0",
         qtdNoPacote: "REAL DEFAULT 1",
+        qtdPorPacote: "REAL DEFAULT 1",
         qtdPacotes: "REAL DEFAULT 0",
         codigoBarras: "TEXT",
         custoLoja: "REAL DEFAULT 0",

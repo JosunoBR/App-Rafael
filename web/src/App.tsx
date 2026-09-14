@@ -610,7 +610,7 @@ export function App() {
   const handleDuplicateItem = (itemToClone: OrderItem) => {
     const clonedItem: OrderItem = {
       ...itemToClone,
-      id: 'item_' + Date.now(),
+      id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       descricao: itemToClone.descricao
     };
 

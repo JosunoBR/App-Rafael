@@ -232,7 +232,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
       const separacao = sepRes ? sepRes.allocations : {};
 
       const itemFinal: OrderItem = {
-        id: 'item_' + Date.now(),
+        id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         codigo: novoItem.codigo || `PROD-${order.items.length + 1}`,
         codigoInterno: novoItem.codigoInterno || novoItem.codigo || `PROD-${order.items.length + 1}`,
         codigoFornecedor: novoItem.codigoFornecedor,
@@ -340,7 +340,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
   const handleDuplicateItem = (item: OrderItem) => {
     const duplicated: OrderItem = {
       ...item,
-      id: 'item_' + Date.now(),
+      id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       codigo: item.codigo,
       descricao: item.descricao
     };

@@ -38,10 +38,11 @@ export function isBlankItem(item?: OrderItem | null): boolean {
   if (!item) return true;
   const hasDesc = Boolean(item.descricao && item.descricao.trim() !== '');
   const hasCod = Boolean((item.codigo || item.codigoInterno || item.codigoFornecedor || item.codigoBarras)?.trim());
+  const hasFoto = Boolean(item.fotoUrl && item.fotoUrl.trim() !== '');
   const hasQtd = Boolean(item.qtdTotalUnidades && item.qtdTotalUnidades > 0);
   const hasPacotes = Boolean(item.qtdPacotes && item.qtdPacotes > 0);
   const hasPreco = Boolean(item.precoUnitario && item.precoUnitario > 0);
-  return !hasDesc && !hasCod && !hasQtd && !hasPacotes && !hasPreco;
+  return !hasDesc && !hasCod && !hasFoto && !hasQtd && !hasPacotes && !hasPreco;
 }
 
 /**

@@ -1,25 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   X, 
   Building2, 
   Plus, 
   Trash2, 
   Edit3, 
-  Check, 
   Phone, 
   User, 
   CreditCard, 
-  Percent, 
-  FileText, 
   Search,
-  CheckCircle2,
-  HelpCircle,
-  MapPin,
-  Mail
+  CheckCircle2
 } from 'lucide-react';
-import { Supplier, PaymentCondition } from '../shared/types';
-import { maskCNPJ, maskPhone } from '../utils/masks';
-import { loadPaymentConditions } from '../utils/paymentConditionStorage';
+import { Supplier } from '../shared/types';
+import { SupplierForm } from './SupplierForm';
 
 interface SupplierModalProps {
   suppliers: Supplier[];
@@ -46,91 +39,17 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(initialEditSupplier || null);
   const [isFormOpen, setIsFormOpen] = useState(!!initialEditSupplier);
 
-  // Form fields
-  const [razaoSocial, setRazaoSocial] = useState(initialEditSupplier?.razaoSocial || '');
-  const [nomeFantasia, setNomeFantasia] = useState(initialEditSupplier?.nomeFantasia || '');
-  const [cnpj, setCnpj] = useState(initialEditSupplier?.cnpj || '');
-  const [vendedorPadrao, setVendedorPadrao] = useState(initialEditSupplier?.vendedorPadrao || '');
-  const [contatoVendedor, setContatoVendedor] = useState(maskPhone(initialEditSupplier?.contatoVendedor || ''));
-  const [telefoneEmpresa, setTelefoneEmpresa] = useState(maskPhone(initialEditSupplier?.telefoneEmpresa || ''));
-  const [email, setEmail] = useState(initialEditSupplier?.email || '');
-  const [endereco, setEndereco] = useState(initialEditSupplier?.endereco || '');
-  const [condicaoPagamentoPadrao, setCondicaoPagamentoPadrao] = useState(initialEditSupplier?.condicaoPagamentoPadrao || '30/60/90 Dias');
-  const [aliquotaStPadrao, setAliquotaStPadrao] = useState<number>(initialEditSupplier?.aliquotaStPadrao || 0);
-  const [aliquotaIpiPadrao, setAliquotaIpiPadrao] = useState<number>(initialEditSupplier?.aliquotaIpiPadrao || 0);
-  const [descontoOffPadrao, setDescontoOffPadrao] = useState<number>(initialEditSupplier?.descontoOffPadrao || 0);
-  const [percentualNotaPadrao, setPercentualNotaPadrao] = useState<number>(initialEditSupplier?.percentualNotaPadrao !== undefined ? initialEditSupplier.percentualNotaPadrao : 100);
-  const [observacoesDescarga, setObservacoesDescarga] = useState(initialEditSupplier?.observacoesDescarga || '');
-  const [paymentConditions, setPaymentConditions] = useState<PaymentCondition[]>([]);
-
-  useEffect(() => {
-    if (isOpen) {
-      loadPaymentConditions(true).then(setPaymentConditions).catch(() => {});
-    }
-  }, [isOpen]);
-
   const handleOpenNewForm = () => {
     setEditingSupplier(null);
-    setRazaoSocial('');
-    setNomeFantasia('');
-    setCnpj('');
-    setVendedorPadrao('');
-    setContatoVendedor('');
-    setTelefoneEmpresa('');
-    setEmail('');
-    setEndereco('');
-    setCondicaoPagamentoPadrao('30/60/90 Dias');
-    setAliquotaStPadrao(0);
-    setAliquotaIpiPadrao(0);
-    setDescontoOffPadrao(0);
-    setPercentualNotaPadrao(100);
-    setObservacoesDescarga('');
     setIsFormOpen(true);
   };
 
   const handleOpenEditForm = (sup: Supplier) => {
     setEditingSupplier(sup);
-    setRazaoSocial(sup.razaoSocial);
-    setNomeFantasia(sup.nomeFantasia || '');
-    setCnpj(sup.cnpj || '');
-    setVendedorPadrao(sup.vendedorPadrao || '');
-    setContatoVendedor(maskPhone(sup.contatoVendedor || ''));
-    setTelefoneEmpresa(maskPhone(sup.telefoneEmpresa || ''));
-    setEmail(sup.email || '');
-    setEndereco(sup.endereco || '');
-    setCondicaoPagamentoPadrao(sup.condicaoPagamentoPadrao || '30/60/90 Dias');
-    setAliquotaStPadrao(sup.aliquotaStPadrao || 0);
-    setAliquotaIpiPadrao(sup.aliquotaIpiPadrao || 0);
-    setDescontoOffPadrao(sup.descontoOffPadrao || 0);
-    setPercentualNotaPadrao(sup.percentualNotaPadrao !== undefined ? sup.percentualNotaPadrao : 100);
-    setObservacoesDescarga(sup.observacoesDescarga || '');
     setIsFormOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!razaoSocial.trim()) return;
-
-    const supplierData: Supplier = {
-      id: editingSupplier?.id || 'sup_' + Date.now(),
-      razaoSocial: razaoSocial.trim(),
-      nomeFantasia: nomeFantasia.trim() || undefined,
-      cnpj: cnpj.trim() || undefined,
-      vendedorPadrao: vendedorPadrao.trim() || undefined,
-      contatoVendedor: contatoVendedor.trim() || undefined,
-      telefoneEmpresa: telefoneEmpresa.trim() || undefined,
-      email: email.trim() || undefined,
-      endereco: endereco.trim() || undefined,
-      condicaoPagamentoPadrao: condicaoPagamentoPadrao.trim() || undefined,
-      aliquotaStPadrao: aliquotaStPadrao || 0,
-      aliquotaIpiPadrao: aliquotaIpiPadrao || 0,
-      descontoOffPadrao: descontoOffPadrao || 0,
-      percentualNotaPadrao: percentualNotaPadrao !== undefined ? percentualNotaPadrao : 100,
-      observacoesDescarga: observacoesDescarga.trim() || undefined,
-      createdAt: editingSupplier?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
+  const handleSaveForm = (supplierData: Supplier) => {
     onSaveSupplier(supplierData);
     if (onSelectSupplierForOrder) {
       onSelectSupplierForOrder(supplierData);
@@ -200,222 +119,15 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
 
           {/* Supplier Form */}
           {isFormOpen ? (
-            <form onSubmit={handleSubmit} className="bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                  {editingSupplier ? 'Editar Fornecedor' : 'Cadastrar Novo Fornecedor'}
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => setIsFormOpen(false)}
-                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                >
-                  Voltar para a lista
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-                {/* Razão Social */}
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Razão Social / Nome da Empresa *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={razaoSocial}
-                    onChange={(e) => setRazaoSocial(e.target.value)}
-                    placeholder="Ex: Plásticos & Utilidades do Brasil Ltda"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium"
-                  />
-                </div>
-
-                {/* Nome Fantasia */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Nome Fantasia
-                  </label>
-                  <input
-                    type="text"
-                    value={nomeFantasia}
-                    onChange={(e) => setNomeFantasia(e.target.value)}
-                    placeholder="Ex: Brasil Plásticos"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                  />
-                </div>
-
-                {/* CNPJ */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    CNPJ
-                  </label>
-                  <input
-                    type="text"
-                    value={cnpj}
-                    onChange={(e) => setCnpj(maskCNPJ(e.target.value))}
-                    placeholder="00.000.000/0001-00"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono"
-                  />
-                </div>
-
-                {/* Vendedor */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <User className="w-3.5 h-3.5 text-slate-400" />
-                    Vendedor / Representante
-                  </label>
-                  <input
-                    type="text"
-                    value={vendedorPadrao}
-                    onChange={(e) => setVendedorPadrao(e.target.value)}
-                    placeholder="Nome do contato"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                  />
-                </div>
-
-                {/* Contato Vendedor */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <Phone className="w-3.5 h-3.5 text-slate-400" />
-                    Telefone / WhatsApp
-                  </label>
-                  <input
-                    type="text"
-                    value={maskPhone(contatoVendedor)}
-                    onChange={(e) => setContatoVendedor(maskPhone(e.target.value))}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono"
-                  />
-                </div>
-
-                {/* Condição de Pagamento Padrão */}
-                <div className="sm:col-span-2 md:col-span-1">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <CreditCard className="w-3.5 h-3.5 text-slate-400" />
-                    Condição de Pagamento Padrão
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={condicaoPagamentoPadrao}
-                      onChange={(e) => setCondicaoPagamentoPadrao(e.target.value)}
-                      placeholder="Ex: 30/60/90 Dias"
-                      list="supplier-payment-conds"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold"
-                    />
-                    <datalist id="supplier-payment-conds">
-                      {paymentConditions.map(c => (
-                        <option key={c.id} value={c.descricao}>
-                          {c.descricao} ({c.qtdParcelas}x - {c.especie})
-                        </option>
-                      ))}
-                    </datalist>
-                  </div>
-                </div>
-
-                {/* OFF % */}
-                <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/50">
-                  <label className="block text-xs font-bold text-blue-900 dark:text-blue-300 mb-1 flex items-center gap-1">
-                    <Percent className="w-3.5 h-3.5 text-blue-600" />
-                    OFF %
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="1"
-                      min="0"
-                      max="100"
-                      value={percentualNotaPadrao === 0 ? '' : percentualNotaPadrao}
-                      placeholder="100"
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => setPercentualNotaPadrao(parseFloat(e.target.value) || 0)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-900 text-blue-900 dark:text-blue-300 font-bold font-mono pr-7"
-                    />
-                    <span className="absolute right-2.5 top-1.5 text-xs font-bold text-blue-500 pointer-events-none">%</span>
-                  </div>
-                  <span className="text-[10px] text-blue-700 dark:text-blue-400 mt-1 block">
-                    Define o percentual de OFF no pedido
-                  </span>
-                </div>
-
-                {/* Telefone da Empresa */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <Phone className="w-3.5 h-3.5 text-slate-400" />
-                    Telefone da Empresa
-                  </label>
-                  <input
-                    type="text"
-                    value={maskPhone(telefoneEmpresa)}
-                    onChange={(e) => setTelefoneEmpresa(maskPhone(e.target.value))}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono"
-                  />
-                </div>
-
-                {/* E-mail da Empresa / Contato */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <Mail className="w-3.5 h-3.5 text-slate-400" />
-                    E-mail do Fornecedor
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="contato@fornecedor.com.br"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                  />
-                </div>
-
-                {/* Endereço */}
-                <div className="sm:col-span-2 md:col-span-1">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    Endereço
-                  </label>
-                  <input
-                    type="text"
-                    value={endereco}
-                    onChange={(e) => setEndereco(e.target.value)}
-                    placeholder="Ex: Av. Brasil, 1500 - Centro, Curitiba - PR"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                  />
-                </div>
-
-
-
-                {/* Observações sobre o Fornecedor */}
-                <div className="sm:col-span-2 md:col-span-3">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5 text-slate-400" />
-                    Descrição do Fornecedor
-                  </label>
-                  <input
-                    type="text"
-                    value={observacoesDescarga}
-                    onChange={(e) => setObservacoesDescarga(e.target.value)}
-                    placeholder="Anotações gerais, acordos comerciais, restrições ou observações sobre o fornecedor"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
-                <button
-                  type="button"
-                  onClick={() => setIsFormOpen(false)}
-                  className="px-4 py-2 text-xs font-medium rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" />
-                  {editingSupplier ? 'Salvar Alterações' : 'Cadastrar Fornecedor'}
-                </button>
-              </div>
-            </form>
+            <div className="bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <SupplierForm
+                initialSupplier={editingSupplier}
+                onSave={handleSaveForm}
+                onCancel={() => setIsFormOpen(false)}
+                submitText={editingSupplier ? 'Salvar Alterações' : 'Cadastrar Fornecedor'}
+                showCardHeader={true}
+              />
+            </div>
           ) : (
             /* Suppliers List */
             <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">

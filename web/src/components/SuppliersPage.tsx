@@ -28,6 +28,7 @@ import {
 import { optimizeImageFile } from '../utils/imageUtils';
 import { Supplier, Product } from '../shared/types';
 import { maskCNPJ, maskPhone, handleCurrencyInput, formatCurrency } from '../utils/masks';
+import { SupplierForm } from './SupplierForm';
 
 interface SuppliersPageProps {
   suppliers: Supplier[];
@@ -58,32 +59,11 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
   React.useEffect(() => {
     if (initialSupplierId) {
       if (initialSupplierId === 'new') {
-        setFormData({
-          razaoSocial: '',
-          nomeFantasia: '',
-          cnpj: '',
-          vendedorPadrao: '',
-          contatoVendedor: '',
-          telefoneEmpresa: '',
-          email: '',
-          endereco: '',
-          condicaoPagamentoPadrao: '30/60/90 Dias',
-          aliquotaStPadrao: 0,
-          aliquotaIpiPadrao: 0,
-          descontoOffPadrao: 0,
-          percentualNotaPadrao: 100,
-          observacoesDescarga: ''
-        });
         setEditingSupplier(null);
         setIsCreatingNew(true);
       } else {
         const target = suppliers.find(s => s.id === initialSupplierId);
         if (target) {
-          setFormData({ 
-            ...target,
-            email: target.email || '',
-            percentualNotaPadrao: target.percentualNotaPadrao !== undefined ? target.percentualNotaPadrao : 100
-          });
           setEditingSupplier(target);
           setIsCreatingNew(true);
           setSearchTerm(target.razaoSocial);
@@ -112,24 +92,6 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
 
-  // Form state
-  const [formData, setFormData] = useState<Partial<Supplier>>({
-    razaoSocial: '',
-    nomeFantasia: '',
-    cnpj: '',
-    vendedorPadrao: '',
-    contatoVendedor: '',
-    telefoneEmpresa: '',
-    email: '',
-    endereco: '',
-    condicaoPagamentoPadrao: '30/60/90 Dias',
-    aliquotaStPadrao: 0,
-    aliquotaIpiPadrao: 0,
-    descontoOffPadrao: 0,
-    percentualNotaPadrao: 100,
-    observacoesDescarga: ''
-  });
-
   const filteredSuppliers = suppliers.filter(s => 
     s.razaoSocial.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.nomeFantasia && s.nomeFantasia.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -138,66 +100,16 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
   );
 
   const handleStartCreate = () => {
-    setFormData({
-      razaoSocial: '',
-      nomeFantasia: '',
-      cnpj: '',
-      vendedorPadrao: '',
-      contatoVendedor: '',
-      telefoneEmpresa: '',
-      email: '',
-      endereco: '',
-      condicaoPagamentoPadrao: '30/60/90 Dias',
-      aliquotaStPadrao: 0,
-      aliquotaIpiPadrao: 0,
-      descontoOffPadrao: 0,
-      percentualNotaPadrao: 100,
-      observacoesDescarga: ''
-    });
     setEditingSupplier(null);
     setIsCreatingNew(true);
   };
 
   const handleStartEdit = (sup: Supplier) => {
-    setFormData({ 
-      ...sup,
-      contatoVendedor: maskPhone(sup.contatoVendedor || ''),
-      telefoneEmpresa: maskPhone(sup.telefoneEmpresa || ''),
-      percentualNotaPadrao: sup.percentualNotaPadrao !== undefined ? sup.percentualNotaPadrao : 100
-    });
     setEditingSupplier(sup);
     setIsCreatingNew(true);
   };
 
   const handleCancelForm = () => {
-    setIsCreatingNew(false);
-    setEditingSupplier(null);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.razaoSocial?.trim()) return;
-
-    const supplierToSave: Supplier = {
-      id: editingSupplier ? editingSupplier.id : ('sup_' + Date.now()),
-      razaoSocial: formData.razaoSocial.trim(),
-      nomeFantasia: formData.nomeFantasia?.trim() || '',
-      cnpj: formData.cnpj?.trim() || '',
-      vendedorPadrao: formData.vendedorPadrao?.trim() || '',
-      contatoVendedor: formData.contatoVendedor?.trim() || '',
-      telefoneEmpresa: formData.telefoneEmpresa?.trim() || '',
-      endereco: formData.endereco?.trim() || '',
-      condicaoPagamentoPadrao: formData.condicaoPagamentoPadrao || '30/60/90 Dias',
-      aliquotaStPadrao: Number(formData.aliquotaStPadrao) || 0,
-      aliquotaIpiPadrao: Number(formData.aliquotaIpiPadrao) || 0,
-      descontoOffPadrao: Number(formData.descontoOffPadrao) || 0,
-      percentualNotaPadrao: formData.percentualNotaPadrao !== undefined ? Number(formData.percentualNotaPadrao) : 100,
-      observacoesDescarga: formData.observacoesDescarga?.trim() || '',
-      createdAt: editingSupplier ? editingSupplier.createdAt : new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    onSaveSupplier(supplierToSave);
     setIsCreatingNew(false);
     setEditingSupplier(null);
   };
@@ -346,209 +258,19 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
       {/* 2. Modal em Box: Cadastro / Edição de Fornecedor */}
       {isCreatingNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto flex flex-col">
-            
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-10 -mx-6 px-6 -mt-6 pt-6 rounded-t-3xl">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
-                    <Building2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                      {editingSupplier ? `Editar Fornecedor: ${editingSupplier.razaoSocial}` : 'Cadastrar Novo Fornecedor'}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Parâmetros comerciais, fiscais e contatos do fornecedor
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCancelForm}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                  title="Fechar modal"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            
-            {/* Razão Social */}
-            <div className="md:col-span-2">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Razão Social *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.razaoSocial}
-                onChange={(e) => setFormData(prev => ({ ...prev, razaoSocial: e.target.value }))}
-                placeholder="Ex: Indústria e Comércio de Utilidades Ltda"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-medium"
-              />
-            </div>
-
-            {/* Nome Fantasia */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Nome Fantasia
-              </label>
-              <input
-                type="text"
-                value={formData.nomeFantasia}
-                onChange={(e) => setFormData(prev => ({ ...prev, nomeFantasia: e.target.value }))}
-                placeholder="Ex: Brasil Utilidades"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-medium"
-              />
-            </div>
-
-            {/* CNPJ */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                CNPJ
-              </label>
-              <input
-                type="text"
-                value={formData.cnpj}
-                onChange={(e) => setFormData(prev => ({ ...prev, cnpj: maskCNPJ(e.target.value) }))}
-                placeholder="00.000.000/0001-00"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono"
-              />
-            </div>
-
-            {/* Vendedor */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Vendedor / Representante
-              </label>
-              <input
-                type="text"
-                value={formData.vendedorPadrao}
-                onChange={(e) => setFormData(prev => ({ ...prev, vendedorPadrao: e.target.value }))}
-                placeholder="Ex: Carlos Andrade"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-medium"
-              />
-            </div>
-
-            {/* Contato Telefone / WhatsApp */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Contato (WhatsApp / Fone)
-              </label>
-              <input
-                type="text"
-                value={maskPhone(formData.contatoVendedor || '')}
-                onChange={(e) => setFormData(prev => ({ ...prev, contatoVendedor: maskPhone(e.target.value) }))}
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono"
-              />
-            </div>
-
-            {/* OFF % */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                OFF %
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  max="100"
-                  value={formData.percentualNotaPadrao === 0 ? '' : formData.percentualNotaPadrao}
-                  placeholder="100"
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => setFormData(prev => ({ ...prev, percentualNotaPadrao: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-200 outline-hidden font-mono font-bold"
-                />
-                <span className="absolute right-3 top-2 text-xs text-blue-400 font-bold">%</span>
-              </div>
-              <span className="text-[10px] text-slate-400 mt-1 block">Define o percentual de OFF no pedido</span>
-            </div>
-
-            {/* Telefone da Empresa */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1 flex items-center gap-1">
-                <Phone className="w-3.5 h-3.5 text-slate-400" />
-                Telefone da Empresa
-              </label>
-              <input
-                type="text"
-                value={maskPhone(formData.telefoneEmpresa || '')}
-                onChange={(e) => setFormData(prev => ({ ...prev, telefoneEmpresa: maskPhone(e.target.value) }))}
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden font-mono"
-              />
-            </div>
-
-            {/* E-mail da Empresa / Contato */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1 flex items-center gap-1">
-                <Mail className="w-3.5 h-3.5 text-slate-400" />
-                E-mail do Fornecedor
-              </label>
-              <input
-                type="email"
-                value={formData.email || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="contato@fornecedor.com.br"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
-              />
-            </div>
-
-            {/* Endereço */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                Endereço
-              </label>
-              <input
-                type="text"
-                value={formData.endereco || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, endereco: e.target.value }))}
-                placeholder="Ex: Av. Brasil, 1500 - Centro, Curitiba - PR"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
-              />
-            </div>
-
-
-
-            {/* Descrição do Fornecedor */}
-            <div className="md:col-span-3">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Descrição do Fornecedor
-              </label>
-              <textarea
-                rows={2}
-                value={formData.observacoesDescarga}
-                onChange={(e) => setFormData(prev => ({ ...prev, observacoesDescarga: e.target.value }))}
-                placeholder="Anotações gerais, acordos comerciais, restrições ou observações sobre o fornecedor."
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
-              />
-            </div>
-
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-10 -mx-6 px-6 -mb-6 pb-6 rounded-b-3xl">
-            <button
-              type="button"
-              onClick={handleCancelForm}
-              className="px-4 py-2 text-xs font-bold rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="submit"
-              className="px-6 py-2 text-xs font-extrabold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition cursor-pointer flex items-center gap-2"
-            >
-              <Check className="w-4 h-4" />
-              <span>Salvar</span>
-            </button>
-          </div>
-
-            </form>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto flex flex-col p-6">
+            <SupplierForm
+              initialSupplier={editingSupplier}
+              onSave={(supplierToSave) => {
+                onSaveSupplier(supplierToSave);
+                setIsCreatingNew(false);
+                setEditingSupplier(null);
+              }}
+              onCancel={handleCancelForm}
+              title={editingSupplier ? `Editar Fornecedor: ${editingSupplier.razaoSocial}` : 'Cadastrar Novo Fornecedor'}
+              submitText="Salvar"
+              showCardHeader={true}
+            />
           </div>
         </div>
       )}

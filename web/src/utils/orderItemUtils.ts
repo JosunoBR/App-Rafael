@@ -1,23 +1,13 @@
 import { OrderItem, FiscalConfig, StoreConfig } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
+import { isBlankItem } from '../shared/orderCalculationEngine';
 
 /**
- * Verifica se um item de pedido está totalmente em branco (sem descrição, código, quantidade ou preço)
+ * Verifica se um item de pedido está totalmente em branco (re-exporta fonte única do motor de cálculo)
  */
-export function isOrderItemBlank(item: OrderItem): boolean {
-  if (!item) return true;
-  const hasDesc = Boolean(item.descricao && item.descricao.trim() !== '');
-  const hasCod = Boolean(item.codigo && item.codigo.trim() !== '');
-  const hasCodInt = Boolean(item.codigoInterno && item.codigoInterno.trim() !== '');
-  const hasCodForn = Boolean(item.codigoFornecedor && item.codigoFornecedor.trim() !== '');
-  const hasBarras = Boolean(item.codigoBarras && item.codigoBarras.trim() !== '');
-  const hasFoto = Boolean(item.fotoUrl && item.fotoUrl.trim() !== '');
-  const hasQtd = Boolean(item.qtdTotalUnidades && item.qtdTotalUnidades > 0);
-  const hasPacotes = Boolean(item.qtdPacotes && item.qtdPacotes > 0);
-  const hasPreco = Boolean(item.precoUnitario && item.precoUnitario > 0);
-  return !hasDesc && !hasCod && !hasCodInt && !hasCodForn && !hasBarras && !hasFoto && !hasQtd && !hasPacotes && !hasPreco;
-}
+export const isOrderItemBlank = isBlankItem;
+export { isBlankItem };
 
 /**
  * Cria um novo item de pedido limpo e em branco

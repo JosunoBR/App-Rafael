@@ -139,7 +139,8 @@ export function getNextOrderNumber(): string {
     
     safeSetItem(STORAGE_KEYS.ORDER_SEQUENCE, nextNum.toString());
     return `PED-${String(nextNum).padStart(4, '0')}`;
-  } catch {
+  } catch (err) {
+    console.error('[storage] Erro ao calcular próxima sequência de pedido. Usando fallback PED-0001:', err);
     return 'PED-0001';
   }
 }
@@ -177,7 +178,8 @@ export function getSuppliersList(): Supplier[] {
         pedidoPadrao: parsedPadrao
       };
     });
-  } catch {
+  } catch (err) {
+    console.error('[storage] Erro ao carregar lista de fornecedores do localStorage. Usando INITIAL_SUPPLIERS:', err);
     return INITIAL_SUPPLIERS;
   }
 }
@@ -269,7 +271,8 @@ export function getProductsList(): Product[] {
         pdvSugerido: 12.00
       };
     });
-  } catch {
+  } catch (err) {
+    console.error('[storage] Erro ao carregar catálogo de produtos do localStorage. Usando INITIAL_PRODUCTS:', err);
     return INITIAL_PRODUCTS;
   }
 }
@@ -389,7 +392,8 @@ export function getInitialFiscalConfig(): FiscalConfig {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.GLOBAL_FISCAL);
     return saved ? JSON.parse(saved) : DEFAULT_FISCAL_CONFIG;
-  } catch {
+  } catch (err) {
+    console.error('[storage] Erro ao carregar configuração fiscal do localStorage:', err);
     return DEFAULT_FISCAL_CONFIG;
   }
 }
@@ -402,7 +406,8 @@ export function getInitialStoresConfig(): StoreConfig[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.GLOBAL_STORES);
     return saved ? JSON.parse(saved) : DEFAULT_STORES;
-  } catch {
+  } catch (err) {
+    console.error('[storage] Erro ao carregar configuração das lojas do localStorage:', err);
     return DEFAULT_STORES;
   }
 }
@@ -428,7 +433,8 @@ export function getInitialSeparationPresets(): SeparationPreset[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.SEPARATION_PRESETS);
     return saved ? JSON.parse(saved) : DEFAULT_SEPARATION_PRESETS;
-  } catch {
+  } catch (err) {
+    console.error('[storage] Erro ao carregar presets de separação do localStorage:', err);
     return DEFAULT_SEPARATION_PRESETS;
   }
 }
@@ -446,7 +452,8 @@ export function getInitialFiscalPresets(): FiscalPreset[] {
       return cleaned.length > 0 ? cleaned : DEFAULT_FISCAL_PRESETS;
     }
     return DEFAULT_FISCAL_PRESETS;
-  } catch {
+  } catch (err) {
+    console.error('[storage] Erro ao carregar presets fiscais do localStorage:', err);
     return DEFAULT_FISCAL_PRESETS;
   }
 }
@@ -533,7 +540,8 @@ export function loadCurrentOrder(): PurchaseOrder | null {
       }
     }
     return ord;
-  } catch {
+  } catch (err) {
+    console.error('[storage] Erro ao carregar rascunho de pedido ativo do localStorage:', err);
     return null;
   }
 }
@@ -701,7 +709,8 @@ export function loadSavedOrdersList(): PurchaseOrder[] {
     });
 
     return Array.from(map.values());
-  } catch {
+  } catch (err) {
+    console.error('[storage] Erro ao carregar histórico de pedidos do localStorage:', err);
     return [];
   }
 }
@@ -747,7 +756,9 @@ export function getInitialCentralStock(): CentralStockItem[] {
         return parsed.map(s => ({ ...s, pdvSugerido: 12.00 }));
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('[storage] Erro ao carregar estoque central do localStorage:', err);
+  }
   return [];
 }
 

@@ -16,6 +16,7 @@ import {
   Check
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 import { exportOrderToExcel } from '../utils/excelExporter';
 import { toBrDate } from '../utils/masks';
 import { PurchaseControlCard } from './PurchaseControlCard';
@@ -68,13 +69,13 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
 
   const totalPedidos = orders.length;
   const totalInvestidoGeral = orders.reduce((acc, o) => {
-    const totalPedido = o.items.reduce((sum, item) => sum + (item.valorTotalBruto || 0), 0);
-    return acc + totalPedido;
+    const totals = calculateOrderTotals(o);
+    return acc + totals.totalGeral;
   }, 0);
 
   const totalPecasGeral = orders.reduce((acc, o) => {
-    const totalPecas = o.items.reduce((sum, item) => sum + (item.qtdTotalUnidades || 0), 0);
-    return acc + totalPecas;
+    const totals = calculateOrderTotals(o);
+    return acc + totals.totalPecas;
   }, 0);
 
   const countByStatus = {
@@ -267,8 +268,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                 </tr>
               ) : (
                 filteredOrders.map((ord) => {
-                  const totalPedido = ord.items.reduce((acc, item) => acc + (item.valorTotalBruto || 0), 0);
-                  const totalPecas = ord.items.reduce((acc, item) => acc + (item.qtdTotalUnidades || 0), 0);
+                  const totals = calculateOrderTotals(ord);
+                  const totalPedido = totals.totalGeral;
+                  const totalPecas = totals.totalPecas;
                   const statusAtual = ord.header.status || 'Em Cotação';
 
                   return (
@@ -294,7 +296,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       </td>
 
                       <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                        {ord.items.length}
+                        {totals.validItemsCount}
                       </td>
 
                       <td className="py-3.5 px-3 text-right font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap">

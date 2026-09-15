@@ -920,11 +920,15 @@ export function App() {
       return;
     }
 
-    await autoRegisterProductsFromOrder(validItems);
+    // Registra novos produtos no catálogo em segundo plano sem travar a interface
+    autoRegisterProductsFromOrder(validItems).catch(err => {
+      console.warn('Aviso ao sincronizar produtos em segundo plano:', err);
+    });
 
     const today = new Date().toISOString().split('T')[0];
     const targetDate = targetOrder.header.dataPedido || targetOrder.header.dataEmissao || today;
 
+    // Preserva fielmente o status do pedido (não rebaixa pedidos Aprovados ou Em Distribuição para Em Cotação)
     const orderToSave: PurchaseOrder = {
       ...targetOrder,
       items: validItems,
@@ -932,40 +936,57 @@ export function App() {
         ...targetOrder.header,
         dataPedido: targetDate,
         dataEmissao: targetOrder.header.dataEmissao || targetDate,
-        isDraft: true,
-        status: targetOrder.header.status === 'Em Separação' || targetOrder.header.status === 'Finalizado' ? targetOrder.header.status : 'Em Cotação',
+        isDraft: targetOrder.header.isDraft !== undefined ? targetOrder.header.isDraft : true,
+        status: targetOrder.header.status || 'Em Cotação',
         updatedAt: new Date().toISOString()
       },
       installments: generateOrderInstallments(targetOrder, undefined, undefined, true)
     };
 
+    // Atualiza imediatamente o histórico local e o estado em memória sem re-baixar todos os pedidos pela rede
+    saveOrderToHistory(orderToSave);
+    setSavedOrders(prev => {
+      const idx = prev.findIndex(o => o.header.id === orderToSave.header.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = orderToSave;
+        return next;
+      }
+      return [orderToSave, ...prev];
+    });
+
     try {
       await saveOrderToDb(orderToSave);
-      saveOrderToHistory(orderToSave);
-      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
-      setSavedOrders(updatedOrders);
-    } catch {
-      saveOrderToHistory(orderToSave);
-      setSavedOrders(loadSavedOrdersList());
+    } catch (err) {
+      console.warn('Aviso ao sincronizar pedido silenciosamente com o SQLite:', err);
     }
   };
 
-  // Carrega com segurança um pedido selecionado, salvando o atual automaticamente se houver trabalho em andamento
-  const handleOpenSelectedOrder = async (selected: PurchaseOrder, destinationTab: ActiveNavTab = 'orders') => {
+  // Carrega com segurança e resposta instantânea (0ms) o pedido selecionado
+  const handleOpenSelectedOrder = (selected: PurchaseOrder, destinationTab: ActiveNavTab = 'orders') => {
+    // 1. Se havia um rascunho NOVO que ainda NÃO constava nos pedidos salvos, preserva em segundo plano
     if (order && order.header.id !== selected.header.id) {
+      const isCurrentAlreadySaved = savedOrders.some(o => o.header.id === order.header.id);
       const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
       const hasWork = validItems.length > 0 || (order.header.fornecedor && order.header.fornecedor.trim() !== '');
-      if (hasWork) {
-        await saveOrderSilently(order);
-        showToast(`Pedido ${order.header.numeroPedido} salvo automaticamente em espera.`, 'info');
+
+      if (hasWork && !isCurrentAlreadySaved) {
+        saveOrderSilently(order).then(() => {
+          showToast(`Rascunho ${order.header.numeroPedido} preservado em espera.`, 'info');
+        }).catch(err => {
+          console.warn('Aviso ao salvar rascunho em background:', err);
+        });
       }
     }
+
+    // 2. Carrega e renderiza IMEDIATAMENTE o pedido selecionado sem qualquer bloqueio de rede
     const today = new Date().toISOString().split('T')[0];
     const targetDate = selected.header.dataPedido || selected.header.dataEmissao || today;
     const sanitizedItems = (selected.items || []).map(it => ({
       ...it,
       descricao: it.descricao ? it.descricao.replace(/\s*\([Cc][óo]pia\)\s*$/g, '').trim() : ''
     }));
+
     setOrder({
       ...selected,
       header: {
@@ -975,6 +996,7 @@ export function App() {
       },
       items: ensureTrailingBlankItem(sanitizedItems, fiscalConfig, storeConfigs)
     });
+
     let targetTab = destinationTab;
     if (!canAccessTab(currentUser?.role, targetTab)) {
       targetTab = getDefaultNavForRole(currentUser?.role);

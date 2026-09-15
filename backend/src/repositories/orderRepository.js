@@ -3,11 +3,8 @@ const { queryAll, queryOne, execute } = require('../config/database');
 class OrderRepository {
   async findAll() {
     const rows = await queryAll("SELECT * FROM purchase_orders ORDER BY createdAt DESC");
-    const orders = [];
-    for (const r of rows) {
-      orders.push(await this._mapRowToOrder(r));
-    }
-    return orders;
+    if (!rows || rows.length === 0) return [];
+    return await Promise.all(rows.map(r => this._mapRowToOrder(r)));
   }
 
   async findById(id) {

@@ -343,25 +343,36 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
         )}
       </div>
 
-      {/* 2. Formulário de Cadastro / Edição Expandido em Página */}
+      {/* 2. Modal em Box: Cadastro / Edição de Fornecedor */}
       {isCreatingNew && (
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800/90 rounded-2xl border-2 border-emerald-500/50 p-6 shadow-lg space-y-6 animate-in slide-in-from-top-4 duration-300">
-          
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                {editingSupplier ? `Editar Fornecedor: ${editingSupplier.razaoSocial}` : 'Cadastrar Novo Fornecedor'}
-              </h3>
-            </div>
-            <button
-              type="button"
-              onClick={handleCancelForm}
-              className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
-            >
-              Cancelar
-            </button>
-          </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto flex flex-col">
+            
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-10 -mx-6 px-6 -mt-6 pt-6 rounded-t-3xl">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      {editingSupplier ? `Editar Fornecedor: ${editingSupplier.razaoSocial}` : 'Cadastrar Novo Fornecedor'}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Parâmetros comerciais, fiscais e contatos do fornecedor
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelForm}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="Fechar modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             
@@ -519,24 +530,27 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
 
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 sticky bottom-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-10 -mx-6 px-6 -mb-6 pb-6 rounded-b-3xl">
             <button
               type="button"
               onClick={handleCancelForm}
-              className="px-4 py-2 text-xs font-bold rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="px-4 py-2 text-xs font-bold rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
             >
               Cancelar
             </button>
 
             <button
               type="submit"
-              className="px-6 py-2 text-xs font-extrabold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition"
+              className="px-6 py-2 text-xs font-extrabold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition cursor-pointer flex items-center gap-2"
             >
-              Salvar Fornecedor no Banco SQLite
+              <Check className="w-4 h-4" />
+              <span>Salvar</span>
             </button>
           </div>
 
-        </form>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* 3. Barra de Busca e Listagem dos Fornecedores */}

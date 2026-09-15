@@ -48,9 +48,16 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
   );
   const [observacoesDescarga, setObservacoesDescarga] = useState(initialSupplier?.observacoesDescarga || '');
   const [paymentConditions, setPaymentConditions] = useState<PaymentCondition[]>([]);
+  const [isCustomPayment, setIsCustomPayment] = useState(false);
 
   useEffect(() => {
-    loadPaymentConditions(true).then(setPaymentConditions).catch(() => {});
+    loadPaymentConditions(false).then(list => {
+      if (Array.isArray(list) && list.length > 0) {
+        setPaymentConditions(list);
+      }
+    }).catch(err => {
+      console.error('[SupplierForm] Erro ao carregar condições de pagamento:', err);
+    });
   }, []);
 
   useEffect(() => {
@@ -64,6 +71,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
       setEmail(initialSupplier.email || '');
       setEndereco(initialSupplier.endereco || '');
       setCondicaoPagamentoPadrao(initialSupplier.condicaoPagamentoPadrao || '30/60/90 Dias');
+      setIsCustomPayment(false);
       setAliquotaStPadrao(initialSupplier.aliquotaStPadrao || 0);
       setAliquotaIpiPadrao(initialSupplier.aliquotaIpiPadrao || 0);
       setDescontoOffPadrao(initialSupplier.descontoOffPadrao || 0);
@@ -79,6 +87,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
       setEmail('');
       setEndereco('');
       setCondicaoPagamentoPadrao('30/60/90 Dias');
+      setIsCustomPayment(false);
       setAliquotaStPadrao(0);
       setAliquotaIpiPadrao(0);
       setDescontoOffPadrao(0);
@@ -207,27 +216,63 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
 
         {/* Condição de Pagamento Padrão */}
         <div className="sm:col-span-2 md:col-span-1">
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-            <CreditCard className="w-3.5 h-3.5 text-slate-400" />
-            Condição de Pagamento Padrão
-          </label>
-          <div className="relative">
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+              <CreditCard className="w-3.5 h-3.5 text-slate-400" />
+              Condição de Pagamento Padrão
+            </label>
+            {isCustomPayment && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCustomPayment(false);
+                  setCondicaoPagamentoPadrao('30/60/90 Dias');
+                }}
+                className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+              >
+                Voltar à lista
+              </button>
+            )}
+          </div>
+
+          {!isCustomPayment ? (
+            <div className="relative">
+              <select
+                value={condicaoPagamentoPadrao}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setIsCustomPayment(true);
+                    setCondicaoPagamentoPadrao('');
+                  } else {
+                    setCondicaoPagamentoPadrao(e.target.value);
+                  }
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer"
+              >
+                <option value="">Selecione a condição de pagamento...</option>
+                {paymentConditions.map(c => (
+                  <option key={c.id} value={c.descricao}>
+                    {c.descricao} {c.qtdParcelas ? `(${c.qtdParcelas}x • ${c.especie || 'Boleto'})` : ''}
+                  </option>
+                ))}
+                {condicaoPagamentoPadrao && !paymentConditions.some(c => c.descricao.toLowerCase() === condicaoPagamentoPadrao.toLowerCase()) && (
+                  <option value={condicaoPagamentoPadrao}>
+                    {condicaoPagamentoPadrao} (Personalizada)
+                  </option>
+                )}
+                <option value="__custom__">+ Digitar outra condição personalizada...</option>
+              </select>
+            </div>
+          ) : (
             <input
               type="text"
+              autoFocus
               value={condicaoPagamentoPadrao}
               onChange={(e) => setCondicaoPagamentoPadrao(e.target.value)}
               placeholder="Ex: 30/60/90 Dias"
-              list="supplier-form-payment-conds"
               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold"
             />
-            <datalist id="supplier-form-payment-conds">
-              {paymentConditions.map(c => (
-                <option key={c.id} value={c.descricao}>
-                  {c.descricao} ({c.qtdParcelas}x - {c.especie})
-                </option>
-              ))}
-            </datalist>
-          </div>
+          )}
         </div>
 
         {/* OFF % */}

@@ -271,6 +271,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="h-px bg-slate-200/80 dark:bg-slate-800 my-1 mx-2" />
               )}
 
+              {/* Histórico de Pedidos */}
+              {canAccessHistory && renderItem(
+                'history',
+                'Histórico de Pedidos',
+                <FolderOpen className={`w-4 h-4 ${activeNav === 'history' ? 'text-white' : 'text-amber-500'}`} />,
+                activeNav === 'history'
+              )}
+
               {/* Financeiro / Boletos */}
               {canAccessFinancial && renderItem(
                 'financial',
@@ -285,14 +293,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 'Dashboard & BI',
                 <BarChart3 className={`w-4 h-4 ${activeNav === 'dashboard' ? 'text-white' : 'text-teal-500'}`} />,
                 activeNav === 'dashboard'
-              )}
-
-              {/* Histórico de Pedidos */}
-              {canAccessHistory && renderItem(
-                'history',
-                'Histórico de Pedidos',
-                <FolderOpen className={`w-4 h-4 ${activeNav === 'history' ? 'text-white' : 'text-amber-500'}`} />,
-                activeNav === 'history'
               )}
 
               {/* Histórico de Separações */}
@@ -316,14 +316,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="h-px bg-slate-200/80 dark:bg-slate-800 my-1 mx-2" />
               )}
 
-              {/* Catálogo de Produtos */}
-              {canAccessProducts && renderItem(
-                'products',
-                'Catálogo de Produtos',
-                <ShoppingBag className={`w-4 h-4 ${activeNav === 'products' ? 'text-white' : 'text-purple-400'}`} />,
-                activeNav === 'products'
-              )}
-
               {/* Fornecedores */}
               {canAccessSuppliers && renderItem(
                 'suppliers',
@@ -332,12 +324,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 activeNav === 'suppliers'
               )}
 
-              {/* Configurações Gerais */}
-              {canAccessFiscal && renderItem(
-                'fiscal',
-                'Configurações gerais',
-                <Settings className={`w-4 h-4 ${activeNav === 'fiscal' ? 'text-white' : 'text-indigo-400'}`} />,
-                activeNav === 'fiscal'
+              {/* Catálogo */}
+              {canAccessProducts && renderItem(
+                'products',
+                'Catálogo',
+                <ShoppingBag className={`w-4 h-4 ${activeNav === 'products' ? 'text-white' : 'text-purple-400'}`} />,
+                activeNav === 'products'
               )}
 
               {/* Gestão de Usuários (RBAC) */}
@@ -346,6 +338,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 'Gestão de Usuários',
                 <UsersIcon className={`w-4 h-4 ${activeNav === 'users' ? 'text-white' : 'text-pink-400'}`} />,
                 activeNav === 'users'
+              )}
+
+              {/* Configurações */}
+              {canAccessFiscal && renderItem(
+                'fiscal',
+                'Configurações',
+                <Settings className={`w-4 h-4 ${activeNav === 'fiscal' ? 'text-white' : 'text-indigo-400'}`} />,
+                activeNav === 'fiscal'
               )}
             </div>
           )}

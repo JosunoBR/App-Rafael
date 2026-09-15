@@ -434,32 +434,161 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
       headerRowIndex = r;
       row.forEach((cell, c) => {
         const clean = String(cell).toUpperCase().trim();
-        if (clean.includes('FORNECEDOR') && (clean.includes('COD') || clean.includes('CÓD') || clean.includes('REF'))) colMap['codigoFornecedor'] = c;
-        else if (clean.includes('INTERNO') || clean.includes('PRD')) colMap['codigoInterno'] = c;
-        else if (clean.includes('EAN') || clean.includes('BARRAS') || clean.includes('BARCODE')) colMap['ean'] = c;
-        else if (clean.includes('CODIGO') || clean.includes('CÓDIGO') || clean.includes('REFER')) colMap['codigo'] = c;
-        else if (clean.includes('DESCRICAO') || clean.includes('DESCRIÇÃO')) colMap['descricao'] = c;
-        else if (clean === 'NCM' || clean.includes('NCM')) colMap['ncm'] = c;
-        else if (clean === 'UNID.' || clean === 'UNID' || clean.includes('UNIDADE DE MEDIDA') || clean === 'UM') colMap['unidade'] = c;
-        else if (clean.includes('EMBALAGEM') || clean.includes('QTD/CX') || clean.includes('QTD NO PAC') || clean.includes('QTD NO PEC') || clean.includes('QTD POR PACOTE') || clean.includes('UN/CX') || clean.includes('UN/PAC') || clean === 'EMB' || clean === 'CX') colMap['embalagem'] = c;
-        else if (clean.includes('PACOTES') || clean.includes('QTD CX') || clean.includes('QTD DE PEC') || clean.includes('QTD CAIXA')) colMap['pacotes'] = c;
-        else if (clean.includes('R$ UNIT') || clean === 'UNIT' || clean.includes('PRECO UNIT') || clean.includes('PREÇO UNIT') || clean.includes('VALOR UNIT')) colMap['unit'] = c;
-        else if (clean.includes('TOTAL PEÇAS') || clean.includes('TOTAL PECAS') || clean.includes('TOTAL UNIDADE') || clean.includes('TOTAL UNIDADES') || clean.includes('QTD UNI') || clean === 'UNIDADES') colMap['unidades'] = c;
-        else if (clean.includes('VALOR IPI') || clean.includes('TOTAL IPI')) colMap['valorIpi'] = c;
-        else if (clean.includes('% IPI') || clean === 'IPI' || clean.includes('ALIQ IPI')) colMap['ipi'] = c;
-        else if (clean.includes('VALOR TOTAL') || clean === 'TOTAL R$' || clean === 'TOTAL') colMap['total'] = c;
-        else if (clean === 'PDV' || clean.includes('PDV SUGERIDO') || clean.includes('VENDA')) colMap['pdv'] = c;
-        else if (clean.includes('CUSTO TOTAL')) colMap['custoTotal'] = c;
-        else if (clean.includes('MARGEM')) colMap['margem'] = c;
-        else if (clean.includes('VALOR DESC') || clean === 'DESC (R$)' || clean.includes('DESCONTO (R$)')) colMap['descontoValor'] = c;
-        else if ((clean.includes('DESC') || clean.includes('DESCONTO') || clean.includes('OFF')) && !clean.includes('DESCR')) colMap['descontoPct'] = c;
+        if (!clean) return;
+
+        // 1. CÓDIGO FORNECEDOR / REFERÊNCIA
+        if (
+          (clean.includes('FORNECEDOR') && (clean.includes('COD') || clean.includes('CÓD') || clean.includes('REF'))) ||
+          (clean.includes('REF') && (clean.includes('FABRICA') || clean.includes('FÁBRICA') || clean.includes('FORNEC') || clean.includes('PRODUTO'))) ||
+          clean === 'REF. FÁBRICA' || clean === 'REF FABRICA' || clean === 'REF.' || clean === 'REF' ||
+          clean === 'CÓD. FORNECEDOR' || clean === 'COD. FORNECEDOR' || clean === 'COD FORN' || clean === 'REF FORN' ||
+          clean === 'REFERÊNCIA DE FÁBRICA' || clean === 'REFERENCIA DE FABRICA' || clean === 'REFERENCIA' || clean === 'REFERÊNCIA'
+        ) {
+          colMap['codigoFornecedor'] = c;
+        }
+        // 2. CÓDIGO INTERNO (PRD)
+        else if (clean.includes('INTERNO') || clean.includes('PRD') || clean.includes('MEGA12') || clean.includes('REDE')) {
+          colMap['codigoInterno'] = c;
+        }
+        // 3. CÓDIGO DE BARRAS (EAN-13)
+        else if (clean.includes('EAN') || clean.includes('BARRAS') || clean.includes('BARCODE') || clean.includes('GTIN')) {
+          colMap['ean'] = c;
+        }
+        // 4. CÓDIGO GENÉRICO
+        else if (clean.includes('CODIGO') || clean.includes('CÓDIGO') || clean.includes('COD.') || clean.includes('CÓD.')) {
+          if (colMap['codigo'] === undefined) colMap['codigo'] = c;
+        }
+        // 5. DESCRIÇÃO DO PRODUTO
+        else if (
+          clean.includes('DESCRICAO') || clean.includes('DESCRIÇÃO') ||
+          (clean.includes('PRODUTO') && !clean.includes('COD') && !clean.includes('CÓD') && !clean.includes('VALOR') && !clean.includes('PRECO') && !clean.includes('PREÇO')) ||
+          clean === 'ITEM' || clean === 'DISCRIMINAÇÃO' || clean === 'DISCRIMINACAO' || clean === 'DESC' || clean === 'PRODUTO' || clean === 'PRODUTOS'
+        ) {
+          colMap['descricao'] = c;
+        }
+        // 6. NCM
+        else if (clean === 'NCM' || clean.includes('NCM') || clean.includes('CLASSIFICA')) {
+          colMap['ncm'] = c;
+        }
+        // 7. UNIDADE DE MEDIDA
+        else if (
+          clean === 'UNID.' || clean === 'UNID' || clean === 'UN' || clean === 'UND' || 
+          clean === 'UNIDADE' || clean.includes('UNIDADE DE MEDIDA') || clean === 'UM' || clean === 'U.M.' || clean === 'MEDIDA'
+        ) {
+          colMap['unidade'] = c;
+        }
+        // 8. QUANTIDADE POR EMBALAGEM / QTD NO PAC
+        else if (
+          clean.includes('EMBALAGEM') || clean.includes('QTD/CX') || clean.includes('QTD NO PAC') || 
+          clean.includes('QTD NO PEC') || clean.includes('QTD POR PACOTE') || clean.includes('UN/CX') || 
+          clean.includes('UN/PAC') || clean === 'EMB' || clean === 'CX' || clean.includes('QTD/PAC') || 
+          clean.includes('QTD POR CX') || clean.includes('PECAS/CX') || clean.includes('PEÇAS/CX') || 
+          clean.includes('UNIDADES/CX') || clean.includes('QTD EMB') || clean.includes('QTD/EMB')
+        ) {
+          colMap['embalagem'] = c;
+        }
+        // 9. QUANTIDADE DE PACOTES / CAIXAS / QTD DE PAC
+        else if (
+          clean.includes('PACOTES') || clean.includes('PACOTE') || clean.includes('QTD CX') || 
+          clean.includes('QTD DE PEC') || clean.includes('QTD DE PAC') || clean.includes('QTD PAC') || 
+          clean.includes('QTD. PAC') || clean.includes('QTD CAIXA') || clean.includes('QTD CAIXAS') || 
+          clean.includes('QTDE CX') || clean.includes('QTDE CAIXAS') || clean.includes('TOTAL CX') || 
+          clean.includes('TOTAL PAC') || clean.includes('TOTAL CAIXAS') || clean.includes('NUM CAIXAS') || 
+          clean.includes('Nº CAIXAS') || clean.includes('QTD DE PACOTES') || clean.includes('QTD DE PACOTE')
+        ) {
+          colMap['pacotes'] = c;
+        }
+        // 10. VALOR TOTAL / TOTAL R$ (avaliado antes de preço unitário e unidades)
+        else if (
+          clean.includes('VALOR TOTAL') || clean.includes('TOTAL R$') || clean.includes('TOTAL (R$)') || 
+          clean.includes('PREÇO TOTAL') || clean.includes('PRECO TOTAL') || clean.includes('VLR TOTAL') || 
+          clean.includes('VL TOTAL') || clean.includes('VR TOTAL') || clean.includes('SUBTOTAL') || 
+          clean === 'TOTAL LIQUIDO' || clean === 'TOTAL LÍQUIDO' || clean === 'TOTAL'
+        ) {
+          colMap['total'] = c;
+        }
+        // 11. QUANTIDADE TOTAL DE PEÇAS / UNIDADES (TOTAL PEÇAS)
+        // Regra anti-conflito: não pode conter termos monetários
+        else if (
+          !clean.includes('R$') && !clean.includes('VALOR') && !clean.includes('PRECO') && 
+          !clean.includes('PREÇO') && !clean.includes('CUSTO') && !clean.includes('$') && (
+            clean.includes('TOTAL PEÇAS') || clean.includes('TOTAL PECAS') || clean.includes('TOTAL DE PEÇAS') || 
+            clean.includes('TOTAL DE PECAS') || clean.includes('TOTAL UNIDADE') || clean.includes('TOTAL UNIDADES') || 
+            clean.includes('QTD UNI') || clean === 'UNIDADES' || clean.includes('QTD TOTAL') || 
+            clean.includes('QTDE TOTAL') || clean.includes('QUANTIDADE TOTAL') || clean.includes('QTD PEDIDA') || 
+            clean.includes('QUANTIDADE PEDIDA') || clean.includes('TOTAL PEC') || clean.includes('TOTAL PAC')
+          )
+        ) {
+          colMap['unidades'] = c;
+        }
+        // 12. PREÇO UNITÁRIO / VALOR
+        // Suporte abrangente a todos os formatos de preço unitário
+        else if (
+          !clean.includes('TOTAL') && !clean.includes('IPI') && !clean.includes('DESC') && (
+            clean.includes('R$ UNIT') || clean === 'UNIT' || clean === 'UNIT.' || clean.includes('PRECO UNIT') || 
+            clean.includes('PREÇO UNIT') || clean.includes('VALOR UNIT') || clean === 'PREÇO' || clean === 'PRECO' || 
+            clean === 'PREÇO (R$)' || clean === 'PRECO (R$)' || clean === 'VALOR' || clean === 'VALOR (R$)' || 
+            clean === 'VALOR DO ITEM' || clean === 'VALOR ITEM' || clean.includes('VR UNIT') || clean.includes('VL UNIT') || 
+            clean.includes('VLR UNIT') || clean.includes('VR. UNIT') || clean.includes('VL. UNIT') || clean.includes('VLR. UNIT') || 
+            clean.includes('PREÇO TABELA') || clean.includes('PRECO TABELA') || clean.includes('VALOR TABELA') || 
+            clean.includes('PREÇO LIQ') || clean.includes('PREÇO LÍQUIDO') || clean.includes('PRECO LIQUIDO') || 
+            clean === 'UNITÁRIO' || clean === 'UNITARIO' || clean === 'R$' || clean === 'R$/UN' || clean === 'R$/UND' || 
+            clean.includes('CUSTO UNIT') || clean === 'CUSTO'
+          )
+        ) {
+          colMap['unit'] = c;
+        }
+        // 13. VALOR IPI
+        else if (
+          clean.includes('VALOR IPI') || clean.includes('TOTAL IPI') || clean.includes('IPI (R$)') || 
+          clean.includes('IPI R$') || clean.includes('VR IPI') || clean.includes('VL IPI') || clean.includes('VLR IPI')
+        ) {
+          colMap['valorIpi'] = c;
+        }
+        // 14. % IPI
+        else if (
+          clean.includes('% IPI') || clean.includes('IPI %') || clean === 'IPI' || clean.includes('ALIQ IPI') || 
+          clean.includes('ALÍQUOTA IPI') || clean.includes('ALIQUOTA IPI') || clean === 'IPI (%)' || clean.includes('% DE IPI')
+        ) {
+          colMap['ipi'] = c;
+        }
+        // 15. PDV SUGERIDO
+        else if (
+          clean === 'PDV' || clean.includes('PDV SUGERIDO') || clean.includes('PREÇO VENDA') || 
+          clean.includes('PRECO VENDA') || clean.includes('VALOR VENDA') || clean.includes('SUGESTÃO VENDA') || 
+          clean.includes('SUGESTAO VENDA') || clean === 'VENDA'
+        ) {
+          colMap['pdv'] = c;
+        }
+        // 16. CUSTO TOTAL
+        else if (clean.includes('CUSTO TOTAL') || clean.includes('CUSTO LOJA') || clean.includes('CUSTO FORN')) {
+          colMap['custoTotal'] = c;
+        }
+        // 17. MARGEM
+        else if (clean.includes('MARGEM')) {
+          colMap['margem'] = c;
+        }
+        // 18. DESCONTO EM VALOR (R$)
+        else if (
+          clean.includes('VALOR DESC') || clean === 'DESC (R$)' || clean.includes('DESCONTO (R$)') || 
+          clean.includes('DESC R$') || clean.includes('DESCONTO R$')
+        ) {
+          colMap['descontoValor'] = c;
+        }
+        // 19. DESCONTO EM PERCENTUAL (%)
+        else if (
+          (clean.includes('DESC') || clean.includes('DESCONTO') || clean.includes('OFF')) && 
+          !clean.includes('DESCR') && !clean.includes('R$') && !clean.includes('VALOR')
+        ) {
+          colMap['descontoPct'] = c;
+        }
       });
 
       if (colMap['codigo'] === undefined) {
         colMap['codigo'] = colMap['codigoFornecedor'] ?? colMap['codigoInterno'] ?? 0;
       }
 
-      // Se a coluna de preço unitário não tiver título na planilha mas estiver entre unidades e valor total
+      // Se a coluna de preço unitário não tiver título explícito mas estiver entre unidades e valor total
       if (colMap['unit'] === undefined && colMap['unidades'] !== undefined && colMap['total'] !== undefined && colMap['total'] - colMap['unidades'] === 2) {
         colMap['unit'] = colMap['unidades'] + 1;
       }
@@ -502,22 +631,58 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
       break;
     }
 
-    const qtdNoPacote = parseNumber(row[colMap['embalagem'] ?? 6]) || 1;
-    const qtdPacotes = parseNumber(row[colMap['pacotes'] ?? 7]) || 0;
-    const precoUnitario = parseNumber(row[colMap['unit'] ?? 8]);
-    
-    // Qtd total de unidades (se não informado, calcula pacotes * embalagem)
-    let qtdTotalUnidades = parseNumber(row[colMap['unidades'] ?? 9]);
+    // Leitura das colunas identificadas (sem fallbacks arbitrários de índices deslocados)
+    const qtdNoPacote = (colMap['embalagem'] !== undefined ? parseNumber(row[colMap['embalagem']]) : 0) || 1;
+    let qtdPacotes = colMap['pacotes'] !== undefined ? parseNumber(row[colMap['pacotes']]) : 0;
+    let precoUnitario = colMap['unit'] !== undefined ? parseNumber(row[colMap['unit']]) : 0;
+    let qtdTotalUnidades = colMap['unidades'] !== undefined ? parseNumber(row[colMap['unidades']]) : 0;
+    let valorTotalBruto = colMap['total'] !== undefined ? parseNumber(row[colMap['total']]) : 0;
+
+    // Sincronização e Inteligência Recíproca:
+    // 1. Se informou pacotes e embalagem mas não unidades: calcula unidades = pacotes * embalagem
     if (!qtdTotalUnidades && qtdPacotes > 0) {
       qtdTotalUnidades = qtdPacotes * qtdNoPacote;
     }
+    // 2. Se informou unidades mas não pacotes: calcula pacotes = unidades / embalagem
+    else if (!qtdPacotes && qtdTotalUnidades > 0 && qtdNoPacote > 0) {
+      qtdPacotes = Math.round((qtdTotalUnidades / qtdNoPacote) * 100) / 100;
+    }
 
-    // Se quantidade for 0 ou negativa, ignora o item conforme regra do sistema
-    if (qtdTotalUnidades <= 0 && qtdPacotes <= 0) {
+    // 3. Se não tem preço unitário mas tem valor total e unidades: calcula preço = total / unidades
+    if (!precoUnitario && valorTotalBruto > 0 && qtdTotalUnidades > 0) {
+      precoUnitario = Number((valorTotalBruto / qtdTotalUnidades).toFixed(4));
+    }
+    // 4. Se não tem valor total mas tem preço e unidades: calcula total = unidades * preço
+    if (!valorTotalBruto && precoUnitario > 0 && qtdTotalUnidades > 0) {
+      valorTotalBruto = Number((qtdTotalUnidades * precoUnitario).toFixed(2));
+    }
+
+    // Heurística Anti-Inversão:
+    // Se precoUnitario é 0 e qtdTotalUnidades > 0, mas colMap['unit'] não foi achado na planilha
+    // e o usuário colocou o preço em uma coluna adjacente não mapeada:
+    if (precoUnitario === 0 && colMap['unit'] === undefined) {
+      for (let c = 0; c < row.length; c++) {
+        if (c !== colMap['embalagem'] && c !== colMap['pacotes'] && c !== colMap['unidades'] && c !== colMap['codigo'] && c !== colMap['descricao']) {
+          const possiblePrice = parseNumber(row[c]);
+          if (possiblePrice > 0) {
+            precoUnitario = possiblePrice;
+            if (!valorTotalBruto && qtdTotalUnidades > 0) {
+              valorTotalBruto = Number((qtdTotalUnidades * precoUnitario).toFixed(2));
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    // Um item só é ignorado se não tiver descrição/código válidos, OU se tanto quantidades quanto valores forem todos nulos
+    if (qtdTotalUnidades <= 0 && qtdPacotes <= 0 && precoUnitario <= 0 && valorTotalBruto <= 0) {
       continue;
     }
 
-    const valorTotalBruto = (colMap['total'] !== undefined ? parseNumber(row[colMap['total']]) : 0) || (qtdTotalUnidades * precoUnitario);
+    if (!valorTotalBruto) {
+      valorTotalBruto = (colMap['total'] !== undefined ? parseNumber(row[colMap['total']]) : 0) || (qtdTotalUnidades * precoUnitario);
+    }
     const pdvSugerido = colMap['pdv'] !== undefined ? parseNumber(row[colMap['pdv']]) : 0;
     const ncm = colMap['ncm'] !== undefined ? String(row[colMap['ncm']] || '').trim() : '';
     const eanBarcode = colMap['ean'] !== undefined ? String(row[colMap['ean']] || '').trim() : '';

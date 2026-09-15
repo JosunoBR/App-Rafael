@@ -47,7 +47,7 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   workbook.modified = new Date();
 
   // ===========================================================================
-  // ABA 1: PEDIDO COMERCIAL
+  // ABA 1: PEDIDO COMERCIAL (8 Colunas Essenciais)
   // ===========================================================================
   const ws1 = workbook.addWorksheet('PEDIDO COMERCIAL', {
     views: [{ showGridLines: true }]
@@ -55,43 +55,40 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
 
   ws1.columns = [
     { key: 'colA', width: 6 },   // #
-    { key: 'colB', width: 18 },  // CÓDIGO FORNECEDOR
-    { key: 'colC', width: 18 },  // CÓDIGO INTERNO (PRD)
-    { key: 'colD', width: 20 },  // CÓDIGO DE BARRAS (EAN-13)
-    { key: 'colE', width: 44 },  // DESCRIÇÃO DO PRODUTO
-    { key: 'colF', width: 13 },  // NCM
-    { key: 'colG', width: 9 },   // UNID.
-    { key: 'colH', width: 11 },  // QTD/CX
-    { key: 'colI', width: 12 },  // QTD CX
-    { key: 'colJ', width: 15 },  // TOTAL PEÇAS
-    { key: 'colK', width: 18 },  // PREÇO UNIT. (R$)
+    { key: 'colB', width: 20 },  // CÓDIGO FORNECEDOR
+    { key: 'colC', width: 46 },  // DESCRIÇÃO DO PRODUTO
+    { key: 'colD', width: 10 },  // UNID.
+    { key: 'colE', width: 12 },  // QTD/CX
+    { key: 'colF', width: 12 },  // QTD CX
+    { key: 'colG', width: 15 },  // TOTAL PEÇAS
+    { key: 'colH', width: 18 },  // PREÇO UNIT. (R$)
   ];
 
   // 1. Cabeçalho Oficial Corporativo
-  ws1.mergeCells('A1:H1');
+  ws1.mergeCells('A1:F1');
   const titleCell = ws1.getCell('A1');
   titleCell.value = 'REDE MEGA 12 • PLANILHA MODELO DE IMPORTAÇÃO DE PEDIDOS';
   titleCell.font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: COLORS.white } };
   titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.darkNavy } };
   titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-  ws1.mergeCells('I1:K1');
-  const badgeNumCell = ws1.getCell('I1');
+  ws1.mergeCells('G1:H1');
+  const badgeNumCell = ws1.getCell('G1');
   badgeNumCell.value = 'MODELO OFICIAL V2.0';
   badgeNumCell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: COLORS.white } };
   badgeNumCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primaryGreen } };
   badgeNumCell.alignment = { vertical: 'middle', horizontal: 'center' };
   ws1.getRow(1).height = 24;
 
-  ws1.mergeCells('A2:H2');
+  ws1.mergeCells('A2:F2');
   const subTitleCell = ws1.getCell('A2');
   subTitleCell.value = 'ALS 10 BAZAR E BRINQUEDOS LTDA  •  ESTRUTURA INTELIGENTE ANTI-ERRO';
   subTitleCell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: 'FF6EE7B7' } };
   subTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.darkSlate } };
   subTitleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-  ws1.mergeCells('I2:K2');
-  const badgeDateCell = ws1.getCell('I2');
+  ws1.mergeCells('G2:H2');
+  const badgeDateCell = ws1.getCell('G2');
   badgeDateCell.value = 'Uso: Compras e Fornecedores';
   badgeDateCell.font = { name: 'Segoe UI', size: 8, color: { argb: 'FFE2E8F0' } };
   badgeDateCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.darkSlate } };
@@ -99,12 +96,12 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   ws1.getRow(2).height = 18;
 
   // Banner Informativo
-  ws1.mergeCells('A3:K3');
+  ws1.mergeCells('A3:H3');
   const warningCell = ws1.getCell('A3');
   warningCell.value = 'ℹ️ INSTRUÇÕES: Preencha os Dados do Fornecedor, Condições e Produtos. A coluna TOTAL PEÇAS calcula automaticamente (= QTD/CX × QTD CX).';
   warningCell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.amberText } };
   warningCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.amberBg } };
-  for (let c = 1; c <= 11; c++) {
+  for (let c = 1; c <= 8; c++) {
     ws1.getRow(3).getCell(c).border = {
       top: { style: 'thin', color: { argb: COLORS.amberBorder } },
       bottom: { style: 'thin', color: { argb: COLORS.amberBorder } },
@@ -117,16 +114,16 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
 
   ws1.getRow(4).height = 6;
 
-  // Cards de Cabeçalho: Comprador (A..E) e Fornecedor (F..K)
-  ws1.mergeCells('A5:E5');
+  // Cards de Cabeçalho: Comprador (A..D) e Fornecedor (E..H)
+  ws1.mergeCells('A5:D5');
   const card1Header = ws1.getCell('A5');
   card1Header.value = '1. DADOS DA EMPRESA COMPRADORA (DESTINATÁRIO - MEGA 12):';
   card1Header.font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
   card1Header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.darkSlate } };
   card1Header.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-  ws1.mergeCells('F5:K5');
-  const card2Header = ws1.getCell('F5');
+  ws1.mergeCells('E5:H5');
+  const card2Header = ws1.getCell('E5');
   card2Header.value = '2. DADOS DO FORNECEDOR & VENDEDOR (PREENCHA SEUS DADOS):';
   card2Header.font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
   card2Header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.darkSlate } };
@@ -166,26 +163,26 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
     row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.surfaceBg } };
     row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-    ws1.mergeCells(`B${rowNum}:E${rowNum}`);
+    ws1.mergeCells(`B${rowNum}:D${rowNum}`);
     const c1Cell = row.getCell(2);
     c1Cell.value = hd.c1Val;
     c1Cell.font = { name: 'Segoe UI', size: 8, bold: hd.c1Bold, color: { argb: COLORS.darkSlate } };
     c1Cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.surfaceBg } };
     c1Cell.alignment = { vertical: 'middle', horizontal: 'left' };
 
-    row.getCell(6).value = hd.c2Label;
-    row.getCell(6).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.mutedSlate } };
-    row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.inputGreenBg } };
-    row.getCell(6).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    row.getCell(5).value = hd.c2Label;
+    row.getCell(5).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.mutedSlate } };
+    row.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.inputGreenBg } };
+    row.getCell(5).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-    ws1.mergeCells(`G${rowNum}:K${rowNum}`);
-    const c2Cell = row.getCell(7);
+    ws1.mergeCells(`F${rowNum}:H${rowNum}`);
+    const c2Cell = row.getCell(6);
     c2Cell.value = hd.c2Val;
     c2Cell.font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.darkNavy } };
     c2Cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.white } };
     c2Cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-    for (let c = 1; c <= 11; c++) {
+    for (let c = 1; c <= 8; c++) {
       row.getCell(c).border = thinBorder;
     }
   });
@@ -193,7 +190,7 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   ws1.getRow(11).height = 6;
 
   // Card 3: Condições Comerciais e Logísticas
-  ws1.mergeCells('A12:K12');
+  ws1.mergeCells('A12:H12');
   const card3Header = ws1.getCell('A12');
   card3Header.value = '3. CONDIÇÕES COMERCIAIS, PRAZOS & FRETE:';
   card3Header.font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
@@ -236,63 +233,51 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   row13.getCell(8).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.primaryGreen } };
   row13.getCell(8).alignment = { vertical: 'middle', horizontal: 'center' };
 
-  row13.getCell(9).value = 'Cond. Pag.:';
-  row13.getCell(9).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.mutedSlate } };
-  row13.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.surfaceBg } };
-
-  ws1.mergeCells('J13:K13');
-  row13.getCell(10).value = '30/60/90 Dias';
-  row13.getCell(10).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.darkNavy } };
-  row13.getCell(10).alignment = { vertical: 'middle', horizontal: 'center' };
-
-  for (let c = 1; c <= 11; c++) {
+  for (let c = 1; c <= 8; c++) {
     row13.getCell(c).border = thinBorder;
   }
 
   const row14 = ws1.getRow(14);
   row14.height = 19;
 
-  row14.getCell(1).value = '% OFF:';
+  row14.getCell(1).value = 'Cond. Pag.:';
   row14.getCell(1).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.mutedSlate } };
   row14.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.surfaceBg } };
 
-  row14.getCell(2).value = '0%';
-  row14.getCell(2).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.primaryGreen } };
+  row14.getCell(2).value = '30/60/90 Dias';
+  row14.getCell(2).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.darkNavy } };
   row14.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
 
-  row14.getCell(3).value = '% Nota:';
+  row14.getCell(3).value = '% OFF:';
   row14.getCell(3).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.mutedSlate } };
   row14.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.surfaceBg } };
 
-  row14.getCell(4).value = '100%';
-  row14.getCell(4).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.darkNavy } };
+  row14.getCell(4).value = '0%';
+  row14.getCell(4).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.primaryGreen } };
   row14.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
 
   row14.getCell(5).value = 'Observações:';
   row14.getCell(5).font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.mutedSlate } };
   row14.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.surfaceBg } };
 
-  ws1.mergeCells('F14:K14');
-  row14.getCell(6).value = 'Agendar descarregamento com antecedência. Entrega no CD Irati - Paletizado padrão PBR.';
+  ws1.mergeCells('F14:H14');
+  row14.getCell(6).value = 'Agendar descarregamento no CD Irati - Paletizado padrão PBR.';
   row14.getCell(6).font = { name: 'Segoe UI', size: 8, italic: true, color: { argb: COLORS.darkSlate } };
   row14.getCell(6).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-  for (let c = 1; c <= 11; c++) {
+  for (let c = 1; c <= 8; c++) {
     row14.getCell(c).border = thinBorder;
   }
 
   ws1.getRow(15).height = 10;
 
   // ===========================================================================
-  // TABELA DE ITENS (Linha 16 - 11 Colunas Essenciais)
+  // TABELA DE ITENS (Linha 16 - 8 Colunas Essenciais)
   // ===========================================================================
   const tableHeaders = [
     { title: '#', align: 'center' as const },
     { title: 'CÓDIGO FORNECEDOR', align: 'center' as const },
-    { title: 'CÓDIGO INTERNO (PRD)', align: 'center' as const },
-    { title: 'CÓDIGO BARRAS (EAN-13)', align: 'center' as const },
     { title: 'DESCRIÇÃO DO PRODUTO', align: 'left' as const },
-    { title: 'NCM', align: 'center' as const },
     { title: 'UNID.', align: 'center' as const },
     { title: 'QTD/CX', align: 'center' as const },
     { title: 'QTD CX', align: 'center' as const },
@@ -340,54 +325,39 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
     row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(2).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.darkNavy } };
 
-    // Col 3: Código Interno (PRD)
+    // Col 3: Descrição do Produto
     row.getCell(3).value = '';
-    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(3).font = { name: 'Segoe UI', size: 8.5, color: { argb: COLORS.primaryGreen } };
+    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    row.getCell(3).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.darkSlate } };
 
-    // Col 4: EAN-13
+    // Col 4: UNID.
     row.getCell(4).value = '';
     row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(4).font = { name: 'Segoe UI', size: 8.5, color: { argb: COLORS.darkSlate } };
 
-    // Col 5: Descrição do Produto
+    // Col 5: QTD/CX
     row.getCell(5).value = '';
-    row.getCell(5).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-    row.getCell(5).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.darkSlate } };
+    row.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(5).font = { name: 'Segoe UI', size: 8.5, color: { argb: COLORS.darkSlate } };
 
-    // Col 6: NCM
+    // Col 6: QTD CX
     row.getCell(6).value = '';
     row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(6).font = { name: 'Segoe UI', size: 8.5, color: { argb: COLORS.mutedSlate } };
+    row.getCell(6).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.darkNavy } };
 
-    // Col 7: UNID.
-    row.getCell(7).value = '';
+    // Col 7: TOTAL PEÇAS (= QTD/CX * QTD CX)
+    const pecasFormula = `IF(F${currentLine}>0,IF(E${currentLine}>0,E${currentLine}*F${currentLine},F${currentLine}),"")`;
+    row.getCell(7).value = { formula: pecasFormula, result: '' };
     row.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(7).font = { name: 'Segoe UI', size: 8.5, color: { argb: COLORS.darkSlate } };
+    row.getCell(7).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
 
-    // Col 8: QTD/CX
+    // Col 8: PREÇO UNIT. (R$)
     row.getCell(8).value = '';
-    row.getCell(8).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(8).font = { name: 'Segoe UI', size: 8.5, color: { argb: COLORS.darkSlate } };
+    row.getCell(8).numFmt = 'R$ #,##0.00';
+    row.getCell(8).alignment = { vertical: 'middle', horizontal: 'right' };
+    row.getCell(8).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.darkNavy } };
 
-    // Col 9: QTD CX
-    row.getCell(9).value = '';
-    row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(9).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.darkNavy } };
-
-    // Col 10: TOTAL PEÇAS
-    const pecasFormula = `IF(I${currentLine}>0,IF(H${currentLine}>0,H${currentLine}*I${currentLine},I${currentLine}),"")`;
-    row.getCell(10).value = { formula: pecasFormula, result: '' };
-    row.getCell(10).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(10).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
-
-    // Col 11: PREÇO UNIT. (R$)
-    row.getCell(11).value = '';
-    row.getCell(11).numFmt = 'R$ #,##0.00';
-    row.getCell(11).alignment = { vertical: 'middle', horizontal: 'right' };
-    row.getCell(11).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.darkNavy } };
-
-    for (let c = 1; c <= 11; c++) {
+    for (let c = 1; c <= 8; c++) {
       const cell = row.getCell(c);
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
       cell.border = thinBorder;
@@ -402,25 +372,25 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   const totalRow = ws1.getRow(currentLine);
   totalRow.height = 24;
 
-  ws1.mergeCells(`A${currentLine}:H${currentLine}`);
+  ws1.mergeCells(`A${currentLine}:E${currentLine}`);
   const totalLabel = totalRow.getCell(1);
   totalLabel.value = 'TOTAIS CONSOLIDADOS DO PEDIDO:';
   totalLabel.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.darkGreen } };
   totalLabel.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-  totalRow.getCell(9).value = { formula: `SUM(I17:I${lastDataLine})`, result: 0 };
-  totalRow.getCell(9).numFmt = '#,##0';
-  totalRow.getCell(9).alignment = { vertical: 'middle', horizontal: 'center' };
-  totalRow.getCell(9).font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.darkGreen } };
+  totalRow.getCell(6).value = { formula: `SUM(F17:F${lastDataLine})`, result: 0 };
+  totalRow.getCell(6).numFmt = '#,##0';
+  totalRow.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
+  totalRow.getCell(6).font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.darkGreen } };
 
-  totalRow.getCell(10).value = { formula: `SUM(J17:J${lastDataLine})`, result: 0 };
-  totalRow.getCell(10).numFmt = '#,##0';
-  totalRow.getCell(10).alignment = { vertical: 'middle', horizontal: 'center' };
-  totalRow.getCell(10).font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.darkGreen } };
+  totalRow.getCell(7).value = { formula: `SUM(G17:G${lastDataLine})`, result: 0 };
+  totalRow.getCell(7).numFmt = '#,##0';
+  totalRow.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
+  totalRow.getCell(7).font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: COLORS.darkGreen } };
 
-  totalRow.getCell(11).value = '';
+  totalRow.getCell(8).value = '';
 
-  for (let c = 1; c <= 11; c++) {
+  for (let c = 1; c <= 8; c++) {
     const cell = totalRow.getCell(c);
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.lightGreenBg } };
     cell.border = {
@@ -438,7 +408,7 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   // Bloco de Regras Mandatórias de Recebimento
   const blockStart = currentLine;
 
-  ws1.mergeCells(`A${blockStart}:K${blockStart}`);
+  ws1.mergeCells(`A${blockStart}:H${blockStart}`);
   const rulesHeader = ws1.getCell(`A${blockStart}`);
   rulesHeader.value = 'REGRAS MANDATÓRIAS DE RECEBIMENTO & FATURAMENTO (REDE MEGA 12 - CD IRATI):';
   rulesHeader.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.roseText } };
@@ -446,7 +416,7 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   rulesHeader.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
   ws1.getRow(blockStart).height = 20;
 
-  for (let c = 1; c <= 11; c++) {
+  for (let c = 1; c <= 8; c++) {
     ws1.getRow(blockStart).getCell(c).border = {
       top: { style: 'thin', color: { argb: COLORS.roseBorder } },
       bottom: { style: 'thin', color: { argb: COLORS.roseBorder } },
@@ -465,7 +435,7 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
 
   rules.forEach((rText, rIdx) => {
     const rLine = blockStart + 1 + rIdx;
-    ws1.mergeCells(`A${rLine}:K${rLine}`);
+    ws1.mergeCells(`A${rLine}:H${rLine}`);
     const cell = ws1.getCell(`A${rLine}`);
     cell.value = rText;
     cell.font = { name: 'Segoe UI', size: 8, color: { argb: COLORS.darkSlate } };
@@ -473,7 +443,7 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
     cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
     ws1.getRow(rLine).height = 18;
 
-    for (let c = 1; c <= 11; c++) {
+    for (let c = 1; c <= 8; c++) {
       ws1.getRow(rLine).getCell(c).border = {
         left: { style: 'thin', color: { argb: COLORS.roseBorder } },
         right: { style: 'thin', color: { argb: COLORS.roseBorder } },
@@ -483,7 +453,7 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   });
 
   // ===========================================================================
-  // ABA 2: SEPARAÇÃO POR LOJA
+  // ABA 2: SEPARAÇÃO POR LOJA (27 Colunas)
   // ===========================================================================
   const ws2 = workbook.addWorksheet('SEPARACAO POR LOJA', {
     views: [{ showGridLines: true }]
@@ -492,18 +462,17 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   const stores = DEFAULT_STORES;
 
   ws2.columns = [
-    { key: 'sColA', width: 6 },
-    { key: 'sColB', width: 16 },
-    { key: 'sColC', width: 16 },
-    { key: 'sColD', width: 38 },
-    { key: 'sColE', width: 14 },
-    { key: 'sColF', width: 12 },
+    { key: 'sColA', width: 6 },   // #
+    { key: 'sColB', width: 18 },  // CÓDIGO FORNEC.
+    { key: 'sColC', width: 42 },  // DESCRIÇÃO DO PRODUTO
+    { key: 'sColD', width: 14 },  // TOTAL PEDIDO
+    { key: 'sColE', width: 12 },  // RESERVA CD
     ...stores.map(() => ({ width: 14 })),
-    { width: 15 },
-    { width: 16 },
+    { width: 15 },                // TOTAL ALOCADO
+    { width: 16 },                // CONFERÊNCIA
   ];
 
-  ws2.mergeCells('A1:AC1');
+  ws2.mergeCells('A1:AA1');
   const sepTitle = ws2.getCell('A1');
   sepTitle.value = 'REDE MEGA 12 • GRADE DE SEPARAÇÃO E DISTRIBUIÇÃO DAS 20 LOJAS';
   sepTitle.font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: COLORS.white } };
@@ -511,7 +480,7 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   sepTitle.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
   ws2.getRow(1).height = 24;
 
-  ws2.mergeCells('A2:AC2');
+  ws2.mergeCells('A2:AA2');
   const sepSub = ws2.getCell('A2');
   sepSub.value = 'Distribuição por filial em Unidades (UN). As quantidades alocadas devem bater exatamente com o total comprado do item.';
   sepSub.font = { name: 'Segoe UI', size: 8.5, color: { argb: 'FFD1FAE5' } };
@@ -519,44 +488,44 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
   sepSub.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
   ws2.getRow(2).height = 18;
 
-  ws2.mergeCells('A3:E3');
+  ws2.mergeCells('A3:D3');
   ws2.getCell('A3').value = 'DADOS DO ITEM COMPRADO';
   ws2.getCell('A3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
   ws2.getCell('A3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.darkSlate } };
   ws2.getCell('A3').alignment = { vertical: 'middle', horizontal: 'center' };
 
-  ws2.getCell('F3').value = 'CD';
+  ws2.getCell('E3').value = 'CD';
+  ws2.getCell('E3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
+  ws2.getCell('E3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.mediumSlate } };
+  ws2.getCell('E3').alignment = { vertical: 'middle', horizontal: 'center' };
+
+  ws2.mergeCells('F3:M3');
+  ws2.getCell('F3').value = 'CLUSTER A (8 LOJAS PRINCIPAIS - MAIOR VOLUME)';
   ws2.getCell('F3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
-  ws2.getCell('F3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.mediumSlate } };
+  ws2.getCell('F3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primaryGreen } };
   ws2.getCell('F3').alignment = { vertical: 'middle', horizontal: 'center' };
 
-  ws2.mergeCells('G3:N3');
-  ws2.getCell('G3').value = 'CLUSTER A (8 LOJAS PRINCIPAIS - MAIOR VOLUME)';
-  ws2.getCell('G3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
-  ws2.getCell('G3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primaryGreen } };
-  ws2.getCell('G3').alignment = { vertical: 'middle', horizontal: 'center' };
+  ws2.mergeCells('N3:U3');
+  ws2.getCell('N3').value = 'CLUSTER B (8 LOJAS MÉDIAS)';
+  ws2.getCell('N3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
+  ws2.getCell('N3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D9488' } };
+  ws2.getCell('N3').alignment = { vertical: 'middle', horizontal: 'center' };
 
-  ws2.mergeCells('O3:V3');
-  ws2.getCell('O3').value = 'CLUSTER B (8 LOJAS MÉDIAS)';
-  ws2.getCell('O3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
-  ws2.getCell('O3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D9488' } };
-  ws2.getCell('O3').alignment = { vertical: 'middle', horizontal: 'center' };
+  ws2.mergeCells('V3:Y3');
+  ws2.getCell('V3').value = 'CLUSTER C (4 LOJAS COMPACTAS)';
+  ws2.getCell('V3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
+  ws2.getCell('V3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } };
+  ws2.getCell('V3').alignment = { vertical: 'middle', horizontal: 'center' };
 
-  ws2.mergeCells('W3:Z3');
-  ws2.getCell('W3').value = 'CLUSTER C (4 LOJAS COMPACTAS)';
-  ws2.getCell('W3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
-  ws2.getCell('W3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } };
-  ws2.getCell('W3').alignment = { vertical: 'middle', horizontal: 'center' };
-
-  ws2.mergeCells('AA3:AB3');
-  ws2.getCell('AA3').value = 'AUDITORIA DA GRADE';
-  ws2.getCell('AA3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
-  ws2.getCell('AA3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.darkSlate } };
-  ws2.getCell('AA3').alignment = { vertical: 'middle', horizontal: 'center' };
+  ws2.mergeCells('Z3:AA3');
+  ws2.getCell('Z3').value = 'AUDITORIA DA GRADE';
+  ws2.getCell('Z3').font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: COLORS.white } };
+  ws2.getCell('Z3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.darkSlate } };
+  ws2.getCell('Z3').alignment = { vertical: 'middle', horizontal: 'center' };
   ws2.getRow(3).height = 18;
 
   const sepHeaders = [
-    '#', 'CÓDIGO FORNEC.', 'CÓDIGO INTERNO', 'DESCRIÇÃO DO PRODUTO', 'TOTAL PEDIDO', 'RESERVA CD',
+    '#', 'CÓDIGO FORNEC.', 'DESCRIÇÃO DO PRODUTO', 'TOTAL PEDIDO', 'RESERVA CD',
     ...stores.map(s => s.name.toUpperCase()),
     'TOTAL ALOCADO', 'CONFERÊNCIA'
   ];
@@ -593,85 +562,82 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
     row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
     row.getCell(2).font = { name: 'Segoe UI', size: 8.5, bold: true };
 
-    // Vinculado à coluna C (Código Interno)
+    // Vinculado à coluna C (Descrição do Produto)
     row.getCell(3).value = { formula: `IF('PEDIDO COMERCIAL'!C${commercialRowIndex}="","",'PEDIDO COMERCIAL'!C${commercialRowIndex})`, result: '' };
-    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    row.getCell(3).font = { name: 'Segoe UI', size: 8.5, bold: true };
 
-    // Vinculado à coluna E (Descrição do Produto)
-    row.getCell(4).value = { formula: `IF('PEDIDO COMERCIAL'!E${commercialRowIndex}="","",'PEDIDO COMERCIAL'!E${commercialRowIndex})`, result: '' };
-    row.getCell(4).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-    row.getCell(4).font = { name: 'Segoe UI', size: 8.5, bold: true };
+    // Vinculado à coluna G (Total Peças)
+    row.getCell(4).value = { formula: `IF('PEDIDO COMERCIAL'!G${commercialRowIndex}="","",'PEDIDO COMERCIAL'!G${commercialRowIndex})`, result: '' };
+    row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(4).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
 
-    // Vinculado à coluna J (Total Peças)
-    row.getCell(5).value = { formula: `IF('PEDIDO COMERCIAL'!J${commercialRowIndex}="","",'PEDIDO COMERCIAL'!J${commercialRowIndex})`, result: '' };
+    // Coluna E: Reserva CD
+    row.getCell(5).value = '';
     row.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(5).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
 
-    // Colunas de quantidades por filial (Reserva CD + 20 Lojas) deixadas vazias para preenchimento
-    row.getCell(6).value = '';
-    row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
-
+    // Colunas F a Y: 20 Lojas
     for (let l = 0; l < 20; l++) {
-      row.getCell(7 + l).value = '';
-      row.getCell(7 + l).alignment = { vertical: 'middle', horizontal: 'center' };
+      row.getCell(6 + l).value = '';
+      row.getCell(6 + l).alignment = { vertical: 'middle', horizontal: 'center' };
     }
 
-    // Coluna AA: Total Alocado
-    row.getCell(27).value = { formula: `IF(OR(E${sLine}="",COUNT(F${sLine}:Z${sLine})=0),"",SUM(F${sLine}:Z${sLine}))`, result: '' };
+    // Coluna Z (26): Total Alocado (E + F..Y)
+    row.getCell(26).value = { formula: `IF(OR(D${sLine}="",COUNT(E${sLine}:Y${sLine})=0),"",SUM(E${sLine}:Y${sLine}))`, result: '' };
+    row.getCell(26).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(26).font = { name: 'Segoe UI', size: 8.5, bold: true };
+
+    // Coluna AA (27): Conferência
+    row.getCell(27).value = { formula: `IF(OR(D${sLine}="",D${sLine}=0),"",IF(Z${sLine}=D${sLine},"OK (100%)","DIVERGENTE"))`, result: '' };
     row.getCell(27).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(27).font = { name: 'Segoe UI', size: 8.5, bold: true };
+    row.getCell(27).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
 
-    // Coluna AB: Conferência
-    row.getCell(28).value = { formula: `IF(OR(E${sLine}="",E${sLine}=0),"",IF(AA${sLine}=E${sLine},"OK (100%)","DIVERGENTE"))`, result: '' };
-    row.getCell(28).alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell(28).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
-
-    for (let c = 1; c <= 28; c++) {
+    for (let c = 1; c <= 27; c++) {
       row.getCell(c).border = thinBorder;
       row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sIdx % 2 === 0 ? COLORS.white : COLORS.surfaceBg } };
     }
   }
 
-  // Linha de Totais da Separação por Loja (Linha 5 + totalTemplateRows)
+  // Linha de Totais da Separação por Loja
   const sepTotalLine = 5 + totalTemplateRows;
   const sepTotalRow = ws2.getRow(sepTotalLine);
   sepTotalRow.height = 24;
 
-  ws2.mergeCells(`A${sepTotalLine}:D${sepTotalLine}`);
+  ws2.mergeCells(`A${sepTotalLine}:C${sepTotalLine}`);
   const sepTotalLabel = sepTotalRow.getCell(1);
   sepTotalLabel.value = 'TOTAL GERAL DA SEPARAÇÃO POR FILIAL:';
   sepTotalLabel.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.darkNavy } };
   sepTotalLabel.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-  // Total Pedido acumulado
+  // Total Pedido acumulado (D)
+  sepTotalRow.getCell(4).value = { formula: `SUM(D5:D${sepTotalLine - 1})`, result: 0 };
+  sepTotalRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
+  sepTotalRow.getCell(4).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
+
+  // Reserva CD acumulada (E)
   sepTotalRow.getCell(5).value = { formula: `SUM(E5:E${sepTotalLine - 1})`, result: 0 };
   sepTotalRow.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
-  sepTotalRow.getCell(5).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
+  sepTotalRow.getCell(5).font = { name: 'Segoe UI', size: 8.5, bold: true };
 
-  // Reserva CD acumulada
-  sepTotalRow.getCell(6).value = { formula: `SUM(F5:F${sepTotalLine - 1})`, result: 0 };
-  sepTotalRow.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
-  sepTotalRow.getCell(6).font = { name: 'Segoe UI', size: 8.5, bold: true };
-
-  // Lojas 1 a 20 acumuladas (Colunas G a Z)
+  // Lojas 1 a 20 acumuladas (Colunas F a Y)
   for (let l = 0; l < 20; l++) {
-    const colLetter = String.fromCharCode(71 + l);
-    sepTotalRow.getCell(7 + l).value = { formula: `SUM(${colLetter}5:${colLetter}${sepTotalLine - 1})`, result: 0 };
-    sepTotalRow.getCell(7 + l).alignment = { vertical: 'middle', horizontal: 'center' };
-    sepTotalRow.getCell(7 + l).font = { name: 'Segoe UI', size: 8.5, bold: true };
+    const colLetter = String.fromCharCode(70 + l); // F = 70
+    sepTotalRow.getCell(6 + l).value = { formula: `SUM(${colLetter}5:${colLetter}${sepTotalLine - 1})`, result: 0 };
+    sepTotalRow.getCell(6 + l).alignment = { vertical: 'middle', horizontal: 'center' };
+    sepTotalRow.getCell(6 + l).font = { name: 'Segoe UI', size: 8.5, bold: true };
   }
 
-  // Total Alocado acumulado (AA)
-  sepTotalRow.getCell(27).value = { formula: `SUM(AA5:AA${sepTotalLine - 1})`, result: 0 };
+  // Total Alocado acumulado (Z)
+  sepTotalRow.getCell(26).value = { formula: `SUM(Z5:Z${sepTotalLine - 1})`, result: 0 };
+  sepTotalRow.getCell(26).alignment = { vertical: 'middle', horizontal: 'center' };
+  sepTotalRow.getCell(26).font = { name: 'Segoe UI', size: 8.5, bold: true };
+
+  // Conferência Geral (AA)
+  sepTotalRow.getCell(27).value = { formula: `IF(D${sepTotalLine}=0,"",IF(Z${sepTotalLine}=D${sepTotalLine},"OK (100%)","DIVERGENTE"))`, result: '' };
   sepTotalRow.getCell(27).alignment = { vertical: 'middle', horizontal: 'center' };
-  sepTotalRow.getCell(27).font = { name: 'Segoe UI', size: 8.5, bold: true };
+  sepTotalRow.getCell(27).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
 
-  // Conferência Geral (AB)
-  sepTotalRow.getCell(28).value = { formula: `IF(E${sepTotalLine}=0,"",IF(AA${sepTotalLine}=E${sepTotalLine},"OK (100%)","DIVERGENTE"))`, result: '' };
-  sepTotalRow.getCell(28).alignment = { vertical: 'middle', horizontal: 'center' };
-  sepTotalRow.getCell(28).font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: COLORS.primaryGreen } };
-
-  for (let c = 1; c <= 28; c++) {
+  for (let c = 1; c <= 27; c++) {
     const cell = sepTotalRow.getCell(c);
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.lightGreenBg } };
     cell.border = {
@@ -731,12 +697,8 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
     { name: 'Tipo de Frete', req: 'SIM', tipo: 'CIF / FOB / Retira', desc: 'CIF: Por conta do fornecedor. FOB: Frete a cobrar/pago pela Mega 12. Retira: Retirada no local.' },
     { name: 'Condição de Pagamento', req: 'SIM', tipo: 'Texto / Prazos', desc: 'Exemplos: 30/60/90 Dias, Boleto 30 Dias, À Vista. O sistema gera automaticamente o fluxo de duplicatas financeiras.' },
     { name: '% OFF / Desconto Comercial', req: 'OPCIONAL', tipo: 'Percentual (%)', desc: 'Percentual de desconto comercial negociado sobre o pedido (ex: 0%, 5%, 10%). O sistema registra no cabeçalho e preserva os preços unitários líquidos da grade.' },
-    { name: '% NOTA FISCAL', req: 'OPCIONAL', tipo: 'Percentual (%)', desc: 'Percentual do valor faturado oficialmente em Nota Fiscal (padrão: 100%). Usado para controle fiscal e histórico.' },
     { name: 'CÓDIGO FORNECEDOR', req: 'SIM', tipo: 'Texto ou Número', desc: 'Referência do item de acordo com a tabela do fornecedor (ex: 652, REF-1020).' },
-    { name: 'CÓDIGO INTERNO (PRD)', req: 'OPCIONAL', tipo: 'PRD-XXXX', desc: 'Se o item já estiver cadastrado no catálogo Mega 12, informe aqui. Se estiver em branco, o sistema cria um novo código automaticamente.' },
-    { name: 'CÓDIGO BARRAS (EAN-13)', req: 'OPCIONAL', tipo: '13 dígitos', desc: 'Código GTIN/EAN-13 da embalagem ou unidade. Essencial para conferência rápida por coletor de doca.' },
     { name: 'DESCRIÇÃO DO PRODUTO', req: 'SIM', tipo: 'Texto Completo', desc: 'Nome claro do produto, material, dimensões ou modelo.' },
-    { name: 'NCM', req: 'RECOMENDADO', tipo: '8 dígitos', desc: 'Nomenclatura Comum do Mercosul para classificação fiscal.' },
     { name: 'UNID.', req: 'SIM', tipo: 'UN / CX / PCT / PAR / JG', desc: 'Unidade de medida. Usado no cálculo de conversão e apontamento de avarias de doca.' },
     { name: 'QTD/CX (Embalagem)', req: 'SIM', tipo: 'Número Inteiro', desc: 'Quantas unidades vêm dentro de cada caixa master ou pacote fechado. (Padrão: 1).' },
     { name: 'QTD CX (Caixas Solicitadas)', req: 'SIM', tipo: 'Número Inteiro', desc: 'Quantidade de caixas ou fardos comprados.' },

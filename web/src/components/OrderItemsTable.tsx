@@ -143,8 +143,23 @@ function highlightMatch(text: string, query: string) {
 }
 
 /**
- * Verifica se o produto pertence ao fornecedor informado no pedido.
- * Compara por ID do fornecedor e por Nome/Razão Social/Nome Fantasia.
+ * Normaliza uma string para comparação robusta:
+ * remove acentos, converte para minúsculo e elimina sufixos jurídicos comuns.
+ */
+function normalizeSupplierName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\b(ltda|s\.?a\.?|s\/a|eireli|epp|me|ss|cia|industria|comercio|ind|com)\b\.?/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Verifica se um produto pertence ao fornecedor informado no pedido.
+ * Compara por ID direto (prioritário) e por nome normalizado.
  */
 function isProductFromSupplier(
   product: Product,
@@ -153,60 +168,33 @@ function isProductFromSupplier(
   suppliersList: Supplier[] = []
 ): boolean {
   const cleanTargetId = (targetSupplierId || '').trim().toLowerCase();
-  const cleanTargetName = (targetSupplierName || '').trim().toLowerCase();
+  const normTargetName = normalizeSupplierName(targetSupplierName || '');
 
-  // Se nenhum fornecedor estiver selecionado no pedido, não filtra
-  if (!cleanTargetId && !cleanTargetName) {
-    return true;
-  }
+  // Se nenhum fornecedor informado no pedido, exibe todos
+  if (!cleanTargetId && !normTargetName) return true;
 
-  const validIds = new Set<string>();
-  const validNames: string[] = [];
-
-  if (cleanTargetId) {
-    validIds.add(cleanTargetId);
-  }
-  if (cleanTargetName) {
-    validNames.push(cleanTargetName);
-  }
-
-  // Se houver lista de fornecedores cadastrados, resolve IDs e Nomes alternativos (razão social vs nome fantasia)
-  if (suppliersList && suppliersList.length > 0) {
-    const matchedSupplier = suppliersList.find(s => {
-      const sId = (s.id || '').trim().toLowerCase();
-      const sRazao = (s.razaoSocial || '').trim().toLowerCase();
-      const sFantasia = (s.nomeFantasia || '').trim().toLowerCase();
-
-      if (cleanTargetId && sId === cleanTargetId) return true;
-      if (cleanTargetName && (sRazao === cleanTargetName || sFantasia === cleanTargetName)) return true;
-      if (cleanTargetName && (cleanTargetName.includes(sRazao) || sRazao.includes(cleanTargetName))) return true;
-      if (cleanTargetName && sFantasia && (cleanTargetName.includes(sFantasia) || sFantasia.includes(cleanTargetName))) return true;
-      return false;
-    });
-
-    if (matchedSupplier) {
-      if (matchedSupplier.id) validIds.add(matchedSupplier.id.trim().toLowerCase());
-      if (matchedSupplier.razaoSocial) validNames.push(matchedSupplier.razaoSocial.trim().toLowerCase());
-      if (matchedSupplier.nomeFantasia) validNames.push(matchedSupplier.nomeFantasia.trim().toLowerCase());
-    }
-  }
-
+  // 1. Correspondência por supplierId (mais confiável)
   const prodSupId = (product.supplierId || '').trim().toLowerCase();
-  const prodSupName = (product.nomeFornecedor || '').trim().toLowerCase();
+  if (cleanTargetId && prodSupId && prodSupId === cleanTargetId) return true;
 
-  // 1. Verifica correspondência por ID do fornecedor
-  if (prodSupId && validIds.has(prodSupId)) {
-    return true;
+  // Resolver ID alternativo via lista de fornecedores cadastrados
+  if (cleanTargetId && suppliersList.length > 0) {
+    const matched = suppliersList.find(s => (s.id || '').trim().toLowerCase() === cleanTargetId);
+    if (matched) {
+      // Checar se o produto está vinculado pelo ID ou pelos nomes cadastrados
+      const matchedRazao = normalizeSupplierName(matched.razaoSocial || '');
+      const matchedFantasia = normalizeSupplierName(matched.nomeFantasia || '');
+      const prodNorm = normalizeSupplierName(product.nomeFornecedor || '');
+      if (prodNorm && (prodNorm === matchedRazao || prodNorm === matchedFantasia)) return true;
+      if (matchedRazao && prodNorm.includes(matchedRazao)) return true;
+      if (matchedFantasia && prodNorm.includes(matchedFantasia)) return true;
+    }
   }
 
-  // 2. Verifica correspondência por Nome do fornecedor
-  if (prodSupName) {
-    const matches = validNames.some(vn => 
-      vn && (prodSupName === vn || prodSupName.includes(vn) || vn.includes(prodSupName))
-    );
-    if (matches) {
-      return true;
-    }
+  // 2. Correspondência por nome normalizado do fornecedor no produto
+  if (normTargetName) {
+    const prodNorm = normalizeSupplierName(product.nomeFornecedor || '');
+    if (prodNorm && (prodNorm === normTargetName || prodNorm.includes(normTargetName) || normTargetName.includes(prodNorm))) return true;
   }
 
   return false;
@@ -1876,11 +1864,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsCatalogPickerOpen(true)}
+            onClick={() => { setCatalogSearch(''); setIsCatalogPickerOpen(true); }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition cursor-pointer shadow-2xs"
           >
             <Package className="w-3.5 h-3.5" />
-            <span>Catálogo ({products.length})</span>
+            <span>Catálogo ({products.filter(p => isProductFromSupplier(p, currentSupplierId, currentSupplierName, suppliers)).length})</span>
           </button>
         </div>
       </div>
@@ -2263,24 +2251,32 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               </div>
             </div>
 
-            {/* Lista de Produtos com Fotos */}
+            {/* Lista de Produtos com Fotos — filtrado pelo fornecedor do pedido */}
             <div className="p-4 overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
               {(() => {
-                const filteredCatalog = products
-                  .filter(p => isProductFromSupplier(p, currentSupplierId, currentSupplierName, suppliers))
-                  .filter(p => {
-                    const s = catalogSearch.toLowerCase();
-                    const desc = p.descricao.toLowerCase();
-                    const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
-                    const codForn = (p.codigoFornecedor || '').toLowerCase();
-                    const cat = (p.categoria || '').toLowerCase();
-                    return desc.includes(s) || codInt.includes(s) || codForn.includes(s) || cat.includes(s);
-                  });
+                // Filtra por fornecedor do pedido, depois aplica busca textual
+                const supplierProducts = products.filter(p =>
+                  isProductFromSupplier(p, currentSupplierId, currentSupplierName, suppliers)
+                );
+
+                const filteredCatalog = catalogSearch.trim().length === 0
+                  ? supplierProducts
+                  : supplierProducts.filter(p => {
+                      const s = catalogSearch.toLowerCase();
+                      const desc = (p.descricao || '').toLowerCase();
+                      const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
+                      const codForn = (p.codigoFornecedor || '').toLowerCase();
+                      const cat = (p.categoria || '').toLowerCase();
+                      return desc.includes(s) || codInt.includes(s) || codForn.includes(s) || cat.includes(s);
+                    });
 
                 if (filteredCatalog.length === 0) {
                   return (
                     <div className="col-span-full p-8 text-center text-slate-400 text-xs">
-                      Nenhum produto {currentSupplierName ? `vinculado a "${currentSupplierName}"` : ''} encontrado.
+                      {catalogSearch.trim().length > 0
+                        ? `Nenhum produto encontrado para "${catalogSearch}".`
+                        : `Nenhum produto cadastrado para o fornecedor "${currentSupplierName || ''}".`
+                      }
                     </div>
                   );
                 }

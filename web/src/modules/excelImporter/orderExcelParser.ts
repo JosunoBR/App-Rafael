@@ -33,12 +33,9 @@ export function parseOrderExcelFile(
   // 2. Extrair Cabeçalho do Pedido
   const header = extractHeaderFromMatrix(sheetMatrix);
 
-  // Se não encontrou número de pedido, gera sugestão baseada no fornecedor e data
-  if (!header.numeroPedido) {
-    const cleanFornec = header.fornecedorNome ? header.fornecedorNome.replace(/[^A-Za-z0-9]/g, '').toUpperCase() : 'FORNEC';
-    const digits = header.dataPedido.replace(/\D/g, '');
-    const dateStamp = digits.length >= 8 ? `${digits.slice(0, 4)}${digits.slice(6, 8)}` : digits;
-    header.numeroPedido = `PED-${cleanFornec}-${dateStamp}`;
+  // Sanitiza número de pedido extraído da planilha para evitar textos espúrios
+  if (header.numeroPedido && (header.numeroPedido.toUpperCase().includes('FORNECEDOR') || header.numeroPedido.toUpperCase().includes('IMPORTADO'))) {
+    header.numeroPedido = '';
   }
 
   // 3. Localizar e extrair a tabela de produtos/itens
@@ -400,7 +397,7 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
 
   return {
     numeroPedido,
-    fornecedorNome: fornecedorNome || 'FORNECEDOR IMPORTADO',
+    fornecedorNome: fornecedorNome || '',
     cnpj,
     email,
     telefoneContato,

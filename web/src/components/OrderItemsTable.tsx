@@ -106,6 +106,8 @@ const ALL_COLUMNS: ColumnMeta[] = [
   { key: 'acoes', label: 'AÇÕES', thClass: 'text-center', defaultWidth: 90, minWidth: 60 },
 ];
 
+const ALL_COLUMNS_MAP = new Map<ColumnKey, ColumnMeta>(ALL_COLUMNS.map(c => [c.key, c]));
+
 const EDITABLE_EXCEL_FIELDS: ColumnKey[] = [
   'codigoInterno',
   'codigoBarras',
@@ -583,23 +585,33 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     setAutocompleteQuery('');
   };
 
-  // Encontra produto no catálogo correspondente ao item
+  // Mapa indexado de produtos para busca instantânea O(1) em vez de varredura O(N*M)
+  const catalogLookup = useMemo(() => {
+    const byCode = new Map<string, Product>();
+    const byDesc = new Map<string, Product>();
+    if (!products || products.length === 0) return { byCode, byDesc };
+    for (const p of products) {
+      const cInt = (p.codigoInterno || '').trim().toLowerCase();
+      if (cInt) byCode.set(cInt, p);
+      const c = (p.codigo || '').trim().toLowerCase();
+      if (c) byCode.set(c, p);
+      const cForn = (p.codigoFornecedor || '').trim().toLowerCase();
+      if (cForn) byCode.set(cForn, p);
+      const desc = (p.descricao || '').trim().toLowerCase();
+      if (desc) byDesc.set(desc, p);
+    }
+    return { byCode, byDesc };
+  }, [products]);
+
+  // Encontra produto no catálogo correspondente ao item em O(1)
   const findCatalogProduct = (item: OrderItem): Product | undefined => {
-    if (!products || products.length === 0) return undefined;
-    const desc = (item.descricao || '').trim().toLowerCase();
     const codInt = (item.codigoInterno || item.codigo || '').trim().toLowerCase();
+    if (codInt && catalogLookup.byCode.has(codInt)) return catalogLookup.byCode.get(codInt);
     const codForn = (item.codigoFornecedor || '').trim().toLowerCase();
-
-    return products.find(p => {
-      const pDesc = (p.descricao || '').trim().toLowerCase();
-      const pCodInt = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
-      const pCodForn = (p.codigoFornecedor || '').trim().toLowerCase();
-
-      if (codInt && pCodInt && codInt === pCodInt) return true;
-      if (codForn && pCodForn && codForn === pCodForn) return true;
-      if (desc && pDesc && desc === pDesc) return true;
-      return false;
-    });
+    if (codForn && catalogLookup.byCode.has(codForn)) return catalogLookup.byCode.get(codForn);
+    const desc = (item.descricao || '').trim().toLowerCase();
+    if (desc && catalogLookup.byDesc.has(desc)) return catalogLookup.byDesc.get(desc);
+    return undefined;
   };
 
   // Cadastro rápido do produto no catálogo direto da linha do pedido
@@ -1193,7 +1205,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const orderedVisibleColumns = useMemo(() => {
     return columnOrder
       .filter(k => visibleColumns[k] !== false)
-      .map(k => ALL_COLUMNS.find(c => c.key === k)!)
+      .map(k => ALL_COLUMNS_MAP.get(k) || ALL_COLUMNS.find(c => c.key === k)!)
       .filter(Boolean);
   }, [columnOrder, visibleColumns]);
 
@@ -1212,8 +1224,8 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     index: number,
     fiscal: any
   ) => {
-    const colWidth = columnWidths[colKey] || ALL_COLUMNS.find(c => c.key === colKey)?.defaultWidth || 100;
-    const colMeta = ALL_COLUMNS.find(c => c.key === colKey);
+    const colMeta = ALL_COLUMNS_MAP.get(colKey);
+    const colWidth = columnWidths[colKey] || colMeta?.defaultWidth || 100;
     const minWidth = colMeta?.minWidth || 60;
     const cellStyle: React.CSSProperties = {
       width: `${colWidth}px`,

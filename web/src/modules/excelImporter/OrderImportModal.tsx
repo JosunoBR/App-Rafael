@@ -35,6 +35,7 @@ import { mapParsedExcelToOrder } from './orderMapper';
 import { ParsedExcelOrder, CatalogProductStatus } from './types';
 import { formatISODateToBR } from './excelDateHelper';
 import { downloadModelTemplate } from './modelTemplateGenerator';
+import { getNextOrderNumber } from '../../utils/storage';
 
 interface OrderImportModalProps {
   isOpen: boolean;
@@ -78,6 +79,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
 
   // Estados pós-leitura
   const [parsedData, setParsedData] = useState<ParsedExcelOrder | null>(null);
+  const [orderNumberInput, setOrderNumberInput] = useState<string>('');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [isNewSupplier, setIsNewSupplier] = useState(false);
   const [catalogAnalysis, setCatalogAnalysis] = useState<ReturnType<typeof analyzeCatalogProducts> | null>(null);
@@ -180,6 +182,20 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
       // Analisar catálogo de produtos
       const analysis = analyzeCatalogProducts(parsed.items, products, matchedSupplier);
 
+      // Sanitiza e atribui número de pedido sequencial oficial
+      let cleanNumero = (parsed.header.numeroPedido || '').trim();
+      const isBogus = !cleanNumero || 
+        cleanNumero.toUpperCase().includes('FORNECEDOR') || 
+        cleanNumero.toUpperCase().includes('IMPORTADO') || 
+        cleanNumero.toUpperCase().includes('FORNEC') ||
+        cleanNumero.toUpperCase().includes('PLANILHA');
+
+      if (isBogus) {
+        cleanNumero = getNextOrderNumber();
+      }
+      parsed.header.numeroPedido = cleanNumero;
+      setOrderNumberInput(cleanNumero);
+
       setParsedData(parsed);
       setSelectedSupplier(matchedSupplier);
       setIsNewSupplier(isNew);
@@ -194,6 +210,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
 
   const handleReset = () => {
     setParsedData(null);
+    setOrderNumberInput('');
     setSelectedSupplier(null);
     setIsNewSupplier(false);
     setCatalogAnalysis(null);
@@ -259,7 +276,8 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
         currentSupplier,
         catalogAnalysis.statusList,
         stores,
-        fiscalConfig
+        fiscalConfig,
+        orderNumberInput.trim() || undefined
       );
 
       // 4. Concluir importação
@@ -622,10 +640,20 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                     )}
                   </div>
 
-                  {/* N° Pedido Sugerido */}
+                  {/* N° do Pedido */}
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">N° Pedido Sugerido</span>
-                    <strong className="text-slate-900 dark:text-white font-mono block mt-0.5">{parsedData.header.numeroPedido}</strong>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">N° do Pedido</span>
+                    <input
+                      type="text"
+                      value={orderNumberInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setOrderNumberInput(val);
+                        if (parsedData) parsedData.header.numeroPedido = val;
+                      }}
+                      placeholder="ex: PED-0001"
+                      className="w-full text-slate-900 dark:text-white font-mono font-bold text-xs bg-slate-50 dark:bg-slate-800/80 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 outline-none mt-0.5 focus:border-emerald-500"
+                    />
                     <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-semibold">Status: Em Cotação</span>
                   </div>
 

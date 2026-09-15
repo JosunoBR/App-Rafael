@@ -11,6 +11,7 @@ import { calculateItemFiscal } from '../../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../../shared/separationEngine';
 import { generateOrderInstallments } from '../../utils/installments';
 import { ensureTrailingBlankItem } from '../../utils/orderItemUtils';
+import { getNextOrderNumber } from '../../utils/storage';
 
 /**
  * Converte os dados estruturados da planilha em um PurchaseOrder pronto para o sistema.
@@ -20,7 +21,8 @@ export function mapParsedExcelToOrder(
   supplier: Supplier,
   statusList: CatalogProductStatus[],
   storeConfigs: StoreConfig[] = [],
-  fiscalConfig?: FiscalConfig
+  fiscalConfig?: FiscalConfig,
+  customNumeroPedido?: string
 ): PurchaseOrder {
   const now = new Date().toISOString();
   const orderId = 'po_' + Date.now();
@@ -158,9 +160,19 @@ export function mapParsedExcelToOrder(
   const totalPecas = orderItems.reduce((acc, it) => acc + (it.qtdTotalUnidades || 0), 0);
   const totalLiquido = orderItems.reduce((acc, it) => acc + (it.valorTotalLiquido || 0), 0);
 
+  // Valida e sanitiza o número do pedido garantindo o padrão limpo e sequencial oficial
+  const candidateNum = (customNumeroPedido || parsed.header.numeroPedido || '').trim();
+  const isBogus = !candidateNum ||
+    candidateNum.toUpperCase().includes('FORNECEDOR') ||
+    candidateNum.toUpperCase().includes('IMPORTADO') ||
+    candidateNum.toUpperCase().includes('FORNEC') ||
+    candidateNum.toUpperCase().includes('PLANILHA');
+
+  const finalNumeroPedido = !isBogus ? candidateNum : getNextOrderNumber();
+
   const header = {
     id: orderId,
-    numeroPedido: parsed.header.numeroPedido || `PED-${supplier.razaoSocial.substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
+    numeroPedido: finalNumeroPedido,
     fornecedor: supplier.razaoSocial || parsed.header.fornecedorNome,
     supplierId: supplier.id,
     cnpj: supplier.cnpj || parsed.header.cnpj || '',

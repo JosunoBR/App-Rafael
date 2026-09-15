@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, startTransition } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   Sidebar,
@@ -220,10 +220,15 @@ export function App() {
     const initStores = getInitialStoresConfig();
     const today = new Date().toISOString().split('T')[0];
     if (saved) {
+      let cleanNum = (saved.header?.numeroPedido || '').trim();
+      if (!cleanNum || cleanNum.toUpperCase().includes('FORNECEDOR') || cleanNum.toUpperCase().includes('IMPORTADO') || cleanNum.toUpperCase().includes('FORNEC')) {
+        cleanNum = getNextOrderNumber();
+      }
       return {
         ...saved,
         header: {
           ...saved.header,
+          numeroPedido: cleanNum,
           dataPedido: saved.header.dataPedido || saved.header.dataEmissao || today,
           dataEmissao: saved.header.dataEmissao || saved.header.dataPedido || today
         },
@@ -349,11 +354,21 @@ export function App() {
       if (dbOrders !== null) {
         const currentFiscal = dbFiscal || getInitialFiscalConfig();
         const currentStores = (dbStores && dbStores.length > 0) ? dbStores : getInitialStoresConfig();
-        const hydratedOrders = dbOrders.map((o: PurchaseOrder) => ({
-          ...o,
-          storeConfigs: o.storeConfigs && o.storeConfigs.length > 0 ? o.storeConfigs : currentStores,
-          fiscalConfig: o.fiscalConfig || currentFiscal
-        }));
+        const hydratedOrders = dbOrders.map((o: PurchaseOrder) => {
+          let cleanNum = (o.header?.numeroPedido || '').trim();
+          if (!cleanNum || cleanNum.toUpperCase().includes('FORNECEDOR') || cleanNum.toUpperCase().includes('IMPORTADO') || cleanNum.toUpperCase().includes('FORNEC')) {
+            cleanNum = getNextOrderNumber();
+          }
+          return {
+            ...o,
+            header: {
+              ...o.header,
+              numeroPedido: cleanNum
+            },
+            storeConfigs: o.storeConfigs && o.storeConfigs.length > 0 ? o.storeConfigs : currentStores,
+            fiscalConfig: o.fiscalConfig || currentFiscal
+          };
+        });
         setSavedOrders(hydratedOrders);
       }
     } catch (err: any) {
@@ -393,9 +408,12 @@ export function App() {
     }
   }, [isDark]);
 
-  // Auto-save active order in local storage
+  // Auto-save active order in local storage (debounced para evitar engasgos ao abrir ou navegar entre pedidos)
   useEffect(() => {
-    saveCurrentOrder(order);
+    const timer = setTimeout(() => {
+      saveCurrentOrder(order);
+    }, 400);
+    return () => clearTimeout(timer);
   }, [order]);
 
   const toggleTheme = () => setIsDark(prev => !prev);
@@ -851,13 +869,19 @@ export function App() {
     const prodsToUpdate: Product[] = [];
     let currentProds = [...products];
 
+    // Índices em memória para busca instantânea O(1)
+    const existingDescSet = new Map<string, Product>();
+    const existingCodeSet = new Map<string, Product>();
+    currentProds.forEach(p => {
+      if (p.descricao) existingDescSet.set(p.descricao.trim().toLowerCase(), p);
+      if (p.codigo) existingCodeSet.set(p.codigo.trim().toLowerCase(), p);
+      if (p.codigoInterno) existingCodeSet.set(p.codigoInterno.trim().toLowerCase(), p);
+    });
+
     for (const it of itemsToAutoRegister) {
       const cleanDesc = it.descricao.trim().toLowerCase();
       const code = (it.codigo || it.codigoInterno || '').trim().toLowerCase();
-      const existing = currentProds.find(p => 
-        (p.descricao && p.descricao.trim().toLowerCase() === cleanDesc) ||
-        (code && ((p.codigo && p.codigo.trim().toLowerCase() === code) || (p.codigoInterno && p.codigoInterno.trim().toLowerCase() === code)))
-      );
+      const existing = (code ? existingCodeSet.get(code) : undefined) || (cleanDesc ? existingDescSet.get(cleanDesc) : undefined);
       const fallbackSupplier = suppliers[0];
       const assignedSupplierId = order.header.supplierId || fallbackSupplier?.id || '';
       const assignedSupplierNome = order.header.fornecedor || fallbackSupplier?.razaoSocial || '';
@@ -964,22 +988,25 @@ export function App() {
 
   // Carrega com segurança e resposta instantânea (0ms) o pedido selecionado
   const handleOpenSelectedOrder = (selected: PurchaseOrder, destinationTab: ActiveNavTab = 'orders') => {
-    // 1. Se havia um rascunho NOVO que ainda NÃO constava nos pedidos salvos, preserva em segundo plano
+    // 1. Se havia um rascunho NOVO que ainda NÃO constava nos pedidos salvos, preserva em segundo plano de forma assíncrona
     if (order && order.header.id !== selected.header.id) {
       const isCurrentAlreadySaved = savedOrders.some(o => o.header.id === order.header.id);
       const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
       const hasWork = validItems.length > 0 || (order.header.fornecedor && order.header.fornecedor.trim() !== '');
 
       if (hasWork && !isCurrentAlreadySaved) {
-        saveOrderSilently(order).then(() => {
-          showToast(`Rascunho ${order.header.numeroPedido} preservado em espera.`, 'info');
-        }).catch(err => {
-          console.warn('Aviso ao salvar rascunho em background:', err);
-        });
+        const orderSnapshot = { ...order };
+        setTimeout(() => {
+          saveOrderSilently(orderSnapshot).then(() => {
+            showToast(`Rascunho ${orderSnapshot.header.numeroPedido} preservado em espera.`, 'info');
+          }).catch(err => {
+            console.warn('Aviso ao salvar rascunho em background:', err);
+          });
+        }, 100);
       }
     }
 
-    // 2. Carrega e renderiza IMEDIATAMENTE o pedido selecionado sem qualquer bloqueio de rede
+    // 2. Carrega e renderiza IMEDIATAMENTE o pedido selecionado sem qualquer bloqueio de rede ou do thread principal
     const today = new Date().toISOString().split('T')[0];
     const targetDate = selected.header.dataPedido || selected.header.dataEmissao || today;
     const sanitizedItems = (selected.items || []).map(it => ({
@@ -987,23 +1014,43 @@ export function App() {
       descricao: it.descricao ? it.descricao.replace(/\s*\([Cc][óo]pia\)\s*$/g, '').trim() : ''
     }));
 
-    setOrder({
+    // Preenche fornecedor/supplierId se puder ser resolvido antecipadamente para evitar efeito em cascata no OrderHeaderForm
+    let resolvedSupplierId = selected.header.supplierId;
+    if (!resolvedSupplierId && selected.header.fornecedor) {
+      const fornLower = selected.header.fornecedor.toLowerCase();
+      const matchingSup = suppliers.find(s => 
+        (s.razaoSocial && s.razaoSocial.toLowerCase() === fornLower) ||
+        (s.nomeFantasia && s.nomeFantasia.toLowerCase() === fornLower)
+      );
+      if (matchingSup) {
+        resolvedSupplierId = matchingSup.id;
+      }
+    }
+
+    const updatedOrder: PurchaseOrder = {
       ...selected,
       header: {
         ...selected.header,
+        supplierId: resolvedSupplierId || selected.header.supplierId,
         dataPedido: targetDate,
         dataEmissao: selected.header.dataEmissao || targetDate
       },
       items: ensureTrailingBlankItem(sanitizedItems, fiscalConfig, storeConfigs)
-    });
+    };
 
     let targetTab = destinationTab;
     if (!canAccessTab(currentUser?.role, targetTab)) {
       targetTab = getDefaultNavForRole(currentUser?.role);
     }
-    if (activeNav !== targetTab) {
-      setActiveNav(targetTab);
-    }
+
+    // startTransition garante prioridade máxima para a resposta de clique do usuário
+    startTransition(() => {
+      setOrder(updatedOrder);
+      if (activeNav !== targetTab) {
+        setActiveNav(targetTab);
+      }
+    });
+
     showToast(`Pedido ${selected.header.numeroPedido} carregado com sucesso.`);
   };
 
@@ -1632,19 +1679,32 @@ export function App() {
   const handleOrderImported = async (importedOrder: PurchaseOrder, updatedProducts: Product[]) => {
     setProducts(updatedProducts);
     
+    // Salvaguarda definitiva: garante que o número do pedido nunca contenha textos espúrios
+    let finalOrderNum = (importedOrder.header.numeroPedido || '').trim();
+    if (!finalOrderNum || finalOrderNum.toUpperCase().includes('FORNECEDOR') || finalOrderNum.toUpperCase().includes('IMPORTADO') || finalOrderNum.toUpperCase().includes('FORNEC')) {
+      finalOrderNum = getNextOrderNumber();
+    }
+    const cleanOrder: PurchaseOrder = {
+      ...importedOrder,
+      header: {
+        ...importedOrder.header,
+        numeroPedido: finalOrderNum
+      }
+    };
+
     // Salva o pedido como ativo e em cotação (rascunho ativo, nunca fechado)
-    setOrder(importedOrder);
-    saveCurrentOrder(importedOrder);
-    saveOrderToHistory(importedOrder);
+    setOrder(cleanOrder);
+    saveCurrentOrder(cleanOrder);
+    saveOrderToHistory(cleanOrder);
 
     try {
-      await saveOrderToDb(importedOrder);
+      await saveOrderToDb(cleanOrder);
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
     } catch {
       setSavedOrders(prev => {
-        const filtered = prev.filter(o => o.header.id !== importedOrder.header.id && o.header.numeroPedido !== importedOrder.header.numeroPedido);
-        return [importedOrder, ...filtered];
+        const filtered = prev.filter(o => o.header.id !== cleanOrder.header.id && o.header.numeroPedido !== cleanOrder.header.numeroPedido);
+        return [cleanOrder, ...filtered];
       });
     }
 

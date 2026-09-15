@@ -40,6 +40,12 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('todos');
   const [controlFilterIds, setControlFilterIds] = useState<Set<string> | null>(null);
+  const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
+
+  const handleOpenOrder = (ord: PurchaseOrder) => {
+    setOpeningOrderId(ord.header.id);
+    onSelectOrder(ord);
+  };
 
   const filteredOrders = orders.filter(o => {
     if (controlFilterIds !== null) {
@@ -348,12 +354,22 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         <div className="flex items-center justify-center gap-1.5">
                           
                           <button
-                            onClick={() => onSelectOrder(ord)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 transition cursor-pointer"
+                            onClick={() => handleOpenOrder(ord)}
+                            disabled={openingOrderId === ord.header.id}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 active:scale-95 transition cursor-pointer disabled:opacity-75 disabled:cursor-wait"
                             title="Abrir este pedido no editor"
                           >
-                            <span>Abrir</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
+                            {openingOrderId === ord.header.id ? (
+                              <>
+                                <span className="inline-block w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                                <span>Abrindo...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>Abrir</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </>
+                            )}
                           </button>
 
                           <button

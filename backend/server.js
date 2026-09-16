@@ -53,7 +53,7 @@ async function bootstrap() {
       console.warn('Aviso: Falha na sincronização automática inicial de pedidos:', syncErr.message);
     }
 
-    app.listen(config.PORT, () => {
+    const server = app.listen(config.PORT, () => {
       console.log(`🚀 Servidor Backend SQLite da Rede Mega 12 rodando na porta ${config.PORT}`);
       console.log(`🛡️ Segurança: Helmet, JWT e Bcrypt Ativos | Clean Architecture (SRP + DIP + RBAC)`);
       console.log(`📂 Banco de dados SQLite: ${dbPath}`);
@@ -61,6 +61,25 @@ async function bootstrap() {
         console.log(`🌐 Frontend Web Ativo e Integrado (Servindo de ${webDistPath})`);
       }
     });
+
+    // 🛡️ Graceful Shutdown para Containers (Railway / Docker SIGTERM e SIGINT)
+    const gracefulShutdown = (signal) => {
+      console.log(`\n🛑 Sinal ${signal} recebido. Salvando banco de dados no disco...`);
+      try {
+        const { saveDatabaseToDisk } = require('./src/config/database');
+        saveDatabaseToDisk();
+        console.log('✔ Banco de dados persistido com sucesso antes do encerramento.');
+      } catch (saveErr) {
+        console.error('Erro ao persistir banco no encerramento:', saveErr.message);
+      }
+      server.close(() => {
+        console.log('Servidor finalizado com segurança.');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   } catch (err) {
     console.error('Falha crítica na inicialização do servidor:', err);
     process.exit(1);

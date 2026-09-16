@@ -18,6 +18,29 @@ async function getDatabase() {
   const SQL = await initSqlJs();
 
   if (fs.existsSync(dbPath)) {
+    // 🛡️ Criar backup preventivo automático antes de carregar
+    try {
+      const backupDir = path.join(dbDir, 'backups');
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+      }
+      const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupFile = path.join(backupDir, `mega12_${dateStr}.db`);
+      fs.copyFileSync(dbPath, backupFile);
+      console.log(`🛡️ Backup preventivo criado com sucesso: ${path.basename(backupFile)}`);
+
+      // Manter até 20 backups históricos rotativos
+      const existingBackups = fs.readdirSync(backupDir)
+        .filter(f => f.startsWith('mega12_') && f.endsWith('.db'))
+        .sort();
+      while (existingBackups.length > 20) {
+        const oldest = existingBackups.shift();
+        fs.unlinkSync(path.join(backupDir, oldest));
+      }
+    } catch (bakErr) {
+      console.warn('Aviso na criação de backup preventivo:', bakErr.message);
+    }
+
     const fileBuffer = fs.readFileSync(dbPath);
     dbInstance = new SQL.Database(fileBuffer);
   } else {

@@ -119,11 +119,6 @@ class ProductService {
   }
 
   async syncCatalog() {
-    const { getDatabase, saveDatabaseToDisk } = require('../config/database');
-    const { runFullDatabaseSeed } = require('../config/seedData');
-    const db = await getDatabase();
-    runFullDatabaseSeed(db);
-    saveDatabaseToDisk();
     return await productRepository.findAll();
   }
 }

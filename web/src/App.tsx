@@ -96,6 +96,7 @@ import {
   saveProduct,
   deleteProduct,
   getNextOrderNumber,
+  isBogusOrderNumber,
   loadCentralStock,
   saveCentralStock,
   updateStockBalance,
@@ -1027,10 +1028,16 @@ export function App() {
       }
     }
 
+    let cleanNum = (selected.header?.numeroPedido || '').trim();
+    if (isBogusOrderNumber(cleanNum)) {
+      cleanNum = getNextOrderNumber();
+    }
+
     const updatedOrder: PurchaseOrder = {
       ...selected,
       header: {
         ...selected.header,
+        numeroPedido: cleanNum,
         supplierId: resolvedSupplierId || selected.header.supplierId,
         dataPedido: targetDate,
         dataEmissao: selected.header.dataEmissao || targetDate
@@ -1051,7 +1058,7 @@ export function App() {
       }
     });
 
-    showToast(`Pedido ${selected.header.numeroPedido} carregado com sucesso.`);
+    showToast(`Pedido ${cleanNum} carregado com sucesso.`);
   };
 
   // 1. Salvar Pedido em Rascunho / Espera (mantém o pedido na tela para continuar editando)

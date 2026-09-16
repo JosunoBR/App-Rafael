@@ -118,20 +118,41 @@ export const INITIAL_PRODUCTS: Product[] = [];
 export const INITIAL_SUPPLIERS: Supplier[] = [];
 
 /**
+ * Valida se o número do pedido contém termos espúrios como 'FORNECEDOR', 'IMPORTADO', 'PLANILHA'
+ */
+export function isBogusOrderNumber(num?: string | null): boolean {
+  if (!num || typeof num !== 'string') return true;
+  const upper = num.trim().toUpperCase();
+  return !upper ||
+    upper === 'PED-' ||
+    upper === 'PED-NOVO' ||
+    upper.includes('FORNECEDOR') ||
+    upper.includes('IMPORTADO') ||
+    upper.includes('FORNEC') ||
+    upper.includes('PLANILHA');
+}
+
+/**
  * Gera o próximo número sequencial do pedido no formato PED-0001, PED-0002...
  */
 export function getNextOrderNumber(): string {
   try {
-    const savedOrders = loadSavedOrdersList();
     let maxNum = 0;
-    
-    savedOrders.forEach(o => {
-      const match = o.header.numeroPedido?.match(/PED-(\d+)/i);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) maxNum = num;
-      }
-    });
+    const rawSaved = localStorage.getItem(STORAGE_KEYS.SAVED_ORDERS);
+    if (rawSaved) {
+      try {
+        const rawList = JSON.parse(rawSaved);
+        if (Array.isArray(rawList)) {
+          rawList.forEach((o: any) => {
+            const match = o?.header?.numeroPedido?.match(/PED-(\d+)/i);
+            if (match && match[1]) {
+              const num = parseInt(match[1], 10);
+              if (num > maxNum) maxNum = num;
+            }
+          });
+        }
+      } catch {}
+    }
 
     const storedSeq = localStorage.getItem(STORAGE_KEYS.ORDER_SEQUENCE);
     const seqNum = storedSeq ? parseInt(storedSeq, 10) : 0;
@@ -538,6 +559,10 @@ export function loadCurrentOrder(): PurchaseOrder | null {
       if (!ord.header.dataEmissao || ord.header.dataEmissao.trim() === '') {
         ord.header.dataEmissao = ord.header.dataPedido || today;
       }
+      if (isBogusOrderNumber(ord.header.numeroPedido)) {
+        ord.header.numeroPedido = getNextOrderNumber();
+        safeSetItem(STORAGE_KEYS.CURRENT_ORDER, JSON.stringify(ord));
+      }
     }
     return ord;
   } catch (err) {
@@ -693,13 +718,23 @@ export function loadSavedOrdersList(): PurchaseOrder[] {
     if (!saved) return [];
     const list: PurchaseOrder[] = JSON.parse(saved);
     
+    let hadBogus = false;
     // Desduplica por numeroPedido garantindo 1 único registro por pedido
     const map = new Map<string, PurchaseOrder>();
     list.forEach(ord => {
-      if (ord?.header?.numeroPedido) {
-        const num = ord.header.numeroPedido.trim().toUpperCase();
-        map.set(num, {
+      if (ord?.header) {
+        let num = (ord.header.numeroPedido || '').trim();
+        if (isBogusOrderNumber(num)) {
+          num = getNextOrderNumber();
+          ord.header.numeroPedido = num;
+          hadBogus = true;
+        }
+        map.set(num.toUpperCase(), {
           ...ord,
+          header: {
+            ...ord.header,
+            numeroPedido: num
+          },
           items: (ord.items || []).map(it => ({ 
             ...it, 
             pdvAlvo: it.pdvAlvo !== undefined && it.pdvAlvo !== null && !isNaN(Number(it.pdvAlvo)) ? Number(it.pdvAlvo) : 12.00 
@@ -708,7 +743,11 @@ export function loadSavedOrdersList(): PurchaseOrder[] {
       }
     });
 
-    return Array.from(map.values());
+    const result = Array.from(map.values());
+    if (hadBogus) {
+      safeSetItem(STORAGE_KEYS.SAVED_ORDERS, JSON.stringify(result));
+    }
+    return result;
   } catch (err) {
     console.error('[storage] Erro ao carregar histórico de pedidos do localStorage:', err);
     return [];

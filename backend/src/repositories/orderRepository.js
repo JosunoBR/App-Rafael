@@ -519,10 +519,16 @@ class OrderRepository {
       }
     }
 
+    let cleanNumeroPedido = (r.numeroPedido || '').trim();
+    if (!cleanNumeroPedido || cleanNumeroPedido.toUpperCase().includes('FORNECEDOR') || cleanNumeroPedido.toUpperCase().includes('IMPORTADO') || cleanNumeroPedido.toUpperCase().includes('FORNEC') || cleanNumeroPedido.toUpperCase().includes('PLANILHA')) {
+      const match = cleanNumeroPedido.match(/(\d+)/);
+      cleanNumeroPedido = match ? `PED-${String(match[1]).padStart(4, '0')}` : 'PED-0001';
+    }
+
     return {
       header: {
         id: r.id,
-        numeroPedido: r.numeroPedido,
+        numeroPedido: cleanNumeroPedido,
         fornecedor: r.fornecedor,
         supplierId: r.supplierId,
         aliquotaSt: r.aliquotaSt,

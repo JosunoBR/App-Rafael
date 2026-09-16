@@ -511,7 +511,8 @@ export function generateOrderInstallments(
   }
 
   const list: PaymentInstallment[] = [];
-  const valorFrete = Number(order.header?.valorFrete ?? order.header?.valorFreteGlobal) || 0;
+  const isCif = String(order.header?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
+  const valorFrete = isCif ? 0 : (Number(order.header?.valorFrete ?? order.header?.valorFreteGlobal) || 0);
   const valorBaseMercadoria = Math.max(0, netTotal - valorFrete);
 
   // CENÁRIO A: NEGOCIAÇÃO MISTA (DEPÓSITO PARCELADO + SALDO EM BOLETO PARCELADO)
@@ -710,7 +711,8 @@ export function generateOrderInstallments(
   }
 
   // CENÁRIO C: BOLETO AUTOMÁTICO DE FRETE (10 DIAS APÓS A DATA DE ENTREGA)
-  if (valorFrete > 0) {
+  // Só gera se não for modalidade CIF e houver frete destacado
+  if (!isCif && valorFrete > 0) {
     const freteDueDate = addDaysToDate(baseDeliveryDate, 10);
     // Verificar se já existia um boleto de frete preservado
     const existingFrete = Array.isArray(order.installments)

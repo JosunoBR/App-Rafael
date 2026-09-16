@@ -174,12 +174,14 @@ export function calculateOrderTotals(
     ? Number(((valorDescontoTotal / valorBruto) * 100).toFixed(2))
     : 0;
 
-  // Frete e Despesas Adicionais
-  const valorFrete = Number(header?.valorFrete ?? header?.valorFreteGlobal) || 0;
+  // Frete e Despesas Adicionais (informativos/rastreabilidade)
+  const isCif = String(header?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
+  const valorFrete = isCif ? 0 : (Number(header?.valorFrete ?? header?.valorFreteGlobal) || 0);
   const valorOutrasDespesas = Number(header?.valorOutrasDespesasGlobal) || 0;
 
-  // Faturamento e Médias
-  const totalGeral = Number((valorLiquido + totalIpi + totalSt + valorFrete + valorOutrasDespesas).toFixed(2));
+  // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Geral
+  // Frete não é considerado no Total Geral comercial do pedido.
+  const totalGeral = Number((valorBruto + totalIpi - valorDescontoTotal).toFixed(2));
   const precoMedio = totalPecas > 0
     ? Number((valorLiquido / totalPecas).toFixed(2))
     : 0;

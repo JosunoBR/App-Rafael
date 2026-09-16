@@ -56,12 +56,32 @@ class OrderRepository {
     const aliquotaIcmsSaida = Number(fiscal.icmsAliquota !== undefined ? fiscal.icmsAliquota : (order.header.aliquotaIcmsSaida !== undefined ? order.header.aliquotaIcmsSaida : 19.5));
     const aliquotaPisCofinsIr = Number(fiscal.pisCofinsAliquota !== undefined ? fiscal.pisCofinsAliquota : (order.header.aliquotaPisCofinsIr !== undefined ? order.header.aliquotaPisCofinsIr : 6));
 
-    let totalLiquido = 0;
+    let totalBruto = 0;
+    let totalDescontoItens = 0;
+    let totalIpi = 0;
+    let totalVolumes = 0;
     let totalPecas = 0;
+
     items.forEach(item => {
-      totalLiquido += (Number(item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto || item.custoLiquidoTotalComDesconto || item.custoLiquidoTotal || 0)));
-      totalPecas += (Number(item.qtdTotalUnidades || 0));
+      const pecas = Number(item.qtdTotalUnidades || 0);
+      const pacotes = Number(item.qtdPacotes || 0);
+      const preco = Number(item.precoUnitario || 0);
+      const bruto = Number(item.valorTotalBruto !== undefined ? item.valorTotalBruto : (pecas * preco));
+      const desc = Number(item.valorDescontoItem || 0);
+      const ipi = Number(item.valorIpi || 0);
+
+      totalBruto += bruto;
+      totalDescontoItens += desc;
+      totalIpi += ipi;
+      totalVolumes += pacotes;
+      totalPecas += pecas;
     });
+
+    const headerDesc = Number(order.header.descontoComercialTotal || 0);
+    const totalDesconto = totalDescontoItens > 0 ? totalDescontoItens : headerDesc;
+    const totalLiquido = Number(Math.max(0, totalBruto - totalDesconto).toFixed(2));
+    // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Geral
+    const totalGeral = Number((totalBruto + totalIpi - totalDesconto).toFixed(2));
 
     const today = new Date().toISOString().split('T')[0];
     const dataPedido = order.header.dataPedido || order.header.dataEmissao || today;
@@ -75,7 +95,7 @@ class OrderRepository {
           previsaoPagamento = ?, tipoFrete = ?, valorFrete = ?, descontoComercialTotal = ?,
           descontoComercialTipo = ?, isDraft = ?, dataPedido = ?, dataEmissao = ?, dataEntregaPrevista = ?,
           percentualDescontoOff = ?, percentualNota = ?, observacoes = ?, status = ?,
-          separationStatus = ?, totalLiquido = ?, totalPecas = ?, installmentsJson = ?,
+          separationStatus = ?, totalBruto = ?, totalIpi = ?, totalDesconto = ?, totalLiquido = ?, totalGeral = ?, totalVolumes = ?, totalPecas = ?, installmentsJson = ?,
           fiscalConfigJson = ?, aliquotaIpi = ?, aliquotaFrete = ?, aliquotaIcmsEntrada = ?,
           aliquotaCustoFixo = ?, aliquotaIcmsSaida = ?, aliquotaPisCofinsIr = ?,
           itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, updatedAt = ?
@@ -92,7 +112,7 @@ class OrderRepository {
         order.header.formaPagamento || 'Boleto',
         order.header.previsaoPagamento || '',
         order.header.tipoFrete || 'CIF',
-        Number(order.header.valorFrete) || 0,
+        String(order.header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? 0 : (Number(order.header.valorFrete) || 0),
         Number(order.header.descontoComercialTotal) || 0,
         order.header.descontoComercialTipo || '%',
         order.header.isDraft ? 1 : 0,
@@ -104,7 +124,12 @@ class OrderRepository {
         order.header.observacoes || '',
         order.header.status || 'Em Cotação',
         order.header.separationStatus || 'Pendente',
+        totalBruto,
+        totalIpi,
+        totalDesconto,
         totalLiquido,
+        totalGeral,
+        totalVolumes,
         totalPecas,
         installmentsJson,
         fiscalConfigJson,
@@ -128,7 +153,7 @@ class OrderRepository {
           previsaoPagamento, tipoFrete, valorFrete, descontoComercialTotal,
           descontoComercialTipo, isDraft, dataPedido, dataEmissao, dataEntregaPrevista,
           percentualDescontoOff, percentualNota, observacoes, status,
-          separationStatus, totalLiquido, totalPecas, installmentsJson,
+          separationStatus, totalBruto, totalIpi, totalDesconto, totalLiquido, totalGeral, totalVolumes, totalPecas, installmentsJson,
           fiscalConfigJson, aliquotaIpi, aliquotaFrete, aliquotaIcmsEntrada,
           aliquotaCustoFixo, aliquotaIcmsSaida, aliquotaPisCofinsIr,
           itemsJson, separationDistributionJson, paymentConfigJson, createdAt, updatedAt
@@ -138,7 +163,7 @@ class OrderRepository {
           ?, ?, ?, ?,
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
-          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
           ?, ?, ?, ?, ?
@@ -156,7 +181,7 @@ class OrderRepository {
         order.header.formaPagamento || 'Boleto',
         order.header.previsaoPagamento || '',
         order.header.tipoFrete || 'CIF',
-        Number(order.header.valorFrete) || 0,
+        String(order.header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? 0 : (Number(order.header.valorFrete) || 0),
         Number(order.header.descontoComercialTotal) || 0,
         order.header.descontoComercialTipo || '%',
         order.header.isDraft ? 1 : 0,
@@ -168,7 +193,12 @@ class OrderRepository {
         order.header.observacoes || '',
         order.header.status || 'Em Cotação',
         order.header.separationStatus || 'Pendente',
+        totalBruto,
+        totalIpi,
+        totalDesconto,
         totalLiquido,
+        totalGeral,
+        totalVolumes,
         totalPecas,
         installmentsJson,
         fiscalConfigJson,

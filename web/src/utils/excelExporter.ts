@@ -29,12 +29,6 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoInterno?.trim() || it.codigoFornecedor?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0)
   );
 
-  let totalVolumesGeral = 0;
-  let totalPecasGeral = 0;
-  let subtotalGeral = 0;
-  let totalIpiGeral = 0;
-  let somaPrecoUnitario = 0;
-
   const itemRowsData = filteredItems.map((item, idx) => {
     const refFornec = item.codigoFornecedor || (item as any).referencia || item.codigo || '-';
     const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
@@ -45,12 +39,6 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
 
     // Determinação unificada do IPI do item via orderCalculationEngine (Single Source of Truth)
     const { valorIpi } = calculateItemIpi(item, order.header, order.fiscalConfig);
-
-    totalVolumesGeral += pacotes;
-    totalPecasGeral += pecas;
-    subtotalGeral += valorTotal;
-    totalIpiGeral += valorIpi;
-    somaPrecoUnitario += precoUnit;
 
     // Exibe apenas o valor monetário formatado, sem o texto de porcentagem dentro das células
     const ipiDisplay = formatCurrency(valorIpi);
@@ -377,19 +365,19 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   const footerRow = ws.getRow(currentRowNum);
   footerRow.height = 22;
 
-  footerRow.getCell(5).value = `${totalVolumesGeral.toLocaleString('pt-BR')} cx`;
+  footerRow.getCell(5).value = `${orderTotals.totalVolumes.toLocaleString('pt-BR')} cx`;
   footerRow.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
 
-  footerRow.getCell(6).value = `${totalPecasGeral.toLocaleString('pt-BR')} un`;
+  footerRow.getCell(6).value = `${orderTotals.totalPecas.toLocaleString('pt-BR')} un`;
   footerRow.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
 
-  footerRow.getCell(7).value = formatCurrency(precoMedioGeral);
+  footerRow.getCell(7).value = formatCurrency(orderTotals.precoMedio);
   footerRow.getCell(7).alignment = { vertical: 'middle', horizontal: 'right' };
 
   footerRow.getCell(8).value = formatCurrency(orderTotals.totalIpi);
   footerRow.getCell(8).alignment = { vertical: 'middle', horizontal: 'right' };
 
-  footerRow.getCell(9).value = formatCurrency(subtotalGeral);
+  footerRow.getCell(9).value = formatCurrency(orderTotals.valorBruto);
   footerRow.getCell(9).alignment = { vertical: 'middle', horizontal: 'right' };
 
   for (let c = 1; c <= 9; c++) {
@@ -425,7 +413,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   // Header Total Geral (Direita: G:I) - Card Verde Emerald
   ws.mergeCells(`G${blockStartRow}:I${blockStartRow}`);
   const totalCardHeader = ws.getCell(`G${blockStartRow}`);
-  totalCardHeader.value = `TOTAL GERAL DO PEDIDO (${filteredItems.length} ITENS | ${totalVolumesGeral.toLocaleString('pt-BR')} CX | ${totalPecasGeral.toLocaleString('pt-BR')} UN):`;
+  totalCardHeader.value = `TOTAL GERAL DO PEDIDO (${filteredItems.length} ITENS | ${orderTotals.totalVolumes.toLocaleString('pt-BR')} CX | ${orderTotals.totalPecas.toLocaleString('pt-BR')} UN):`;
   totalCardHeader.font = { name: 'Segoe UI', size: 7.5, color: { argb: 'FFFFFFFF' } };
   totalCardHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } };
   totalCardHeader.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -490,7 +478,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   const valRow = blockStartRow + 1;
   ws.mergeCells(`G${valRow}:I${valRow + 1}`);
   const totalValCell = ws.getCell(`G${valRow}`);
-  totalValCell.value = formatCurrency(totalGeralComIpi);
+  totalValCell.value = formatCurrency(orderTotals.totalGeral);
   totalValCell.font = { name: 'Segoe UI', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
   totalValCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } };
   totalValCell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -511,7 +499,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   const detRow = valRow + 2;
   ws.mergeCells(`G${detRow}:I${detRow}`);
   const detCell = ws.getCell(`G${detRow}`);
-  detCell.value = `(${formatCurrency(subtotalGeral)} - Total | ${formatCurrency(orderTotals.totalIpi)} - IPI | ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto Comercial)`;
+  detCell.value = `(${formatCurrency(orderTotals.valorBruto)} - Total | ${formatCurrency(orderTotals.totalIpi)} - IPI | ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto Comercial)`;
   detCell.font = { name: 'Segoe UI', size: 8, color: { argb: 'FF475569' } };
   detCell.alignment = { vertical: 'middle', horizontal: 'center' };
   ws.getRow(detRow).height = 16;

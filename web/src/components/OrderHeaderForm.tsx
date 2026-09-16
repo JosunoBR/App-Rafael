@@ -211,11 +211,22 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   }, []);
 
   const handleFieldChange = (field: keyof OrderHeader, value: any) => {
-    if (field === 'valorFrete') {
+    if (field === 'tipoFrete') {
+      const isCif = String(value || 'CIF').toUpperCase().includes('CIF');
       onChange({
         ...header,
-        valorFrete: value,
-        valorFreteGlobal: value
+        tipoFrete: value,
+        ...(isCif ? { valorFrete: 0, valorFreteGlobal: 0 } : {})
+      });
+      return;
+    }
+    if (field === 'valorFrete') {
+      const isCif = String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF');
+      const freteFinal = isCif ? 0 : value;
+      onChange({
+        ...header,
+        valorFrete: freteFinal,
+        valorFreteGlobal: freteFinal
       });
       return;
     }
@@ -2220,25 +2231,36 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
                       <span>Valor Frete (R$)</span>
-                      {valorFreteNum > 0 && valorBaseMercadoria > 0 && (
-                        <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400">
-                          {((valorFreteNum / valorBaseMercadoria) * 100).toFixed(2)}% dos produtos
+                      {String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          Incluso (Fornecedor)
                         </span>
+                      ) : (
+                        valorFreteNum > 0 && valorBaseMercadoria > 0 && (
+                          <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400">
+                            {((valorFreteNum / valorBaseMercadoria) * 100).toFixed(2)}% dos produtos
+                          </span>
+                        )
                       )}
                     </label>
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : ''}
+                      disabled={String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF')}
+                      value={String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? '0,00' : (header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : '')}
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => {
                         const { value } = handleCurrencyInput(e.target.value, true);
                         handleFieldChange('valorFrete', value);
                       }}
                       placeholder="0,00"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-bold shadow-2xs"
+                      className={`w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 font-mono font-bold shadow-2xs ${
+                        String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF')
+                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                          : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden'
+                      }`}
                     />
-                    {valorFreteNum > 0 && (
+                    {!String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF') && valorFreteNum > 0 && (
                       <p className="text-[10px] text-sky-600 dark:text-sky-400 font-medium mt-1 flex items-center gap-1">
                         <span>🚚 Boleto de frete gerado em {addDaysToDate(baseDate, 10).split('-').reverse().join('/')} (10d após entrega)</span>
                       </p>

@@ -430,12 +430,6 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       'Valor Total'
     ];
 
-    let totalVolumesGeral = 0;
-    let totalPecasGeral = 0;
-    let subtotalGeral = 0;
-    let totalIpiGeral = 0;
-    let somaPrecoUnitario = 0;
-
     const filteredItems = (order.items || []).filter(it =>
       Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoFornecedor?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0)
     );
@@ -451,12 +445,6 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
 
       // Determinação unificada do IPI do item via orderCalculationEngine (Single Source of Truth)
       const { valorIpi } = calculateItemIpi(item, order.header, order.fiscalConfig);
-
-      totalVolumesGeral += pacotes;
-      totalPecasGeral += pecas;
-      subtotalGeral += valorTotal;
-      totalIpiGeral += valorIpi;
-      somaPrecoUnitario += precoUnit;
 
       // Exibe apenas o valor monetário formatado, sem o texto de porcentagem dentro das células na proposta
       const ipiDisplay = formatCurrency(valorIpi);
@@ -474,9 +462,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       ];
     });
 
-    const precoMedioGeral = orderTotals.precoMedio;
-
-    // Linha de Totais da Tabela (com colSpan elegante para 9 colunas)
+    // Linha de Totais da Tabela alimentada 100% diretamente pela Engine Central
     const footerRow = [
       {
         content: `TOTAIS DO PEDIDO (${bodyRows.length} itens)`,
@@ -484,15 +470,15 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
         styles: { halign: 'left', fontStyle: 'bold' }
       },
       {
-        content: totalVolumesGeral.toLocaleString('pt-BR') + ' cx',
+        content: orderTotals.totalVolumes.toLocaleString('pt-BR') + ' cx',
         styles: { halign: 'center', fontStyle: 'bold' }
       },
       {
-        content: totalPecasGeral.toLocaleString('pt-BR') + ' un',
+        content: orderTotals.totalPecas.toLocaleString('pt-BR') + ' un',
         styles: { halign: 'center', fontStyle: 'bold' }
       },
       {
-        content: formatCurrency(precoMedioGeral),
+        content: formatCurrency(orderTotals.precoMedio),
         styles: { halign: 'right', fontStyle: 'bold' }
       },
       {
@@ -500,7 +486,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
         styles: { halign: 'right', fontStyle: 'bold' }
       },
       {
-        content: formatCurrency(subtotalGeral),
+        content: formatCurrency(orderTotals.valorBruto),
         styles: { halign: 'right', fontStyle: 'bold' }
       }
     ];
@@ -601,16 +587,14 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setFillColor(5, 150, 105); // Emerald-600
     doc.roundedRect(boxX, boxY, boxW, boxH, 1.5, 1.5, 'F');
 
-    const totalGeralFinal = orderTotals.totalGeral;
-
-    // Lado Esquerdo: A conta detalhada e intuitiva
+    // Lado Esquerdo: A conta detalhada e intuitiva (Total + IPI - Desconto = Total Geral)
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6.8);
 
-    doc.text(`  ${formatCurrency(subtotalGeral)} - Total`, boxX + 3.5, boxY + 4.2);
+    doc.text(`  ${formatCurrency(orderTotals.valorBruto)} - Total`, boxX + 3.5, boxY + 4.2);
     doc.text(`+ ${formatCurrency(orderTotals.totalIpi)} - IPI`, boxX + 3.5, boxY + 7.8);
-    doc.text(`- ${formatCurrency(totalDescontoComercial)} - Desconto comercial`, boxX + 3.5, boxY + 11.4);
+    doc.text(`- ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto comercial`, boxX + 3.5, boxY + 11.4);
 
     // Linha divisória sutil da conta
     doc.setDrawColor(167, 243, 208); // Emerald-200
@@ -619,7 +603,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
 
     // Linha de resultado da conta
     doc.setFontSize(7.2);
-    doc.text(`= ${formatCurrency(totalGeralFinal)} - Total geral`, boxX + 3.5, boxY + 16.2);
+    doc.text(`= ${formatCurrency(orderTotals.totalGeral)} - Total geral`, boxX + 3.5, boxY + 16.2);
 
     // Lado Direito: Badge de Destaque Master do Total Geral
     const badgeX = boxX + 57;
@@ -634,7 +618,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     let totalGeralFontSize = 10.5;
     doc.setFontSize(totalGeralFontSize);
     doc.setTextColor(255, 255, 255);
-    const totalGeralText = formatCurrency(totalGeralFinal);
+    const totalGeralText = formatCurrency(orderTotals.totalGeral);
     while (doc.getTextWidth(totalGeralText) > badgeW - 7 && totalGeralFontSize > 7) {
       totalGeralFontSize -= 0.5;
       doc.setFontSize(totalGeralFontSize);

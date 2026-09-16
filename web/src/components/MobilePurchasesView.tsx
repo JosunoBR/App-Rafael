@@ -33,6 +33,7 @@ import {
 import { PurchaseOrder, OrderItem, Supplier, Product, StoreConfig, FiscalConfig } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 import { handleCurrencyInput, formatCurrency } from '../utils/masks';
 
 interface MobilePurchasesViewProps {
@@ -96,34 +97,21 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     order.fiscalConfig
   );
 
-  // Resumo financeiro executivo da carga completa (desconsiderando itens em ruptura)
-  const activeItems = order.items.filter(i => !i.ruptura);
-  const totalCaixas = activeItems.reduce((acc, i) => acc + (i.qtdPacotes || 0), 0);
-  const totalUnidades = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades || 0), 0);
-  const totalBrutoCompra = activeItems.reduce((acc, i) => acc + (i.valorTotalBruto || (i.qtdTotalUnidades * i.precoUnitario) || 0), 0);
-  
-  const hasItemDiscounts = activeItems.some(it => (it.percentualDesconto && it.percentualDesconto > 0) || (it.valorTotalLiquido !== undefined && it.valorTotalLiquido < (it.valorTotalBruto || 0)));
-  let valorDesconto = 0;
-  let subtotalAposDesconto = 0;
-
-  if (hasItemDiscounts) {
-    valorDesconto = activeItems.reduce((acc, it) => {
-      const b = it.valorTotalBruto || (it.qtdTotalUnidades * it.precoUnitario) || 0;
-      const d = it.valorDescontoItem !== undefined ? it.valorDescontoItem : (b * ((it.percentualDesconto || 0) / 100));
-      return acc + d;
-    }, 0);
-    subtotalAposDesconto = Math.max(0, totalBrutoCompra - valorDesconto);
-  } else {
-    subtotalAposDesconto = totalBrutoCompra;
-  }
-
-  const valorSt = (subtotalAposDesconto * (order.header.aliquotaSt || 0)) / 100;
-  const totalCompraLiquido = subtotalAposDesconto + valorSt + (order.header.valorFreteGlobal || 0);
+  // Resumo financeiro executivo da carga completa via Engine Central (Single Source of Truth)
+  const totals = calculateOrderTotals(order);
+  const activeItems = (order.items || []).filter(i => !i.ruptura);
+  const totalCaixas = totals.totalVolumes;
+  const totalUnidades = totals.totalPecas;
+  const totalBrutoCompra = totals.valorBruto;
+  const valorDesconto = totals.valorDescontoTotal;
+  const subtotalAposDesconto = totals.valorLiquido;
+  const valorSt = totals.totalSt;
+  const totalCompraLiquido = totals.totalGeral;
 
   const faturamentoPdvProjetado = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.pdvAlvo || 0)), 0);
   const custoRealEfetivoTotal = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.custoRealEfetivo || 0)), 0);
-  const totalMargemBrutaReais = faturamentoPdvProjetado - custoRealEfetivoTotal - valorSt;
-  const margemMediaPercentual = faturamentoPdvProjetado > 0 ? (totalMargemBrutaReais / faturamentoPdvProjetado) * 100 : 0;
+  const totalMargemBrutaReais = faturamentoPdvProjetado - custoRealEfetivoTotal - totals.totalSt;
+  const margemMediaPercentual = totals.margemMediaPercentual;
 
   // Autocomplete de fornecedor
   const handleSelectSupplier = (sup: Supplier) => {

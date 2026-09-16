@@ -40,3 +40,5 @@ local.properties
 .agents/
 App-Rafael/
 .artifacts/
+scratch/
+*.bak

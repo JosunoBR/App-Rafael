@@ -443,20 +443,31 @@ export function App() {
     newItems: OrderItem[], 
     activeFiscal?: FiscalConfig
   ): { items: OrderItem[]; header: typeof prev.header } => {
-    const fiscal = activeFiscal || prev.fiscalConfig || fiscalConfig || DEFAULT_FISCAL_CONFIG;
-    const freteRate = normalizeRateToDecimal(fiscal.freteAliquota, 0);
-
-    // Calcula o total líquido dos produtos
-    const totalMerc = calculateOrderMerchandiseTotal({ ...prev, items: newItems });
+    const isCif = String(prev.header?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
     let updatedHeader = prev.header;
 
-    if (freteRate > 0) {
-      const novoValorFrete = Number((totalMerc * freteRate).toFixed(2));
-      updatedHeader = {
-        ...prev.header,
-        valorFrete: novoValorFrete,
-        valorFreteGlobal: novoValorFrete
-      };
+    if (isCif) {
+      if (prev.header?.valorFrete !== 0 || prev.header?.valorFreteGlobal !== 0) {
+        updatedHeader = {
+          ...prev.header,
+          valorFrete: 0,
+          valorFreteGlobal: 0
+        };
+      }
+    } else {
+      // Se não for CIF (ex: FOB), sincroniza somente se já havia frete definido pelo usuário
+      const fiscal = activeFiscal || prev.fiscalConfig || fiscalConfig || DEFAULT_FISCAL_CONFIG;
+      const freteRate = normalizeRateToDecimal(fiscal.freteAliquota, 0);
+      const totalMerc = calculateOrderMerchandiseTotal({ ...prev, items: newItems });
+
+      if (freteRate > 0 && Number(prev.header?.valorFrete) > 0) {
+        const novoValorFrete = Number((totalMerc * freteRate).toFixed(2));
+        updatedHeader = {
+          ...prev.header,
+          valorFrete: novoValorFrete,
+          valorFreteGlobal: novoValorFrete
+        };
+      }
     }
 
     return { items: newItems, header: updatedHeader };
@@ -467,6 +478,15 @@ export function App() {
     setOrder(prev => {
       let newFiscal = prev.fiscalConfig || fiscalConfig;
       let updatedItems = prev.items;
+
+      const isCif = String(updatedHeader?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
+      if (isCif) {
+        updatedHeader = {
+          ...updatedHeader,
+          valorFrete: 0,
+          valorFreteGlobal: 0
+        };
+      }
 
       // Se alterou o percentual de desconto OFF no cabeçalho/condições de pagamento
       const oldOff = prev.header.percentualDescontoOff ?? 0;
@@ -501,8 +521,8 @@ export function App() {
         });
       }
 
-      // Se o usuário digitou ou alterou o valor do frete em R$ manualmente no cabeçalho
-      if (updatedHeader.valorFrete !== prev.header.valorFrete) {
+      // Se o usuário digitou ou alterou o valor do frete em R$ manualmente no cabeçalho (apenas se não for CIF)
+      if (!isCif && updatedHeader.valorFrete !== prev.header.valorFrete) {
         const tempOrder = { ...prev, header: updatedHeader, items: updatedItems };
         const totalMerc = calculateOrderMerchandiseTotal(tempOrder);
         const newRate = totalMerc > 0 ? Number(((updatedHeader.valorFrete || 0) / totalMerc).toFixed(4)) : 0;
@@ -530,8 +550,11 @@ export function App() {
         : prev.header.aliquotaSt;
 
       const totalMerc = calculateOrderMerchandiseTotal(prev);
+      const isCif = String(prev.header?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
       const freteRate = normalizeRateToDecimal(newFiscal.freteAliquota, 0);
-      const novoValorFrete = freteRate > 0 ? Number((totalMerc * freteRate).toFixed(2)) : 0;
+      const novoValorFrete = (!isCif && Number(prev.header?.valorFrete) > 0 && freteRate > 0)
+        ? Number((totalMerc * freteRate).toFixed(2))
+        : (isCif ? 0 : (Number(prev.header?.valorFrete) || 0));
       
       const updatedHeader = {
         ...prev.header,

@@ -43,12 +43,23 @@ class OrderService {
 
     // Se houver total de mercadorias / itens e o pedido não for um rascunho
     if (!orderData.header?.isDraft && Array.isArray(orderData.items) && orderData.items.length > 0) {
-      const itemsSum = orderData.items.reduce((acc, item) => {
-        return acc + Number(item.valorTotalLiquido !== undefined ? item.valorTotalLiquido : (item.valorTotalBruto || item.custoLiquidoTotalComDesconto || item.custoLiquidoTotal || 0));
-      }, 0);
-      
-      const frete = Number(orderData.header.valorFrete) || 0;
-      const expectedTotal = itemsSum + frete;
+      let brutoSum = 0;
+      let ipiSum = 0;
+      let descSum = 0;
+      orderData.items.forEach(item => {
+        if (item.ruptura) return;
+        const pecas = Number(item.qtdTotalUnidades || 0);
+        const preco = Number(item.precoUnitario || 0);
+        const bruto = Number(item.valorTotalBruto !== undefined ? item.valorTotalBruto : (pecas * preco));
+        brutoSum += bruto;
+        ipiSum += Number(item.valorIpi || 0);
+        descSum += Number(item.valorDescontoItem || 0);
+      });
+
+      const headerDesc = Number(orderData.header.descontoComercialTotal || 0);
+      const totalDesconto = descSum > 0 ? descSum : headerDesc;
+      // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Geral
+      const expectedTotal = Number(Math.max(0, brutoSum + ipiSum - totalDesconto).toFixed(2));
 
       // Se ambas as somas forem expressivas (> 1 real) e a discrepância for superior a 5 reais (além de centavos)
       if (sumInstallments > 1 && expectedTotal > 1) {

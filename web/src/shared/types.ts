@@ -243,6 +243,15 @@ export interface OrderHeader {
   finalizadoPor?: string;
   dataFinalizacao?: string;
 
+  // Resumo Financeiro Oficial Consolidado
+  totalBruto?: number;
+  totalIpi?: number;
+  totalDesconto?: number;
+  totalLiquido?: number;
+  totalGeral?: number;
+  totalVolumes?: number;
+  totalPecas?: number;
+
   createdAt: string;
   updatedAt: string;
 }

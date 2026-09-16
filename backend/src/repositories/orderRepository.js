@@ -576,6 +576,44 @@ class OrderRepository {
       cleanNumeroPedido = match ? `PED-${String(match[1]).padStart(4, '0')}` : 'PED-0001';
     }
 
+    let totalBruto = r.totalBruto !== undefined && r.totalBruto !== null ? Number(r.totalBruto) : undefined;
+    let totalIpi = r.totalIpi !== undefined && r.totalIpi !== null ? Number(r.totalIpi) : 0;
+    let totalDesconto = r.totalDesconto !== undefined && r.totalDesconto !== null ? Number(r.totalDesconto) : 0;
+    let totalLiquido = r.totalLiquido !== undefined && r.totalLiquido !== null ? Number(r.totalLiquido) : undefined;
+    let totalGeral = r.totalGeral !== undefined && r.totalGeral !== null ? Number(r.totalGeral) : undefined;
+    let totalPecas = r.totalPecas !== undefined && r.totalPecas !== null ? Number(r.totalPecas) : 0;
+    let totalVolumes = r.totalVolumes !== undefined && r.totalVolumes !== null ? Number(r.totalVolumes) : 0;
+
+    // Se os campos consolidados não estiverem gravados na linha do banco, calcula a partir dos itens e da regra central
+    if (totalBruto === undefined || totalBruto === null || totalGeral === undefined || totalGeral === null || (totalBruto === 0 && items.length > 0)) {
+      let calcBruto = 0;
+      let calcPecas = 0;
+      let calcVolumes = 0;
+      let calcDesc = 0;
+      let calcIpi = 0;
+      for (const it of items) {
+        if (it.ruptura) continue;
+        const pecas = Number(it.qtdTotalUnidades || 0);
+        const preco = Number(it.precoUnitario || 0);
+        const bruto = Number(it.valorTotalBruto !== undefined ? it.valorTotalBruto : (pecas * preco));
+        calcBruto += bruto;
+        calcPecas += pecas;
+        calcVolumes += Number(it.qtdPacotes || 0);
+        calcDesc += Number(it.valorDescontoItem || 0);
+        calcIpi += Number(it.valorIpi || 0);
+      }
+      calcBruto = Number(calcBruto.toFixed(2));
+      const headerDesc = Number(r.descontoComercialTotal || 0);
+      const finalDesc = calcDesc > 0 ? calcDesc : headerDesc;
+      totalBruto = calcBruto;
+      totalPecas = calcPecas;
+      totalVolumes = calcVolumes;
+      totalDesconto = Number(finalDesc.toFixed(2));
+      totalIpi = Number(calcIpi.toFixed(2));
+      totalLiquido = Number(Math.max(0, calcBruto - totalDesconto).toFixed(2));
+      totalGeral = Number(Math.max(0, calcBruto + totalIpi - totalDesconto).toFixed(2));
+    }
+
     return {
       header: {
         id: r.id,
@@ -601,6 +639,13 @@ class OrderRepository {
         observacoes: r.observacoes,
         status: r.status,
         separationStatus: r.separationStatus,
+        totalBruto,
+        totalIpi,
+        totalDesconto,
+        totalLiquido,
+        totalGeral,
+        totalVolumes,
+        totalPecas,
         ...paymentConfig,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt

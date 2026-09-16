@@ -672,8 +672,8 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
       }
     }
 
-    // Um item só é ignorado se não tiver descrição/código válidos, OU se tanto quantidades quanto valores forem todos nulos
-    if (qtdTotalUnidades <= 0 && qtdPacotes <= 0 && precoUnitario <= 0 && valorTotalBruto <= 0) {
+    // Linha vazia ou sem identificação de produto: ignora
+    if (!descRaw && !codFornecRaw && !codInternoRaw) {
       continue;
     }
 

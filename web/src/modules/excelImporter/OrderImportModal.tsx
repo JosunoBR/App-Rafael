@@ -125,7 +125,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
       const parsed = parseOrderExcelFile(buffer, file.name);
 
       if (!parsed.items || parsed.items.length === 0) {
-        throw new Error('Nenhum item com quantidade válida foi localizado na planilha.');
+        throw new Error('Nenhum item ou produto foi localizado na planilha. Verifique se as linhas de produtos estão preenchidas.');
       }
 
       // Vincular fornecedor correspondente ou sugerir cadastro

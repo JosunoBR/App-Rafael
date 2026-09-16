@@ -150,11 +150,11 @@ fun SeparationDetailScreen(
 
                 items(SeparationEngine.DEFAULT_STORES) { store ->
                     val totalPecasLoja = order.items.sumOf { item ->
-                        val sep = SeparationEngine.calculateBoxesSeparation(item.caixas, item.qtdPorCaixa)
+                        val sep = SeparationEngine.calculateBoxesSeparation(item.totalPecas, 1)
                         sep.allocations[store.id] ?: 0
                     }
                     val totalCaixasLoja = order.items.sumOf { item ->
-                        val sep = SeparationEngine.calculateBoxesSeparation(item.caixas, item.qtdPorCaixa)
+                        val sep = SeparationEngine.calculateBoxesSeparation(item.totalPecas, 1)
                         sep.allocationsBoxes[store.id] ?: 0
                     }
 

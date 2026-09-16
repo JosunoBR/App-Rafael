@@ -9,10 +9,18 @@ import androidx.navigation.navArgument
 import br.com.mega12.app.ui.screens.buyer.BuyerHomeScreen
 import br.com.mega12.app.ui.screens.buyer.OrderCreationScreen
 import br.com.mega12.app.ui.screens.buyer.QuickCalculatorScreen
+import br.com.mega12.app.ui.screens.catalog.ProductsCatalogScreen
+import br.com.mega12.app.ui.screens.dashboard.SupplierDashboardScreen
+import br.com.mega12.app.ui.screens.financial.FinancialBoletosScreen
 import br.com.mega12.app.ui.screens.login.LoginScreen
+import br.com.mega12.app.ui.screens.orders.OrderHistoryScreen
 import br.com.mega12.app.ui.screens.separation.SeparationDetailScreen
 import br.com.mega12.app.ui.screens.separation.SeparationListScreen
+import br.com.mega12.app.ui.screens.settings.FiscalSettingsScreen
 import br.com.mega12.app.ui.screens.settings.ServerConfigScreen
+import br.com.mega12.app.ui.screens.stock.CentralStockScreen
+import br.com.mega12.app.ui.screens.suppliers.SuppliersScreen
+import br.com.mega12.app.ui.screens.users.UsersManagementScreen
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
 
 @Composable
@@ -78,6 +86,62 @@ fun NavGraph(
             OrderCreationScreen(
                 viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.ProductsCatalog.route) {
+            ProductsCatalogScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
+
+        composable(Screen.Suppliers.route) {
+            SuppliersScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
+
+        composable(Screen.OrderHistory.route) {
+            OrderHistoryScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
+
+        composable(Screen.SupplierDashboard.route) {
+            SupplierDashboardScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
+
+        composable(Screen.FinancialBoletos.route) {
+            FinancialBoletosScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
+
+        composable(Screen.CentralStock.route) {
+            CentralStockScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
+
+        composable(Screen.UsersManagement.route) {
+            UsersManagementScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
+
+        composable(Screen.FiscalSettings.route) {
+            FiscalSettingsScreen(
+                navController = navController,
+                viewModel = viewModel
             )
         }
 

@@ -36,6 +36,28 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
         }
     }
 
+    suspend fun getUsers(): Result<List<User>> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getUsers()
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Erro ao buscar usuários"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveUser(user: User): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.saveUser(user)
+            if (response.isSuccessful) Result.success(true) else Result.failure(Exception("Erro ao salvar usuário"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getProducts(): Result<List<Product>> = withContext(Dispatchers.IO) {
         try {
             val response = api.getProducts()
@@ -49,6 +71,24 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
         }
     }
 
+    suspend fun saveProduct(product: Product): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.saveProduct(product)
+            if (response.isSuccessful) Result.success(true) else Result.failure(Exception("Erro ao salvar produto"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteProduct(productId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.deleteProduct(productId)
+            if (response.isSuccessful) Result.success(true) else Result.failure(Exception("Erro ao excluir produto"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getSuppliers(): Result<List<Supplier>> = withContext(Dispatchers.IO) {
         try {
             val response = api.getSuppliers()
@@ -57,6 +97,24 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             } else {
                 Result.failure(Exception("Erro ao buscar fornecedores da API"))
             }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveSupplier(supplier: Supplier): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.saveSupplier(supplier)
+            if (response.isSuccessful) Result.success(true) else Result.failure(Exception("Erro ao salvar fornecedor"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteSupplier(supplierId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.deleteSupplier(supplierId)
+            if (response.isSuccessful) Result.success(true) else Result.failure(Exception("Erro ao excluir fornecedor"))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -88,6 +146,15 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
         }
     }
 
+    suspend fun deleteOrder(orderId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.deleteOrder(orderId)
+            if (response.isSuccessful) Result.success(true) else Result.failure(Exception("Erro ao cancelar pedido"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getFiscalConfig(): Result<FiscalConfig> = withContext(Dispatchers.IO) {
         try {
             val response = api.getFiscalConfig()
@@ -98,6 +165,37 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             }
         } catch (e: Exception) {
             Result.success(FiscalConfig()) // Fallback padrão
+        }
+    }
+
+    suspend fun saveFiscalConfig(config: FiscalConfig): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.saveFiscalConfig(config)
+            if (response.isSuccessful) Result.success(true) else Result.failure(Exception("Erro ao salvar parâmetros fiscais"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getStock(): Result<List<CentralStockItem>> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getStock()
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.success(emptyList())
+            }
+        } catch (e: Exception) {
+            Result.success(emptyList())
+        }
+    }
+
+    suspend fun saveStockItem(item: CentralStockItem): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.saveStockItem(item)
+            if (response.isSuccessful) Result.success(true) else Result.failure(Exception("Erro ao atualizar estoque"))
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

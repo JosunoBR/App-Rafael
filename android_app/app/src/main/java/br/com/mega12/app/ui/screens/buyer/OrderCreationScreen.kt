@@ -335,7 +335,7 @@ fun OrderCreationScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "${item.caixas} CX (${item.totalPecas} un) x R$ %.2f".format(item.precoCompraUnitario),
+                                    text = "${item.totalPecas} UN x R$ %.2f".format(item.precoCompraUnitario),
                                     style = MaterialTheme.typography.bodyMedium.copy(color = Slate400)
                                 )
                                 Text(

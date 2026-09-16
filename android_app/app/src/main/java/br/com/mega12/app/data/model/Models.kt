@@ -103,6 +103,22 @@ data class OrderItem(
     val qtdPorCaixa: Int = 1
 )
 
+// Parcela e Boleto
+data class PaymentInstallment(
+    val id: String = "",
+    val orderId: String? = null,
+    val numeroPedido: String? = null,
+    val fornecedor: String? = null,
+    val numeroParcela: Int = 1,
+    val totalParcelas: Int = 1,
+    val dataVencimento: String = "",
+    val valor: Double = 0.0,
+    val status: String = "A Vencer", // "A Vencer" | "Vence Hoje" | "Em Atraso" | "Pago"
+    val dataPagamento: String? = null,
+    val observacao: String? = null,
+    val documentoRef: String? = null
+)
+
 // Cabeçalho do Pedido
 data class OrderHeader(
     val numeroPedido: String = "",
@@ -124,11 +140,30 @@ data class PurchaseOrder(
     val id: String = "",
     val header: OrderHeader = OrderHeader(),
     val items: List<OrderItem> = emptyList(),
+    val installments: List<PaymentInstallment> = emptyList(),
     val status: String = "Em Cotação",
     val separationStatus: String = "Pendente",
     val totalLiquido: Double = 0.0,
     val totalPecas: Int = 0,
     val createdAt: String? = null
+)
+
+// Item do Estoque Central (CD)
+data class CentralStockItem(
+    val id: String = "",
+    val productId: String? = null,
+    val codigoInterno: String = "",
+    val codigoFornecedor: String? = null,
+    val codigoBarras: String? = null,
+    val descricao: String = "",
+    val categoria: String? = null,
+    val fotoUrl: String? = null,
+    val saldoUnidades: Int = 0,
+    val precoUnitario: Double = 0.0,
+    val pdvSugerido: Double = 12.0,
+    val localizacaoGalpao: String? = "Rua A - Palete 01",
+    val fornecedorOrigem: String? = null,
+    val updatedAt: String? = null
 )
 
 // Lançamento de Avaria
@@ -140,4 +175,18 @@ data class AvariaItem(
     val quantidade: Int,
     val motivo: String,
     val timestamp: String
+)
+
+// Lançamento Financeiro
+data class FinancialEntry(
+    val id: String = "",
+    val descricao: String = "",
+    val categoria: String = "PRODUTOS",
+    val fornecedor: String? = null,
+    val formaPagamento: String = "BOLETO",
+    val parcelaDesc: String = "1/1",
+    val dataVencimento: String = "",
+    val valor: Double = 0.0,
+    val status: String = "A Vencer",
+    val dataPagamento: String? = null
 )

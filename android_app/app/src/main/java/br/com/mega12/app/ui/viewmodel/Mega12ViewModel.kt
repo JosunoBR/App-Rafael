@@ -178,7 +178,7 @@ class Mega12ViewModel : ViewModel() {
         val finalCodInterno = codigoInterno.ifEmpty { codigo.ifEmpty { "PRD-${System.currentTimeMillis() % 10000}" } }
         val subtotal = totalUnidades * precoCompra
         val fiscal = FiscalEngine.calculateItemFiscal(precoCompra, pdvAlvo, _fiscalConfig.value)
-        val sep = SeparationEngine.calculateAutomaticSeparation(totalUnidades)
+        val sep = SeparationEngine.calculateBoxesSeparation(totalUnidades, 1)
 
         val newItem = OrderItem(
             id = UUID.randomUUID().toString(),
@@ -231,11 +231,12 @@ class Mega12ViewModel : ViewModel() {
             return false
         }
 
+        val totalUnidades = caixas * qtdPorCaixa
+
         addItemToDraftOrder(
             descricao = descricao,
             codigo = codigo,
-            caixas = caixas,
-            qtdPorCaixa = qtdPorCaixa,
+            totalUnidades = totalUnidades,
             precoCompra = compra,
             pdvAlvo = pdv
         )

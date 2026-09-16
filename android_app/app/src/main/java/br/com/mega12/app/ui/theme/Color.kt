@@ -26,6 +26,7 @@ val Slate100 = Color(0xFFF1F5F9)
 val Slate50 = Color(0xFFF8FAFC)
 
 val Amber500 = Color(0xFFF59E0B)
+val Amber400 = Color(0xFFFBBF24)
 val Amber100 = Color(0xFFFEF3C7)
 val Rose500 = Color(0xFFF43F5E)
 val Rose100 = Color(0xFFFFE4E6)

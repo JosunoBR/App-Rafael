@@ -487,14 +487,6 @@ async function getDatabase() {
     const rootHash = bcrypt.hashSync('Athlon64', 10);
     const now = new Date().toISOString();
 
-    // Remove qualquer resquício de logins de teste antigos
-    try {
-      dbInstance.run(`
-        DELETE FROM users 
-        WHERE id IN ('usr_rafael', 'usr_comprador', 'usr_conferente', 'usr_diretoria', 'usr_deposito', 'usr_separacao', 'usr_jorge', 'usr_marcos') 
-           OR LOWER(email) IN ('diretoria@mega12.com.br', 'deposito@mega12.com.br', 'separacao@mega12.com.br', 'compras@mega12.com.br', 'jorge@mega12.com.br', 'marcos@mega12.com.br')
-      `);
-    } catch (cleanErr) {}
 
     // Verifica se usuário root já existe
     const rootCheck = dbInstance.exec("SELECT id FROM users WHERE LOWER(email) = 'root' OR id = 'usr_root' OR LOWER(nome) = 'root'");

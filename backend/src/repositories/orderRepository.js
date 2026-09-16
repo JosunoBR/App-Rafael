@@ -18,9 +18,30 @@ class OrderRepository {
   }
 
   async save(order) {
-    const existing = await queryOne("SELECT id, numeroPedido FROM purchase_orders WHERE id = ? OR numeroPedido = ?", [order.header.id, order.header.numeroPedido]);
+    const rawNum = order?.header?.numeroPedido ? String(order.header.numeroPedido).trim() : '';
+    if (!rawNum) {
+      const err = new Error('Número do pedido é obrigatório.');
+      err.statusCode = 400;
+      throw err;
+    }
+    order.header.numeroPedido = rawNum;
+
+    // 🛡️ Validação de Unicidade Estrita: Não permite duplicidade de número de pedido
+    const currentId = order.header.id || '';
+    const conflict = await queryOne(
+      "SELECT id, numeroPedido, fornecedor FROM purchase_orders WHERE LOWER(numeroPedido) = LOWER(?) AND id != ?",
+      [rawNum, currentId]
+    );
+
+    if (conflict) {
+      const err = new Error(`Não é permitido duplicar números de pedido! O número "${rawNum}" já pertence ao pedido do fornecedor "${conflict.fornecedor || 'N/A'}" (ID: ${conflict.id}). Números de pedido devem ser únicos.`);
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const existing = currentId ? await queryOne("SELECT id, numeroPedido FROM purchase_orders WHERE id = ?", [currentId]) : null;
     const now = new Date().toISOString();
-    const targetId = existing ? existing.id : (order.header.id || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+    const targetId = existing ? existing.id : (currentId || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
     order.header.id = targetId;
 
     const items = order.items || [];
@@ -595,14 +616,24 @@ class OrderRepository {
   async getNextNumeroPedido() {
     const rows = await queryAll("SELECT numeroPedido FROM purchase_orders");
     let maxNum = 0;
+    const existingNumbers = new Set();
     rows.forEach(r => {
-      const match = r.numeroPedido && r.numeroPedido.match(/PED-(\d+)/i);
+      if (!r.numeroPedido) return;
+      existingNumbers.add(r.numeroPedido.trim().toUpperCase());
+      const match = r.numeroPedido.match(/(\d+)/);
       if (match && match[1]) {
         const num = parseInt(match[1], 10);
         if (num > maxNum) maxNum = num;
       }
     });
-    return `PED-${String(maxNum + 1).padStart(4, '0')}`;
+
+    let nextCandidate = maxNum + 1;
+    let nextFormatted = `PED-${String(nextCandidate).padStart(4, '0')}`;
+    while (existingNumbers.has(nextFormatted.toUpperCase())) {
+      nextCandidate++;
+      nextFormatted = `PED-${String(nextCandidate).padStart(4, '0')}`;
+    }
+    return nextFormatted;
   }
 
   async duplicate(id) {

@@ -25,7 +25,7 @@ import {
   RotateCcw,
   ArrowRightLeft
 } from 'lucide-react';
-import { OrderHeader, Supplier, PaymentCondition } from '../shared/types';
+import { OrderHeader, Supplier, PaymentCondition, PurchaseOrder } from '../shared/types';
 import { handleCurrencyInput, formatCurrency, maskPhone, maskDate, toBrDate, toIsoDate } from '../utils/masks';
 import { LEGACY_DEFAULT_OBSERVACOES } from '../utils/storage';
 import { PaymentConditionsModal } from './PaymentConditionsModal';
@@ -48,7 +48,7 @@ const FORMA_PAGAMENTO_OPTIONS = [
   { value: 'Depósito', label: '🏦 Depósito / PIX' },
   { value: 'Cheque', label: '📜 Cheque' },
   { value: 'Boleto / Depósito', label: '📄/🏦 Boleto / Depósito' },
-  { value: 'Boleto / Cheque', label: '📄/📜 Boleto / Cheque' }
+  { value: 'Dinheiro', label: '💵 Dinheiro' }
 ];
 
 const TIPO_FRETE_OPTIONS = [
@@ -60,6 +60,7 @@ const TIPO_FRETE_OPTIONS = [
 interface OrderHeaderFormProps {
   header: OrderHeader;
   suppliers: Supplier[];
+  existingOrders?: PurchaseOrder[];
   onChange: (updatedHeader: OrderHeader) => void;
   onOpenSupplierModal: (supplierToEdit?: Supplier | null) => void;
   orderTotal?: number;
@@ -73,6 +74,7 @@ interface OrderHeaderFormProps {
 export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({ 
   header, 
   suppliers, 
+  existingOrders = [],
   onChange,
   onOpenSupplierModal,
   orderTotal,
@@ -87,6 +89,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const [supplierFilterText, setSupplierFilterText] = useState('');
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 🛡️ Validação em tempo real de unicidade do número do pedido
+  const duplicateOrderConflict = useMemo(() => {
+    if (!header.numeroPedido || !existingOrders || existingOrders.length === 0) return null;
+    const currentNum = header.numeroPedido.trim().toUpperCase();
+    if (!currentNum) return null;
+    return existingOrders.find(o => 
+      o.header.id !== header.id && 
+      o.header.numeroPedido && 
+      o.header.numeroPedido.trim().toUpperCase() === currentNum
+    ) || null;
+  }, [header.numeroPedido, header.id, existingOrders]);
 
   // Box de Condições de Pagamento
   const [isPaymentCondModalOpen, setIsPaymentCondModalOpen] = useState(false);
@@ -1511,17 +1525,34 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
             
             {/* 1. Nº Pedido */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                <Hash className="w-3.5 h-3.5 text-slate-400" />
-                Nº Pedido / Cotação
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Hash className="w-3.5 h-3.5 text-slate-400" />
+                  Nº Pedido / Cotação
+                </label>
+                {duplicateOrderConflict && (
+                  <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider animate-pulse">
+                    ⚠️ Duplicado!
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={header.numeroPedido}
                 onChange={(e) => handleFieldChange('numeroPedido', e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-bold"
+                className={`w-full px-3 py-2 text-xs rounded-lg border bg-white dark:bg-slate-900 font-mono font-bold transition-colors outline-hidden ${
+                  duplicateOrderConflict
+                    ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20 text-rose-700 dark:text-rose-300 bg-rose-50/50 dark:bg-rose-950/20'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                }`}
                 placeholder="Ex: PED-0001"
               />
+              {duplicateOrderConflict && (
+                <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-start gap-1 leading-tight">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                  <span>Já existe no pedido de <b>{duplicateOrderConflict.header.fornecedor || 'outro fornecedor'}</b>. Números devem ser únicos!</span>
+                </p>
+              )}
             </div>
 
             {/* 2. Fornecedor (Ocupa 2 colunas) */}

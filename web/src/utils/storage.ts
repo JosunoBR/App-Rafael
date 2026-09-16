@@ -134,34 +134,54 @@ export function isBogusOrderNumber(num?: string | null): boolean {
 
 /**
  * Gera o próximo número sequencial do pedido no formato PED-0001, PED-0002...
+ * Garante que nunca colida com pedidos existentes no banco ou localStorage.
  */
-export function getNextOrderNumber(): string {
+export function getNextOrderNumber(knownOrders?: PurchaseOrder[]): string {
   try {
     let maxNum = 0;
+    const existingNumbers = new Set<string>();
+
+    const checkList = (ordersList: any[]) => {
+      if (!Array.isArray(ordersList)) return;
+      ordersList.forEach((o: any) => {
+        const numStr = o?.header?.numeroPedido;
+        if (numStr && typeof numStr === 'string') {
+          existingNumbers.add(numStr.trim().toUpperCase());
+          const match = numStr.match(/(\d+)/);
+          if (match && match[1]) {
+            const n = parseInt(match[1], 10);
+            if (n > maxNum) maxNum = n;
+          }
+        }
+      });
+    };
+
+    if (knownOrders && knownOrders.length > 0) {
+      checkList(knownOrders);
+    }
+
     const rawSaved = localStorage.getItem(STORAGE_KEYS.SAVED_ORDERS);
     if (rawSaved) {
       try {
         const rawList = JSON.parse(rawSaved);
-        if (Array.isArray(rawList)) {
-          rawList.forEach((o: any) => {
-            const match = o?.header?.numeroPedido?.match(/PED-(\d+)/i);
-            if (match && match[1]) {
-              const num = parseInt(match[1], 10);
-              if (num > maxNum) maxNum = num;
-            }
-          });
-        }
+        checkList(rawList);
       } catch {}
     }
 
     const storedSeq = localStorage.getItem(STORAGE_KEYS.ORDER_SEQUENCE);
     const seqNum = storedSeq ? parseInt(storedSeq, 10) : 0;
-    const nextNum = Math.max(maxNum, seqNum) + 1;
+    let nextCandidate = Math.max(maxNum, seqNum) + 1;
     
-    safeSetItem(STORAGE_KEYS.ORDER_SEQUENCE, nextNum.toString());
-    return `PED-${String(nextNum).padStart(4, '0')}`;
+    let candidateStr = `PED-${String(nextCandidate).padStart(4, '0')}`;
+    while (existingNumbers.has(candidateStr.toUpperCase())) {
+      nextCandidate++;
+      candidateStr = `PED-${String(nextCandidate).padStart(4, '0')}`;
+    }
+
+    safeSetItem(STORAGE_KEYS.ORDER_SEQUENCE, nextCandidate.toString());
+    return candidateStr;
   } catch (err) {
-    console.error('[storage] Erro ao calcular próxima sequência de pedido. Usando fallback PED-0001:', err);
+    console.error('[storage] Erro ao calcular próxima sequência de pedido:', err);
     return 'PED-0001';
   }
 }
@@ -756,11 +776,20 @@ export function loadSavedOrdersList(): PurchaseOrder[] {
 
 export function saveOrderToHistory(order: PurchaseOrder): void {
   const list = loadSavedOrdersList();
-  const orderNum = order.header.numeroPedido.trim().toUpperCase();
-  const index = list.findIndex(o => 
-    o.header.id === order.header.id || 
-    (o.header.numeroPedido && o.header.numeroPedido.trim().toUpperCase() === orderNum)
+  const orderNum = (order.header.numeroPedido || '').trim().toUpperCase();
+  
+  // 🛡️ Prevenção de duplicidade: não permite que dois pedidos distintos tenham o mesmo número
+  const conflict = list.find(o => 
+    o.header.id !== order.header.id && 
+    o.header.numeroPedido && 
+    o.header.numeroPedido.trim().toUpperCase() === orderNum
   );
+  if (conflict) {
+    console.error(`[storage] Erro de unicidade: O número "${orderNum}" já pertence ao pedido ID ${conflict.header.id}`);
+    throw new Error(`O número de pedido "${orderNum}" já está em uso por outro pedido (${conflict.header.fornecedor || 'Fornecedor'}). Números de pedido devem ser únicos!`);
+  }
+
+  const index = list.findIndex(o => o.header.id === order.header.id);
   
   const updatedOrder = { 
     ...order, 

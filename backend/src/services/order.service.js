@@ -163,6 +163,25 @@ class OrderService {
       order: duplicated
     };
   }
+
+  async getNextOrderNumber() {
+    return await orderRepository.getNextNumeroPedido();
+  }
+
+  async checkNumeroAvailable(numeroPedido, excludeId = null) {
+    if (!numeroPedido) return { available: false, message: 'Número é obrigatório.' };
+    const num = String(numeroPedido).trim();
+    const existing = await orderRepository.findByNumero(num);
+    if (existing && existing.header.id !== excludeId) {
+      return {
+        available: false,
+        conflictId: existing.header.id,
+        conflictFornecedor: existing.header.fornecedor,
+        message: `O número "${num}" já está em uso pelo pedido do fornecedor "${existing.header.fornecedor}".`
+      };
+    }
+    return { available: true, message: `O número "${num}" está disponível.` };
+  }
 }
 
 module.exports = new OrderService();

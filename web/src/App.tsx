@@ -358,7 +358,7 @@ export function App() {
         const hydratedOrders = dbOrders.map((o: PurchaseOrder) => {
           let cleanNum = (o.header?.numeroPedido || '').trim();
           if (!cleanNum || cleanNum.toUpperCase().includes('FORNECEDOR') || cleanNum.toUpperCase().includes('IMPORTADO') || cleanNum.toUpperCase().includes('FORNEC')) {
-            cleanNum = getNextOrderNumber();
+            cleanNum = getNextOrderNumber(dbOrders);
           }
           return {
             ...o,
@@ -371,6 +371,30 @@ export function App() {
           };
         });
         setSavedOrders(hydratedOrders);
+
+        // 🛡️ Sincroniza a sequência global de pedidos com os dados do banco
+        getNextOrderNumber(hydratedOrders);
+
+        // Se o pedido em edição for um rascunho inicial em branco cujo número colida com um pedido existente
+        setOrder(currentOrder => {
+          const validItems = (currentOrder.items || []).filter(it => !isOrderItemBlank(it));
+          const hasWork = validItems.length > 0 || (currentOrder.header.fornecedor && currentOrder.header.fornecedor.trim() !== '');
+          const isSaved = hydratedOrders.some(o => o.header.id === currentOrder.header.id);
+          const currentNum = (currentOrder.header?.numeroPedido || '').trim().toUpperCase();
+          const collision = hydratedOrders.some(o => o.header.id !== currentOrder.header.id && o.header.numeroPedido?.trim().toUpperCase() === currentNum);
+
+          if (!isSaved && (!hasWork || collision)) {
+            const nextFreeNum = getNextOrderNumber(hydratedOrders);
+            return {
+              ...currentOrder,
+              header: {
+                ...currentOrder.header,
+                numeroPedido: nextFreeNum
+              }
+            };
+          }
+          return currentOrder;
+        });
       }
     } catch (err: any) {
       console.warn('Usando armazenamento local de contingência:', err);
@@ -893,11 +917,14 @@ export function App() {
     const prodsToUpdate: Product[] = [];
     let currentProds = [...products];
 
-    // Índices em memória para busca instantânea O(1)
+    // Índices em memória para busca instantânea O(1) escopados por fornecedor
     const existingDescSet = new Map<string, Product>();
     const existingCodeSet = new Map<string, Product>();
     currentProds.forEach(p => {
-      if (p.descricao) existingDescSet.set(p.descricao.trim().toLowerCase(), p);
+      const supKey = (p.supplierId || '').trim();
+      if (p.descricao) {
+        existingDescSet.set(`${supKey}:::${p.descricao.trim().toLowerCase()}`, p);
+      }
       if (p.codigo) existingCodeSet.set(p.codigo.trim().toLowerCase(), p);
       if (p.codigoInterno) existingCodeSet.set(p.codigoInterno.trim().toLowerCase(), p);
     });
@@ -905,10 +932,13 @@ export function App() {
     for (const it of itemsToAutoRegister) {
       const cleanDesc = it.descricao.trim().toLowerCase();
       const code = (it.codigo || it.codigoInterno || '').trim().toLowerCase();
-      const existing = (code ? existingCodeSet.get(code) : undefined) || (cleanDesc ? existingDescSet.get(cleanDesc) : undefined);
       const fallbackSupplier = suppliers[0];
       const assignedSupplierId = order.header.supplierId || fallbackSupplier?.id || '';
       const assignedSupplierNome = order.header.fornecedor || fallbackSupplier?.razaoSocial || '';
+
+      // 🛡️ Busca primeiro por código; se for por descrição, busca estritamente no catálogo DO MESMO FORNECEDOR
+      const existing = (code ? existingCodeSet.get(code) : undefined) || 
+                       (cleanDesc ? (existingDescSet.get(`${assignedSupplierId}:::${cleanDesc}`) || existingDescSet.get(`:::${cleanDesc}`)) : undefined);
 
       if (!existing) {
         const codInterno = it.codigoInterno || it.codigo || `PRD-${String(currentProds.length + 1).padStart(3, '0')}`;
@@ -965,6 +995,20 @@ export function App() {
   const saveOrderSilently = async (targetOrder: PurchaseOrder) => {
     const validItems = (targetOrder.items || []).filter(it => !isOrderItemBlank(it));
     if (validItems.length === 0 && (!targetOrder.header.fornecedor || targetOrder.header.fornecedor.trim() === '')) {
+      return;
+    }
+
+    const cleanNum = (targetOrder.header.numeroPedido || '').trim().toUpperCase();
+    if (!cleanNum) return;
+
+    // 🛡️ Não permite salvar se o número de pedido colidir com outro pedido existente
+    const duplicate = savedOrders.find(o => 
+      o.header.id !== targetOrder.header.id && 
+      o.header.numeroPedido && 
+      o.header.numeroPedido.trim().toUpperCase() === cleanNum
+    );
+    if (duplicate) {
+      console.warn(`[AutoSave] Abortado: número ${cleanNum} já pertence a outro pedido (${duplicate.header.fornecedor}).`);
       return;
     }
 
@@ -1092,6 +1136,23 @@ export function App() {
       return;
     }
 
+    const cleanNum = (order.header.numeroPedido || '').trim().toUpperCase();
+    if (!cleanNum) {
+      showToast('O número do pedido é obrigatório.', 'error');
+      return;
+    }
+
+    // 🛡️ Validação Estrita de Unicidade: impede duplicidade de número chave
+    const conflict = savedOrders.find(o => 
+      o.header.id !== order.header.id && 
+      o.header.numeroPedido && 
+      o.header.numeroPedido.trim().toUpperCase() === cleanNum
+    );
+    if (conflict) {
+      showToast(`Não é possível salvar: O número "${order.header.numeroPedido}" já pertence ao pedido do fornecedor "${conflict.header.fornecedor || 'outro fornecedor'}". Números de pedido devem ser únicos!`, 'error');
+      return;
+    }
+
     await autoRegisterProductsFromOrder(validItems);
 
     const today = new Date().toISOString().split('T')[0];
@@ -1154,6 +1215,23 @@ export function App() {
     }
     if (!order.header.fornecedor || order.header.fornecedor.trim() === '') {
       showToast('Selecione um fornecedor para fechar o pedido.', 'error');
+      return;
+    }
+
+    const cleanNum = (order.header.numeroPedido || '').trim().toUpperCase();
+    if (!cleanNum) {
+      showToast('O número do pedido é obrigatório.', 'error');
+      return;
+    }
+
+    // 🛡️ Validação Estrita de Unicidade
+    const conflict = savedOrders.find(o => 
+      o.header.id !== order.header.id && 
+      o.header.numeroPedido && 
+      o.header.numeroPedido.trim().toUpperCase() === cleanNum
+    );
+    if (conflict) {
+      showToast(`Não é possível fechar o pedido: O número "${order.header.numeroPedido}" já pertence a outro pedido (${conflict.header.fornecedor || 'Fornecedor'}).`, 'error');
       return;
     }
 
@@ -1458,6 +1536,19 @@ export function App() {
 
   // Salvar pedido atualizado diretamente (ex: pelo módulo financeiro ou romaneio)
   const handleSaveOrderDirect = async (updatedOrder: PurchaseOrder) => {
+    const cleanNum = (updatedOrder.header.numeroPedido || '').trim().toUpperCase();
+    if (cleanNum) {
+      const conflict = savedOrders.find(o => 
+        o.header.id !== updatedOrder.header.id && 
+        o.header.numeroPedido && 
+        o.header.numeroPedido.trim().toUpperCase() === cleanNum
+      );
+      if (conflict) {
+        showToast(`Não é possível salvar: O número "${updatedOrder.header.numeroPedido}" já pertence ao pedido de ${conflict.header.fornecedor || 'outro fornecedor'}.`, 'error');
+        return;
+      }
+    }
+
     // Salva automaticamente no catálogo produtos deste pedido que ainda não existam
     const validItems = (updatedOrder.items || []).filter(it => !isOrderItemBlank(it) && it.descricao && it.descricao.trim().length > 0);
     if (validItems.length > 0) {
@@ -1474,7 +1565,8 @@ export function App() {
           const pCodInt = (p.codigoInterno || p.codigo || '').trim().toLowerCase();
           const itCodInt = (it.codigoInterno || it.codigo || '').trim().toLowerCase();
           const itDesc = (it.descricao || '').trim().toLowerCase();
-          return (itCodInt && pCodInt && itCodInt === pCodInt) || (itDesc && pDesc && itDesc === pDesc);
+          return (itCodInt && pCodInt && itCodInt === pCodInt) || 
+                 (itDesc && pDesc && itDesc === pDesc && (!p.supplierId || p.supplierId === assignedSupplierId));
         });
 
         if (!existing) {
@@ -1709,10 +1801,13 @@ export function App() {
   const handleOrderImported = async (importedOrder: PurchaseOrder, updatedProducts: Product[]) => {
     setProducts(updatedProducts);
     
-    // Salvaguarda definitiva: garante que o número do pedido nunca contenha textos espúrios
+    // Salvaguarda definitiva: garante que o número do pedido nunca contenha textos espúrios ou colida com existentes
     let finalOrderNum = (importedOrder.header.numeroPedido || '').trim();
-    if (!finalOrderNum || finalOrderNum.toUpperCase().includes('FORNECEDOR') || finalOrderNum.toUpperCase().includes('IMPORTADO') || finalOrderNum.toUpperCase().includes('FORNEC')) {
-      finalOrderNum = getNextOrderNumber();
+    const isBogus = !finalOrderNum || finalOrderNum.toUpperCase().includes('FORNECEDOR') || finalOrderNum.toUpperCase().includes('IMPORTADO') || finalOrderNum.toUpperCase().includes('FORNEC');
+    const isConflict = finalOrderNum && savedOrders.some(o => o.header.id !== importedOrder.header.id && o.header.numeroPedido?.trim().toUpperCase() === finalOrderNum.toUpperCase());
+
+    if (isBogus || isConflict) {
+      finalOrderNum = getNextOrderNumber(savedOrders);
     }
     const cleanOrder: PurchaseOrder = {
       ...importedOrder,
@@ -2204,6 +2299,7 @@ export function App() {
                   <OrderHeaderForm 
                     header={order.header} 
                     suppliers={suppliers}
+                    existingOrders={savedOrders}
                     onChange={handleHeaderChange} 
                     onOpenSupplierModal={(supToEdit) => {
                       setSupplierModalEditTarget(supToEdit || null);
@@ -2476,6 +2572,7 @@ export function App() {
           suppliers={suppliers}
           products={products}
           stores={storeConfigs}
+          existingOrders={savedOrders}
           fiscalConfig={fiscalConfig}
           onSaveSupplier={handleSaveSupplier}
           onOrderImported={handleOrderImported}

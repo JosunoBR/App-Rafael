@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   UploadCloud, 
   FileSpreadsheet, 
@@ -43,6 +43,7 @@ interface OrderImportModalProps {
   suppliers: Supplier[];
   products: Product[];
   stores: StoreConfig[];
+  existingOrders?: PurchaseOrder[];
   fiscalConfig?: FiscalConfig;
   onSaveSupplier?: (supplier: Supplier) => Promise<any> | void;
   onOrderImported: (order: PurchaseOrder, updatedProducts: Product[]) => void;
@@ -54,6 +55,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
   suppliers,
   products,
   stores,
+  existingOrders = [],
   fiscalConfig,
   onSaveSupplier,
   onOrderImported
@@ -190,8 +192,13 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
         cleanNumero.toUpperCase().includes('FORNEC') ||
         cleanNumero.toUpperCase().includes('PLANILHA');
 
-      if (isBogus) {
-        cleanNumero = getNextOrderNumber();
+      // 🛡️ Prevenção de duplicidade: se o número já existir no sistema, gera o próximo livre
+      const numberAlreadyTaken = cleanNumero && existingOrders.some(o => 
+        o.header.numeroPedido && o.header.numeroPedido.trim().toUpperCase() === cleanNumero.toUpperCase()
+      );
+
+      if (isBogus || numberAlreadyTaken) {
+        cleanNumero = getNextOrderNumber(existingOrders);
       }
       parsed.header.numeroPedido = cleanNumero;
       setOrderNumberInput(cleanNumero);
@@ -229,8 +236,25 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
     setCatalogAnalysis(updatedAnalysis);
   };
 
+  const isInputDuplicate = useMemo(() => {
+    if (!orderNumberInput || !existingOrders) return false;
+    const clean = orderNumberInput.trim().toUpperCase();
+    return existingOrders.some(o => o.header.numeroPedido && o.header.numeroPedido.trim().toUpperCase() === clean);
+  }, [orderNumberInput, existingOrders]);
+
   const handleConfirmImport = async () => {
     if (!parsedData || !selectedSupplier || !catalogAnalysis) return;
+
+    const finalNum = (orderNumberInput || parsedData.header.numeroPedido || '').trim().toUpperCase();
+    if (!finalNum) {
+      setError('O número do pedido é obrigatório.');
+      return;
+    }
+    const duplicate = existingOrders.find(o => o.header.numeroPedido && o.header.numeroPedido.trim().toUpperCase() === finalNum);
+    if (duplicate) {
+      setError(`Não é possível importar: O número de pedido "${finalNum}" já pertence a outro pedido no sistema (${duplicate.header.fornecedor || 'Fornecedor'}). Números de pedido não podem ser duplicados!`);
+      return;
+    }
 
     setIsImporting(true);
     setError(null);
@@ -641,8 +665,17 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                   </div>
 
                   {/* N° do Pedido */}
-                  <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">N° do Pedido</span>
+                  <div className={`p-2 rounded-xl bg-white dark:bg-slate-900 border transition-colors ${
+                    isInputDuplicate 
+                      ? 'border-rose-500 dark:border-rose-500 bg-rose-50/30 dark:bg-rose-950/20' 
+                      : 'border-slate-200/70 dark:border-slate-800'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">N° do Pedido</span>
+                      {isInputDuplicate && (
+                        <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">⚠️ Já existe!</span>
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={orderNumberInput}
@@ -652,9 +685,17 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                         if (parsedData) parsedData.header.numeroPedido = val;
                       }}
                       placeholder="ex: PED-0001"
-                      className="w-full text-slate-900 dark:text-white font-mono font-bold text-xs bg-slate-50 dark:bg-slate-800/80 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 outline-none mt-0.5 focus:border-emerald-500"
+                      className={`w-full font-mono font-bold text-xs px-2 py-1 rounded border outline-none mt-0.5 ${
+                        isInputDuplicate
+                          ? 'border-rose-500 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40'
+                          : 'text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 focus:border-emerald-500'
+                      }`}
                     />
-                    <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-semibold">Status: Em Cotação</span>
+                    {isInputDuplicate ? (
+                      <span className="block text-[10px] text-rose-600 dark:text-rose-400 mt-0.5 font-semibold">Número duplicado não permitido</span>
+                    ) : (
+                      <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-semibold">Status: Em Cotação</span>
+                    )}
                   </div>
 
                   {/* Condição de Pagamento e Desconto Comercial */}
@@ -813,8 +854,8 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
             <button
               type="button"
               onClick={handleConfirmImport}
-              disabled={isImporting}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition disabled:opacity-50 cursor-pointer"
+              disabled={isImporting || isInputDuplicate}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
               {isImporting ? (
                 <>

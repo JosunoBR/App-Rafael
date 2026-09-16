@@ -1,5 +1,6 @@
 import { PurchaseOrder, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition, FinancialEntry, FinancialSummary } from '../shared/types';
 import { API_BASE_URL } from './config';
+import { getNextOrderNumber } from './storage';
 
 export class ApiError extends Error {
   status: number;
@@ -288,6 +289,12 @@ export async function saveFiscalConfigToDb(config: FiscalConfig): Promise<void> 
 
 export async function fetchNextOrderNumberFromDb(): Promise<string> {
   try {
+    const res = await apiFetch('/orders/next-number');
+    const data = await res.json();
+    if (data?.nextNumber) return data.nextNumber;
+  } catch {}
+
+  try {
     const res = await apiFetch('/orders');
     const orders: PurchaseOrder[] = await res.json();
     if (!orders || orders.length === 0) return 'PED-0001';
@@ -303,7 +310,17 @@ export async function fetchNextOrderNumberFromDb(): Promise<string> {
 
     return `PED-${String(maxNum + 1).padStart(4, '0')}`;
   } catch {
-    return 'PED-0001';
+    return getNextOrderNumber();
+  }
+}
+
+export async function checkOrderNumberInDb(numero: string, excludeId?: string): Promise<{ available: boolean; message: string }> {
+  try {
+    const query = excludeId ? `?excludeId=${encodeURIComponent(excludeId)}` : '';
+    const res = await apiFetch(`/orders/check-numero/${encodeURIComponent(numero)}${query}`);
+    return await res.json();
+  } catch {
+    return { available: true, message: 'Não foi possível validar online' };
   }
 }
 

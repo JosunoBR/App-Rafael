@@ -54,6 +54,26 @@ class OrderController {
       next(err);
     }
   }
+
+  async getNextNumber(req, res, next) {
+    try {
+      const nextNumber = await orderService.getNextOrderNumber();
+      return res.json({ nextNumber });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async checkNumero(req, res, next) {
+    try {
+      const { numero } = req.params;
+      const { excludeId } = req.query;
+      const result = await orderService.checkNumeroAvailable(numero, excludeId);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new OrderController();

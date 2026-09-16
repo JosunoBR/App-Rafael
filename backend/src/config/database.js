@@ -394,6 +394,13 @@ async function getDatabase() {
           try { dbInstance.run(`ALTER TABLE purchase_orders ADD COLUMN ${col} ${def}`); } catch (e) {}
         }
       });
+
+      // 🛡️ Integridade de Dados: Garante unicidade estrita e case-insensitive do número do pedido
+      try {
+        dbInstance.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_purchase_orders_numero_nocase ON purchase_orders(numeroPedido COLLATE NOCASE);`);
+      } catch (idxErr) {
+        console.warn('Aviso ao criar indice unico de numeroPedido:', idxErr.message);
+      }
     }
 
     const prodTableInfo = dbInstance.exec("PRAGMA table_info(products)");

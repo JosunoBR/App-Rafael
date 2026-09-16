@@ -15,6 +15,7 @@ dist-ssr/
 *.sqlite
 mega12.db
 backend/data/*.db
+backup_*.json
 
 # Logs
 logs/

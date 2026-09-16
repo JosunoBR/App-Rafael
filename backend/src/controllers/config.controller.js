@@ -36,6 +36,24 @@ class ConfigController {
       next(err);
     }
   }
+
+  async restoreBackup(req, res, next) {
+    try {
+      const user = req.user;
+      const isRoot = user && (user.id === 'usr_root' || user.email === 'root' || user.nome === 'Root');
+      if (!isRoot) {
+        return res.status(403).json({ 
+          error: 'Acesso negado. Apenas o Administrador Raiz (Root) possui permissão para restaurar backups do sistema.' 
+        });
+      }
+
+      const backupRestoreService = require('../services/backupRestore.service');
+      const result = await backupRestoreService.restoreFromBackupData(req.body);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new ConfigController();

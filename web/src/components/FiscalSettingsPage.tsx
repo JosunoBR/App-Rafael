@@ -17,25 +17,48 @@ import {
   Trash2,
   X,
   Search,
-  Check
+  Check,
+  Database,
+  Download,
+  Upload,
+  ShieldAlert,
+  Loader2,
+  FileJson,
+  Shield
 } from 'lucide-react';
-import { FiscalConfig, StoreConfig } from '../shared/types';
+import { FiscalConfig, StoreConfig, User } from '../shared/types';
 import { DEFAULT_FISCAL_CONFIG, DEFAULT_STORES } from '../shared/constants';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
+import { restoreDatabaseBackupApi } from '../utils/api';
 
 interface FiscalSettingsPageProps {
   fiscalConfig: FiscalConfig;
   storeConfigs: StoreConfig[];
+  currentUser?: User | null;
   onSave: (fiscal: FiscalConfig, stores: StoreConfig[]) => void;
+  onRestoreSuccess?: () => void;
 }
 
 export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
   fiscalConfig,
   storeConfigs,
-  onSave
+  currentUser,
+  onSave,
+  onRestoreSuccess
 }) => {
   const [fiscal, setFiscal] = useState<FiscalConfig>({ ...fiscalConfig });
   const [stores, setStores] = useState<StoreConfig[]>(() => storeConfigs.map(s => ({ ...s })));
+
+  // Verificação estrita de usuário Root
+  const isRoot = currentUser?.id === 'usr_root' || 
+                 currentUser?.email?.toLowerCase() === 'root' || 
+                 currentUser?.nome?.toLowerCase() === 'root';
+
+  // Estados de Restauração de Backup (Apenas Root)
+  const [backupFile, setBackupFile] = useState<File | null>(null);
+  const [backupPreview, setBackupPreview] = useState<any | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreMessage, setRestoreMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
   // Busca rápida de lojas
   const [storeSearch, setStoreSearch] = useState<string>('');
@@ -121,6 +144,91 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
   const handleDeleteStore = (storeId: string, storeName: string) => {
     if (confirm(`Tem certeza que deseja remover a filial "${storeName}" da rede?`)) {
       setStores(prev => prev.filter(s => s.id !== storeId));
+    }
+  };
+
+  // Manipuladores de Backup & Restauração (Exclusivo Root)
+  const handleBackupFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRestoreMessage(null);
+    const file = e.target.files?.[0];
+    if (!file) {
+      setBackupFile(null);
+      setBackupPreview(null);
+      return;
+    }
+    setBackupFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        setBackupPreview(parsed);
+      } catch (err: any) {
+        setRestoreMessage({ type: 'error', text: 'Arquivo inválido: o conteúdo selecionado não é um arquivo JSON válido.' });
+        setBackupPreview(null);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExecuteRestore = async () => {
+    if (!backupPreview) return;
+    const confirmRestore = window.confirm(
+      '⚠️ ATENÇÃO: Esta ação irá sincronizar e restaurar os pedidos, produtos, fornecedores e configurações contidos no arquivo para o banco de dados SQLite.\n\nDeseja prosseguir?'
+    );
+    if (!confirmRestore) return;
+
+    setIsRestoring(true);
+    setRestoreMessage(null);
+    try {
+      const res = await restoreDatabaseBackupApi(backupPreview);
+      setRestoreMessage({
+        type: 'success',
+        text: `✔ Restauração concluída com sucesso! ${res.restoredOrdersCount} pedidos, ${res.restoredProductsCount} produtos e ${res.restoredSuppliersCount} fornecedores restaurados no banco de dados.`
+      });
+
+      // Sincroniza também no armazenamento local (localStorage) para contingência
+      try {
+        for (const [k, v] of Object.entries(backupPreview)) {
+          if (typeof v === 'string') {
+            localStorage.setItem(k, v);
+          } else if (typeof v === 'object' && v !== null) {
+            localStorage.setItem(k, JSON.stringify(v));
+          }
+        }
+      } catch {}
+
+      if (onRestoreSuccess) {
+        onRestoreSuccess();
+      }
+    } catch (err: any) {
+      setRestoreMessage({
+        type: 'error',
+        text: err?.message || 'Erro ao comunicar com o servidor para restaurar o backup.'
+      });
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const handleDownloadCurrentBackup = () => {
+    try {
+      const backup: Record<string, string> = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k) backup[k] = localStorage.getItem(k) || '';
+      }
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup_mega12_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Erro ao gerar download de backup: ' + (err?.message || err));
     }
   };
 
@@ -630,6 +738,105 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
         </div>
 
       </div>
+
+      {/* 3. ZONA DE RECUPERAÇÃO & BACKUP DO BANCO DE DADOS (EXCLUSIVO USUÁRIO ROOT) */}
+      {isRoot && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-teal-500/10 dark:from-amber-950/30 dark:via-emerald-950/30 dark:to-teal-950/30 rounded-2xl border-2 border-amber-400/50 dark:border-amber-600/50 p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-amber-200/60 dark:border-amber-800/60">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-amber-500 text-white shadow-md shadow-amber-500/30">
+                <Database className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Restauração e Backup do Banco de Dados
+                  </h3>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500 text-white shadow-xs">
+                    <Shield className="w-3 h-3" /> Apenas Root
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                  Importe arquivos de backup (.json) para restaurar pedidos, catálogo de produtos e fornecedores diretamente no volume do banco SQLite.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDownloadCurrentBackup}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 shadow-xs transition cursor-pointer self-start sm:self-auto"
+              title="Baixar cópia de segurança completa do sistema em JSON"
+            >
+              <Download className="w-4 h-4 text-indigo-500" />
+              <span>Baixar Backup Atual (.json)</span>
+            </button>
+          </div>
+
+          {/* Seleção do Arquivo e Execução */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+            <div className="md:col-span-8">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                <FileJson className="w-4 h-4 text-amber-500" />
+                Arquivo de Backup para Restauração (.json)
+              </label>
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleBackupFileChange}
+                disabled={isRestoring}
+                className="w-full text-xs text-slate-600 dark:text-slate-300 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-white hover:file:bg-amber-600 file:cursor-pointer file:shadow-xs border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 p-1 cursor-pointer focus:outline-hidden"
+              />
+              {backupFile && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Arquivo carregado: {backupFile.name} ({(backupFile.size / 1024).toFixed(1)} KB)
+                  {backupPreview && ` • ${Object.keys(backupPreview).length} coleções prontas para gravação`}
+                </p>
+              )}
+            </div>
+
+            <div className="md:col-span-4 flex items-end">
+              <button
+                type="button"
+                onClick={handleExecuteRestore}
+                disabled={!backupPreview || isRestoring}
+                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-600/30 transition cursor-pointer"
+              >
+                {isRestoring ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Restaurando Banco SQLite...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    <span>Restaurar Banco de Dados</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Mensagens de Feedback */}
+          {restoreMessage && (
+            <div
+              className={`p-4 rounded-xl text-xs font-semibold flex items-center gap-2.5 ${
+                restoreMessage.type === 'success'
+                  ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800'
+                  : 'bg-red-100 dark:bg-red-950/80 text-red-900 dark:text-red-200 border border-red-300 dark:border-red-800'
+              }`}
+            >
+              {restoreMessage.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+              )}
+              <span>{restoreMessage.text}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal de Nova Filial / Editar Filial */}
       {modalStore && (

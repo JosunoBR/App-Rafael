@@ -443,5 +443,22 @@ export async function importFinancialClientSheetInDb(customFilePath?: string): P
   return json.data;
 }
 
+export async function restoreDatabaseBackupApi(backupData: any): Promise<{
+  success: boolean;
+  restoredSuppliersCount: number;
+  restoredProductsCount: number;
+  restoredOrdersCount: number;
+  restoredItemsCount: number;
+  restoredConditionsCount: number;
+}> {
+  const res = await apiFetch('/config/restore-backup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(backupData)
+  });
+  return res.json();
+}
+
+
 
 

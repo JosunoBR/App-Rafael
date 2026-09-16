@@ -2363,7 +2363,12 @@ export function App() {
                 <FiscalSettingsPage
                   fiscalConfig={fiscalConfig}
                   storeConfigs={storeConfigs}
+                  currentUser={currentUser}
                   onSave={handleSaveGlobalSettings}
+                  onRestoreSuccess={async () => {
+                    await loadFromSqlite();
+                    showToast('Base de dados SQLite restaurada e sincronizada com sucesso!', 'success');
+                  }}
                 />
               )}
 

@@ -142,7 +142,9 @@ import {
   fetchPaymentConditionsFromDb,
   isOfflineError,
   fetchHealth,
-  duplicateOrderInDb
+  duplicateOrderInDb,
+  verifyServerSession,
+  isJwtExpired
 } from './utils/api';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
 import { exportOrderToExcel } from './utils/excelExporter';
@@ -155,21 +157,23 @@ import { CheckCircle2, AlertCircle, Plus } from 'lucide-react';
 import { canAccessTab, canCreateOrEditOrders, getDefaultNavForRole } from './shared/permissions';
 
 export function App() {
-  // 1. Estado de Autenticação (RBAC) - Inicia nulo para exigir login obrigatório
+  // 1. Estado de Autenticação (RBAC) - Validação prévia de expiração local
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('mega12_user');
     if (saved) {
       try { 
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.email) {
+        if (parsed && parsed.email && parsed.token && !isJwtExpired(parsed.token)) {
           if (parsed.nome) {
             parsed.nome = parsed.nome.replace(/\s*\([^)]*\)/g, '').trim();
           }
           return parsed;
+        } else if (parsed && parsed.token && isJwtExpired(parsed.token)) {
+          localStorage.removeItem('mega12_user');
         }
       } catch {}
     }
-    // Sem sessão salva: exige login
+    // Sem sessão salva ou token expirado: exige login
     return null;
   });
 
@@ -177,9 +181,9 @@ export function App() {
   const [activeNav, setActiveNav] = useState<ActiveNavTab>(() => {
     const saved = localStorage.getItem('mega12_user');
     if (saved) {
-      try {
+      try { 
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.role) {
+        if (parsed && parsed.role && parsed.token && !isJwtExpired(parsed.token)) {
           return getDefaultNavForRole(parsed.role);
         }
       } catch {}
@@ -401,6 +405,45 @@ export function App() {
     }
   };
 
+  // 1. Validação DIRETA no servidor (SQLite /api/auth/me) na montagem do App
+  useEffect(() => {
+    let isMounted = true;
+    async function checkServerSession() {
+      const saved = localStorage.getItem('mega12_user');
+      if (!saved) return;
+
+      const session = await verifyServerSession();
+      if (!isMounted) return;
+
+      if (!session.valid) {
+        if (session.expired) {
+          showToast('Sua sessão expirou no servidor. Por favor faça login novamente.', 'error');
+        }
+        setCurrentUser(null);
+      } else if (session.user) {
+        // Atualiza perfil oficial e consistente vindo do servidor
+        setCurrentUser(session.user);
+      }
+    }
+
+    checkServerSession();
+    return () => { isMounted = false; };
+  }, []);
+
+  // 2. Escuta evento global de sessão expirada disparado pelo apiFetch ao tomar 401 do servidor
+  useEffect(() => {
+    const handleSessionExpired = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      showToast(detail?.message || 'Sua sessão expirou no servidor. Por favor faça login novamente.', 'error');
+      setCurrentUser(null);
+    };
+
+    window.addEventListener('auth:session_expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('auth:session_expired', handleSessionExpired);
+    };
+  }, []);
+
   useEffect(() => {
     loadFromSqlite();
   }, []);
@@ -433,11 +476,16 @@ export function App() {
     }
   }, [isDark]);
 
-  // Auto-save active order in local storage (debounced para evitar engasgos ao abrir ou navegar entre pedidos)
+  // Auto-save active order in local storage and SQLite (debounced para evitar engasgos ao abrir ou navegar entre pedidos)
   useEffect(() => {
     const timer = setTimeout(() => {
       saveCurrentOrder(order);
-    }, 400);
+      // Sincroniza silenciosamente com SQLite se houver itens válidos ou fornecedor preenchido
+      const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
+      if (validItems.length > 0 || (order.header?.fornecedor && order.header.fornecedor.trim() !== '')) {
+        saveOrderSilently(order).catch(() => {});
+      }
+    }, 1000);
     return () => clearTimeout(timer);
   }, [order]);
 
@@ -467,8 +515,13 @@ export function App() {
     newItems: OrderItem[], 
     activeFiscal?: FiscalConfig
   ): { items: OrderItem[]; header: typeof prev.header } => {
-    const isCif = String(prev.header?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
-    let updatedHeader = prev.header;
+    const rawValorFrete = Number(prev.header?.valorFrete ?? prev.header?.valorFreteGlobal) || 0;
+    let effectiveTipoFrete = prev.header?.tipoFrete;
+    if (rawValorFrete > 0 && (!effectiveTipoFrete || effectiveTipoFrete === 'CIF')) {
+      effectiveTipoFrete = 'FOB';
+    }
+    const isCif = String(effectiveTipoFrete || 'CIF').toUpperCase().includes('CIF') && rawValorFrete <= 0;
+    let updatedHeader = effectiveTipoFrete !== prev.header?.tipoFrete ? { ...prev.header, tipoFrete: effectiveTipoFrete } : prev.header;
 
     if (isCif) {
       if (prev.header?.valorFrete !== 0 || prev.header?.valorFreteGlobal !== 0) {
@@ -503,10 +556,17 @@ export function App() {
       let newFiscal = prev.fiscalConfig || fiscalConfig;
       let updatedItems = prev.items;
 
-      const isCif = String(updatedHeader?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
+      const rawValorFrete = Number(updatedHeader?.valorFrete ?? updatedHeader?.valorFreteGlobal) || 0;
+      let effectiveTipoFrete = updatedHeader?.tipoFrete;
+      if (rawValorFrete > 0 && (!effectiveTipoFrete || effectiveTipoFrete === 'CIF')) {
+        effectiveTipoFrete = 'FOB';
+        updatedHeader = { ...updatedHeader, tipoFrete: 'FOB' };
+      }
+      const isCif = String(effectiveTipoFrete || 'CIF').toUpperCase().includes('CIF') && rawValorFrete <= 0;
       if (isCif) {
         updatedHeader = {
           ...updatedHeader,
+          tipoFrete: 'CIF',
           valorFrete: 0,
           valorFreteGlobal: 0
         };
@@ -574,14 +634,20 @@ export function App() {
         : prev.header.aliquotaSt;
 
       const totalMerc = calculateOrderMerchandiseTotal(prev);
-      const isCif = String(prev.header?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
+      const rawValorFrete = Number(prev.header?.valorFrete ?? prev.header?.valorFreteGlobal) || 0;
+      let effectiveTipoFrete = prev.header?.tipoFrete;
+      if (rawValorFrete > 0 && (!effectiveTipoFrete || effectiveTipoFrete === 'CIF')) {
+        effectiveTipoFrete = 'FOB';
+      }
+      const isCif = String(effectiveTipoFrete || 'CIF').toUpperCase().includes('CIF') && rawValorFrete <= 0;
       const freteRate = normalizeRateToDecimal(newFiscal.freteAliquota, 0);
-      const novoValorFrete = (!isCif && Number(prev.header?.valorFrete) > 0 && freteRate > 0)
+      const novoValorFrete = (!isCif && rawValorFrete > 0 && freteRate > 0)
         ? Number((totalMerc * freteRate).toFixed(2))
-        : (isCif ? 0 : (Number(prev.header?.valorFrete) || 0));
+        : (isCif ? 0 : rawValorFrete);
       
       const updatedHeader = {
         ...prev.header,
+        tipoFrete: effectiveTipoFrete || prev.header?.tipoFrete || 'CIF',
         aliquotaSt: stValue,
         valorFrete: novoValorFrete,
         valorFreteGlobal: novoValorFrete
@@ -1020,19 +1086,38 @@ export function App() {
     const today = new Date().toISOString().split('T')[0];
     const targetDate = targetOrder.header.dataPedido || targetOrder.header.dataEmissao || today;
 
+    // Recupera valor de frete das parcelas caso o header tenha ficado zerado
+    const existingFrete = Array.isArray(targetOrder.installments)
+      ? targetOrder.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
+      : undefined;
+
+    let targetValorFrete = Number(targetOrder.header.valorFrete ?? targetOrder.header.valorFreteGlobal) || 0;
+    if (targetValorFrete <= 0 && existingFrete && existingFrete.valor > 0) {
+      targetValorFrete = existingFrete.valor;
+    }
+    let targetTipoFrete = targetOrder.header.tipoFrete;
+    if (targetValorFrete > 0 && (!targetTipoFrete || targetTipoFrete === 'CIF')) {
+      targetTipoFrete = 'FOB';
+    }
+
     // Preserva fielmente o status do pedido (não rebaixa pedidos Aprovados ou Em Distribuição para Em Cotação)
+    const headerWithFrete = {
+      ...targetOrder.header,
+      tipoFrete: targetTipoFrete || targetOrder.header.tipoFrete || 'CIF',
+      valorFrete: targetValorFrete,
+      valorFreteGlobal: targetValorFrete,
+      dataPedido: targetDate,
+      dataEmissao: targetOrder.header.dataEmissao || targetDate,
+      isDraft: targetOrder.header.isDraft !== undefined ? targetOrder.header.isDraft : true,
+      status: targetOrder.header.status || 'Em Cotação',
+      updatedAt: new Date().toISOString()
+    };
+
     const orderToSave: PurchaseOrder = {
       ...targetOrder,
       items: validItems,
-      header: {
-        ...targetOrder.header,
-        dataPedido: targetDate,
-        dataEmissao: targetOrder.header.dataEmissao || targetDate,
-        isDraft: targetOrder.header.isDraft !== undefined ? targetOrder.header.isDraft : true,
-        status: targetOrder.header.status || 'Em Cotação',
-        updatedAt: new Date().toISOString()
-      },
-      installments: generateOrderInstallments(targetOrder, undefined, undefined, true)
+      header: headerWithFrete,
+      installments: generateOrderInstallments({ ...targetOrder, header: headerWithFrete }, undefined, undefined, true)
     };
 
     // Atualiza imediatamente o histórico local e o estado em memória sem re-baixar todos os pedidos pela rede
@@ -1056,21 +1141,16 @@ export function App() {
 
   // Carrega com segurança e resposta instantânea (0ms) o pedido selecionado
   const handleOpenSelectedOrder = (selected: PurchaseOrder, destinationTab: ActiveNavTab = 'orders') => {
-    // 1. Se havia um rascunho NOVO que ainda NÃO constava nos pedidos salvos, preserva em segundo plano de forma assíncrona
+    // 1. Ao trocar de pedido, se havia trabalho no pedido atual, preserva silenciosamente no banco SQLite
     if (order && order.header.id !== selected.header.id) {
-      const isCurrentAlreadySaved = savedOrders.some(o => o.header.id === order.header.id);
       const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
       const hasWork = validItems.length > 0 || (order.header.fornecedor && order.header.fornecedor.trim() !== '');
 
-      if (hasWork && !isCurrentAlreadySaved) {
+      if (hasWork) {
         const orderSnapshot = { ...order };
-        setTimeout(() => {
-          saveOrderSilently(orderSnapshot).then(() => {
-            showToast(`Rascunho ${orderSnapshot.header.numeroPedido} preservado em espera.`, 'info');
-          }).catch(err => {
-            console.warn('Aviso ao salvar rascunho em background:', err);
-          });
-        }, 100);
+        saveOrderSilently(orderSnapshot).catch(err => {
+          console.warn('Aviso ao salvar pedido em background:', err);
+        });
       }
     }
 
@@ -1100,12 +1180,29 @@ export function App() {
       cleanNum = getNextOrderNumber();
     }
 
+    // Recupera frete das parcelas se o cabeçalho estiver zerado
+    const existingFreteInst = Array.isArray(selected.installments)
+      ? selected.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
+      : undefined;
+
+    let selectedFreteVal = Number(selected.header.valorFrete ?? selected.header.valorFreteGlobal) || 0;
+    if (selectedFreteVal <= 0 && existingFreteInst && existingFreteInst.valor > 0) {
+      selectedFreteVal = existingFreteInst.valor;
+    }
+    let selectedTipoFrete = selected.header.tipoFrete;
+    if (selectedFreteVal > 0 && (!selectedTipoFrete || selectedTipoFrete === 'CIF')) {
+      selectedTipoFrete = 'FOB';
+    }
+
     const updatedOrder: PurchaseOrder = {
       ...selected,
       header: {
         ...selected.header,
         numeroPedido: cleanNum,
         supplierId: resolvedSupplierId || selected.header.supplierId,
+        tipoFrete: selectedTipoFrete || (selectedFreteVal > 0 ? 'FOB' : (selected.header.tipoFrete || 'CIF')),
+        valorFrete: selectedFreteVal,
+        valorFreteGlobal: selectedFreteVal,
         dataPedido: targetDate,
         dataEmissao: selected.header.dataEmissao || targetDate
       },

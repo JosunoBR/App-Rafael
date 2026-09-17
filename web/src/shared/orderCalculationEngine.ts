@@ -175,8 +175,9 @@ export function calculateOrderTotals(
     : 0;
 
   // Frete e Despesas Adicionais (informativos/rastreabilidade)
-  const isCif = String(header?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
-  const valorFrete = isCif ? 0 : (Number(header?.valorFrete ?? header?.valorFreteGlobal) || 0);
+  const rawValorFrete = Number(header?.valorFrete ?? header?.valorFreteGlobal) || 0;
+  const isCif = String(header?.tipoFrete || (rawValorFrete > 0 ? 'FOB' : 'CIF')).toUpperCase().includes('CIF') && rawValorFrete <= 0;
+  const valorFrete = isCif ? 0 : rawValorFrete;
   const valorOutrasDespesas = Number(header?.valorOutrasDespesasGlobal) || 0;
 
   // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Geral

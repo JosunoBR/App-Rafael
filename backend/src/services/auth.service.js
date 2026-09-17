@@ -42,6 +42,19 @@ class AuthService {
     }
 
     // Gerar token JWT assinado
+    const token = this.generateToken(user);
+
+    const { senha: _, ...safeUser } = user;
+    safeUser.token = token;
+
+    return {
+      success: true,
+      user: safeUser,
+      token
+    };
+  }
+
+  generateToken(user) {
     const payload = {
       id: user.id,
       nome: user.nome,
@@ -49,13 +62,26 @@ class AuthService {
       role: user.role
     };
 
-    const token = jwt.sign(payload, config.JWT_SECRET, {
-      expiresIn: config.JWT_EXPIRES_IN
+    return jwt.sign(payload, config.JWT_SECRET, {
+      expiresIn: config.JWT_EXPIRES_IN || '30d'
     });
+  }
 
+  async getUserProfile(userId) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      const err = new Error('Usuário não encontrado ou inativo no servidor.');
+      err.statusCode = 404;
+      throw err;
+    }
     const { senha: _, ...safeUser } = user;
-    safeUser.token = token;
+    return safeUser;
+  }
 
+  async renewToken(userId) {
+    const safeUser = await this.getUserProfile(userId);
+    const token = this.generateToken(safeUser);
+    safeUser.token = token;
     return {
       success: true,
       user: safeUser,

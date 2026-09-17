@@ -1590,18 +1590,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
       case 'custoLoja':
       case 'custoReal': {
-        const hasCustomFiscal = Boolean(item.fiscalOverride?.useCustomFiscal);
         return (
           <td key="custoLoja" style={cellStyle} className="py-2 px-3 text-right border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap bg-blue-50/20 dark:bg-blue-950/10">
             <div className="flex items-center justify-end gap-1.5">
-              {hasCustomFiscal && (
-                <span
-                  title="Este item possui alíquotas fiscais individuais personalizadas"
-                  className="inline-flex items-center px-1 py-0.2 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300/50"
-                >
-                  Indiv.
-                </span>
-              )}
               <div 
                 className={`font-extrabold text-blue-700 dark:text-blue-400 font-mono text-xs whitespace-nowrap ${onOpenFiscalModal && !isOrderItemBlank(item) ? 'cursor-pointer hover:underline' : ''}`} 
                 title="Custo Total da Loja (conforme modelo da planilha). Clique para abrir calculadora fiscal."

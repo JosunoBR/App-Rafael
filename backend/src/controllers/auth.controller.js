@@ -13,9 +13,21 @@ class AuthController {
 
   async me(req, res, next) {
     try {
+      const user = await authService.getUserProfile(req.user.id);
       return res.json({
-        user: req.user
+        success: true,
+        valid: true,
+        user
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async refresh(req, res, next) {
+    try {
+      const result = await authService.renewToken(req.user.id);
+      return res.json(result);
     } catch (err) {
       next(err);
     }

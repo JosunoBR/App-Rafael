@@ -235,12 +235,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       return;
     }
     if (field === 'valorFrete') {
+      const numVal = typeof value === 'number' ? value : (parseFloat(String(value).replace(',', '.')) || 0);
       const isCif = String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF');
-      const freteFinal = isCif ? 0 : value;
+      const newTipoFrete = (numVal > 0 && isCif) ? 'FOB' : (header.tipoFrete || 'CIF');
       onChange({
         ...header,
-        valorFrete: freteFinal,
-        valorFreteGlobal: freteFinal
+        tipoFrete: newTipoFrete,
+        valorFrete: numVal,
+        valorFreteGlobal: numVal
       });
       return;
     }
@@ -408,7 +410,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const isDepositoEBoleto = header.prazoDias === 'deposito_e_boleto' || 
     header.formaPagamento === 'Boleto / Depósito' || 
     header.formaPagamento === 'Boleto / Cheque' ||
-    (header.depositoParcelasCount !== undefined && header.saldoParcelasCount !== undefined && (header.depositoParcelasCount > 0 || header.saldoParcelasCount > 0));
+    (header.depositoParcelasCount !== undefined && header.saldoParcelasCount !== undefined && (header.depositoParcelasCount > 0 || header.saldoParcelasCount > 0)) ||
+    Boolean(header.condicaoPagamento && (header.condicaoPagamento.toLowerCase().includes('depósito') || header.condicaoPagamento.toLowerCase().includes('deposito')) && (header.condicaoPagamento.toLowerCase().includes('boleto') || header.condicaoPagamento.toLowerCase().includes('saldo') || header.condicaoPagamento.toLowerCase().includes('cheque')));
 
   const isEntradaMista = header.prazoDias === 'entrada_com_parcelamento' || isDepositoEBoleto;
 
@@ -2246,7 +2249,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       Modalidade Frete
                     </label>
                     <select
-                      value={header.tipoFrete || 'CIF'}
+                      value={valorFreteNum > 0 && String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? 'FOB' : (header.tipoFrete || 'CIF')}
                       onChange={(e) => handleFieldChange('tipoFrete', e.target.value)}
                       className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
                     >
@@ -2260,42 +2263,49 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
                   {/* 5. Valor do Frete */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>Valor Frete (R$)</span>
-                      {String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? (
-                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          Incluso (Fornecedor)
-                        </span>
-                      ) : (
-                        valorFreteNum > 0 && valorBaseMercadoria > 0 && (
-                          <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400">
-                            {((valorFreteNum / valorBaseMercadoria) * 100).toFixed(2)}% dos produtos
-                          </span>
-                        )
-                      )}
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      disabled={String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF')}
-                      value={String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? '0,00' : (header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : '')}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => {
-                        const { value } = handleCurrencyInput(e.target.value, true);
-                        handleFieldChange('valorFrete', value);
-                      }}
-                      placeholder="0,00"
-                      className={`w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 font-mono font-bold shadow-2xs ${
-                        String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF')
-                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                          : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden'
-                      }`}
-                    />
-                    {!String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF') && valorFreteNum > 0 && (
-                      <p className="text-[10px] text-sky-600 dark:text-sky-400 font-medium mt-1 flex items-center gap-1">
-                        <span>🚚 Boleto de frete gerado em {addDaysToDate(baseDate, 10).split('-').reverse().join('/')} (10d após entrega)</span>
-                      </p>
-                    )}
+                    {(() => {
+                      const isCifModalidade = String(header.tipoFrete || (valorFreteNum > 0 ? 'FOB' : 'CIF')).toUpperCase().includes('CIF') && valorFreteNum <= 0;
+                      return (
+                        <>
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                            <span>Valor Frete (R$)</span>
+                            {isCifModalidade ? (
+                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                Incluso (Fornecedor)
+                              </span>
+                            ) : (
+                              valorFreteNum > 0 && valorBaseMercadoria > 0 && (
+                                <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400">
+                                  {((valorFreteNum / valorBaseMercadoria) * 100).toFixed(2)}% dos produtos
+                                </span>
+                              )
+                            )}
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            disabled={isCifModalidade}
+                            value={isCifModalidade ? '0,00' : (valorFreteNum > 0 ? formatCurrency(valorFreteNum, false) : (header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : ''))}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const { value } = handleCurrencyInput(e.target.value, true);
+                              handleFieldChange('valorFrete', value);
+                            }}
+                            placeholder="0,00"
+                            className={`w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 font-mono font-bold shadow-2xs ${
+                              isCifModalidade
+                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                                : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden'
+                            }`}
+                          />
+                          {!isCifModalidade && valorFreteNum > 0 && (
+                            <p className="text-[10px] text-sky-600 dark:text-sky-400 font-medium mt-1 flex items-center gap-1">
+                              <span>🚚 Boleto de frete gerado em {addDaysToDate(baseDate, 10).split('-').reverse().join('/')} (10d após entrega)</span>
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* 6. Desconto Comercial (%) */}

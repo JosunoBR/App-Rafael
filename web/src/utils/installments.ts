@@ -511,13 +511,29 @@ export function generateOrderInstallments(
   }
 
   const list: PaymentInstallment[] = [];
-  const isCif = String(order.header?.tipoFrete || 'CIF').toUpperCase().includes('CIF');
-  const valorFrete = isCif ? 0 : (Number(order.header?.valorFrete ?? order.header?.valorFreteGlobal) || 0);
+
+  // Detecta se já existe uma parcela de frete previamente salva nas parcelas
+  const existingFrete = Array.isArray(order.installments)
+    ? order.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
+    : undefined;
+
+  let rawValorFrete = Number(order.header?.valorFrete ?? order.header?.valorFreteGlobal) || 0;
+  if (rawValorFrete <= 0 && existingFrete && existingFrete.valor > 0) {
+    rawValorFrete = existingFrete.valor;
+  }
+
+  // É CIF estrito apenas se não houver valor de frete nem parcela de frete
+  const isExplicitCif = String(order.header?.tipoFrete || '').toUpperCase() === 'CIF' && rawValorFrete <= 0 && !existingFrete;
+  const isCif = isExplicitCif;
+  const valorFrete = isCif ? 0 : rawValorFrete;
   const valorBaseMercadoria = Math.max(0, netTotal - valorFrete);
 
+  const condLower = String(order.header?.condicaoPagamento || '').toLowerCase();
+  const isCompositeCond = (condLower.includes('depósito') || condLower.includes('deposito')) && (condLower.includes('boleto') || condLower.includes('saldo') || condLower.includes('cheque'));
+
   // CENÁRIO A: NEGOCIAÇÃO MISTA (DEPÓSITO PARCELADO + SALDO EM BOLETO PARCELADO)
-  if (prazo === 'entrada_com_parcelamento' || prazo === 'deposito_e_boleto' || order.header.formaPagamento === 'Boleto / Depósito') {
-    const totalParcelasDeposito = Math.max(1, order.header.depositoParcelasCount || (prazo === 'deposito_e_boleto' ? 2 : 1));
+  if (prazo === 'entrada_com_parcelamento' || prazo === 'deposito_e_boleto' || order.header.formaPagamento === 'Boleto / Depósito' || isCompositeCond) {
+    const totalParcelasDeposito = Math.max(1, order.header.depositoParcelasCount || (prazo === 'deposito_e_boleto' || isCompositeCond ? 2 : 1));
     const depositoPrazo = String(order.header.depositoPrazoDias || (totalParcelasDeposito === 1 ? 'vista' : '30'));
     const isProporcional = order.header.isEntradaProporcional !== false;
     const targetPctDep = order.header.percentualEntrada !== undefined 
@@ -711,19 +727,15 @@ export function generateOrderInstallments(
   }
 
   // CENÁRIO C: BOLETO AUTOMÁTICO DE FRETE (10 DIAS APÓS A DATA DE ENTREGA)
-  // Só gera se não for modalidade CIF e houver frete destacado
-  if (!isCif && valorFrete > 0) {
+  // Só gera se não for modalidade CIF e houver frete destacado ou parcela pré-existente
+  if ((!isCif && valorFrete > 0) || (existingFrete && existingFrete.valor > 0)) {
     const freteDueDate = addDaysToDate(baseDeliveryDate, 10);
-    // Verificar se já existia um boleto de frete preservado
-    const existingFrete = Array.isArray(order.installments)
-      ? order.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
-      : undefined;
-
     const nextParcelaNum = list.length + 1;
     const customFreteDate = customDates?.['frete'] || customDates?.[String(nextParcelaNum)];
 
+    const finalBaseFreightVal = valorFrete > 0 ? valorFrete : existingFrete!.valor;
     const isFreteManuallyOverridden = existingFrete?.valor !== undefined && existingFrete?.valorOriginal !== undefined && Math.abs(existingFrete.valor - existingFrete.valorOriginal) > 0.01;
-    const valorFreteFinal = isFreteManuallyOverridden ? existingFrete.valor : valorFrete;
+    const valorFreteFinal = isFreteManuallyOverridden ? existingFrete.valor : finalBaseFreightVal;
     const rawFreteDate = customFreteDate || existingFrete?.dataVencimento || freteDueDate;
     const dataVencFrete = addDaysToDate(rawFreteDate, 0);
     const statusFrete = existingFrete?.status || getInstallmentStatus(dataVencFrete, existingFrete?.dataPagamento);
@@ -737,7 +749,7 @@ export function generateOrderInstallments(
       totalParcelas: nextParcelaNum,
       dataVencimento: dataVencFrete,
       valor: valorFreteFinal,
-      valorOriginal: isFreteManuallyOverridden ? existingFrete.valorOriginal : valorFrete,
+      valorOriginal: isFreteManuallyOverridden ? existingFrete.valorOriginal : finalBaseFreightVal,
       status: statusFrete,
       dataPagamento: existingFrete?.dataPagamento,
       observacao: existingFrete?.observacao || 'Boleto de Frete (10 dias após a entrega)',

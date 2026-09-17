@@ -50,9 +50,38 @@ class OrderRepository {
     const installmentsJson = JSON.stringify(installments);
     const separationJson = order.separationDistribution ? JSON.stringify(order.separationDistribution) : null;
 
+    let tipoFrete = order.header.tipoFrete;
+    let valorFrete = Number(order.header.valorFrete !== undefined ? order.header.valorFrete : order.header.valorFreteGlobal) || 0;
+    const hasFreteBoleto = installments.some(i => i.isBoletoFrete || i.tipoTitulo === 'frete');
+    if (hasFreteBoleto && valorFrete === 0) {
+      const fInst = installments.find(i => i.isBoletoFrete || i.tipoTitulo === 'frete');
+      if (fInst) valorFrete = Number(fInst.valor) || 0;
+    }
+    if ((valorFrete > 0 || hasFreteBoleto) && (!tipoFrete || tipoFrete.toUpperCase().includes('CIF'))) {
+      tipoFrete = 'FOB';
+    }
+    if (!tipoFrete) {
+      tipoFrete = 'CIF';
+    }
+    if (tipoFrete.toUpperCase().includes('CIF') && !hasFreteBoleto && valorFrete === 0) {
+      valorFrete = 0;
+    }
+    order.header.tipoFrete = tipoFrete;
+    order.header.valorFrete = valorFrete;
+
+    const condStr = (order.header.condicaoPagamento || '').trim();
+    const condLower = condStr.toLowerCase();
+    const isCompositeCond = (condLower.includes('depósito') || condLower.includes('deposito')) && (condLower.includes('boleto') || condLower.includes('cheque'));
+
+    let finalPrazoDias = order.header.prazoDias;
+    let finalFormaPgto = order.header.formaPagamento || (isCompositeCond ? 'Boleto / Depósito' : 'Boleto');
+    if (isCompositeCond && (!finalPrazoDias || finalPrazoDias === '30')) {
+      finalPrazoDias = 'deposito_e_boleto';
+    }
+
     const paymentConfig = {
       parcelasCount: order.header.parcelasCount,
-      prazoDias: order.header.prazoDias,
+      prazoDias: finalPrazoDias,
       diaVencimentoPersonalizado: order.header.diaVencimentoPersonalizado,
       dataPrimeiroVencimento: order.header.dataPrimeiroVencimento,
       datasVencimentoPersonalizadas: order.header.datasVencimentoPersonalizadas,
@@ -130,10 +159,10 @@ class OrderRepository {
         order.header.vendedor || '',
         order.header.contatoVendedor || '',
         order.header.condicaoPagamento || '30/60/90 Dias',
-        order.header.formaPagamento || 'Boleto',
+        finalFormaPgto,
         order.header.previsaoPagamento || '',
-        order.header.tipoFrete || 'CIF',
-        String(order.header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? 0 : (Number(order.header.valorFrete) || 0),
+        tipoFrete,
+        valorFrete,
         Number(order.header.descontoComercialTotal) || 0,
         order.header.descontoComercialTipo || '%',
         order.header.isDraft ? 1 : 0,
@@ -199,10 +228,10 @@ class OrderRepository {
         order.header.vendedor || '',
         order.header.contatoVendedor || '',
         order.header.condicaoPagamento || '30/60/90 Dias',
-        order.header.formaPagamento || 'Boleto',
+        finalFormaPgto,
         order.header.previsaoPagamento || '',
-        order.header.tipoFrete || 'CIF',
-        String(order.header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? 0 : (Number(order.header.valorFrete) || 0),
+        tipoFrete,
+        valorFrete,
         Number(order.header.descontoComercialTotal) || 0,
         order.header.descontoComercialTipo || '%',
         order.header.isDraft ? 1 : 0,
@@ -556,6 +585,23 @@ class OrderRepository {
       } catch (e) {}
     }
 
+    const condStr = (r.condicaoPagamento || '').trim();
+    const condLower = condStr.toLowerCase();
+    const isCompositeCond = (condLower.includes('depósito') || condLower.includes('deposito')) && (condLower.includes('boleto') || condLower.includes('cheque'));
+
+    if (isCompositeCond) {
+      if (!paymentConfig.prazoDias || paymentConfig.prazoDias === '30') {
+        paymentConfig.prazoDias = 'deposito_e_boleto';
+      }
+      if (!paymentConfig.depositoParcelasCount || !paymentConfig.saldoParcelasCount) {
+        const xMatches = [...condStr.matchAll(/(\d+)x/gi)];
+        if (xMatches.length >= 2) {
+          if (!paymentConfig.depositoParcelasCount) paymentConfig.depositoParcelasCount = parseInt(xMatches[0][1], 10);
+          if (!paymentConfig.saldoParcelasCount) paymentConfig.saldoParcelasCount = parseInt(xMatches[1][1], 10);
+        }
+      }
+    }
+
     // Fallback para pedidos antigos: se não houver datasVencimentoPersonalizadas salvas, reconstrói a partir de installments
     if (!paymentConfig.datasVencimentoPersonalizadas && Array.isArray(installments) && installments.length > 0) {
       const customDates = {};
@@ -568,6 +614,14 @@ class OrderRepository {
       if (Object.keys(customDates).length > 0) {
         paymentConfig.datasVencimentoPersonalizadas = customDates;
       }
+    }
+
+    let tipoFrete = r.tipoFrete || 'CIF';
+    let valorFrete = Number(r.valorFrete) || 0;
+    const freteInst = Array.isArray(installments) ? installments.find(ins => ins.isBoletoFrete || ins.tipoTitulo === 'frete') : null;
+    if (freteInst && Number(freteInst.valor) > 0) {
+      if (valorFrete === 0) valorFrete = Number(freteInst.valor);
+      if (!tipoFrete || tipoFrete.toUpperCase().includes('CIF')) tipoFrete = 'FOB';
     }
 
     let cleanNumeroPedido = (r.numeroPedido || '').trim();
@@ -624,10 +678,10 @@ class OrderRepository {
         vendedor: r.vendedor,
         contatoVendedor: r.contatoVendedor,
         condicaoPagamento: r.condicaoPagamento,
-        formaPagamento: r.formaPagamento || 'Boleto',
+        formaPagamento: r.formaPagamento || (isCompositeCond ? 'Boleto / Depósito' : 'Boleto'),
         previsaoPagamento: r.previsaoPagamento || '',
-        tipoFrete: r.tipoFrete || 'CIF',
-        valorFrete: r.valorFrete || 0,
+        tipoFrete,
+        valorFrete,
         descontoComercialTotal: r.descontoComercialTotal || 0,
         descontoComercialTipo: r.descontoComercialTipo || '%',
         isDraft: r.isDraft === 1,

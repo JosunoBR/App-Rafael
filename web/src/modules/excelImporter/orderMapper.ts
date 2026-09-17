@@ -9,7 +9,7 @@ import {
 import { ParsedExcelOrder, CatalogProductStatus } from './types';
 import { calculateItemFiscal } from '../../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../../shared/separationEngine';
-import { generateOrderInstallments } from '../../utils/installments';
+import { generateOrderInstallments, parsePaymentConditionString } from '../../utils/installments';
 import { ensureTrailingBlankItem } from '../../utils/orderItemUtils';
 import { getNextOrderNumber } from '../../utils/storage';
 
@@ -178,8 +178,17 @@ export function mapParsedExcelToOrder(
     cnpj: supplier.cnpj || parsed.header.cnpj || '',
     vendedor: parsed.header.vendedor || supplier.vendedorPadrao || '',
     contatoVendedor: parsed.header.contatoVendedor || supplier.contatoVendedor || '',
-    condicaoPagamento: parsed.header.condicaoPagamento || supplier.condicaoPagamentoPadrao || '30/60/90 Dias',
-    formaPagamento: 'Boleto Bancário',
+    ...(() => {
+      const rawCond = parsed.header.condicaoPagamento || supplier.condicaoPagamentoPadrao || '30/60/90 Dias';
+      const parsedCond = parsePaymentConditionString(rawCond);
+      const isComposite = parsedCond.prazo === 'deposito_e_boleto' || ((rawCond.toLowerCase().includes('depósito') || rawCond.toLowerCase().includes('deposito')) && (rawCond.toLowerCase().includes('boleto') || rawCond.toLowerCase().includes('saldo')));
+      return {
+        condicaoPagamento: rawCond,
+        formaPagamento: isComposite ? 'Boleto / Depósito' : (parsedCond.prazo === 'vista' ? 'Depósito' : 'Boleto'),
+        prazoDias: parsedCond.prazo,
+        parcelasCount: parsedCond.parcelas
+      };
+    })(),
     dataPedido: parsed.header.dataPedido,
     dataEntregaPrevista: parsed.header.dataEntregaPrevista,
     percentualDescontoOff: (parsed.header.percentualDescontoOff !== undefined && parsed.header.percentualDescontoOff > 0)

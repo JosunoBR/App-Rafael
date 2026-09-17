@@ -23,6 +23,48 @@ export function isOfflineError(err: any): boolean {
   return false;
 }
 
+export function isJwtExpired(token: string): boolean {
+  if (!token) return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    const payload = JSON.parse(atob(parts[1]));
+    if (!payload.exp) return false;
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return false;
+  }
+}
+
+export async function verifyServerSession(): Promise<{ valid: boolean; user?: User; expired?: boolean }> {
+  try {
+    const raw = localStorage.getItem('mega12_user');
+    if (raw) {
+      const localUser = JSON.parse(raw);
+      if (localUser?.token && isJwtExpired(localUser.token)) {
+        return { valid: false, expired: true };
+      }
+    }
+    const res = await apiFetch('/auth/me');
+    if (res.ok) {
+      const data = await res.json();
+      return { valid: true, user: data.user };
+    }
+  } catch {}
+
+  try {
+    const raw = localStorage.getItem('mega12_user');
+    if (raw) {
+      const localUser = JSON.parse(raw);
+      if (localUser?.token && !isJwtExpired(localUser.token)) {
+        return { valid: true, user: localUser };
+      }
+      return { valid: false, expired: true };
+    }
+  } catch {}
+  return { valid: false };
+}
+
 function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extraHeaders };
   try {
@@ -476,6 +518,7 @@ export async function restoreDatabaseBackupApi(backupData: any): Promise<{
   return res.json();
 }
 
-
-
-
+export async function exportDatabaseBackupApi(): Promise<Record<string, string>> {
+  const res = await apiFetch('/config/export-backup');
+  return res.json();
+}

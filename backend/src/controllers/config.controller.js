@@ -54,6 +54,24 @@ class ConfigController {
       next(err);
     }
   }
+
+  async exportBackup(req, res, next) {
+    try {
+      const user = req.user;
+      const isRoot = user && (user.id === 'usr_root' || user.email === 'root' || user.nome === 'Root' || user.role === 'diretoria');
+      if (!isRoot) {
+        return res.status(403).json({ 
+          error: 'Acesso negado. Apenas o Administrador Raiz (Root) possui permissão para exportar backups do sistema.' 
+        });
+      }
+
+      const backupRestoreService = require('../services/backupRestore.service');
+      const backupData = await backupRestoreService.exportBackupData();
+      return res.json(backupData);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new ConfigController();

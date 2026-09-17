@@ -175,36 +175,113 @@ class BackupRestoreService {
         orderId = `ord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       }
 
+      let tipoFrete = ord.header.tipoFrete;
+      let valorFrete = Number(ord.header.valorFrete !== undefined ? ord.header.valorFrete : ord.header.valorFreteGlobal) || 0;
+      const hasFreteInst = (ord.installments || []).some(i => i.isBoletoFrete || i.tipoTitulo === 'frete');
+      if (hasFreteInst && valorFrete === 0) {
+        const fInst = ord.installments.find(i => i.isBoletoFrete || i.tipoTitulo === 'frete');
+        if (fInst) valorFrete = Number(fInst.valor) || 0;
+      }
+      if ((valorFrete > 0 || hasFreteInst) && (!tipoFrete || tipoFrete === 'CIF')) {
+        tipoFrete = 'FOB';
+      }
+      if (!tipoFrete) tipoFrete = 'CIF';
+
+      const paymentConfig = {
+        parcelasCount: ord.header.parcelasCount,
+        prazoDias: ord.header.prazoDias,
+        diaVencimentoPersonalizado: ord.header.diaVencimentoPersonalizado,
+        dataPrimeiroVencimento: ord.header.dataPrimeiroVencimento,
+        datasVencimentoPersonalizadas: ord.header.datasVencimentoPersonalizadas,
+        valorEntradaAVista: ord.header.valorEntradaAVista,
+        percentualEntrada: ord.header.percentualEntrada,
+        isEntradaProporcional: ord.header.isEntradaProporcional,
+        depositoFormaPagamento: ord.header.depositoFormaPagamento,
+        depositoParcelasCount: ord.header.depositoParcelasCount,
+        depositoPrazoDias: ord.header.depositoPrazoDias,
+        saldoFormaPagamento: ord.header.saldoFormaPagamento,
+        saldoParcelasCount: ord.header.saldoParcelasCount,
+        saldoPrazoDias: ord.header.saldoPrazoDias
+      };
+      const paymentConfigJson = ord.header.paymentConfigJson || JSON.stringify(paymentConfig);
+      const fiscalConfigJson = ord.fiscalConfig ? JSON.stringify(ord.fiscalConfig) : (ord.header.fiscalConfigJson || null);
+      const separationJson = ord.separationDistribution ? JSON.stringify(ord.separationDistribution) : (ord.header.separationDistributionJson || null);
+
+      const totalBruto = Number(ord.header.totalBruto) || 0;
+      const totalIpi = Number(ord.header.totalIpi) || 0;
+      const totalDesconto = Number(ord.header.totalDesconto) || 0;
+      const totalLiquido = Number(ord.header.totalLiquido) || 0;
+      const totalGeral = Number(ord.header.totalGeral) || (totalBruto + totalIpi - totalDesconto);
+      const totalVolumes = Number(ord.header.totalVolumes) || 0;
+      const totalPecas = Number(ord.header.totalPecas) || 0;
+
       const itemsJson = JSON.stringify(ord.items || []);
       const installmentsJson = JSON.stringify(ord.installments || []);
 
       db.run(`
         INSERT INTO purchase_orders (
-          id, numeroPedido, fornecedor, supplierId, vendedor, contatoVendedor, 
-          condicaoPagamento, dataPedido, dataEmissao, dataEntregaPrevista, 
-          percentualDescontoOff, percentualNota, observacoes, status, separationStatus,
-          totalLiquido, totalPecas, itemsJson, installmentsJson, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, numeroPedido, fornecedor, supplierId, aliquotaSt,
+          vendedor, contatoVendedor, condicaoPagamento, formaPagamento,
+          previsaoPagamento, tipoFrete, valorFrete, descontoComercialTotal,
+          descontoComercialTipo, isDraft, dataPedido, dataEmissao, dataEntregaPrevista,
+          percentualDescontoOff, percentualNota, observacoes, status,
+          separationStatus, totalBruto, totalIpi, totalDesconto, totalLiquido, totalGeral, totalVolumes, totalPecas, installmentsJson,
+          fiscalConfigJson, aliquotaIpi, aliquotaFrete, aliquotaIcmsEntrada,
+          aliquotaCustoFixo, aliquotaIcmsSaida, aliquotaPisCofinsIr,
+          itemsJson, separationDistributionJson, paymentConfigJson, createdAt, updatedAt
+        ) VALUES (
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?, ?, ?
+        )
       `, [
         orderId,
         num,
         ord.header.fornecedor || 'Fornecedor',
-        ord.header.supplierId || '',
+        ord.header.supplierId || null,
+        Number(ord.header.aliquotaSt) || 0,
         ord.header.vendedor || '',
         ord.header.contatoVendedor || '',
         ord.header.condicaoPagamento || '',
+        ord.header.formaPagamento || 'Boleto',
+        ord.header.previsaoPagamento || '',
+        tipoFrete,
+        valorFrete,
+        Number(ord.header.descontoComercialTotal) || 0,
+        ord.header.descontoComercialTipo || '%',
+        ord.header.isDraft ? 1 : 0,
         ord.header.dataPedido || now.split('T')[0],
         ord.header.dataEmissao || now.split('T')[0],
         ord.header.dataEntregaPrevista || '',
-        ord.header.percentualDescontoOff || 0,
-        ord.header.percentualNota || 100,
+        Number(ord.header.percentualDescontoOff) || 0,
+        ord.header.percentualNota !== undefined ? Number(ord.header.percentualNota) : 100,
         ord.header.observacoes || '',
         ord.header.status || 'Em Cotação',
         ord.header.separationStatus || 'Pendente',
-        ord.header.totalLiquido || 0,
-        ord.header.totalPecas || 0,
-        itemsJson,
+        totalBruto,
+        totalIpi,
+        totalDesconto,
+        totalLiquido,
+        totalGeral,
+        totalVolumes,
+        totalPecas,
         installmentsJson,
+        fiscalConfigJson,
+        Number(ord.header.aliquotaIpi) || 0,
+        Number(ord.header.aliquotaFrete) || 0,
+        Number(ord.header.aliquotaIcmsEntrada !== undefined ? ord.header.aliquotaIcmsEntrada : 12),
+        Number(ord.header.aliquotaCustoFixo !== undefined ? ord.header.aliquotaCustoFixo : 26),
+        Number(ord.header.aliquotaIcmsSaida !== undefined ? ord.header.aliquotaIcmsSaida : 19.5),
+        Number(ord.header.aliquotaPisCofinsIr !== undefined ? ord.header.aliquotaPisCofinsIr : 6),
+        itemsJson,
+        separationJson,
+        paymentConfigJson,
         ord.header.createdAt || now,
         ord.header.updatedAt || now
       ]);
@@ -237,6 +314,36 @@ class BackupRestoreService {
             now
           ]);
           restoredItemsCount++;
+        }
+      }
+
+      if (Array.isArray(ord.installments)) {
+        for (let instIdx = 0; instIdx < ord.installments.length; instIdx++) {
+          const inst = ord.installments[instIdx];
+          const instId = inst.id || `inst_${orderId}_${instIdx}_${Math.random().toString(36).slice(2, 8)}`;
+          db.run(`
+            INSERT INTO order_installments (
+              id, orderId, numeroParcela, totalParcelas, dataVencimento, valor,
+              valorOriginal, status, dataPagamento, observacao, documentoRef,
+              isBoletoFrete, tipoTitulo, createdAt, updatedAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            instId,
+            orderId,
+            Number(inst.numeroParcela) || (instIdx + 1),
+            Number(inst.totalParcelas) || ord.installments.length,
+            inst.dataVencimento || '',
+            Number(inst.valor) || 0,
+            Number(inst.valorOriginal) || Number(inst.valor) || 0,
+            inst.status || 'A Vencer',
+            inst.dataPagamento || null,
+            inst.observacao || '',
+            inst.documentoRef || '',
+            inst.isBoletoFrete ? 1 : 0,
+            inst.tipoTitulo || (inst.isBoletoFrete ? 'frete' : 'mercadoria'),
+            inst.createdAt || now,
+            now
+          ]);
         }
       }
 
@@ -281,6 +388,53 @@ class BackupRestoreService {
       restoredOrdersCount,
       restoredItemsCount,
       restoredConditionsCount
+    };
+  }
+
+  async exportBackupData() {
+    const orderRepository = require('../repositories/orderRepository');
+    const productRepository = require('../repositories/productRepository');
+    const supplierRepository = require('../repositories/supplierRepository');
+    const fiscalRepository = require('../repositories/fiscalRepository');
+    const stockRepository = require('../repositories/stockRepository');
+    const paymentConditionRepository = require('../repositories/paymentConditionRepository');
+    const separationPresetRepository = require('../repositories/separationPresetRepository');
+    const fiscalPresetRepository = require('../repositories/fiscalPresetRepository');
+
+    const [
+      orders,
+      products,
+      suppliers,
+      fiscalConfig,
+      stores,
+      stockItems,
+      paymentConditions,
+      separationPresets,
+      fiscalPresets
+    ] = await Promise.all([
+      orderRepository.findAll().catch(() => []),
+      productRepository.findAll().catch(() => []),
+      supplierRepository.findAll().catch(() => []),
+      fiscalRepository.getFiscalConfig().catch(() => null),
+      fiscalRepository.getStores().catch(() => []),
+      stockRepository.findAll().catch(() => []),
+      paymentConditionRepository.findAll().catch(() => []),
+      separationPresetRepository.findAll().catch(() => []),
+      fiscalPresetRepository.findAll().catch(() => [])
+    ]);
+
+    return {
+      mega12_saved_orders_v1: JSON.stringify(orders),
+      mega12_products_v1: JSON.stringify(products),
+      mega12_suppliers_v1: JSON.stringify(suppliers),
+      mega12_fiscal_config_v1: fiscalConfig ? JSON.stringify(fiscalConfig) : '',
+      mega12_stores_v1: JSON.stringify(stores),
+      mega12_stock_items_v1: JSON.stringify(stockItems),
+      mega12_payment_conditions: JSON.stringify(paymentConditions),
+      mega12_separation_presets: JSON.stringify(separationPresets),
+      mega12_fiscal_presets: JSON.stringify(fiscalPresets),
+      exportedAt: new Date().toISOString(),
+      source: 'SQLite mega12.db (Physical Database)'
     };
   }
 }

@@ -29,7 +29,7 @@ import {
 import { FiscalConfig, StoreConfig, User } from '../shared/types';
 import { DEFAULT_FISCAL_CONFIG, DEFAULT_STORES } from '../shared/constants';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
-import { restoreDatabaseBackupApi } from '../utils/api';
+import { restoreDatabaseBackupApi, exportDatabaseBackupApi } from '../utils/api';
 
 interface FiscalSettingsPageProps {
   fiscalConfig: FiscalConfig;
@@ -211,13 +211,20 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
     }
   };
 
-  const handleDownloadCurrentBackup = () => {
+  const handleDownloadCurrentBackup = async () => {
     try {
-      const backup: Record<string, string> = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k) backup[k] = localStorage.getItem(k) || '';
+      let backup: Record<string, string> = {};
+      try {
+        // 🛡️ Tenta exportar os dados reais e completos diretamente do banco físico SQLite
+        backup = await exportDatabaseBackupApi();
+      } catch (apiErr) {
+        console.warn('Aviso: Falha ao exportar backup via API SQLite, usando fallback do localStorage:', apiErr);
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k) backup[k] = localStorage.getItem(k) || '';
+        }
       }
+
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

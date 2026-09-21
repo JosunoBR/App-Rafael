@@ -26,6 +26,7 @@ import {
   Plus
 } from 'lucide-react';
 import { PurchaseOrder, Supplier } from '../shared/types';
+import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 import { 
   DashboardFilter, 
   calculateDashboardMetrics, 
@@ -229,7 +230,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   Painel Executivo & Business Intelligence (BI)
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 inline-flex items-center gap-1.5">
+                    <img src={LOGO_MEGA12_BASE64} alt="Mega 12" className="w-3.5 h-3.5 rounded-full object-contain" />
                     Rede Mega 12
                   </span>
                 </h2>
@@ -400,7 +402,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span className="text-xs font-semibold mr-1">R$</span>
               {metrics.faturamentoPdv.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-[11px] text-slate-400 mt-0.5 block truncate">Projetado nas 20 lojas</span>
+            <span className="text-[11px] text-slate-400 mt-0.5 block truncate">Projetado nas lojas da rede</span>
           </div>
         </div>
 
@@ -581,7 +583,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Store className="w-4 h-4 text-indigo-500" />
-                    Rateio das 20 Lojas (39 Pts)
+                    Rateio das Lojas da Rede
                   </h3>
                   <span className="text-xs font-mono font-bold text-slate-500">
                     {metrics.totalPecas.toLocaleString('pt-BR')} un
@@ -750,7 +752,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   R$ {metrics.faturamentoPdv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </h4>
                 <p className="text-xs text-slate-300 mt-1">
-                  Receita total estimada na venda de {metrics.totalPecas.toLocaleString('pt-BR')} peças nas 20 lojas.
+                  Receita total estimada na venda de {metrics.totalPecas.toLocaleString('pt-BR')} peças nas lojas da rede.
                 </p>
               </div>
 
@@ -1113,7 +1115,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {supplierBargainMetrics.avgStReal > 0 ? (
                           <>Este fornecedor tem alíquota média de <b>+{supplierBargainMetrics.avgStReal.toFixed(1)}% de ST</b> nos pedidos. Negocie bonificação em mercadorias de alto giro (ex: 5% a mais em peças) para neutralizar o impacto fiscal de entrada.</>
                         ) : (
-                          <>Fornecedor isento de ST (0% nos pedidos). Excelente para manter preços agressivos de venda no PDV das 20 lojas.</>
+                          <>Fornecedor isento de ST (0% nos pedidos). Excelente para manter preços agressivos de venda no PDV das lojas.</>
                         )}
                       </p>
                     </div>

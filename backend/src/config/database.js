@@ -143,6 +143,7 @@ async function getDatabase() {
       itemsJson TEXT NOT NULL DEFAULT '[]',
       separationDistributionJson TEXT,
       paymentConfigJson TEXT,
+      inspectionJson TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -342,6 +343,27 @@ async function getDatabase() {
     CREATE INDEX IF NOT EXISTS idx_fin_categoria ON financial_entries(categoria);
     CREATE INDEX IF NOT EXISTS idx_fin_loja ON financial_entries(lojaNome);
     CREATE INDEX IF NOT EXISTS idx_fin_order ON financial_entries(orderId);
+
+    CREATE TABLE IF NOT EXISTS order_deletion_logs (
+      id TEXT PRIMARY KEY,
+      orderId TEXT NOT NULL,
+      numeroPedido TEXT NOT NULL,
+      tipoPedido TEXT NOT NULL, -- 'transferencia_cd' | 'compra_fornecedor'
+      fornecedor TEXT,
+      solicitadoPorNome TEXT NOT NULL,
+      solicitadoPorEmail TEXT NOT NULL,
+      autorizadoPorNome TEXT NOT NULL,
+      autorizadoPorEmail TEXT NOT NULL,
+      motivo TEXT NOT NULL,
+      totalPecasEstornadas INTEGER DEFAULT 0,
+      totalValor REAL DEFAULT 0,
+      snapshotJson TEXT NOT NULL,
+      dataExclusao TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_del_order ON order_deletion_logs(numeroPedido);
+    CREATE INDEX IF NOT EXISTS idx_del_data ON order_deletion_logs(dataExclusao);
   `);
 
   // Migrações automáticas de colunas
@@ -386,6 +408,7 @@ async function getDatabase() {
         valorFrete: "REAL DEFAULT 0",
         descontoComercialTotal: "REAL DEFAULT 0",
         descontoComercialTipo: "TEXT DEFAULT '%'",
+        inspectionJson: "TEXT",
         isDraft: "INTEGER DEFAULT 0"
       };
 
@@ -489,6 +512,12 @@ async function getDatabase() {
         }
       });
     }
+    // Sanitização de nomes de fornecedores de transferência e remoção de títulos indevidos
+    try {
+      dbInstance.run("UPDATE purchase_orders SET fornecedor = REPLACE(fornecedor, 'Depósito Central Mega 12', 'Depósito Central') WHERE fornecedor LIKE '%Depósito Central Mega 12%'");
+      dbInstance.run("DELETE FROM financial_entries WHERE orderId LIKE 'order_transf_cd_%' OR documentoRef LIKE 'CD-%' OR fornecedor LIKE '%Transferência%'");
+      dbInstance.run("DELETE FROM order_installments WHERE orderId LIKE 'order_transf_cd_%' OR orderId IN (SELECT id FROM purchase_orders WHERE supplierId = 'cd_matriz')");
+    } catch (e) {}
   } catch (err) {
     console.error('Aviso na verificação de migrações:', err.message);
   }

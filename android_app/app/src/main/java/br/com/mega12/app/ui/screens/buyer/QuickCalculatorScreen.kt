@@ -283,7 +283,7 @@ fun QuickCalculatorScreen(
                                     Icon(Icons.Default.Store, contentDescription = null, tint = Emerald400, modifier = Modifier.size(20.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Rateio Automático (20 Lojas)",
+                                        text = "Rateio Automático (Lojas)",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
                                     )
                                 }

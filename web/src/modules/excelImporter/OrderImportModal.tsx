@@ -396,7 +396,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Contém todos os campos obrigatórios (Código PRD, EAN-13, NCM, Unidade, Separação das 20 Lojas e Fórmulas Automáticas) para evitar erros de importação.
+                      Contém todos os campos obrigatórios (Código PRD, EAN-13, NCM, Unidade, Separação das Lojas e Fórmulas Automáticas) para evitar erros de importação.
                     </p>
                   </div>
                 </div>

@@ -84,7 +84,7 @@ export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) =
           {faturamentoPdvProjetado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
         <div className="text-[10px] text-slate-400 truncate">
-          Receita bruta nas 20 lojas
+          Receita bruta nas lojas
         </div>
       </div>
 
@@ -139,10 +139,10 @@ export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) =
       {/* 6. Status de Separação / Lojas */}
       <div 
         className="bg-white dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs"
-        title="Valida se a soma das peças distribuídas para as 20 lojas (mais a reserva de estoque) bate 100% com a quantidade total comprada."
+        title="Valida se a soma das peças distribuídas para as lojas (mais a reserva de estoque) bate 100% com a quantidade total comprada."
       >
         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1">
-          <span className="text-xs font-medium">Separação 20 Lojas</span>
+          <span className="text-xs font-medium">Separação das Lojas</span>
           <Store className="w-4 h-4 text-indigo-500" />
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">

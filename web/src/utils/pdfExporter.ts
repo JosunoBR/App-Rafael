@@ -463,6 +463,11 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     });
 
     // Linha de Totais da Tabela alimentada 100% diretamente pela Engine Central
+    // O primeiro total exibe o Total COM IPI (alinhado ao IPI ao lado) e na linha abaixo o Total SEM IPI
+    const totalComIpi = Number((orderTotals.valorBruto + orderTotals.totalIpi).toFixed(2));
+    const ipiFooterContent = `${formatCurrency(orderTotals.totalIpi)}\n `;
+    const valorTotalFooterContent = `${formatCurrency(totalComIpi)} (c/ IPI)\n${formatCurrency(orderTotals.valorBruto)} (s/ IPI)`;
+
     const footerRow = [
       {
         content: `TOTAIS DO PEDIDO (${bodyRows.length} itens)`,
@@ -482,11 +487,11 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
         styles: { halign: 'right', fontStyle: 'bold' }
       },
       {
-        content: formatCurrency(orderTotals.totalIpi),
+        content: ipiFooterContent,
         styles: { halign: 'right', fontStyle: 'bold' }
       },
       {
-        content: formatCurrency(orderTotals.valorBruto),
+        content: valorTotalFooterContent,
         styles: { halign: 'right', fontStyle: 'bold' }
       }
     ];
@@ -514,13 +519,13 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       columnStyles: {
         0: { cellWidth: 8, halign: 'center' },
         1: { cellWidth: 28, halign: 'center', fontStyle: 'bold', textColor: [15, 23, 42] },
-        2: { cellWidth: 110, halign: 'left', fontStyle: 'bold' },
+        2: { cellWidth: 106, halign: 'left', fontStyle: 'bold' },
         3: { cellWidth: 16, halign: 'center' },
         4: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
         5: { cellWidth: 22, halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] },
         6: { cellWidth: 23, halign: 'right' },
         7: { cellWidth: 26, halign: 'right', fontStyle: 'bold', textColor: [180, 83, 9] }, // IPI
-        8: { cellWidth: 28, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }
+        8: { cellWidth: 32, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252]
@@ -728,7 +733,7 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     doc.setTextColor(15, 23, 42); // Slate-900
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
-    doc.text('MEGA 12 • ROMANEIO DE SEPARAÇÃO E EXPEDIÇÃO (20 LOJAS)', 33, 12);
+    doc.text('MEGA 12 • ROMANEIO DE SEPARAÇÃO E EXPEDIÇÃO', 33, 12);
 
     doc.setTextColor(5, 150, 105); // Emerald-600
     doc.setFontSize(8);

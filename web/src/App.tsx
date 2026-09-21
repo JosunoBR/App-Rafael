@@ -76,6 +76,9 @@ import {
 import { 
   OrderPipelineStepper 
 } from './components/OrderPipelineStepper';
+import { 
+  DeleteOrderConfirmModal 
+} from './components/DeleteOrderConfirmModal';
 
 import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem, SeparationPreset, FiscalPreset } from './shared/types';
 import { 
@@ -101,6 +104,7 @@ import {
   saveCentralStock,
   updateStockBalance,
   createStockTransferOrder,
+  StockTransferPayloadItem,
   getInitialSeparationPresets,
   saveSeparationPresetsList,
   getInitialFiscalPresets,
@@ -379,11 +383,29 @@ export function App() {
         // 🛡️ Sincroniza a sequência global de pedidos com os dados do banco
         getNextOrderNumber(hydratedOrders);
 
-        // Se o pedido em edição for um rascunho inicial em branco cujo número colida com um pedido existente
+        // Se o pedido em edição for uma transferência de CD ou colidir com pedido existente
         setOrder(currentOrder => {
+          const isTransfer = 
+            currentOrder.header?.supplierId === 'cd_matriz' || 
+            String(currentOrder.header?.numeroPedido || '').startsWith('CD-') ||
+            String(currentOrder.header?.id || '').startsWith('order_transf_cd_') ||
+            (currentOrder.header?.fornecedor && currentOrder.header.fornecedor.toLowerCase().includes('transferência'));
+
+          const isSaved = hydratedOrders.some(o => o.header.id === currentOrder.header.id || o.header.numeroPedido === currentOrder.header.numeroPedido);
+
+          // Se for uma transferência excluída ou se a cotação estiver presa com dados de romaneio de CD: limpa a tela de cotação!
+          if (isTransfer && !isSaved) {
+            clearCurrentDraft();
+            const nextFreeNum = getNextOrderNumber(hydratedOrders);
+            const cleanOrd = createNewOrder(currentFiscal, currentStores, nextFreeNum);
+            return {
+              ...cleanOrd,
+              items: ensureTrailingBlankItem(cleanOrd.items || [], currentFiscal, currentStores)
+            };
+          }
+
           const validItems = (currentOrder.items || []).filter(it => !isOrderItemBlank(it));
           const hasWork = validItems.length > 0 || (currentOrder.header.fornecedor && currentOrder.header.fornecedor.trim() !== '');
-          const isSaved = hydratedOrders.some(o => o.header.id === currentOrder.header.id);
           const currentNum = (currentOrder.header?.numeroPedido || '').trim().toUpperCase();
           const collision = hydratedOrders.some(o => o.header.id !== currentOrder.header.id && o.header.numeroPedido?.trim().toUpperCase() === currentNum);
 
@@ -404,6 +426,39 @@ export function App() {
       console.warn('Usando armazenamento local de contingência:', err);
     }
   };
+
+  // 🛡️ Salvaguarda contra contaminação da tela de Cotação Comercial:
+  // Se o pedido ativo for uma transferência que foi excluída ou se a tela de cotação estiver presa com dados de CD, limpa imediatamente!
+  useEffect(() => {
+    const isOrderTransfer = 
+      order.header?.supplierId === 'cd_matriz' || 
+      String(order.header?.numeroPedido || '').startsWith('CD-') ||
+      String(order.header?.id || '').startsWith('order_transf_cd_') ||
+      (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+
+    if (isOrderTransfer) {
+      const existsInSaved = savedOrders.some(
+        o => o.header.id === order.header.id || o.header.numeroPedido === order.header.numeroPedido
+      );
+      if (!existsInSaved || activeNav === 'orders') {
+        clearCurrentDraft();
+        fetchNextOrderNumberFromDb().then(nextNum => {
+          const clean = createNewOrder(fiscalConfig, storeConfigs, nextNum);
+          setOrder({
+            ...clean,
+            items: ensureTrailingBlankItem(clean.items || [], fiscalConfig, storeConfigs)
+          });
+        }).catch(() => {
+          const localNum = getNextOrderNumber();
+          const clean = createNewOrder(fiscalConfig, storeConfigs, localNum);
+          setOrder({
+            ...clean,
+            items: ensureTrailingBlankItem(clean.items || [], fiscalConfig, storeConfigs)
+          });
+        });
+      }
+    }
+  }, [activeNav, savedOrders, order.header?.id, order.header?.numeroPedido, order.header?.supplierId]);
 
   // 1. Validação DIRETA no servidor (SQLite /api/auth/me) na montagem do App
   useEffect(() => {
@@ -839,6 +894,24 @@ export function App() {
     showToast('Rascunho descartado. Pedido zerado.', 'info');
   };
 
+  // Estado para modal de confirmação de exclusão da tela de cotação
+  const [orderToDeleteFromHeader, setOrderToDeleteFromHeader] = useState<PurchaseOrder | null>(null);
+
+  // Solicitar descarte ou exclusão do pedido ativo na cotação com proteção por senha de diretoria
+  const handleRequestDiscardOrDelete = () => {
+    const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
+    const hasWork = validItems.length > 0 || (order.header.fornecedor && order.header.fornecedor.trim() !== '');
+    const isSaved = savedOrders.some(o => o.header.id === order.header.id || o.header.numeroPedido === order.header.numeroPedido);
+
+    // Se o pedido tiver itens, valores ou já estiver salvo no SQLite, exige confirmação por senha de diretoria
+    if (hasWork || isSaved) {
+      setOrderToDeleteFromHeader(order);
+    } else {
+      // Se estiver totalmente vazio e nunca salvo, apenas zera o formulário
+      handleDiscardDraft();
+    }
+  };
+
   // Identificar fornecedor ativo no pedido e seu Pedido Padrão / Template
   const activeSupplier = useMemo(() => {
     return suppliers.find(s => 
@@ -1210,6 +1283,16 @@ export function App() {
     };
 
     let targetTab = destinationTab;
+    const isTransfer = 
+      selected.header.supplierId === 'cd_matriz' || 
+      String(selected.header.numeroPedido || '').startsWith('CD-') || 
+      String(selected.header.id || '').startsWith('order_transf_cd_') ||
+      (selected.header.fornecedor && selected.header.fornecedor.toLowerCase().includes('transferência'));
+
+    if (isTransfer && targetTab === 'orders') {
+      targetTab = 'separation';
+    }
+
     if (!canAccessTab(currentUser?.role, targetTab)) {
       targetTab = getDefaultNavForRole(currentUser?.role);
     }
@@ -1810,14 +1893,34 @@ export function App() {
     }
   };
 
-  const handleGenerateStockSeparation = (itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>) => {
-    const transfOrder = createStockTransferOrder(itemsToTransfer, storeConfigs, fiscalConfig);
-    saveOrderToHistory(transfOrder);
-    setSavedOrders(loadSavedOrdersList());
-    setOrder(transfOrder);
-    setActiveNav('separation');
-    confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
-    showToast(`Romaneio ${transfOrder.header.numeroPedido} gerado e enviado para a Separação da Doca!`, 'success');
+  const handleGenerateStockSeparation = async (itemsToTransfer: StockTransferPayloadItem[]) => {
+    try {
+      const transfOrder = createStockTransferOrder(itemsToTransfer, storeConfigs, fiscalConfig);
+      await saveOrderToDb(transfOrder).catch(err => {
+        console.warn('Aviso ao salvar romaneio no SQLite:', err);
+      });
+      saveOrderToHistory(transfOrder);
+      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      // Garante que a cotação comercial permaneça limpa e nunca seja poluída com romaneio de transferência interna
+      if (
+        order.header.supplierId === 'cd_matriz' || 
+        String(order.header.numeroPedido || '').startsWith('CD-') ||
+        String(order.header.id || '').startsWith('order_transf_cd_')
+      ) {
+        clearCurrentDraft();
+        const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
+        const cleanOrd = createNewOrder(fiscalConfig, storeConfigs, nextNum);
+        setOrder({
+          ...cleanOrd,
+          items: ensureTrailingBlankItem(cleanOrd.items || [], fiscalConfig, storeConfigs)
+        });
+      }
+      confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
+      showToast(`Romaneio ${transfOrder.header.numeroPedido} despachado com sucesso para a Doca!`, 'success');
+    } catch (err: any) {
+      console.error('Erro ao gerar romaneio de transferência:', err);
+      showToast('Erro ao despachar romaneio: ' + (err.message || 'Falha inesperada'), 'error');
+    }
   };
 
   const handleFinalizeSeparation = async (finalizedOrder: PurchaseOrder) => {
@@ -1952,7 +2055,7 @@ export function App() {
 
   const handleExportSeparationPDF = () => {
     exportRomaneioPDF(order, storeConfigs);
-    showToast('Romaneio PDF de Separação (20 Lojas) gerado com sucesso!', 'success');
+    showToast('Romaneio PDF de Separação gerado com sucesso!', 'success');
   };
 
   // Supplier Page Handlers
@@ -2235,21 +2338,99 @@ export function App() {
     }
   };
 
-  const handleDeleteOrder = async (orderId: string) => {
+  const handleDeleteOrder = async (
+    orderId: string,
+    authPayload?: { directorEmail?: string; directorPassword?: string; reason?: string }
+  ) => {
     try {
-      await deleteOrderFromDb(orderId);
-      const updated = await fetchOrdersFromDb().catch(() => null);
-      if (updated !== null) {
-        setSavedOrders(updated);
+      const targetOrder = savedOrders.find(o => o.header.id === orderId || o.header.numeroPedido === orderId) || 
+                          (order.header.id === orderId ? order : null);
+
+      const isTransfer = targetOrder && (
+        targetOrder.header.supplierId === 'cd_matriz' || 
+        String(targetOrder.header.numeroPedido || '').startsWith('CD-') || 
+        String(targetOrder.header.id || '').startsWith('order_transf_cd_') ||
+        (targetOrder.header.fornecedor && targetOrder.header.fornecedor.toLowerCase().includes('transferência'))
+      );
+
+      // 🛡️ Executa a exclusão no backend passando a autorização da diretoria
+      const deleteResult = await deleteOrderFromDb(orderId, authPayload);
+
+      let totalUnitsReversed = 0;
+
+      if (isTransfer && targetOrder && Array.isArray(targetOrder.items)) {
+        for (const it of targetOrder.items) {
+          const qty = Number(it.qtdTotalUnidades || 0);
+          if (qty > 0) {
+            const match = centralStock.find(s => 
+              (s.codigo && it.codigo && s.codigo.trim().toLowerCase() === it.codigo.trim().toLowerCase()) ||
+              (s.descricao && it.descricao && s.descricao.trim().toLowerCase() === it.descricao.trim().toLowerCase()) ||
+              (s.productId && (s.productId === it.id || s.productId === (it as any).productId))
+            );
+            if (match) {
+              updateStockBalance(match.id, qty);
+              totalUnitsReversed += qty;
+            }
+          }
+        }
+      }
+
+      const updatedOrders = await fetchOrdersFromDb().catch(() => null);
+      if (updatedOrders !== null) {
+        setSavedOrders(updatedOrders);
       } else {
         setSavedOrders(prev => prev.filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId));
       }
-      showToast('Pedido excluído do sistema.', 'info');
-    } catch (err) {
-      setSavedOrders(prev => prev.filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId));
-      const list = loadSavedOrdersList().filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId);
-      saveSavedOrdersList(list);
-      showToast('Pedido excluído localmente.', 'info');
+
+      // 🧹 LIMPEZA IMEDIATA DA TELA DE COTAÇÃO:
+      // Se o pedido excluído era o que estava exibido na tela de cotação ou se a tela de cotação estiver presa com essa transferência:
+      const isCurrentOrderMatch = 
+        order.header.id === orderId || 
+        order.header.numeroPedido === orderId || 
+        (targetOrder && (
+          order.header.id === targetOrder.header.id || 
+          order.header.numeroPedido === targetOrder.header.numeroPedido
+        )) ||
+        (isTransfer && (
+          order.header.supplierId === 'cd_matriz' || 
+          String(order.header.numeroPedido || '').startsWith('CD-') ||
+          String(order.header.id || '').startsWith('order_transf_cd_')
+        ));
+
+      if (isCurrentOrderMatch) {
+        clearCurrentDraft();
+        let nextNum = '';
+        try {
+          nextNum = await fetchNextOrderNumberFromDb();
+        } catch {
+          nextNum = getNextOrderNumber();
+        }
+        const cleanOrd = createNewOrder(fiscalConfig, storeConfigs, nextNum);
+        const finalCleanOrd: PurchaseOrder = {
+          ...cleanOrd,
+          items: ensureTrailingBlankItem(cleanOrd.items || [], fiscalConfig, storeConfigs)
+        };
+        setOrder(finalCleanOrd);
+        saveCurrentOrder(finalCleanOrd);
+      }
+
+      if (isTransfer && targetOrder) {
+        const refreshedStock = await fetchStockFromDb().catch(() => null);
+        if (refreshedStock) {
+          setCentralStock(refreshedStock);
+          saveCentralStock(refreshedStock);
+        }
+        showToast(
+          deleteResult?.message || `Romaneio ${targetOrder.header.numeroPedido} excluído! ${totalUnitsReversed} unidades creditadas de volta no Estoque Central.`, 
+          'success'
+        );
+      } else {
+        showToast(deleteResult?.message || 'Pedido excluído com sucesso e registrado na auditoria.', 'info');
+      }
+    } catch (err: any) {
+      console.error('Erro ao excluir pedido:', err);
+      showToast(err?.message || 'Erro ao autorizar exclusão. Verifique a senha da Diretoria.', 'error');
+      throw err;
     }
   };
 
@@ -2313,7 +2494,7 @@ export function App() {
           onSaveOrder={handleSaveDraftOrder}
           onCloseOrder={handleCloseOrder}
           onDuplicateOrder={handleDuplicateCurrentOrder}
-          onDiscardDraft={handleDiscardDraft}
+          onDiscardDraft={handleRequestDiscardOrDelete}
           onExportExcel={handleExportExcel}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
           onImportExcel={() => setIsImportModalOpen(true)}
@@ -2347,8 +2528,9 @@ export function App() {
             <MobileSeparationView
               order={order}
               orders={savedOrders.length > 0 ? savedOrders : [order]}
-              onSelectOrder={setOrder}
-              onUpdateOrder={setOrder}
+              currentUser={currentUser}
+              onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
+              onUpdateOrder={handleSaveOrderDirect}
               onFinalizeOrder={handleFinalizeSeparation}
             />
           )}
@@ -2363,6 +2545,7 @@ export function App() {
                   savedOrders={savedOrders}
                   draftOrder={hasActiveDraft ? order : null}
                   suppliers={suppliers}
+                  products={products}
                   stores={storeConfigs}
                   centralStock={centralStock}
                   onNavigate={(tab) => {
@@ -2472,6 +2655,7 @@ export function App() {
                   suppliers={suppliers}
                   stores={storeConfigs}
                   fiscalConfig={fiscalConfig}
+                  presets={separationPresets}
                   onUpdateStockBalance={handleUpdateStockBalance}
                   onSaveNewStockItem={handleSaveNewStockItem}
                   onGenerateStockSeparation={handleGenerateStockSeparation}
@@ -2482,23 +2666,34 @@ export function App() {
 
               {/* PÁGINA 2: CONFERÊNCIA DE SEPARAÇÃO E ROMANEIO (20 LOJAS) */}
               {activeNav === 'separation' && canAccessTab(currentUser?.role, 'separation') && (
-                <SeparationPage
-                  order={order}
-                  orders={savedOrders.length > 0 ? savedOrders : [order]}
-                  stores={storeConfigs}
-                  presets={separationPresets}
-                  currentUser={currentUser}
-                  onExportPDF={handleExportSeparationPDF}
-                  onNavigateToOrders={() => setActiveNav('orders')}
-                  onNavigateToHistory={() => setActiveNav('separationHistory')}
-                  onChangeOrder={setOrder}
-                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
-                  onFinalizeOrder={handleFinalizeSeparation}
-                  onReleaseToSeparation={handleReleaseToSeparation}
-                  onApproveOrder={handleApproveOrder}
-                  onSavePreset={handleSaveSeparationPreset}
-                  onDeletePreset={handleDeleteSeparationPreset}
-                />
+                currentUser?.role === 'separacao' ? (
+                  <MobileSeparationView
+                    order={order}
+                    orders={savedOrders.length > 0 ? savedOrders : [order]}
+                    currentUser={currentUser}
+                    onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
+                    onUpdateOrder={handleSaveOrderDirect}
+                    onFinalizeOrder={handleFinalizeSeparation}
+                  />
+                ) : (
+                  <SeparationPage
+                    order={order}
+                    orders={savedOrders.length > 0 ? savedOrders : [order]}
+                    stores={storeConfigs}
+                    presets={separationPresets}
+                    currentUser={currentUser}
+                    onExportPDF={handleExportSeparationPDF}
+                    onNavigateToOrders={() => setActiveNav('orders')}
+                    onNavigateToHistory={() => setActiveNav('separationHistory')}
+                    onChangeOrder={setOrder}
+                    onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
+                    onFinalizeOrder={handleFinalizeSeparation}
+                    onReleaseToSeparation={handleReleaseToSeparation}
+                    onApproveOrder={handleApproveOrder}
+                    onSavePreset={handleSaveSeparationPreset}
+                    onDeletePreset={handleDeleteSeparationPreset}
+                  />
+                )
               )}
 
               {/* PÁGINA 2.1: HISTÓRICO DE SEPARAÇÕES & AUDITORIA DE CONFERENTES */}
@@ -2572,6 +2767,7 @@ export function App() {
               {activeNav === 'history' && canAccessTab(currentUser?.role, 'history') && (
                 <OrderHistoryPage
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
+                  currentUser={currentUser}
                   onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
                   onDeleteOrder={handleDeleteOrder}
                   onNewOrder={handleNewOrder}
@@ -2681,6 +2877,20 @@ export function App() {
           onOrderImported={handleOrderImported}
         />
       )}
+
+      {/* Modal Seguro de Confirmação de Exclusão da Tela de Cotação */}
+      <DeleteOrderConfirmModal
+        isOpen={Boolean(orderToDeleteFromHeader)}
+        onClose={() => setOrderToDeleteFromHeader(null)}
+        order={orderToDeleteFromHeader}
+        currentUser={currentUser}
+        onConfirm={async (authPayload) => {
+          if (orderToDeleteFromHeader) {
+            await handleDeleteOrder(orderToDeleteFromHeader.header.id, authPayload);
+            setOrderToDeleteFromHeader(null);
+          }
+        }}
+      />
 
     </div>
   );

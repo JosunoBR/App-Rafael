@@ -705,7 +705,7 @@ class ExportService {
     doc.setTextColor(15, 23, 42); // Slate-900
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
-    doc.text('MEGA 12 • ROMANEIO DE SEPARAÇÃO E EXPEDIÇÃO (20 LOJAS)', 33, 12);
+    doc.text('MEGA 12 • ROMANEIO DE SEPARAÇÃO E EXPEDIÇÃO', 33, 12);
 
     doc.setTextColor(5, 150, 105); // Emerald-600
     doc.setFontSize(8);

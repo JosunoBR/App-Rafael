@@ -95,7 +95,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
   };
 
   const handleResetStoresDefaults = () => {
-    if (confirm('Deseja restaurar a matriz original de 20 lojas com os percentuais iniciais?')) {
+    if (confirm('Deseja restaurar a matriz original de lojas com os percentuais iniciais?')) {
       setStores(DEFAULT_STORES.map(s => ({ ...s })));
     }
   };
@@ -535,10 +535,10 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
               type="button"
               onClick={handleResetStoresDefaults}
               className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-1 font-semibold transition cursor-pointer shrink-0"
-              title="Restaurar lista original de 20 lojas"
+              title="Restaurar lista original de lojas"
             >
               <RotateCcw className="w-3 h-3" />
-              <span>Restaurar 20 Lojas</span>
+              <span>Restaurar Lojas</span>
             </button>
           </div>
 

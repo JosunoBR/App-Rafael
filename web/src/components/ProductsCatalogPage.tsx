@@ -51,6 +51,8 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
   // Modal de Cadastro/Edição
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingPrecoCompra, setEditingPrecoCompra] = useState<string | null>(null);
+  const [editingPdv, setEditingPdv] = useState<string | null>(null);
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [draggedOverCardId, setDraggedOverCardId] = useState<string | null>(null);
@@ -125,6 +127,8 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
+    setEditingPrecoCompra(null);
+    setEditingPdv(null);
     setIsModalOpen(true);
   };
 
@@ -136,6 +140,8 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
       codigoBarras: prod.codigoBarras || prod.eanBarcode || '',
       qtdPorPacote: prod.qtdPorPacote !== undefined && prod.qtdPorPacote !== null ? prod.qtdPorPacote : 12
     });
+    setEditingPrecoCompra(null);
+    setEditingPdv(null);
     setIsModalOpen(true);
   };
 
@@ -303,7 +309,7 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
               </span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Banco central de produtos com fotos em alta resolução para compras, cotações e separação nas 20 lojas
+              Banco central de produtos com fotos em alta resolução para compras, cotações e separação nas lojas da rede
             </p>
           </div>
         </div>
@@ -980,12 +986,32 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                   </label>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    value={formatCurrency(editingProduct.precoUnitarioPadrao || 0)}
+                    inputMode="decimal"
+                    value={editingPrecoCompra !== null ? editingPrecoCompra : formatCurrency(editingProduct.precoUnitarioPadrao || 0)}
                     placeholder="0,00"
-                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === '.') {
+                        e.preventDefault();
+                        const target = e.currentTarget;
+                        const currentVal = target.value;
+                        if (!currentVal.includes(',')) {
+                          const selStart = target.selectionStart ?? currentVal.length;
+                          const selEnd = target.selectionEnd ?? currentVal.length;
+                          const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                          const { formatted, value } = handleCurrencyInput(newVal, false);
+                          setEditingPrecoCompra(formatted);
+                          setEditingProduct(prev => prev ? { ...prev, precoUnitarioPadrao: value } : null);
+                        }
+                      }
+                    }}
+                    onFocus={(e) => {
+                      setEditingPrecoCompra(editingProduct.precoUnitarioPadrao ? formatCurrency(editingProduct.precoUnitarioPadrao, false) : '');
+                      e.target.select();
+                    }}
+                    onBlur={() => setEditingPrecoCompra(null)}
                     onChange={(e) => {
-                      const { value } = handleCurrencyInput(e.target.value, false);
+                      const { formatted, value } = handleCurrencyInput(e.target.value, false);
+                      setEditingPrecoCompra(formatted);
                       setEditingProduct(prev => prev ? { ...prev, precoUnitarioPadrao: value } : null);
                     }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
@@ -998,11 +1024,31 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                   </label>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    value={formatCurrency(editingProduct.pdvSugerido !== undefined ? editingProduct.pdvSugerido : 12.00)}
-                    onFocus={(e) => e.target.select()}
+                    inputMode="decimal"
+                    value={editingPdv !== null ? editingPdv : formatCurrency(editingProduct.pdvSugerido !== undefined ? editingProduct.pdvSugerido : 12.00)}
+                    onKeyDown={(e) => {
+                      if (e.key === '.') {
+                        e.preventDefault();
+                        const target = e.currentTarget;
+                        const currentVal = target.value;
+                        if (!currentVal.includes(',')) {
+                          const selStart = target.selectionStart ?? currentVal.length;
+                          const selEnd = target.selectionEnd ?? currentVal.length;
+                          const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                          const { formatted, value } = handleCurrencyInput(newVal, false);
+                          setEditingPdv(formatted);
+                          setEditingProduct(prev => prev ? { ...prev, pdvSugerido: value } : null);
+                        }
+                      }
+                    }}
+                    onFocus={(e) => {
+                      setEditingPdv(editingProduct.pdvSugerido !== undefined ? formatCurrency(editingProduct.pdvSugerido, false) : '12,00');
+                      e.target.select();
+                    }}
+                    onBlur={() => setEditingPdv(null)}
                     onChange={(e) => {
-                      const { value } = handleCurrencyInput(e.target.value, false);
+                      const { formatted, value } = handleCurrencyInput(e.target.value, false);
+                      setEditingPdv(formatted);
                       setEditingProduct(prev => prev ? { ...prev, pdvSugerido: value } : null);
                     }}
                     placeholder="12,00"

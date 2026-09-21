@@ -78,7 +78,7 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     { key: 'colF', width: 15 },  // Total Peças
     { key: 'colG', width: 17 },  // Preço Unit.
     { key: 'colH', width: 17 },  // IPI
-    { key: 'colI', width: 20 },  // Valor Total
+    { key: 'colI', width: 23 },  // Valor Total
   ];
 
   // Helper para bordas
@@ -374,11 +374,14 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   footerRow.getCell(7).value = formatCurrency(orderTotals.precoMedio);
   footerRow.getCell(7).alignment = { vertical: 'middle', horizontal: 'right' };
 
-  footerRow.getCell(8).value = formatCurrency(orderTotals.totalIpi);
-  footerRow.getCell(8).alignment = { vertical: 'middle', horizontal: 'right' };
+  const totalComIpi = Number((orderTotals.valorBruto + orderTotals.totalIpi).toFixed(2));
 
-  footerRow.getCell(9).value = formatCurrency(orderTotals.valorBruto);
-  footerRow.getCell(9).alignment = { vertical: 'middle', horizontal: 'right' };
+  footerRow.getCell(8).value = `${formatCurrency(orderTotals.totalIpi)}\n `;
+  footerRow.getCell(8).alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+
+  footerRow.getCell(9).value = `${formatCurrency(totalComIpi)} (c/ IPI)\n${formatCurrency(orderTotals.valorBruto)} (s/ IPI)`;
+  footerRow.getCell(9).alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+  footerRow.height = 28;
 
   for (let c = 1; c <= 9; c++) {
     const cell = footerRow.getCell(c);

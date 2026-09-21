@@ -89,6 +89,8 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
     eanBarcode: ''
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [editingPrecoCompra, setEditingPrecoCompra] = useState<string | null>(null);
+  const [editingPdv, setEditingPdv] = useState<string | null>(null);
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
 
@@ -685,12 +687,32 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                   </label>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    value={newProductData.precoUnitarioPadrao ? formatCurrency(newProductData.precoUnitarioPadrao, false) : ''}
+                    inputMode="decimal"
+                    value={editingPrecoCompra !== null ? editingPrecoCompra : (newProductData.precoUnitarioPadrao ? formatCurrency(newProductData.precoUnitarioPadrao, false) : '')}
                     placeholder="0,00"
-                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === '.') {
+                        e.preventDefault();
+                        const target = e.currentTarget;
+                        const currentVal = target.value;
+                        if (!currentVal.includes(',')) {
+                          const selStart = target.selectionStart ?? currentVal.length;
+                          const selEnd = target.selectionEnd ?? currentVal.length;
+                          const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                          const { formatted, value } = handleCurrencyInput(newVal, true);
+                          setEditingPrecoCompra(formatted);
+                          setNewProductData(prev => ({ ...prev, precoUnitarioPadrao: value }));
+                        }
+                      }
+                    }}
+                    onFocus={(e) => {
+                      setEditingPrecoCompra(newProductData.precoUnitarioPadrao ? formatCurrency(newProductData.precoUnitarioPadrao, false) : '');
+                      e.target.select();
+                    }}
+                    onBlur={() => setEditingPrecoCompra(null)}
                     onChange={(e) => {
-                      const { value } = handleCurrencyInput(e.target.value, true);
+                      const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                      setEditingPrecoCompra(formatted);
                       setNewProductData(prev => ({ ...prev, precoUnitarioPadrao: value }));
                     }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
@@ -703,12 +725,32 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                   </label>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    value={newProductData.pdvSugerido ? formatCurrency(newProductData.pdvSugerido, false) : ''}
+                    inputMode="decimal"
+                    value={editingPdv !== null ? editingPdv : (newProductData.pdvSugerido ? formatCurrency(newProductData.pdvSugerido, false) : '')}
                     placeholder="0,00"
-                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === '.') {
+                        e.preventDefault();
+                        const target = e.currentTarget;
+                        const currentVal = target.value;
+                        if (!currentVal.includes(',')) {
+                          const selStart = target.selectionStart ?? currentVal.length;
+                          const selEnd = target.selectionEnd ?? currentVal.length;
+                          const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                          const { formatted, value } = handleCurrencyInput(newVal, true);
+                          setEditingPdv(formatted);
+                          setNewProductData(prev => ({ ...prev, pdvSugerido: value }));
+                        }
+                      }
+                    }}
+                    onFocus={(e) => {
+                      setEditingPdv(newProductData.pdvSugerido ? formatCurrency(newProductData.pdvSugerido, false) : '');
+                      e.target.select();
+                    }}
+                    onBlur={() => setEditingPdv(null)}
                     onChange={(e) => {
-                      const { value } = handleCurrencyInput(e.target.value, true);
+                      const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                      setEditingPdv(formatted);
                       setNewProductData(prev => ({ ...prev, pdvSugerido: value }));
                     }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 outline-hidden"

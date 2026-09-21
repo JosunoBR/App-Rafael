@@ -96,7 +96,7 @@ fun FiscalSettingsScreen(
 
             item {
                 Text(
-                    text = "Configuração das 20 Lojas & Clusters",
+                    text = "Configuração das Lojas & Clusters",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
                 )
             }

@@ -30,7 +30,7 @@ fun SeparationListScreen(
         topBar = {
             Mega12TopBar(
                 title = "Separação & Romaneio Doca",
-                subtitle = "Conferência das 20 Lojas",
+                subtitle = "Conferência das Lojas",
                 onBackClick = onNavigateBack,
                 actions = {
                     IconButton(onClick = { viewModel.refreshData() }) {

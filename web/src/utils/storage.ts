@@ -565,6 +565,16 @@ export function loadCurrentOrder(): PurchaseOrder | null {
     if (!saved) return null;
     const ord: PurchaseOrder = JSON.parse(saved);
     if (ord.header?.status === 'Finalizado') return null;
+    // Romaneios de transferência interna do CD nunca são rascunhos de cotação comercial
+    if (
+      ord.header?.supplierId === 'cd_matriz' || 
+      String(ord.header?.numeroPedido || '').startsWith('CD-') ||
+      String(ord.header?.id || '').startsWith('order_transf_cd_') ||
+      (ord.header?.fornecedor && ord.header.fornecedor.toLowerCase().includes('transferência'))
+    ) {
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_ORDER);
+      return null;
+    }
     if (ord.items) {
       ord.items = ord.items.map(it => ({
         ...it,
@@ -597,8 +607,14 @@ export function loadCurrentOrder(): PurchaseOrder | null {
 }
 
 export function saveCurrentOrder(order: PurchaseOrder): void {
-  // Não salva pedidos finalizados como rascunho ativo
-  if (order.header?.status === 'Finalizado') {
+  // Não salva pedidos finalizados nem transferências internas do CD como rascunho ativo de cotação comercial
+  if (
+    order.header?.status === 'Finalizado' ||
+    order.header?.supplierId === 'cd_matriz' || 
+    String(order.header?.numeroPedido || '').startsWith('CD-') ||
+    String(order.header?.id || '').startsWith('order_transf_cd_') ||
+    (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'))
+  ) {
     localStorage.removeItem(STORAGE_KEYS.CURRENT_ORDER);
     return;
   }
@@ -754,6 +770,11 @@ export function loadSavedOrdersList(): PurchaseOrder[] {
           ord.header.numeroPedido = num;
           hadBogus = true;
         }
+        let fornecedor = ord.header.fornecedor || '';
+        if (fornecedor.includes('Depósito Central Mega 12')) {
+          ord.header.fornecedor = fornecedor.replace('Depósito Central Mega 12', 'Depósito Central');
+          hadBogus = true;
+        }
         map.set(num.toUpperCase(), {
           ...ord,
           header: {
@@ -864,8 +885,14 @@ export function updateStockBalance(stockId: string, deltaUnidades: number, newLo
   return stock;
 }
 
+export interface StockTransferPayloadItem {
+  stockItem: CentralStockItem;
+  caixasParaSeparar: number;
+  separacaoLojas?: Record<string, number>;
+}
+
 export function createStockTransferOrder(
-  selectedItemsWithBoxes: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>,
+  selectedItemsWithBoxes: StockTransferPayloadItem[],
   storeConfigs: StoreConfig[],
   fiscalConfig: FiscalConfig
 ): PurchaseOrder {
@@ -873,12 +900,26 @@ export function createStockTransferOrder(
   const today = new Date().toISOString().split('T')[0];
 
   const items: OrderItem[] = selectedItemsWithBoxes.map((sel, idx) => {
-    const { stockItem, caixasParaSeparar } = sel;
+    const { stockItem, caixasParaSeparar, separacaoLojas } = sel;
     const pack = stockItem.qtdPorPacote || 1;
     const qtdTotalUnidades = caixasParaSeparar * pack;
     const valorTotalBruto = qtdTotalUnidades * stockItem.precoUnitario;
     const fiscal = calculateItemFiscal(stockItem.precoUnitario, stockItem.pdvSugerido, fiscalConfig);
-    const separation = calculateAutomaticSeparation(qtdTotalUnidades, storeConfigs);
+
+    let finalSeparacao: Record<string, number>;
+    let finalReserve: number;
+    let isManual = false;
+
+    if (separacaoLojas && Object.keys(separacaoLojas).length > 0) {
+      finalSeparacao = { ...separacaoLojas };
+      const totalAlocado = Object.values(separacaoLojas).reduce((a, b) => a + (Number(b) || 0), 0);
+      finalReserve = Math.max(0, qtdTotalUnidades - totalAlocado);
+      isManual = true;
+    } else {
+      const separation = calculateAutomaticSeparation(qtdTotalUnidades, storeConfigs);
+      finalSeparacao = separation.allocations;
+      finalReserve = separation.reserveStock;
+    }
 
     return {
       id: `item_transf_${Date.now()}_${idx + 1}`,
@@ -896,9 +937,9 @@ export function createStockTransferOrder(
       custoRealEfetivo: fiscal.custoRealEfetivo,
       margemRealUnit: fiscal.margemRealUnit,
       margemPercentual: fiscal.margemPercentual,
-      separacaoLojas: separation.allocations,
-      qtdReservaEstoque: separation.reserveStock,
-      separacaoManual: false
+      separacaoLojas: finalSeparacao,
+      qtdReservaEstoque: finalReserve,
+      separacaoManual: isManual
     };
   });
 
@@ -906,24 +947,29 @@ export function createStockTransferOrder(
     header: {
       id: 'order_transf_cd_' + Date.now(),
       numeroPedido: nextNum,
-      fornecedor: 'Depósito Central Mega 12 (Transferência CD)',
+      fornecedor: 'Depósito Central (Transferência CD)',
       supplierId: 'cd_matriz',
       aliquotaSt: 0,
       vendedor: 'Expedição / CD Matriz',
       contatoVendedor: '(41) 3300-1200',
       condicaoPagamento: 'Transferência Interna Entre Filiais',
+      formaPagamento: 'Transferência Interna',
+      prazoDias: 'sem_cobranca',
+      parcelasCount: 0,
       dataPedido: today,
       dataEntregaPrevista: today,
       percentualDescontoOff: 0,
       percentualNota: 100,
-      observacoesDescarga: 'Romaneio gerado a partir do estoque físico do Depósito Central para distribuição às 20 lojas.',
+      observacoesDescarga: 'Romaneio gerado a partir do estoque físico do Depósito Central para distribuição às lojas da rede.',
       valorFreteGlobal: 0,
       valorOutrasDespesasGlobal: 0,
       status: 'Em Separação',
+      separationStatus: 'Pendente',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     },
     items,
+    installments: [],
     fiscalConfig,
     storeConfigs
   };

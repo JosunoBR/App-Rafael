@@ -10,6 +10,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { User } from '../shared/types';
+import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 
 interface LoginPageProps {
   onLoginSuccess: (user: User) => void;
@@ -64,13 +65,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         
         {/* Cabeçalho com Logomarca */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center p-3.5 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl shadow-lg shadow-emerald-900/50 mb-2">
-            <Building2 className="w-8 h-8 text-white" />
+          <div className="w-24 h-24 mx-auto rounded-full overflow-hidden shadow-2xl shadow-emerald-500/20 mb-3 border-2 border-emerald-500/40 bg-slate-950 p-1 flex items-center justify-center">
+            <img 
+              src={LOGO_MEGA12_BASE64} 
+              alt="Rede Mega 12" 
+              className="w-full h-full object-contain rounded-full" 
+            />
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
             Rede Mega 12
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-400 font-bold">
-              20 Lojas
+              Rede de Lojas
             </span>
           </h1>
           <p className="text-xs text-slate-400 max-w-xs mx-auto">

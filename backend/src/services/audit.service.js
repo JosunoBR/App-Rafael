@@ -21,6 +21,14 @@ class AuditService {
       message: 'Log de auditoria registrado com sucesso.'
     };
   }
+
+  async listDeletions(orderId) {
+    const deletionAuditRepo = require('../repositories/deletionAuditRepository');
+    if (orderId) {
+      return await deletionAuditRepo.findByOrderId(orderId);
+    }
+    return await deletionAuditRepo.findAll();
+  }
 }
 
 module.exports = new AuditService();

@@ -4,21 +4,17 @@
  */
 
 /**
- * Formata valores monetários (R$) em tempo real estilo caixa eletrônico / ERP financeiro.
- * As casas decimais são inseridas automaticamente conforme os dígitos são digitados.
- * Exemplo:
- * Digita 5 -> 0,05
- * Digita 0 -> 0,50
- * Digita 0 -> 5,00
- * Digita 0 -> 50,00
- * Digita 0 -> 500,00
+ * Formata valores monetários (R$) em tempo real permitindo digitação natural de números inteiros:
+ * - Ao digitar números sem vírgula, são tratados como inteiros (ex: "6" -> 6; "1253" -> 1.253).
+ * - Casas decimais são aceitas apenas se o usuário digitar uma vírgula (ex: "6,52" -> 6.52).
+ * - Ao sair do campo ou formatar, valores são exibidos no padrão de moeda (ex: "6,00", "1.253,00").
  */
 export function handleCurrencyInput(
   inputValue: string | number,
   allowEmpty: boolean = false
 ): { formatted: string; value: number } {
   if (inputValue === '' || inputValue === null || inputValue === undefined) {
-    return { formatted: allowEmpty ? '' : '0,00', value: 0 };
+    return { formatted: allowEmpty ? '' : '', value: 0 };
   }
 
   if (typeof inputValue === 'number') {
@@ -31,20 +27,72 @@ export function handleCurrencyInput(
     };
   }
 
-  // Remove qualquer caracter não numérico
-  const digits = inputValue.replace(/\D/g, '');
+  let str = String(inputValue).trim();
 
-  if (!digits || (allowEmpty && (digits === '0' || digits === '00'))) {
-    return { formatted: allowEmpty ? '' : '0,00', value: 0 };
+  // Se string vazia
+  if (str === '') {
+    return { formatted: '', value: 0 };
   }
 
-  const numeric = parseInt(digits, 10) / 100;
-  const formatted = numeric.toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
+  // Converte ponto em vírgula se foi digitado como separador decimal (ex: "6.", "6.5", "6.52", "1253.52")
+  if (!str.includes(',')) {
+    if (str.endsWith('.')) {
+      str = str.slice(0, -1) + ',';
+    } else if (str.includes('.')) {
+      const parts = str.split('.');
+      if (parts.length === 2 && parts[1].length <= 2) {
+        str = parts[0] + ',' + parts[1];
+      }
+    }
+  }
 
-  return { formatted, value: numeric };
+  const hasComma = str.includes(',');
+
+  let intPartDigits = '';
+  let decPartDigits = '';
+
+  if (hasComma) {
+    const commaIndex = str.indexOf(',');
+    const beforeComma = str.slice(0, commaIndex);
+    const afterComma = str.slice(commaIndex + 1);
+
+    // Remove separadores de milhar (pontos) e outros caracteres não-numéricos antes da vírgula
+    intPartDigits = beforeComma.replace(/\D/g, '');
+    // Decimais limitados a no máximo 2 dígitos
+    decPartDigits = afterComma.replace(/\D/g, '').slice(0, 2);
+  } else {
+    intPartDigits = str.replace(/\D/g, '');
+  }
+
+  if (!intPartDigits && !decPartDigits && !hasComma) {
+    return { formatted: allowEmpty ? '' : '', value: 0 };
+  }
+
+  // Valor numérico
+  const intVal = parseInt(intPartDigits || '0', 10);
+  let numVal = intVal;
+  if (decPartDigits.length > 0) {
+    numVal = parseFloat(`${intVal}.${decPartDigits}`);
+  }
+
+  // Formatação do inteiro com pontuação de milhar brasileira (.)
+  let formattedInt = '';
+  if (intPartDigits === '' && hasComma) {
+    formattedInt = '0';
+  } else if (intVal === 0 && intPartDigits.includes('0')) {
+    formattedInt = '0';
+  } else if (intPartDigits) {
+    formattedInt = intVal.toLocaleString('pt-BR');
+  } else {
+    formattedInt = '0';
+  }
+
+  let formatted = formattedInt;
+  if (hasComma) {
+    formatted = `${formattedInt},${decPartDigits}`;
+  }
+
+  return { formatted, value: numVal };
 }
 
 /**

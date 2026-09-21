@@ -295,6 +295,13 @@ export interface AvariaRecord {
   dataRegistro?: string;
 }
 
+export interface StoreItemCheck {
+  conferido: boolean;
+  conferenteId: string;
+  conferenteNome: string;
+  dataHora: string;
+}
+
 export interface OrderInspection {
   conferente?: string;
   dataConferencia?: string;
@@ -302,6 +309,7 @@ export interface OrderInspection {
   observacoesDoca?: string;
   avarias: AvariaRecord[];
   totalPrejuizoAvarias?: number;
+  conferenciaLojas?: Record<string, StoreItemCheck>; // Chave: `${storeId}_${itemId}`
 }
 
 export interface PurchaseOrder {

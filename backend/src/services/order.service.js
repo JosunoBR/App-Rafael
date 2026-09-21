@@ -145,12 +145,119 @@ class OrderService {
     };
   }
 
-  async deleteOrder(id) {
+  async deleteOrder(id, authData = {}, currentUser = null) {
     const existing = await orderRepository.findById(id);
     if (!existing) {
       const err = new Error('Pedido não encontrado.');
       err.statusCode = 404;
       throw err;
+    }
+
+    const userRepository = require('../repositories/userRepository');
+    const bcrypt = require('bcryptjs');
+
+    const { directorEmail, directorPassword, reason } = authData || {};
+
+    if (!directorPassword || String(directorPassword).trim().length === 0) {
+      const err = new Error('A senha de Diretoria é obrigatória para autorizar a exclusão.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    let authorizingDirector = null;
+
+    // Cenário 1: O usuário logado já possui perfil de Diretoria (Sudo Mode)
+    if (currentUser && currentUser.role === 'diretoria') {
+      const dbUser = await userRepository.findById(currentUser.id) || await userRepository.findByEmailOrAlias(currentUser.email);
+      if (!dbUser) {
+        const err = new Error('Usuário de diretoria não encontrado no sistema.');
+        err.statusCode = 401;
+        throw err;
+      }
+      const isPasswordValid = await bcrypt.compare(directorPassword, dbUser.senha);
+      if (!isPasswordValid) {
+        const err = new Error('Senha de Diretoria incorreta.');
+        err.statusCode = 403;
+        throw err;
+      }
+      authorizingDirector = dbUser;
+    } else {
+      // Cenário 2: Usuário logado não é Diretoria (Comprador, Depósito, etc.) -> Exige autorização de supervisor
+      const targetEmail = (directorEmail || '').trim().toLowerCase();
+      if (!targetEmail) {
+        const err = new Error('O e-mail de um Diretor é obrigatório para autorizar a exclusão.');
+        err.statusCode = 400;
+        throw err;
+      }
+      const directorUser = await userRepository.findByEmailOrAlias(targetEmail);
+      if (!directorUser || directorUser.role !== 'diretoria' || directorUser.ativo === 0) {
+        const err = new Error('Usuário supervisor não encontrado ou não possui perfil de Diretoria ativo.');
+        err.statusCode = 403;
+        throw err;
+      }
+      const isPasswordValid = await bcrypt.compare(directorPassword, directorUser.senha);
+      if (!isPasswordValid) {
+        const err = new Error('Senha do Diretor supervisor incorreta.');
+        err.statusCode = 403;
+        throw err;
+      }
+      authorizingDirector = directorUser;
+    }
+
+    // Se for romaneio de transferência do CD, estorna o estoque central automaticamente
+    const isTransfer = existing.header?.supplierId === 'cd_matriz' || 
+                       String(existing.header?.numeroPedido || '').startsWith('CD-') || 
+                       String(id).startsWith('order_transf_cd_') ||
+                       (existing.header?.fornecedor && existing.header.fornecedor.toLowerCase().includes('transferência'));
+
+    let reversedUnits = 0;
+    if (isTransfer && Array.isArray(existing.items)) {
+      try {
+        const stockRepository = require('../repositories/stockRepository');
+        const allStock = await stockRepository.findAll();
+        for (const it of existing.items) {
+          const qty = Number(it.qtdTotalUnidades || 0);
+          if (qty > 0) {
+            const match = allStock.find(s => 
+              (s.codigo && it.codigo && s.codigo.trim().toLowerCase() === it.codigo.trim().toLowerCase()) ||
+              (s.descricao && it.descricao && s.descricao.trim().toLowerCase() === it.descricao.trim().toLowerCase()) ||
+              (s.productId && (s.productId === it.id || s.productId === it.productId))
+            );
+            if (match) {
+              await stockRepository.updateBalance(match.id, qty);
+              reversedUnits += qty;
+            }
+          }
+        }
+      } catch (stockErr) {
+        console.warn('Aviso ao estornar estoque de transferência:', stockErr.message);
+      }
+    }
+
+    // Calcula totais para auditoria
+    const totalPecas = Number(existing.header?.totalPecas || 0) || reversedUnits;
+    const totalValor = Number(existing.header?.totalGeral || existing.header?.totalLiquido || 0);
+
+    // Grava log de auditoria no SQLite
+    try {
+      const deletionAuditRepo = require('../repositories/deletionAuditRepository');
+      await deletionAuditRepo.create({
+        orderId: existing.header?.id || id,
+        numeroPedido: existing.header?.numeroPedido || id,
+        tipoPedido: isTransfer ? 'transferencia_cd' : 'compra_fornecedor',
+        fornecedor: existing.header?.fornecedor || (isTransfer ? 'Depósito Central Matriz' : ''),
+        solicitadoPorNome: currentUser?.nome || 'Operador do Sistema',
+        solicitadoPorEmail: currentUser?.email || '',
+        autorizadoPorNome: authorizingDirector?.nome || 'Diretoria',
+        autorizadoPorEmail: authorizingDirector?.email || '',
+        motivo: (reason || '').trim() || 'Cancelamento autorizado pela Diretoria',
+        totalPecasEstornadas: reversedUnits || totalPecas,
+        totalValor: totalValor,
+        snapshotJson: existing,
+        dataExclusao: new Date().toISOString()
+      });
+    } catch (auditErr) {
+      console.error('Erro ao gravar log de auditoria no SQLite:', auditErr);
     }
 
     await orderRepository.delete(id);
@@ -163,7 +270,15 @@ class OrderService {
       console.error('Erro ao remover lançamentos financeiros do pedido:', finErr);
     }
 
-    return { success: true, message: `Pedido ${existing.header.numeroPedido} excluído com sucesso.` };
+    return { 
+      success: true, 
+      message: isTransfer 
+        ? `Romaneio ${existing.header.numeroPedido} excluído! ${reversedUnits} unidades creditadas de volta no Estoque Central.`
+        : `Pedido ${existing.header.numeroPedido} excluído com sucesso.`,
+      isTransfer,
+      reversedUnits,
+      autorizadoPor: authorizingDirector?.nome
+    };
   }
 
   async duplicateOrder(id) {

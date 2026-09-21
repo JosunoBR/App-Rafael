@@ -90,6 +90,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Estados de edição em tempo real para campos monetários do cabeçalho
+  const [editingValorEntrada, setEditingValorEntrada] = useState<string | null>(null);
+  const [editingValorFrete, setEditingValorFrete] = useState<string | null>(null);
+  const [editingDescontoTotal, setEditingDescontoTotal] = useState<string | null>(null);
+
   // 🛡️ Validação em tempo real de unicidade do número do pedido
   const duplicateOrderConflict = useMemo(() => {
     if (!header.numeroPedido || !existingOrders || existingOrders.length === 0) return null;
@@ -1848,6 +1853,37 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
           {/* SEÇÃO 2: CONDIÇÕES COMERCIAIS, PAGAMENTO & BOLETOS (Card Destacado com Validação de Limite) */}
           {(() => {
+            const isTransferencia = header.supplierId === 'cd_matriz' || 
+              header.condicaoPagamento?.toLowerCase().includes('transferência') ||
+              header.fornecedor?.toLowerCase().includes('transferência') ||
+              String(header.numeroPedido || '').startsWith('CD-') ||
+              String(header.id || '').startsWith('order_transf_cd_');
+
+            if (isTransferencia) {
+              return (
+                <div className="p-4 rounded-2xl border bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <ArrowRightLeft className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          Transferência Interna Entre Filiais (CD Matriz ➔ Lojas)
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300">
+                          Sem Emissão de Boletos
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Este romaneio refere-se a uma movimentação de estoque própria do CD. Não gera contas a pagar, parcelas ou títulos bancários a fornecedores.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
             const LIMITE_MAXIMO_BOLETO = 9999;
             const valorMaximoBoletoCalculado = isEntradaMista ? valorPorParcelaSaldo : (valorTotalPedido > 0 && currentParcelas > 0 ? (valorTotalPedido / currentParcelas) : 0);
             
@@ -2129,12 +2165,32 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           </label>
                           <input
                             type="text"
-                            inputMode="numeric"
-                            value={valorEntrada > 0 ? formatCurrency(valorEntrada, false) : ''}
+                            inputMode="decimal"
+                            value={editingValorEntrada !== null ? editingValorEntrada : (valorEntrada > 0 ? formatCurrency(valorEntrada, false) : '')}
                             placeholder="0,00"
-                            onFocus={(e) => e.target.select()}
+                            onKeyDown={(e) => {
+                              if (e.key === '.') {
+                                e.preventDefault();
+                                const target = e.currentTarget;
+                                const currentVal = target.value;
+                                if (!currentVal.includes(',')) {
+                                  const selStart = target.selectionStart ?? currentVal.length;
+                                  const selEnd = target.selectionEnd ?? currentVal.length;
+                                  const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                                  const { formatted, value } = handleCurrencyInput(newVal, true);
+                                  setEditingValorEntrada(formatted);
+                                  handleEntradaChange(value);
+                                }
+                              }
+                            }}
+                            onFocus={(e) => {
+                              setEditingValorEntrada(valorEntrada > 0 ? formatCurrency(valorEntrada, false) : '');
+                              e.target.select();
+                            }}
+                            onBlur={() => setEditingValorEntrada(null)}
                             onChange={(e) => {
-                              const { value } = handleCurrencyInput(e.target.value, true);
+                              const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                              setEditingValorEntrada(formatted);
                               handleEntradaChange(value);
                             }}
                             className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-bold"
@@ -2283,12 +2339,33 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           </label>
                           <input
                             type="text"
-                            inputMode="numeric"
+                            inputMode="decimal"
                             disabled={isCifModalidade}
-                            value={isCifModalidade ? '0,00' : (valorFreteNum > 0 ? formatCurrency(valorFreteNum, false) : (header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : ''))}
-                            onFocus={(e) => e.target.select()}
+                            value={isCifModalidade ? '0,00' : (editingValorFrete !== null ? editingValorFrete : (valorFreteNum > 0 ? formatCurrency(valorFreteNum, false) : (header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : '')))}
+                            onKeyDown={(e) => {
+                              if (e.key === '.') {
+                                e.preventDefault();
+                                const target = e.currentTarget;
+                                const currentVal = target.value;
+                                if (!currentVal.includes(',')) {
+                                  const selStart = target.selectionStart ?? currentVal.length;
+                                  const selEnd = target.selectionEnd ?? currentVal.length;
+                                  const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                                  const { formatted, value } = handleCurrencyInput(newVal, true);
+                                  setEditingValorFrete(formatted);
+                                  handleFieldChange('valorFrete', value);
+                                }
+                              }
+                            }}
+                            onFocus={(e) => {
+                              const currentVal = valorFreteNum > 0 ? valorFreteNum : (header.valorFrete || 0);
+                              setEditingValorFrete(currentVal > 0 ? formatCurrency(currentVal, false) : '');
+                              e.target.select();
+                            }}
+                            onBlur={() => setEditingValorFrete(null)}
                             onChange={(e) => {
-                              const { value } = handleCurrencyInput(e.target.value, true);
+                              const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                              setEditingValorFrete(formatted);
                               handleFieldChange('valorFrete', value);
                             }}
                             placeholder="0,00"
@@ -2340,11 +2417,32 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </label>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      value={header.descontoComercialTotal !== undefined && header.descontoComercialTotal !== 0 ? formatCurrency(header.descontoComercialTotal, false) : ''}
-                      onFocus={(e) => e.target.select()}
+                      inputMode="decimal"
+                      value={editingDescontoTotal !== null ? editingDescontoTotal : (header.descontoComercialTotal !== undefined && header.descontoComercialTotal !== 0 ? formatCurrency(header.descontoComercialTotal, false) : '')}
+                      onKeyDown={(e) => {
+                        if (e.key === '.') {
+                          e.preventDefault();
+                          const target = e.currentTarget;
+                          const currentVal = target.value;
+                          if (!currentVal.includes(',')) {
+                            const selStart = target.selectionStart ?? currentVal.length;
+                            const selEnd = target.selectionEnd ?? currentVal.length;
+                            const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                            const { formatted, value } = handleCurrencyInput(newVal, true);
+                            setEditingDescontoTotal(formatted);
+                            handleFieldChange('descontoComercialTotal', value);
+                          }
+                        }
+                      }}
+                      onFocus={(e) => {
+                        const currentVal = header.descontoComercialTotal || 0;
+                        setEditingDescontoTotal(currentVal > 0 ? formatCurrency(currentVal, false) : '');
+                        e.target.select();
+                      }}
+                      onBlur={() => setEditingDescontoTotal(null)}
                       onChange={(e) => {
-                        const { value } = handleCurrencyInput(e.target.value, true);
+                        const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                        setEditingDescontoTotal(formatted);
                         handleFieldChange('descontoComercialTotal', value);
                       }}
                       placeholder="0,00"

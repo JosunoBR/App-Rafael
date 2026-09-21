@@ -23,6 +23,15 @@ class AuditController {
       next(err);
     }
   }
+
+  async listDeletions(req, res, next) {
+    try {
+      const logs = await auditService.listDeletions(req.query.orderId);
+      return res.json(logs);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new AuditController();

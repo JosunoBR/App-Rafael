@@ -20,11 +20,14 @@ import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 import { exportOrderToExcel } from '../utils/excelExporter';
 import { toBrDate } from '../utils/masks';
 import { PurchaseControlCard } from './PurchaseControlCard';
+import { DeleteOrderConfirmModal } from './DeleteOrderConfirmModal';
+import { User } from '../shared/types';
 
 interface OrderHistoryPageProps {
   orders: PurchaseOrder[];
+  currentUser?: User;
   onSelectOrder: (order: PurchaseOrder) => void;
-  onDeleteOrder?: (orderId: string) => void;
+  onDeleteOrder?: (orderId: string, authPayload?: { directorEmail?: string; directorPassword?: string; reason?: string }) => Promise<void> | void;
   onNewOrder: () => void;
   onUpdateOrderStatus?: (order: PurchaseOrder, newStatus: string) => void;
   onNavigateToSeparation?: (order: PurchaseOrder) => void;
@@ -32,6 +35,7 @@ interface OrderHistoryPageProps {
 
 export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   orders,
+  currentUser,
   onSelectOrder,
   onDeleteOrder,
   onNewOrder,
@@ -42,9 +46,19 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('todos');
   const [controlFilterIds, setControlFilterIds] = useState<Set<string> | null>(null);
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
 
   const handleOpenOrder = (ord: PurchaseOrder) => {
     setOpeningOrderId(ord.header.id);
+    const isTransf = ord.header?.supplierId === 'cd_matriz' || 
+      String(ord.header?.numeroPedido || '').startsWith('CD-') || 
+      String(ord.header?.id || '').startsWith('order_transf_cd_') ||
+      (ord.header?.fornecedor && ord.header.fornecedor.toLowerCase().includes('transferência'));
+
+    if (isTransf && onNavigateToSeparation) {
+      onNavigateToSeparation(ord);
+      return;
+    }
     onSelectOrder(ord);
   };
 
@@ -329,7 +343,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                           <button
                             onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
                             className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 mx-auto"
-                            title="Abrir a matriz de distribuição do Depósito para ratear nas 20 lojas e dar entrada no estoque"
+                            title="Abrir a matriz de distribuição do Depósito para ratear nas lojas e dar entrada no estoque"
                           >
                             <Boxes className="w-3.5 h-3.5" />
                             <span>Distribuir CD</span>
@@ -384,9 +398,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
 
                           {onDeleteOrder && (
                             <button
-                              onClick={() => onDeleteOrder(ord.id || ord.header.id)}
+                              onClick={() => setOrderToDelete(ord)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
-                              title="Excluir este pedido"
+                              title="Excluir este pedido com senha de Diretoria"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -404,6 +418,20 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         </div>
 
       </div>
+
+      {/* Modal Seguro de Confirmação com Senha de Diretoria e Auditoria */}
+      <DeleteOrderConfirmModal
+        isOpen={Boolean(orderToDelete)}
+        onClose={() => setOrderToDelete(null)}
+        order={orderToDelete}
+        currentUser={currentUser}
+        onConfirm={async (authPayload) => {
+          if (orderToDelete && onDeleteOrder) {
+            await onDeleteOrder(orderToDelete.id || orderToDelete.header.id, authPayload);
+            setOrderToDelete(null);
+          }
+        }}
+      />
 
     </div>
   );

@@ -44,6 +44,10 @@ class OrderRepository {
     const targetId = existing ? existing.id : (currentId || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
     order.header.id = targetId;
 
+    if (order.header.fornecedor && order.header.fornecedor.includes('Depósito Central Mega 12')) {
+      order.header.fornecedor = order.header.fornecedor.replace('Depósito Central Mega 12', 'Depósito Central');
+    }
+
     const items = order.items || [];
     const installments = order.installments || [];
     const itemsJson = JSON.stringify(items);
@@ -148,7 +152,7 @@ class OrderRepository {
           separationStatus = ?, totalBruto = ?, totalIpi = ?, totalDesconto = ?, totalLiquido = ?, totalGeral = ?, totalVolumes = ?, totalPecas = ?, installmentsJson = ?,
           fiscalConfigJson = ?, aliquotaIpi = ?, aliquotaFrete = ?, aliquotaIcmsEntrada = ?,
           aliquotaCustoFixo = ?, aliquotaIcmsSaida = ?, aliquotaPisCofinsIr = ?,
-          itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, updatedAt = ?
+          itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, inspectionJson = ?, updatedAt = ?
         WHERE id = ?
       `;
       await execute(sql, [
@@ -192,6 +196,7 @@ class OrderRepository {
         itemsJson,
         separationJson,
         paymentConfigJson,
+        order.inspection ? JSON.stringify(order.inspection) : null,
         now,
         targetId
       ]);
@@ -206,7 +211,7 @@ class OrderRepository {
           separationStatus, totalBruto, totalIpi, totalDesconto, totalLiquido, totalGeral, totalVolumes, totalPecas, installmentsJson,
           fiscalConfigJson, aliquotaIpi, aliquotaFrete, aliquotaIcmsEntrada,
           aliquotaCustoFixo, aliquotaIcmsSaida, aliquotaPisCofinsIr,
-          itemsJson, separationDistributionJson, paymentConfigJson, createdAt, updatedAt
+          itemsJson, separationDistributionJson, paymentConfigJson, inspectionJson, createdAt, updatedAt
         ) VALUES (
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
@@ -216,7 +221,7 @@ class OrderRepository {
           ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
-          ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?
         )
       `;
       await execute(sql, [
@@ -261,6 +266,7 @@ class OrderRepository {
         itemsJson,
         separationJson,
         paymentConfigJson,
+        order.inspection ? JSON.stringify(order.inspection) : null,
         order.header.createdAt || now,
         now
       ]);
@@ -534,29 +540,39 @@ class OrderRepository {
       try { installments = JSON.parse(r.installmentsJson || '[]'); } catch {}
     }
 
+    if (r.inspectionJson) {
+      try {
+        inspection = JSON.parse(r.inspectionJson);
+      } catch {}
+    }
+
     try {
       const dbAvarias = await queryAll("SELECT * FROM order_avarias WHERE orderId = ?", [r.id]);
       if (dbAvarias && dbAvarias.length > 0) {
-        inspection = {
-          possuiAvarias: true,
-          conferente: dbAvarias[0]?.conferente || 'Conferente',
-          dataConferencia: dbAvarias[0]?.dataRegistro || r.updatedAt,
-          avarias: dbAvarias.map(av => ({
-            id: av.id,
-            itemId: av.itemId,
-            codigoProduto: av.codigoProduto,
-            descricaoProduto: av.descricaoProduto,
-            storeId: av.storeId,
-            nomeLoja: av.nomeLoja,
-            quantidade: av.quantidade,
-            unidadeMedida: av.unidadeMedida,
-            custoUnitario: av.custoUnitario,
-            valorPrejuizoTotal: av.valorPrejuizoTotal,
-            motivo: av.motivo,
-            conferente: av.conferente,
-            dataRegistro: av.dataRegistro
-          }))
-        };
+        if (!inspection) {
+          inspection = {
+            possuiAvarias: true,
+            conferente: dbAvarias[0]?.conferente || 'Conferente',
+            dataConferencia: dbAvarias[0]?.dataRegistro || r.updatedAt,
+            avarias: []
+          };
+        }
+        inspection.possuiAvarias = true;
+        inspection.avarias = dbAvarias.map(av => ({
+          id: av.id,
+          itemId: av.itemId,
+          codigoProduto: av.codigoProduto,
+          descricaoProduto: av.descricaoProduto,
+          storeId: av.storeId,
+          nomeLoja: av.nomeLoja,
+          quantidade: av.quantidade,
+          unidadeMedida: av.unidadeMedida,
+          custoUnitario: av.custoUnitario,
+          valorPrejuizoTotal: av.valorPrejuizoTotal,
+          motivo: av.motivo,
+          conferente: av.conferente,
+          dataRegistro: av.dataRegistro
+        }));
       }
     } catch {}
 
@@ -672,7 +688,7 @@ class OrderRepository {
       header: {
         id: r.id,
         numeroPedido: cleanNumeroPedido,
-        fornecedor: r.fornecedor,
+        fornecedor: (r.fornecedor || '').replace('Depósito Central Mega 12', 'Depósito Central'),
         supplierId: r.supplierId,
         aliquotaSt: r.aliquotaSt,
         vendedor: r.vendedor,

@@ -35,6 +35,7 @@ import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
 import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 import { handleCurrencyInput, formatCurrency } from '../utils/masks';
+import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 
 interface MobilePurchasesViewProps {
   order: PurchaseOrder;
@@ -82,6 +83,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     pdvAlvo: 0,
     fotoUrl: ''
   });
+  const [editingPrecoUnitario, setEditingPrecoUnitario] = useState<string | null>(null);
 
   // Cálculos fiscais instantâneos do formulário
   const totalUnidadesNovo = Number(novoItem.qtdTotalUnidades) || 0;
@@ -248,6 +250,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
     }
 
     // Resetar formulário
+    setEditingPrecoUnitario(null);
     setNovoItem({
       codigo: '',
       descricao: '',
@@ -262,6 +265,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
   // Iniciar edição de um item existente
   const handleStartEditItem = (item: OrderItem) => {
     setEditingItemId(item.id);
+    setEditingPrecoUnitario(null);
     setNovoItem({
       codigo: item.codigo,
       codigoInterno: item.codigoInterno,
@@ -278,6 +282,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
 
   const handleCancelEdit = () => {
     setEditingItemId(null);
+    setEditingPrecoUnitario(null);
     setNovoItem({
       codigo: '',
       descricao: '',
@@ -381,13 +386,18 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
 
         {/* Topo do Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-xl bg-white/10 text-emerald-300 backdrop-blur-xs">
-              <ShoppingBag className="w-4 h-4" />
-            </span>
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-200">
-              Cotação Mobile • Feiras & Viagens
-            </span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-400/40 bg-slate-950 p-0.5 shrink-0 shadow-sm">
+              <img src={LOGO_MEGA12_BASE64} alt="Mega 12" className="w-full h-full object-contain rounded-full" />
+            </div>
+            <div>
+              <span className="text-xs font-black uppercase tracking-wider text-white block leading-tight">
+                Rede Mega 12
+              </span>
+              <span className="text-[10px] font-semibold text-emerald-200 block leading-tight">
+                Cotação Mobile • Feiras & Viagens
+              </span>
+            </div>
           </div>
           <span className="text-xs font-mono font-bold bg-white/20 px-2.5 py-1 rounded-full text-white backdrop-blur-xs">
             {order.header.numeroPedido || 'PED-NOVO'}
@@ -762,12 +772,32 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
               <label className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Compra (R$)</label>
               <input
                 type="text"
-                inputMode="numeric"
-                value={novoItem.precoUnitario ? formatCurrency(novoItem.precoUnitario, false) : ''}
+                inputMode="decimal"
+                value={editingPrecoUnitario !== null ? editingPrecoUnitario : (novoItem.precoUnitario ? formatCurrency(novoItem.precoUnitario, false) : '')}
                 placeholder="0,00"
-                onFocus={(e) => e.target.select()}
+                onKeyDown={(e) => {
+                  if (e.key === '.') {
+                    e.preventDefault();
+                    const target = e.currentTarget;
+                    const currentVal = target.value;
+                    if (!currentVal.includes(',')) {
+                      const selStart = target.selectionStart ?? currentVal.length;
+                      const selEnd = target.selectionEnd ?? currentVal.length;
+                      const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                      const { formatted, value } = handleCurrencyInput(newVal, true);
+                      setEditingPrecoUnitario(formatted);
+                      setNovoItem(prev => ({ ...prev, precoUnitario: value }));
+                    }
+                  }
+                }}
+                onFocus={(e) => {
+                  setEditingPrecoUnitario(novoItem.precoUnitario ? formatCurrency(novoItem.precoUnitario, false) : '');
+                  e.target.select();
+                }}
+                onBlur={() => setEditingPrecoUnitario(null)}
                 onChange={(e) => {
-                  const { value } = handleCurrencyInput(e.target.value, true);
+                  const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                  setEditingPrecoUnitario(formatted);
                   setNovoItem(prev => ({ ...prev, precoUnitario: value }));
                 }}
                 className="w-full mt-1 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400"
@@ -973,7 +1003,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
               {/* Linha 4: Barra de Botões Touch do Card */}
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700/60 text-xs gap-2">
                 <div className="flex items-center gap-2">
-                  {/* Botão para Matriz de Separação das 20 Lojas */}
+                  {/* Botão para Matriz de Separação das Lojas */}
                   {onOpenSeparationModal && (
                     <button
                       type="button"
@@ -981,7 +1011,7 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
                       className="px-2.5 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 font-bold text-[11px] flex items-center gap-1.5 transition cursor-pointer"
                     >
                       <Store className="w-3.5 h-3.5" />
-                      <span>20 Lojas</span>
+                      <span>Lojas</span>
                     </button>
                   )}
 

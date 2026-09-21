@@ -192,7 +192,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Grade de Separação em Unidades (20 Lojas)
+                  Grade de Separação em Unidades ({stores.length > 0 ? `${stores.length} Lojas` : 'Lojas'})
                 </h3>
                 {isManual ? (
                   <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">

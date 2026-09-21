@@ -7,6 +7,7 @@ import {
   Minus, 
   PackageCheck, 
   ArrowRight, 
+  ArrowLeft,
   TrendingUp, 
   Building2, 
   Sparkles, 
@@ -20,9 +21,15 @@ import {
   FileSpreadsheet, 
   Layers,
   X,
-  PlusCircle
+  PlusCircle,
+  RotateCcw,
+  SlidersHorizontal,
+  Store,
+  Bookmark
 } from 'lucide-react';
-import { CentralStockItem, StoreConfig, FiscalConfig, Product, Supplier } from '../shared/types';
+import { CentralStockItem, StoreConfig, FiscalConfig, Product, Supplier, SeparationPreset } from '../shared/types';
+import { StockTransferPayloadItem } from '../utils/storage';
+import { applySeparationPreset, calculateAutomaticSeparation } from '../shared/separationEngine';
 
 interface CentralStockPageProps {
   stockItems: CentralStockItem[];
@@ -30,9 +37,10 @@ interface CentralStockPageProps {
   suppliers: Supplier[];
   stores: StoreConfig[];
   fiscalConfig: FiscalConfig;
+  presets?: SeparationPreset[];
   onUpdateStockBalance: (stockId: string, deltaUnidades: number, newLocation?: string) => void;
   onSaveNewStockItem: (item: CentralStockItem) => void;
-  onGenerateStockSeparation: (itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }>) => void;
+  onGenerateStockSeparation: (itemsToTransfer: StockTransferPayloadItem[]) => void;
   onNavigateToSeparation: () => void;
   onDeleteStockItem?: (stockId: string) => void;
 }
@@ -43,6 +51,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   suppliers = [],
   stores = [],
   fiscalConfig,
+  presets = [],
   onUpdateStockBalance,
   onSaveNewStockItem,
   onGenerateStockSeparation,
@@ -55,6 +64,10 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   // Itens selecionados para o Romaneio de Transferência: { [stockId]: unidadesAEnviar }
   const [selectedTransferItems, setSelectedTransferItems] = useState<Record<string, number>>({});
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferWizardStep, setTransferWizardStep] = useState<1 | 2>(1);
+  const [transferStoreAllocations, setTransferStoreAllocations] = useState<Record<string, Record<string, number>>>({});
+  const [activeTransferStockId, setActiveTransferStockId] = useState<string>('');
+  const [selectedPresetIdPerItem, setSelectedPresetIdPerItem] = useState<Record<string, string>>({});
   
   // Modal de Ajuste / Entrada de Estoque
   const [editingStockItem, setEditingStockItem] = useState<CentralStockItem | null>(null);
@@ -164,6 +177,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
       return;
     }
     setSelectionWarning(null);
+    setTransferWizardStep(1);
     setIsTransferModalOpen(true);
   };
 
@@ -175,15 +189,101 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     }));
   };
 
+  const handleProceedToDistributionStep = () => {
+    const selectedIds = Object.keys(selectedTransferItems).filter(id => (selectedTransferItems[id] || 0) > 0);
+    if (selectedIds.length === 0) {
+      setSelectionWarning('Defina a quantidade de ao menos 1 item para prosseguir à distribuição.');
+      return;
+    }
+
+    // Inicializar alocações de lojas caso ainda não tenham sido configuradas
+    setTransferStoreAllocations(prev => {
+      const next = { ...prev };
+      selectedIds.forEach(id => {
+        if (!next[id] || Object.keys(next[id]).length === 0) {
+          const totalUnits = selectedTransferItems[id] || 0;
+          const defaultPreset = presets.find(p => p.isDefault) || presets[0];
+          if (defaultPreset) {
+            const sep = applySeparationPreset(totalUnits, defaultPreset, stores);
+            next[id] = { ...sep.allocations };
+          } else {
+            const sep = calculateAutomaticSeparation(totalUnits, stores);
+            next[id] = { ...sep.allocations };
+          }
+        }
+      });
+      return next;
+    });
+
+    if (!activeTransferStockId || !selectedTransferItems[activeTransferStockId]) {
+      setActiveTransferStockId(selectedIds[0]);
+    }
+
+    setTransferWizardStep(2);
+  };
+
+  const handleApplyPresetToActiveItem = (presetId: string) => {
+    if (!activeTransferStockId) return;
+    const preset = presets.find(p => p.id === presetId);
+    if (!preset) return;
+    const itemUnits = selectedTransferItems[activeTransferStockId] || 0;
+    const result = applySeparationPreset(itemUnits, preset, stores);
+    setTransferStoreAllocations(prev => ({
+      ...prev,
+      [activeTransferStockId]: { ...result.allocations }
+    }));
+    setSelectedPresetIdPerItem(prev => ({
+      ...prev,
+      [activeTransferStockId]: presetId
+    }));
+  };
+
+  const handleStoreAllocationChange = (stockId: string, storeId: string, value: number) => {
+    const val = Math.max(0, value || 0);
+    setTransferStoreAllocations(prev => {
+      const itemAlloc = { ...(prev[stockId] || {}) };
+      itemAlloc[storeId] = val;
+      return {
+        ...prev,
+        [stockId]: itemAlloc
+      };
+    });
+  };
+
+  const handleClearStoreAllocations = (stockId: string) => {
+    setTransferStoreAllocations(prev => ({
+      ...prev,
+      [stockId]: {}
+    }));
+  };
+
+  const handleDistributeEqually = (stockId: string) => {
+    const totalUnits = selectedTransferItems[stockId] || 0;
+    const activeStores = stores.filter(s => s.active);
+    if (activeStores.length === 0 || totalUnits <= 0) return;
+    const basePerStore = Math.floor(totalUnits / activeStores.length);
+    let remainder = totalUnits % activeStores.length;
+    const newAlloc: Record<string, number> = {};
+    activeStores.forEach((s) => {
+      newAlloc[s.id] = basePerStore + (remainder > 0 ? 1 : 0);
+      if (remainder > 0) remainder--;
+    });
+    setTransferStoreAllocations(prev => ({
+      ...prev,
+      [stockId]: newAlloc
+    }));
+  };
+
   const handleConfirmTransferOrder = () => {
-    const itemsToTransfer: Array<{ stockItem: CentralStockItem; caixasParaSeparar: number }> = [];
+    const itemsToTransfer: StockTransferPayloadItem[] = [];
 
     Object.entries(selectedTransferItems).forEach(([stockId, units]) => {
       const stockItem = stockItems.find(s => s.id === stockId);
       if (stockItem && units > 0) {
         itemsToTransfer.push({
           stockItem,
-          caixasParaSeparar: units
+          caixasParaSeparar: units,
+          separacaoLojas: transferStoreAllocations[stockId] || {}
         });
       }
     });
@@ -192,7 +292,9 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
 
     onGenerateStockSeparation(itemsToTransfer);
     setIsTransferModalOpen(false);
+    setTransferWizardStep(1);
     setSelectedTransferItems({});
+    setTransferStoreAllocations({});
   };
 
   const handleSaveStockAdjustment = () => {
@@ -266,7 +368,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 ? 'text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 animate-pulse hover:scale-102'
                 : 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
             }`}
-            title={selectedCount > 0 ? "Abrir conferência do romaneio para as 20 lojas" : "Clique para gerar romaneio dos produtos selecionados"}
+            title={selectedCount > 0 ? "Abrir conferência do romaneio para as lojas" : "Clique para gerar romaneio dos produtos selecionados"}
           >
             <Send className="w-4 h-4" />
             <span>
@@ -612,7 +714,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                 {selectedCount} {selectedCount === 1 ? 'produto selecionado' : 'produtos selecionados'} para transferência
               </div>
               <div className="text-[11px] text-slate-400">
-                Volume total a ratear: <strong className="text-emerald-400 font-mono">{totalUnidadesTransferencia.toLocaleString('pt-BR')} unidades</strong> entre as 20 lojas
+                Volume total a ratear: <strong className="text-emerald-400 font-mono">{totalUnidadesTransferencia.toLocaleString('pt-BR')} unidades</strong> entre as lojas
               </div>
             </div>
           </div>
@@ -627,7 +729,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setIsTransferModalOpen(true)}
+              onClick={handleOpenTransferModal}
               className="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer hover:scale-102"
             >
               <Send className="w-4 h-4" />
@@ -637,23 +739,44 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
         </div>
       )}
 
-      {/* 5. MODAL DE CONFIRMAÇÃO DO ROMANEIO DE TRANSFERÊNCIA */}
+      {/* 5. ASSISTENTE INTEGRADO DE ROMANEIO DE TRANSFERÊNCIA (2 ETAPAS) */}
       {isTransferModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full overflow-hidden flex flex-col max-h-[92vh] transition-all ${
+            transferWizardStep === 1 ? 'max-w-2xl' : 'max-w-5xl'
+          }`}>
             
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-950/30">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/30">
-                  <Send className="w-5 h-5" />
-                </div>
+                {transferWizardStep === 2 ? (
+                  <button
+                    type="button"
+                    onClick={() => setTransferWizardStep(1)}
+                    className="p-2 rounded-xl bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                    title="Voltar para a seleção de itens"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="text-xs font-bold hidden sm:inline">Voltar</span>
+                  </button>
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/30 shrink-0">
+                    <Send className="w-5 h-5" />
+                  </div>
+                )}
                 <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white">
-                    Gerar Romaneio de Transferência do Depósito
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">
+                      {transferWizardStep === 1 ? 'Gerar Romaneio de Transferência' : 'Distribuição do Romaneio para as Lojas'}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-300">
+                      {transferWizardStep === 1 ? 'Etapa 1 de 2' : 'Etapa 2 de 2'}
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Defina quantas unidades de cada item serão distribuídas proporcionalmente entre as 20 lojas
+                    {transferWizardStep === 1 
+                      ? 'Defina a quantidade de unidades de cada produto que sairá do Estoque Central'
+                      : 'Distribua as quantidades entre as lojas ou aplique um modelo salvo no banco'}
                   </p>
                 </div>
               </div>
@@ -666,110 +789,373 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               </button>
             </div>
 
-            {/* Modal Body - Lista de Itens Selecionados */}
-            <div className="p-5 overflow-y-auto space-y-4 flex-1">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
-                Produtos Selecionados ({selectedCount})
-              </div>
+            {/* ETAPA 1: QUANTIDADES A SAIR DO CD */}
+            {transferWizardStep === 1 && (
+              <>
+                <div className="p-5 overflow-y-auto space-y-3 flex-1">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">
+                    Produtos Selecionados ({selectedCount})
+                  </div>
 
-              {Object.entries(selectedTransferItems).map(([stockId, unidades]) => {
-                const item = stockItems.find(s => s.id === stockId);
-                if (!item) return null;
+                  {Object.entries(selectedTransferItems).map(([stockId, unidades]) => {
+                    const item = stockItems.find(s => s.id === stockId);
+                    if (!item) return null;
 
-                return (
-                  <div 
-                    key={stockId}
-                    className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {item.fotoUrl && (
-                        <img
-                          src={item.fotoUrl}
-                          alt={item.descricao}
-                          className="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
-                        />
-                      )}
-                      <div className="min-w-0">
-                        <span className="font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400 block">
-                          {item.codigo}
-                        </span>
-                        <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                          {item.descricao}
+                    return (
+                      <div 
+                        key={stockId}
+                        className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          {item.fotoUrl && (
+                            <img
+                              src={item.fotoUrl}
+                              alt={item.descricao}
+                              className="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <span className="font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400 block">
+                              {item.codigo}
+                            </span>
+                            <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                              {item.descricao}
+                            </div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                              Saldo Disponível no CD: <strong className="text-slate-700 dark:text-slate-300">{(item.saldoUnidades || 0).toLocaleString('pt-BR')} un</strong>
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                          Saldo Disponível no CD: <strong className="text-slate-700 dark:text-slate-300">{(item.saldoUnidades || 0).toLocaleString('pt-BR')} un</strong>
+
+                        {/* Controle de Unidades a Transferir */}
+                        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
+                          <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <button
+                              type="button"
+                              onClick={() => handleTransferUnitsChange(stockId, unidades - 10, item.saldoUnidades)}
+                              className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              max={item.saldoUnidades}
+                              value={unidades === 0 ? '' : unidades}
+                              placeholder="0"
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => handleTransferUnitsChange(stockId, parseInt(e.target.value, 10) || 0, item.saldoUnidades)}
+                              className="w-16 text-center font-mono font-bold text-xs bg-transparent text-slate-900 dark:text-white outline-hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleTransferUnitsChange(stockId, unidades + 10, item.saldoUnidades)}
+                              className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <div className="text-right min-w-[70px]">
+                            <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 block">
+                              {unidades} un
+                            </span>
+                            <span className="text-[10px] text-slate-400">Total do CD</span>
+                          </div>
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+
+                {/* Footer Etapa 1 */}
+                <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 block">Total Selecionado do CD:</span>
+                    <span className="text-sm font-extrabold text-slate-900 dark:text-white font-mono">
+                      {totalUnidadesTransferencia.toLocaleString('pt-BR')} unidades
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsTransferModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={totalUnidadesTransferencia <= 0}
+                      onClick={handleProceedToDistributionStep}
+                      className="px-5 py-2.5 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 shadow-md shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer hover:scale-102"
+                    >
+                      <span>Avançar para Distribuição das Lojas</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ETAPA 2: GRADE DE DISTRIBUIÇÃO POR LOJA COM PRESETS */}
+            {transferWizardStep === 2 && (() => {
+              const selectedStockIds = Object.keys(selectedTransferItems).filter(id => (selectedTransferItems[id] || 0) > 0);
+              const activeStockItem = stockItems.find(s => s.id === activeTransferStockId) || (selectedStockIds.length > 0 ? stockItems.find(s => s.id === selectedStockIds[0]) : null);
+              const currentItemTotal = activeStockItem ? (selectedTransferItems[activeStockItem.id] || 0) : 0;
+              const currentItemAlloc = activeStockItem ? (transferStoreAllocations[activeStockItem.id] || {}) : {};
+              const currentItemAllocatedSum = Object.values(currentItemAlloc).reduce((sum, val) => sum + (Number(val) || 0), 0);
+              const currentItemRemaining = currentItemTotal - currentItemAllocatedSum;
+              const isOverAllocated = currentItemRemaining < 0;
+              const isFullyAllocated = currentItemRemaining === 0;
+
+              return (
+                <>
+                  <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                    {/* Abas de Navegação entre Produtos (se mais de 1 produto selecionado) */}
+                    {selectedStockIds.length > 1 && (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
+                        {selectedStockIds.map(stockId => {
+                          const item = stockItems.find(s => s.id === stockId);
+                          if (!item) return null;
+                          const isCurrent = item.id === activeTransferStockId;
+                          const allocSum = Object.values(transferStoreAllocations[item.id] || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+                          const total = selectedTransferItems[item.id] || 0;
+
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => setActiveTransferStockId(item.id)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-2 border ${
+                                isCurrent
+                                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                              }`}
+                            >
+                              <span>{item.codigo}</span>
+                              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-extrabold ${
+                                isCurrent ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                              }`}>
+                                {allocSum}/{total} un
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Card de Resumo do Item Ativo */}
+                    {activeStockItem && (
+                      <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          {activeStockItem.fotoUrl && (
+                            <img
+                              src={activeStockItem.fotoUrl}
+                              alt={activeStockItem.descricao}
+                              className="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
+                            />
+                          )}
+                          <div>
+                            <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                              {activeStockItem.codigo}
+                            </span>
+                            <h4 className="font-black text-sm text-slate-900 dark:text-white">
+                              {activeStockItem.descricao}
+                            </h4>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Localização CD: <strong>{activeStockItem.localizacaoGalpao || 'Padrão'}</strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* KPIs do Item Ativo */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-right">
+                            <span className="text-[10px] font-semibold text-slate-400 block uppercase">Total a Transferir</span>
+                            <span className="font-mono font-extrabold text-sm text-slate-900 dark:text-white">{currentItemTotal} un</span>
+                          </div>
+
+                          <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-right">
+                            <span className="text-[10px] font-semibold text-slate-400 block uppercase">Alocado nas Lojas</span>
+                            <span className="font-mono font-extrabold text-sm text-emerald-600 dark:text-emerald-400">{currentItemAllocatedSum} un</span>
+                          </div>
+
+                          <div className={`px-3 py-1.5 rounded-xl border text-right ${
+                            isOverAllocated
+                              ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300'
+                              : isFullyAllocated
+                              ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-sky-50 dark:bg-sky-950/60 border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300'
+                          }`}>
+                            <span className="text-[10px] font-semibold block uppercase">
+                              {isOverAllocated ? 'Excesso' : isFullyAllocated ? 'Balanço' : 'Sobra no CD'}
+                            </span>
+                            <span className="font-mono font-extrabold text-sm">
+                              {isOverAllocated ? `+${Math.abs(currentItemRemaining)} un` : isFullyAllocated ? '✓ 100%' : `${currentItemRemaining} un`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Toolbar de Presets & Ações Rápidas */}
+                    {activeStockItem && (
+                      <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 flex-1">
+                          <Bookmark className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            Modelo / Preset:
+                          </span>
+                          <select
+                            value={selectedPresetIdPerItem[activeStockItem.id] || ''}
+                            onChange={(e) => handleApplyPresetToActiveItem(e.target.value)}
+                            className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
+                          >
+                            <option value="">-- Selecione um Modelo Salvo no Banco --</option>
+                            {presets.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} {p.isDefault ? '⭐ (Padrão)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleDistributeEqually(activeStockItem.id)}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1.5"
+                            title="Distribuir igualmente entre todas as lojas ativas"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Distribuir Igual</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleClearStoreAllocations(activeStockItem.id)}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1.5"
+                            title="Zerar a distribuição deste item para escolher lojas pontuais"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Zerar Lojas</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Grade das Lojas */}
+                    {activeStockItem && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
+                          <span>Grade de Destino ({stores.length > 0 ? `${stores.length} Lojas da Rede` : 'Lojas da Rede'}):</span>
+                          <span className="text-[11px] font-normal text-slate-400">Digite a quantidade ou use os botões +/-</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 max-h-[46vh] overflow-y-auto pr-1">
+                          {stores.map(store => {
+                            const storeUnits = currentItemAlloc[store.id] || 0;
+                            const isAllocated = storeUnits > 0;
+
+                            return (
+                              <div
+                                key={store.id}
+                                className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 ${
+                                  isAllocated
+                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 shadow-2xs'
+                                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 opacity-80'
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-md ${
+                                      store.cluster === 'A' 
+                                        ? 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300' 
+                                        : store.cluster === 'B'
+                                        ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}>
+                                      {store.cluster}
+                                    </span>
+                                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                      {store.name.replace('Ponta Grossa ', 'PG ')}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400">
+                                    {isAllocated ? `${storeUnits} un a receber` : 'Não recebe'}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStoreAllocationChange(activeStockItem.id, store.id, storeUnits - 1)}
+                                    className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-xs transition cursor-pointer"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={storeUnits === 0 ? '' : storeUnits}
+                                    placeholder="0"
+                                    onFocus={(e) => e.target.select()}
+                                    onChange={(e) => handleStoreAllocationChange(activeStockItem.id, store.id, parseInt(e.target.value, 10) || 0)}
+                                    className="w-12 text-center font-mono font-bold text-xs py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStoreAllocationChange(activeStockItem.id, store.id, storeUnits + 1)}
+                                    className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-xs transition cursor-pointer"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer Etapa 2 */}
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Total Geral Alocado:</span>
+                      <strong className="text-sm font-mono font-extrabold text-slate-900 dark:text-white">
+                        {Object.values(transferStoreAllocations).reduce((sum, itemAlloc) => {
+                          return sum + Object.values(itemAlloc).reduce((s, v) => s + (Number(v) || 0), 0);
+                        }, 0).toLocaleString('pt-BR')} unidades
+                      </strong>
                     </div>
 
-                    {/* Controle de Unidades a Transferir */}
-                    <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
-                      <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <button
-                          type="button"
-                          onClick={() => handleTransferUnitsChange(stockId, unidades - 10, item.saldoUnidades)}
-                          className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <input
-                          type="number"
-                          min="1"
-                          max={item.saldoUnidades}
-                          value={unidades === 0 ? '' : unidades}
-                          placeholder="0"
-                          onFocus={(e) => e.target.select()}
-                          onChange={(e) => handleTransferUnitsChange(stockId, parseInt(e.target.value, 10) || 0, item.saldoUnidades)}
-                          className="w-16 text-center font-mono font-bold text-xs bg-transparent text-slate-900 dark:text-white outline-hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleTransferUnitsChange(stockId, unidades + 10, item.saldoUnidades)}
-                          className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setTransferWizardStep(1)}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Voltar aos Produtos</span>
+                      </button>
 
-                      <div className="text-right min-w-[70px]">
-                        <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 block">
-                          {unidades} un
-                        </span>
-                        <span className="text-[10px] text-slate-400">Rateio lojas</span>
-                      </div>
+                      <button
+                        type="button"
+                        disabled={isOverAllocated}
+                        onClick={handleConfirmTransferOrder}
+                        className="px-5 py-2.5 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 shadow-md shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer hover:scale-102"
+                      >
+                        <PackageCheck className="w-4 h-4" />
+                        <span>Despachar Romaneio para a Doca</span>
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between gap-3">
-              <div>
-                <span className="text-xs text-slate-500 dark:text-slate-400 block">Resumo do Romaneio:</span>
-                <span className="text-sm font-extrabold text-slate-900 dark:text-white font-mono">
-                  {totalUnidadesTransferencia.toLocaleString('pt-BR')} unidades totais para rateio entre 20 lojas
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsTransferModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmTransferOrder}
-                  className="px-5 py-2.5 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition flex items-center gap-2 cursor-pointer hover:scale-102"
-                >
-                  <PackageCheck className="w-4 h-4" />
-                  <span>Enviar para Separação na Doca</span>
-                </button>
-              </div>
-            </div>
+                </>
+              );
+            })()}
 
           </div>
         </div>

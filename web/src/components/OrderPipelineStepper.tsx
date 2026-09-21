@@ -56,7 +56,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
     {
       id: 'Em Distribuição',
       label: '3. Distribuição / CD',
-      description: 'Rateio das 20 lojas e entrada de estoque CD',
+      description: 'Rateio das lojas e entrada de estoque CD',
       icon: Boxes,
       badgeColor: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800'
     },

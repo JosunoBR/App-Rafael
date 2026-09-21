@@ -30,6 +30,7 @@ import {
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { ActiveNavTab, canAccessTab, canCreateOrEditOrders } from '../shared/permissions';
 import { calculateOrderNetTotal } from '../utils/installments';
+import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 
 interface HeaderProps {
   activeNav: ActiveNavTab;
@@ -173,6 +174,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div>
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 dark:text-slate-500 leading-none mb-1">
+              <img src={LOGO_MEGA12_BASE64} alt="Mega 12" className="w-3.5 h-3.5 object-contain rounded-full inline-block" />
               <span>Rede Mega 12</span>
               <ChevronRight className="w-3 h-3 text-slate-400" />
               <span className="text-slate-600 dark:text-slate-400">{navMeta.group}</span>
@@ -412,13 +414,9 @@ export const Header: React.FC<HeaderProps> = ({
 
                 {onDiscardDraft && (
                   <button
-                    onClick={() => {
-                      if (window.confirm('Tem certeza que deseja descartar as alterações deste pedido e zerar a digitação?')) {
-                        onDiscardDraft();
-                      }
-                    }}
+                    onClick={onDiscardDraft}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
-                    title="Descartar rascunho e zerar pedido"
+                    title="Excluir/descartar este pedido com confirmação de Diretoria"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

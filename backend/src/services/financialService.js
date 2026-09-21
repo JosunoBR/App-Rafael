@@ -273,6 +273,18 @@ class FinancialService {
   async syncSingleOrder(order) {
     if (!order || !order.id) return;
 
+    // Pedidos de transferência interna (CD -> Lojas) não geram títulos a pagar nem boletos
+    const isTransf = order.header?.supplierId === 'cd_matriz' ||
+      (order.header?.condicaoPagamento && order.header.condicaoPagamento.toLowerCase().includes('transferência')) ||
+      (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência')) ||
+      String(order.id).startsWith('order_transf_cd_') ||
+      String(order.header?.numeroPedido || '').startsWith('CD-');
+
+    if (isTransf) {
+      await financialRepo.deleteByOrderId(order.id);
+      return;
+    }
+
     // Buscar lançamentos existentes para preservar status se alguma parcela já foi baixada como Paga
     const existingEntries = await financialRepo.findByOrderId(order.id);
     const existingMap = new Map();
@@ -337,6 +349,18 @@ class FinancialService {
 
     for (const ord of orders) {
       if (!ord || !ord.id) continue;
+
+      // Pedidos de transferência interna (CD -> Lojas) não geram títulos a pagar nem boletos
+      const isTransf = ord.header?.supplierId === 'cd_matriz' ||
+        (ord.header?.condicaoPagamento && ord.header.condicaoPagamento.toLowerCase().includes('transferência')) ||
+        (ord.header?.fornecedor && ord.header.fornecedor.toLowerCase().includes('transferência')) ||
+        String(ord.id).startsWith('order_transf_cd_') ||
+        String(ord.header?.numeroPedido || '').startsWith('CD-');
+
+      if (isTransf) {
+        await financialRepo.deleteByOrderId(ord.id);
+        continue;
+      }
 
       // Verificar se já foram sincronizadas
       const existingFin = await financialRepo.findByOrderId(ord.id);

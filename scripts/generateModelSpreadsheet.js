@@ -540,7 +540,7 @@ async function generateModelSpreadsheet() {
   // Banner Superior da Separação
   ws2.mergeCells('A1:AC1');
   const sepTitle = ws2.getCell('A1');
-  sepTitle.value = 'REDE MEGA 12 • GRADE DE SEPARAÇÃO E DISTRIBUIÇÃO DAS 20 LOJAS';
+  sepTitle.value = 'REDE MEGA 12 • GRADE DE SEPARAÇÃO E DISTRIBUIÇÃO DAS LOJAS';
   sepTitle.font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: COLORS.white } };
   sepTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.darkNavy } };
   sepTitle.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };

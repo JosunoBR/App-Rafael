@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { canAccessTab, ActiveNavTab } from '../shared/permissions';
+import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 
 export type { ActiveNavTab };
 
@@ -170,8 +171,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`flex items-center gap-3 min-w-0 ${isCollapsed ? 'cursor-pointer' : ''}`}
             title={isCollapsed ? 'Expandir menu lateral' : undefined}
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-500/25 shrink-0 transition-transform hover:scale-105">
-              <ShoppingBag className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-emerald-950/20 shrink-0 transition-transform hover:scale-105 flex items-center justify-center bg-slate-950/80 p-0.5 border border-emerald-500/30">
+              <img 
+                src={LOGO_MEGA12_BASE64} 
+                alt="Logo Rede Mega 12" 
+                className="w-full h-full object-contain rounded-lg"
+              />
             </div>
             {!isCollapsed && (
               <div className="min-w-0">

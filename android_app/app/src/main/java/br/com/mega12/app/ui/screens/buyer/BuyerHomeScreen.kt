@@ -140,7 +140,7 @@ fun BuyerHomeScreen(
                                 )
                             )
                             Text(
-                                text = "Romaneio das 20 Lojas",
+                                text = "Romaneio das Lojas",
                                 style = MaterialTheme.typography.labelMedium.copy(color = Slate400)
                             )
                         }

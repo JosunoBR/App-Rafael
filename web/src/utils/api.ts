@@ -185,10 +185,16 @@ export async function saveOrderToDb(order: PurchaseOrder): Promise<void> {
   });
 }
 
-export async function deleteOrderFromDb(orderId: string): Promise<void> {
-  await apiFetch(`/orders/${orderId}`, {
-    method: 'DELETE'
+export async function deleteOrderFromDb(
+  orderId: string,
+  authPayload?: { directorEmail?: string; directorPassword?: string; reason?: string }
+): Promise<any> {
+  const res = await apiFetch(`/orders/${orderId}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: authPayload ? JSON.stringify(authPayload) : undefined
   });
+  return await res.json().catch(() => ({ success: true }));
 }
 
 export async function duplicateOrderInDb(orderId: string): Promise<PurchaseOrder> {

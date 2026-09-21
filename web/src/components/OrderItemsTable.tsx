@@ -236,10 +236,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   const [autocompleteQuery, setAutocompleteQuery] = useState('');
   const [dropdownCoords, setDropdownCoords] = useState<{ top: number; left: number; width: number; isFlipped: boolean } | null>(null);
 
-  // Estado da Barra de Inclusão Rápida Superior
-  const [quickSearchText, setQuickSearchText] = useState('');
-  const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
-  const quickSearchInputRef = useRef<HTMLInputElement>(null);
+  // Estado da Barra de Busca e Filtro no Pedido (com Autocomplete)
+  const [orderSearchText, setOrderSearchText] = useState('');
+  const [isOrderSearchOpen, setIsOrderSearchOpen] = useState(false);
+  const orderSearchInputRef = useRef<HTMLInputElement>(null);
+  const orderSearchContainerRef = useRef<HTMLDivElement>(null);
 
   // Estado para controlar digitação da coluna de preço garantindo sempre 2 casas decimais (R$)
   const [editingPriceMap, setEditingPriceMap] = useState<Record<string, string>>({});
@@ -387,6 +388,13 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       ) {
         setIsColumnsDropdownOpen(false);
       }
+
+      if (
+        orderSearchContainerRef.current &&
+        !orderSearchContainerRef.current.contains(target)
+      ) {
+        setIsOrderSearchOpen(false);
+      }
     };
 
     const handleScrollOrResize = () => {
@@ -428,27 +436,57 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     }).slice(0, 8);
   }, [products, autocompleteQuery, currentSupplierId, currentSupplierName, suppliers]);
 
-  // Produtos filtrados para a Barra de Inclusão Rápida Superior (apenas do fornecedor do pedido)
-  const matchingProductsForQuickBar = useMemo(() => {
-    if (!quickSearchText || quickSearchText.trim().length === 0) return [];
-    const q = quickSearchText.trim().toLowerCase();
+  // Itens do Pedido correspondentes à busca rápida para o Dropdown Autocomplete
+  const matchingOrderItems = useMemo(() => {
+    if (!orderSearchText || orderSearchText.trim().length === 0) return [];
+    const q = orderSearchText.trim().toLowerCase();
 
-    // Filtra estritamente pelo fornecedor informado no pedido
-    const supplierProducts = products.filter(p => 
-      isProductFromSupplier(p, currentSupplierId, currentSupplierName, suppliers)
-    );
+    return items
+      .map((item, originalIndex) => ({ item, originalIndex }))
+      .filter(({ item }) => {
+        // Ignora linhas totalmente vazias
+        if (!item.descricao && !item.codigoInterno && !item.codigoFornecedor && !item.codigo) return false;
 
-    return supplierProducts.filter(p => {
-      const desc = (p.descricao || '').toLowerCase();
-      const codInt = (p.codigoInterno || p.codigo || '').toLowerCase();
-      const codForn = (p.codigoFornecedor || '').toLowerCase();
-      const ean = (p.codigoBarras || p.eanBarcode || '').toLowerCase();
-      const cat = (p.categoria || '').toLowerCase();
-      return desc.includes(q) || codInt.includes(q) || codForn.includes(q) || ean.includes(q) || cat.includes(q);
-    }).slice(0, 8);
-  }, [products, quickSearchText, currentSupplierId, currentSupplierName, suppliers]);
+        const desc = (item.descricao || '').toLowerCase();
+        const codInt = (item.codigoInterno || item.codigo || '').toLowerCase();
+        const codForn = (item.codigoFornecedor || '').toLowerCase();
+        const ean = (item.codigoBarras || '').toLowerCase();
 
-  // Inserir novo produto selecionado do catálogo
+        return desc.includes(q) || codInt.includes(q) || codForn.includes(q) || ean.includes(q);
+      })
+      .slice(0, 10);
+  }, [items, orderSearchText]);
+
+  // Lista de Itens do Pedido indexada e filtrada para a Tabela
+  const filteredIndexedItems = useMemo(() => {
+    if (!orderSearchText || orderSearchText.trim().length === 0) {
+      return items.map((item, originalIndex) => ({ item, originalIndex }));
+    }
+    const q = orderSearchText.trim().toLowerCase();
+
+    return items
+      .map((item, originalIndex) => ({ item, originalIndex }))
+      .filter(({ item, originalIndex }) => {
+        // Se houver busca e for a linha em branco final, oculta da exibição filtrada
+        const isBlankTrailing = !item.descricao && !item.codigoInterno && !item.codigoFornecedor && originalIndex === items.length - 1;
+        if (isBlankTrailing) return false;
+
+        const desc = (item.descricao || '').toLowerCase();
+        const codInt = (item.codigoInterno || item.codigo || '').toLowerCase();
+        const codForn = (item.codigoFornecedor || '').toLowerCase();
+        const ean = (item.codigoBarras || '').toLowerCase();
+
+        return desc.includes(q) || codInt.includes(q) || codForn.includes(q) || ean.includes(q);
+      });
+  }, [items, orderSearchText]);
+
+  // Ao selecionar um item pelo autocomplete do pedido
+  const handleSelectOrderItemFromSearch = (targetItem: OrderItem) => {
+    setOrderSearchText(targetItem.descricao || targetItem.codigoFornecedor || targetItem.codigoInterno || '');
+    setIsOrderSearchOpen(false);
+  };
+
+  // Inserir novo produto selecionado do modal de catálogo
   const handleSelectProductForNewItem = (prod: Product) => {
     const codInterno = prod.codigoInterno || prod.codigo || '';
     const codFornecedor = prod.codigoFornecedor || '';
@@ -503,9 +541,6 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     };
 
     onAddItem(fullItem);
-    // Permite que o catálogo continue aberto para ir adicionando outros itens sem fechar
-    setQuickSearchText('');
-    setIsQuickSearchOpen(false);
   };
 
   // Preencher linha existente com o produto selecionado no autocomplete inteligente
@@ -1494,18 +1529,34 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           <td key="precoUnitario" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap">
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               data-excel-row={index}
               data-excel-field="precoUnitario"
               value={displayVal}
               placeholder="0,00"
-              onKeyDown={(e) => handleExcelKeyDown(e, index, 'precoUnitario')}
+              onKeyDown={(e) => {
+                if (e.key === '.') {
+                  e.preventDefault();
+                  const target = e.currentTarget;
+                  const currentVal = target.value;
+                  if (!currentVal.includes(',')) {
+                    const selStart = target.selectionStart ?? currentVal.length;
+                    const selEnd = target.selectionEnd ?? currentVal.length;
+                    const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                    const { formatted, value } = handleCurrencyInput(newVal, false);
+                    setEditingPriceMap(prev => ({ ...prev, [item.id]: formatted }));
+                    handleFieldChange(item, 'precoUnitario', value);
+                  }
+                  return;
+                }
+                handleExcelKeyDown(e, index, 'precoUnitario');
+              }}
               onFocus={(e) => {
                 setEditingPriceMap(prev => ({
                   ...prev,
                   [item.id]: item.precoUnitario > 0
                     ? formatCurrency(item.precoUnitario, false)
-                    : '0,00'
+                    : ''
                 }));
                 e.target.select();
               }}
@@ -1552,18 +1603,29 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
               data-excel-field="pdvAlvo"
               value={displayVal}
               placeholder="12,00"
-              onKeyDown={(e) => handleExcelKeyDown(e, index, 'pdvAlvo')}
-              onFocus={() => {
-                setEditingPdvMap(prev => ({
-                  ...prev,
-                  [item.id]: ''
-                }));
+              onKeyDown={(e) => {
+                if (e.key === '.') {
+                  e.preventDefault();
+                  const target = e.currentTarget;
+                  const currentVal = target.value;
+                  if (!currentVal.includes(',')) {
+                    const selStart = target.selectionStart ?? currentVal.length;
+                    const selEnd = target.selectionEnd ?? currentVal.length;
+                    const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                    const { formatted, value } = handleCurrencyInput(newVal, false);
+                    setEditingPdvMap(prev => ({ ...prev, [item.id]: formatted }));
+                    handleFieldChange(item, 'pdvAlvo', value);
+                  }
+                  return;
+                }
+                handleExcelKeyDown(e, index, 'pdvAlvo');
               }}
-              onClick={() => {
+              onFocus={(e) => {
                 setEditingPdvMap(prev => ({
                   ...prev,
-                  [item.id]: ''
+                  [item.id]: pdvVal > 0 ? formatCurrency(pdvVal, false) : ''
                 }));
+                e.target.select();
               }}
               onBlur={() => {
                 if (!item.pdvAlvo || item.pdvAlvo <= 0) {
@@ -1576,10 +1638,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 });
               }}
               onChange={(e) => {
-                const sanitized = e.target.value.replace(/[^0-9,\.]/g, '');
-                setEditingPdvMap(prev => ({ ...prev, [item.id]: sanitized }));
-                const parsed = parseFloat(sanitized.replace(',', '.')) || 0;
-                handleFieldChange(item, 'pdvAlvo', parsed);
+                const { formatted, value } = handleCurrencyInput(e.target.value, false);
+                setEditingPdvMap(prev => ({ ...prev, [item.id]: formatted }));
+                handleFieldChange(item, 'pdvAlvo', value);
               }}
               className="w-full h-full min-h-[38px] px-2 py-1.5 text-center text-xs font-bold font-mono text-slate-900 dark:text-white bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
               title="Preço de Venda (PDV) - Clique para editar livremente"
@@ -1761,6 +1822,22 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
               {validItemsCount} {validItemsCount === 1 ? 'item' : 'itens'}
             </span>
+            {orderSearchText.trim().length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 flex items-center gap-1">
+                <span>Filtrando no pedido: {filteredIndexedItems.length} de {validItemsCount}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrderSearchText('');
+                    setIsOrderSearchOpen(false);
+                  }}
+                  className="hover:text-amber-950 dark:hover:text-white cursor-pointer ml-0.5"
+                  title="Limpar filtro"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Digitação contínua em formato planilha com auto-inclusão de linhas, códigos, custos e rateio de lojas
@@ -1770,83 +1847,102 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
         {/* Barra de Ações Rápidas Superior */}
         <div className="flex flex-wrap items-center gap-2">
           
-
-          {/* Busca Rápida com Autocomplete no Catálogo */}
-          <div className="relative min-w-[200px] sm:min-w-[240px]">
+          {/* Busca Rápida com Autocomplete no Pedido */}
+          <div ref={orderSearchContainerRef} className="relative min-w-[220px] sm:min-w-[280px]">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <Search className="w-3.5 h-3.5" />
             </div>
             <input
-              ref={quickSearchInputRef}
+              ref={orderSearchInputRef}
               type="text"
-              value={quickSearchText}
+              value={orderSearchText}
               onChange={(e) => {
-                setQuickSearchText(e.target.value);
-                setIsQuickSearchOpen(true);
+                setOrderSearchText(e.target.value);
+                setIsOrderSearchOpen(true);
               }}
               onFocus={() => {
-                if (quickSearchText.trim().length > 0) setIsQuickSearchOpen(true);
+                if (orderSearchText.trim().length > 0) setIsOrderSearchOpen(true);
               }}
-              placeholder="Buscar no catálogo..."
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsOrderSearchOpen(false);
+                }
+              }}
+              placeholder="Buscar no pedido (nome ou código)..."
               className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-hidden shadow-2xs font-medium"
             />
-            {quickSearchText && (
+            {orderSearchText && (
               <button
                 type="button"
                 onClick={() => {
-                  setQuickSearchText('');
-                  setIsQuickSearchOpen(false);
+                  setOrderSearchText('');
+                  setIsOrderSearchOpen(false);
                 }}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                title="Limpar busca"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
 
-            {/* Menu Suspenso de Resultados da Busca Rápida Superior */}
-            {isQuickSearchOpen && quickSearchText.trim().length > 0 && (
+            {/* Menu Suspenso de Autocomplete de Itens do Pedido */}
+            {isOrderSearchOpen && orderSearchText.trim().length > 0 && (
               <div
-                className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-40 max-h-72 overflow-y-auto p-1.5 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-40 max-h-80 overflow-y-auto p-1.5 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150"
               >
-                {matchingProductsForQuickBar.length > 0 ? (
-                  matchingProductsForQuickBar.map(prod => (
+                <div className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span>Itens no Pedido</span>
+                  <span>{matchingOrderItems.length} encontrado(s)</span>
+                </div>
+
+                {matchingOrderItems.length > 0 ? (
+                  matchingOrderItems.map(({ item, originalIndex }) => (
                     <button
-                      key={prod.id}
+                      key={item.id || originalIndex}
                       type="button"
-                      onClick={() => handleSelectProductForNewItem(prod)}
-                      className="w-full p-2 rounded-xl text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-2.5 group cursor-pointer"
+                      onClick={() => handleSelectOrderItemFromSearch(item)}
+                      className="w-full p-2 rounded-xl text-left hover:bg-emerald-50/60 dark:hover:bg-slate-800/80 transition flex items-center gap-2.5 group cursor-pointer"
                     >
                       <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
-                        {prod.fotoUrl ? (
-                          <img src={prod.fotoUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                        {item.fotoUrl ? (
+                          <img src={item.fotoUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                         ) : (
                           <Package className="w-4 h-4 text-slate-400" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {highlightMatch(prod.descricao, quickSearchText)}
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                            #{originalIndex + 1}
+                          </span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {highlightMatch(item.descricao || 'Sem descrição', orderSearchText)}
+                          </span>
                         </div>
-                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
-                          <span>{prod.codigoInterno || prod.codigo}</span>
-                          <span>•</span>
-                          <span className="text-emerald-600 font-bold">R$ {Number(prod.precoUnitarioPadrao || 0).toFixed(2)}</span>
-                          {prod.nomeFornecedor && (
+                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2 mt-0.5">
+                          {item.codigoFornecedor && (
+                            <span>Ref: {highlightMatch(item.codigoFornecedor, orderSearchText)}</span>
+                          )}
+                          {(item.codigoInterno || item.codigo) && (
                             <>
                               <span>•</span>
-                              <span className="text-slate-500 truncate">{prod.nomeFornecedor}</span>
+                              <span>Cód: {highlightMatch(item.codigoInterno || item.codigo || '', orderSearchText)}</span>
                             </>
                           )}
+                          <span>•</span>
+                          <span className="text-slate-600 dark:text-slate-300 font-bold">{item.qtdTotalUnidades || 0} un</span>
+                          <span>•</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">R$ {Number(item.precoUnitario || 0).toFixed(2)}</span>
                         </div>
                       </div>
-                      <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition px-2 py-1 bg-indigo-50 dark:bg-indigo-950/60 rounded-lg shrink-0">
-                        Adicionar +
+                      <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition px-2 py-1 bg-emerald-50 dark:bg-emerald-950/60 rounded-lg shrink-0">
+                        Filtrar
                       </div>
                     </button>
                   ))
                 ) : (
                   <div className="p-3 text-center text-xs text-slate-400">
-                    Nenhum produto {currentSupplierName ? `do fornecedor "${currentSupplierName}"` : ''} encontrado para "{quickSearchText}"
+                    Nenhum item correspondente no pedido para "{orderSearchText}"
                   </div>
                 )}
               </div>
@@ -2050,32 +2146,55 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-700/80 text-xs">
-            {items.map((item, index) => {
-              const precoCompraEfetivo = item.precoUnitario * (1 - (item.percentualDesconto || 0) / 100);
-              const fiscal = calculateItemFiscal(precoCompraEfetivo, item.pdvAlvo, globalFiscal, item.fiscalOverride);
+            {filteredIndexedItems.length === 0 && orderSearchText.trim().length > 0 ? (
+              <tr>
+                <td colSpan={orderedVisibleColumns.length + 1} className="py-10 text-center bg-slate-50/50 dark:bg-slate-900/30">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <Search className="w-6 h-6 text-slate-400" />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Nenhum item correspondente a "{orderSearchText}" neste pedido
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOrderSearchText('');
+                        setIsOrderSearchOpen(false);
+                      }}
+                      className="mt-1 px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer shadow-2xs"
+                    >
+                      Limpar pesquisa (exibir todos os {validItemsCount} itens)
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filteredIndexedItems.map(({ item, originalIndex }) => {
+                const precoCompraEfetivo = item.precoUnitario * (1 - (item.percentualDesconto || 0) / 100);
+                const fiscal = calculateItemFiscal(precoCompraEfetivo, item.pdvAlvo, globalFiscal, item.fiscalOverride);
 
-              return (
-                <tr 
-                  key={item.id ? `${item.id}_${index}` : `row_${index}`}
-                  className={`${
-                    item.ruptura 
-                      ? 'bg-rose-50/60 dark:bg-rose-950/25 hover:bg-rose-100/60 dark:hover:bg-rose-950/40' 
-                      : 'hover:bg-emerald-50/20 dark:hover:bg-slate-800/40'
-                  } transition-colors group whitespace-nowrap`}
-                >
-                  {/* Index / Linha fixa */}
-                  <td 
-                    style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}
-                    className="py-2 px-2 text-center bg-slate-50 dark:bg-slate-900/40 text-slate-400 font-mono text-[11px] font-semibold border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap select-none"
+                return (
+                  <tr 
+                    key={item.id ? `${item.id}_${originalIndex}` : `row_${originalIndex}`}
+                    className={`${
+                      item.ruptura 
+                        ? 'bg-rose-50/60 dark:bg-rose-950/25 hover:bg-rose-100/60 dark:hover:bg-rose-950/40' 
+                        : 'hover:bg-emerald-50/20 dark:hover:bg-slate-800/40'
+                    } transition-colors group whitespace-nowrap`}
                   >
-                    {index + 1}
-                  </td>
+                    {/* Index / Linha fixa */}
+                    <td 
+                      style={{ width: '48px', minWidth: '48px', maxWidth: '48px' }}
+                      className="py-2 px-2 text-center bg-slate-50 dark:bg-slate-900/40 text-slate-400 font-mono text-[11px] font-semibold border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap select-none"
+                    >
+                      {originalIndex + 1}
+                    </td>
 
-                  {/* Células dinâmicas de acordo com orderedVisibleColumns */}
-                  {orderedVisibleColumns.map(col => renderTableCell(col.key, item, index, fiscal))}
-                </tr>
-              );
-            })}
+                    {/* Células dinâmicas de acordo com orderedVisibleColumns */}
+                    {orderedVisibleColumns.map(col => renderTableCell(col.key, item, originalIndex, fiscal))}
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

@@ -79,7 +79,6 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('todos');
-  const [controlFilterIds, setControlFilterIds] = useState<Set<string> | null>(null);
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
 
@@ -149,13 +148,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   // Processamento e ordenação dos pedidos
   const processedOrders = useMemo(() => {
     let result = orders.filter(o => {
-      // 1. Filtro do Card de Controle de Compras
-      if (controlFilterIds !== null) {
-        const orderId = o.id || o.header?.id;
-        if (orderId && !controlFilterIds.has(orderId)) {
-          return false;
-        }
-      }
+
 
       // 2. Busca Global
       if (searchTerm.trim()) {
@@ -270,7 +263,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     }
 
     return result;
-  }, [orders, controlFilterIds, searchTerm, selectedStatusTab, columnFilters, sortField, sortDirection]);
+  }, [orders, searchTerm, selectedStatusTab, columnFilters, sortField, sortDirection]);
 
   const totalPedidos = orders.length;
 
@@ -352,7 +345,6 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
       <PurchaseControlCard
         orders={orders}
         onSelectOrder={onSelectOrder}
-        onFilterChange={setControlFilterIds}
       />
 
       {/* 3. Abas de Status da Esteira Operacional Oficial */}

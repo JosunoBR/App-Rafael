@@ -23,7 +23,6 @@ import { calculateOrderTotals } from '../shared/orderCalculationEngine';
 interface PurchaseControlCardProps {
   orders: PurchaseOrder[];
   onSelectOrder?: (order: PurchaseOrder) => void;
-  onFilterChange?: (filteredOrderIds: Set<string> | null) => void;
 }
 
 interface AggregatedProduct {
@@ -99,8 +98,7 @@ function extractOrderDate(order: PurchaseOrder): { year: string; month: string; 
 
 export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
   orders,
-  onSelectOrder,
-  onFilterChange
+  onSelectOrder
 }) => {
   // Controle de expansão/recolhimento do card (retrátil)
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
@@ -109,7 +107,6 @@ export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
   const [selectedYear, setSelectedYear] = useState<string>('todos');
   const [selectedMonth, setSelectedMonth] = useState<string>('todos');
   const [selectedSupplier, setSelectedSupplier] = useState<string>('todos');
-  const [syncWithTable, setSyncWithTable] = useState<boolean>(true);
 
   // Navegação interna do card (Abas)
   const [activeTab, setActiveTab] = useState<'kpis' | 'produtos' | 'pedidos'>('kpis');
@@ -165,21 +162,7 @@ export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
     });
   }, [orders, selectedYear, selectedMonth, selectedSupplier]);
 
-  // Sincronizar com a tabela externa de pedidos se habilitado
-  React.useEffect(() => {
-    if (!onFilterChange) return;
 
-    if (!syncWithTable || (selectedYear === 'todos' && selectedMonth === 'todos' && selectedSupplier === 'todos')) {
-      onFilterChange(null);
-    } else {
-      const ids = new Set<string>();
-      filteredOrders.forEach(o => {
-        if (o.id) ids.add(o.id);
-        if (o.header?.id) ids.add(o.header.id);
-      });
-      onFilterChange(ids);
-    }
-  }, [filteredOrders, syncWithTable, selectedYear, selectedMonth, selectedSupplier, onFilterChange]);
 
   // Limpar filtros
   const handleResetFilters = () => {
@@ -561,22 +544,7 @@ export const PurchaseControlCard: React.FC<PurchaseControlCardProps> = ({
               )}
             </div>
 
-            {/* Informações da Amostragem & Checkbox de sincronização */}
-            <div className="flex items-center gap-3 text-xs">
-              <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                <b>{filteredOrders.length}</b> {filteredOrders.length === 1 ? 'pedido' : 'pedidos'} analisados
-              </span>
 
-              <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={syncWithTable}
-                  onChange={(e) => setSyncWithTable(e.target.checked)}
-                  className="rounded text-indigo-600 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 cursor-pointer"
-                />
-                <span>Filtrar lista abaixo</span>
-              </label>
-            </div>
 
           </div>
 

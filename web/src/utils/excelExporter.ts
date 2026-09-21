@@ -354,37 +354,39 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   });
 
   // ===========================================================================
-  // 5. LINHA DE TOTAIS DA TABELA (Barra Verde #D1FAE5 idêntica ao PDF)
+  // 5. LINHA DE TOTAIS DA TABELA (Linha 1 completa e Linha 2 apenas célula de total)
   // ===========================================================================
-  ws.mergeCells(`A${currentRowNum}:D${currentRowNum}`);
-  const totalLabelCell = ws.getCell(`A${currentRowNum}`);
+  const totalComIpi = Number((orderTotals.valorBruto + orderTotals.totalIpi).toFixed(2));
+  const r1 = currentRowNum;
+  const r2 = currentRowNum + 1;
+
+  // Linha 1 de Totais (Normal e Completa)
+  ws.mergeCells(`A${r1}:D${r1}`);
+  const totalLabelCell = ws.getCell(`A${r1}`);
   totalLabelCell.value = `TOTAIS DO PEDIDO (${filteredItems.length} itens)`;
   totalLabelCell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: 'FF064E3B' } };
   totalLabelCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
-  const footerRow = ws.getRow(currentRowNum);
-  footerRow.height = 22;
+  const footerRow1 = ws.getRow(r1);
+  footerRow1.height = 20;
 
-  footerRow.getCell(5).value = `${orderTotals.totalVolumes.toLocaleString('pt-BR')} cx`;
-  footerRow.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
+  footerRow1.getCell(5).value = `${orderTotals.totalVolumes.toLocaleString('pt-BR')} cx`;
+  footerRow1.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
 
-  footerRow.getCell(6).value = `${orderTotals.totalPecas.toLocaleString('pt-BR')} un`;
-  footerRow.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
+  footerRow1.getCell(6).value = `${orderTotals.totalPecas.toLocaleString('pt-BR')} un`;
+  footerRow1.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
 
-  footerRow.getCell(7).value = formatCurrency(orderTotals.precoMedio);
-  footerRow.getCell(7).alignment = { vertical: 'middle', horizontal: 'right' };
+  footerRow1.getCell(7).value = formatCurrency(orderTotals.precoMedio);
+  footerRow1.getCell(7).alignment = { vertical: 'middle', horizontal: 'right' };
 
-  const totalComIpi = Number((orderTotals.valorBruto + orderTotals.totalIpi).toFixed(2));
+  footerRow1.getCell(8).value = formatCurrency(orderTotals.totalIpi);
+  footerRow1.getCell(8).alignment = { vertical: 'middle', horizontal: 'right' };
 
-  footerRow.getCell(8).value = `${formatCurrency(orderTotals.totalIpi)}\n `;
-  footerRow.getCell(8).alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
-
-  footerRow.getCell(9).value = `${formatCurrency(totalComIpi)} (c/ IPI)\n${formatCurrency(orderTotals.valorBruto)} (s/ IPI)`;
-  footerRow.getCell(9).alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
-  footerRow.height = 28;
+  footerRow1.getCell(9).value = `${formatCurrency(totalComIpi)} (c/ IPI)`;
+  footerRow1.getCell(9).alignment = { vertical: 'middle', horizontal: 'right' };
 
   for (let c = 1; c <= 9; c++) {
-    const cell = footerRow.getCell(c);
+    const cell = footerRow1.getCell(c);
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Emerald-100
     cell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: 'FF064E3B' } }; // Emerald-900
     cell.border = {
@@ -395,7 +397,22 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     };
   }
 
-  currentRowNum++;
+  // Linha 2 de Totais: APENAS a célula sob a coluna 9 (Valor Total) é verde com o Total SEM IPI
+  const footerRow2 = ws.getRow(r2);
+  footerRow2.height = 18;
+  const totalSemIpiCell = footerRow2.getCell(9);
+  totalSemIpiCell.value = `${formatCurrency(orderTotals.valorBruto)} (s/ IPI)`;
+  totalSemIpiCell.alignment = { vertical: 'middle', horizontal: 'right' };
+  totalSemIpiCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Emerald-100
+  totalSemIpiCell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: 'FF064E3B' } }; // Emerald-900
+  totalSemIpiCell.border = {
+    top: { style: 'thin', color: { argb: 'FFA7F3D0' } },
+    bottom: { style: 'thin', color: { argb: 'FFA7F3D0' } },
+    left: { style: 'thin', color: { argb: 'FFA7F3D0' } },
+    right: { style: 'thin', color: { argb: 'FFA7F3D0' } }
+  };
+
+  currentRowNum += 2;
   ws.getRow(currentRowNum).height = 10; // Espaçador
   currentRowNum++;
 

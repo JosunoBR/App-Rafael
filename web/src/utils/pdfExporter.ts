@@ -463,12 +463,11 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     });
 
     // Linha de Totais da Tabela alimentada 100% diretamente pela Engine Central
-    // O primeiro total exibe o Total COM IPI (alinhado ao IPI ao lado) e na linha abaixo o Total SEM IPI
+    // Linha 1: Linha de totais normal do pedido (Volumes, Peças, Preço Médio, IPI e Total COM IPI)
+    // Linha 2: Apenas uma célula destacada no rodapé sob a coluna Valor Total com o Total SEM IPI
     const totalComIpi = Number((orderTotals.valorBruto + orderTotals.totalIpi).toFixed(2));
-    const ipiFooterContent = `${formatCurrency(orderTotals.totalIpi)}\n `;
-    const valorTotalFooterContent = `${formatCurrency(totalComIpi)} (c/ IPI)\n${formatCurrency(orderTotals.valorBruto)} (s/ IPI)`;
 
-    const footerRow = [
+    const footerRow1 = [
       {
         content: `TOTAIS DO PEDIDO (${bodyRows.length} itens)`,
         colSpan: 4,
@@ -487,11 +486,23 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
         styles: { halign: 'right', fontStyle: 'bold' }
       },
       {
-        content: ipiFooterContent,
+        content: formatCurrency(orderTotals.totalIpi),
         styles: { halign: 'right', fontStyle: 'bold' }
       },
       {
-        content: valorTotalFooterContent,
+        content: `${formatCurrency(totalComIpi)} (c/ IPI)`,
+        styles: { halign: 'right', fontStyle: 'bold' }
+      }
+    ];
+
+    const footerRow2 = [
+      {
+        content: '',
+        colSpan: 8,
+        styles: { fillColor: false, lineWidth: 0 }
+      },
+      {
+        content: `${formatCurrency(orderTotals.valorBruto)} (s/ IPI)`,
         styles: { halign: 'right', fontStyle: 'bold' }
       }
     ];
@@ -499,7 +510,7 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     autoTable(doc, {
       startY: cardY + cardH + 2.5,
       head: [headCols],
-      body: [...bodyRows, footerRow],
+      body: [...bodyRows, footerRow1, footerRow2],
       theme: 'grid',
       styles: {
         fontSize: 7,
@@ -535,6 +546,17 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
           data.cell.styles.fillColor = [209, 250, 229]; // Emerald-100 (Barra verde de totais)
           data.cell.styles.fontStyle = 'bold';
           data.cell.styles.textColor = [6, 78, 59]; // Emerald-900
+        } else if (data.row.index === bodyRows.length + 1) {
+          if (data.column.index === 0) {
+            data.cell.styles.fillColor = false;
+            data.cell.styles.lineWidth = 0;
+          } else {
+            data.cell.styles.fillColor = [209, 250, 229]; // Emerald-100
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.textColor = [6, 78, 59]; // Emerald-900
+            data.cell.styles.lineColor = [226, 232, 240];
+            data.cell.styles.lineWidth = 0.2;
+          }
         }
       },
       margin: { top: 12, bottom: 12, left: 10, right: 10 }
@@ -592,23 +614,14 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     doc.setFillColor(5, 150, 105); // Emerald-600
     doc.roundedRect(boxX, boxY, boxW, boxH, 1.5, 1.5, 'F');
 
-    // Lado Esquerdo: A conta detalhada e intuitiva (Total + IPI - Desconto = Total Geral)
+    // Lado Esquerdo: Detalhamento dos componentes (Total, IPI e Desconto comercial)
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(6.8);
+    doc.setFontSize(7);
 
-    doc.text(`  ${formatCurrency(orderTotals.valorBruto)} - Total`, boxX + 3.5, boxY + 4.2);
-    doc.text(`+ ${formatCurrency(orderTotals.totalIpi)} - IPI`, boxX + 3.5, boxY + 7.8);
-    doc.text(`- ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto comercial`, boxX + 3.5, boxY + 11.4);
-
-    // Linha divisória sutil da conta
-    doc.setDrawColor(167, 243, 208); // Emerald-200
-    doc.setLineWidth(0.2);
-    doc.line(boxX + 3.5, boxY + 12.8, boxX + 54, boxY + 12.8);
-
-    // Linha de resultado da conta
-    doc.setFontSize(7.2);
-    doc.text(`= ${formatCurrency(orderTotals.totalGeral)} - Total geral`, boxX + 3.5, boxY + 16.2);
+    doc.text(`  ${formatCurrency(orderTotals.valorBruto)} - Total`, boxX + 3.5, boxY + 5.2);
+    doc.text(`+ ${formatCurrency(orderTotals.totalIpi)} - IPI`, boxX + 3.5, boxY + 9.5);
+    doc.text(`- ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto comercial`, boxX + 3.5, boxY + 13.8);
 
     // Lado Direito: Badge de Destaque Master do Total Geral
     const badgeX = boxX + 57;

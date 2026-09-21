@@ -1,19 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   FolderOpen, 
   Search, 
   Trash2, 
   FileSpreadsheet, 
   ArrowRight, 
-  Calendar, 
-  DollarSign, 
   Boxes, 
-  Package, 
-  CheckCircle2, 
   PlusCircle,
-  Sparkles,
   PackageCheck,
-  Check
+  Check,
+  Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Truck,
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { calculateOrderTotals } from '../shared/orderCalculationEngine';
@@ -33,6 +35,39 @@ interface OrderHistoryPageProps {
   onNavigateToSeparation?: (order: PurchaseOrder) => void;
 }
 
+type SortField = 'numero' | 'fornecedor' | 'data' | 'itens' | 'pecas' | 'valor' | 'frete' | 'status';
+type SortDirection = 'asc' | 'desc' | null;
+
+interface ColumnFilters {
+  numero: string;
+  fornecedor: string;
+  data: string;
+  frete: string;
+  status: string;
+}
+
+const getOrderFreteModalidade = (ord: PurchaseOrder): 'CIF' | 'FOB' | 'Retira' => {
+  const explicit = ord.header?.tipoFrete;
+  if (explicit === 'FOB' || explicit === 'Retira' || explicit === 'CIF') {
+    return explicit;
+  }
+  const rawFrete = Number(ord.header?.valorFrete ?? ord.header?.valorFreteGlobal ?? 0);
+  return rawFrete > 0 ? 'FOB' : 'CIF';
+};
+
+const getFreteBadgeClass = (frete: 'CIF' | 'FOB' | 'Retira') => {
+  switch (frete) {
+    case 'CIF':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+    case 'FOB':
+      return 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
+    case 'Retira':
+      return 'bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800';
+    default:
+      return 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+  }
+};
+
 export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   orders,
   currentUser,
@@ -48,6 +83,18 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
 
+  // Ordenação e Filtros por Coluna
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [activeFilterDropdown, setActiveFilterDropdown] = useState<SortField | null>(null);
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
+    numero: '',
+    fornecedor: '',
+    data: '',
+    frete: '',
+    status: ''
+  });
+
   const handleOpenOrder = (ord: PurchaseOrder) => {
     setOpeningOrderId(ord.header.id);
     const isTransf = ord.header?.supplierId === 'cd_matriz' || 
@@ -62,35 +109,170 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     onSelectOrder(ord);
   };
 
-  const filteredOrders = orders.filter(o => {
-    if (controlFilterIds !== null) {
-      const orderId = o.id || o.header?.id;
-      if (orderId && !controlFilterIds.has(orderId)) {
+  // Alterna a ordenação de uma coluna (asc -> desc -> limpa)
+  const handleSortToggle = (field: SortField) => {
+    if (sortField !== field) {
+      setSortField(field);
+      setSortDirection('asc');
+    } else if (sortDirection === 'asc') {
+      setSortDirection('desc');
+    } else {
+      setSortField(null);
+      setSortDirection(null);
+    }
+  };
+
+  // Fornecedores únicos para o filtro de coluna
+  const uniqueSuppliers = useMemo(() => {
+    const map = new Map<string, number>();
+    orders.forEach(o => {
+      const fn = (o.header?.fornecedor || '').trim();
+      if (fn) {
+        map.set(fn, (map.get(fn) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [orders]);
+
+  // Contagem por modalidade de frete
+  const freteCounts = useMemo(() => {
+    const counts = { CIF: 0, FOB: 0, Retira: 0 };
+    orders.forEach(o => {
+      const mod = getOrderFreteModalidade(o);
+      if (mod in counts) counts[mod]++;
+    });
+    return counts;
+  }, [orders]);
+
+  // Processamento e ordenação dos pedidos
+  const processedOrders = useMemo(() => {
+    let result = orders.filter(o => {
+      // 1. Filtro do Card de Controle de Compras
+      if (controlFilterIds !== null) {
+        const orderId = o.id || o.header?.id;
+        if (orderId && !controlFilterIds.has(orderId)) {
+          return false;
+        }
+      }
+
+      // 2. Busca Global
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        const matchesSearch = 
+          o.header.numeroPedido.toLowerCase().includes(q) ||
+          o.header.fornecedor.toLowerCase().includes(q) ||
+          (o.header.vendedor && o.header.vendedor.toLowerCase().includes(q));
+        if (!matchesSearch) return false;
+      }
+
+      // 3. Aba de Status
+      const currentStatus = o.header.status || 'Em Cotação';
+      if (selectedStatusTab !== 'todos' && currentStatus !== selectedStatusTab) {
         return false;
       }
+
+      // 4. Filtro da Coluna: Número
+      if (columnFilters.numero.trim()) {
+        if (!o.header.numeroPedido.toLowerCase().includes(columnFilters.numero.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // 5. Filtro da Coluna: Fornecedor / Representante
+      if (columnFilters.fornecedor.trim()) {
+        const qFornec = columnFilters.fornecedor.toLowerCase();
+        const matchesFornec = 
+          o.header.fornecedor.toLowerCase().includes(qFornec) ||
+          (o.header.vendedor && o.header.vendedor.toLowerCase().includes(qFornec));
+        if (!matchesFornec) return false;
+      }
+
+      // 6. Filtro da Coluna: Data
+      if (columnFilters.data.trim()) {
+        const qData = columnFilters.data.trim();
+        const formattedDate = toBrDate(o.header.dataPedido || o.header.createdAt);
+        const rawDate = String(o.header.dataPedido || '');
+        if (!formattedDate.includes(qData) && !rawDate.includes(qData)) {
+          return false;
+        }
+      }
+
+      // 7. Filtro da Coluna: Frete
+      if (columnFilters.frete && columnFilters.frete !== 'todos') {
+        const modalidade = getOrderFreteModalidade(o);
+        if (modalidade !== columnFilters.frete) {
+          return false;
+        }
+      }
+
+      // 8. Filtro da Coluna: Status
+      if (columnFilters.status && columnFilters.status !== 'todos') {
+        if (currentStatus !== columnFilters.status) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Ordenação
+    if (sortField && sortDirection) {
+      result = [...result].sort((a, b) => {
+        let cmp = 0;
+        switch (sortField) {
+          case 'numero':
+            cmp = (a.header.numeroPedido || '').localeCompare(b.header.numeroPedido || '', undefined, { numeric: true });
+            break;
+          case 'fornecedor':
+            cmp = (a.header.fornecedor || '').localeCompare(b.header.fornecedor || '');
+            break;
+          case 'data': {
+            const dateA = new Date(a.header.dataPedido || a.header.createdAt || 0).getTime();
+            const dateB = new Date(b.header.dataPedido || b.header.createdAt || 0).getTime();
+            cmp = dateA - dateB;
+            break;
+          }
+          case 'itens': {
+            const itensA = calculateOrderTotals(a).validItemsCount;
+            const itensB = calculateOrderTotals(b).validItemsCount;
+            cmp = itensA - itensB;
+            break;
+          }
+          case 'pecas': {
+            const pecasA = calculateOrderTotals(a).totalPecas;
+            const pecasB = calculateOrderTotals(b).totalPecas;
+            cmp = pecasA - pecasB;
+            break;
+          }
+          case 'valor': {
+            const valA = calculateOrderTotals(a).totalGeral;
+            const valB = calculateOrderTotals(b).totalGeral;
+            cmp = valA - valB;
+            break;
+          }
+          case 'frete': {
+            const freteA = getOrderFreteModalidade(a);
+            const freteB = getOrderFreteModalidade(b);
+            cmp = freteA.localeCompare(freteB);
+            break;
+          }
+          case 'status': {
+            const statA = a.header.status || 'Em Cotação';
+            const statB = b.header.status || 'Em Cotação';
+            cmp = statA.localeCompare(statB);
+            break;
+          }
+        }
+        return sortDirection === 'asc' ? cmp : -cmp;
+      });
     }
 
-    const matchesSearch = 
-      o.header.numeroPedido.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.header.fornecedor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (o.header.vendedor && o.header.vendedor.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const currentStatus = o.header.status || 'Em Cotação';
-    const matchesStatus = selectedStatusTab === 'todos' || currentStatus === selectedStatusTab;
-
-    return matchesSearch && matchesStatus;
-  });
+    return result;
+  }, [orders, controlFilterIds, searchTerm, selectedStatusTab, columnFilters, sortField, sortDirection]);
 
   const totalPedidos = orders.length;
-  const totalInvestidoGeral = orders.reduce((acc, o) => {
-    const totals = calculateOrderTotals(o);
-    return acc + totals.totalGeral;
-  }, 0);
-
-  const totalPecasGeral = orders.reduce((acc, o) => {
-    const totals = calculateOrderTotals(o);
-    return acc + totals.totalPecas;
-  }, 0);
 
   const countByStatus = {
     todos: orders.length,
@@ -115,6 +297,24 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
       default:
         return 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border-amber-300 dark:border-amber-800';
     }
+  };
+
+  const hasActiveColumnFilters = Boolean(
+    columnFilters.numero ||
+    columnFilters.fornecedor ||
+    columnFilters.data ||
+    columnFilters.frete ||
+    columnFilters.status
+  );
+
+  const handleClearAllColumnFilters = () => {
+    setColumnFilters({
+      numero: '',
+      fornecedor: '',
+      data: '',
+      frete: '',
+      status: ''
+    });
   };
 
   return (
@@ -245,55 +445,560 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
       {/* 4. Tabela de Pedidos Salvos */}
       <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-5 shadow-xs space-y-4">
         
-        {/* Barra de Busca */}
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por número (ex: PED-0001), fornecedor ou vendedor..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
-          />
+        {/* Barra Superior: Busca Global e Status dos Filtros */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="relative w-full max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por número (ex: PED-0001), fornecedor ou vendedor..."
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span>
+              Exibindo <strong className="text-slate-900 dark:text-white font-mono">{processedOrders.length}</strong> de <strong className="font-mono">{orders.length}</strong> pedidos
+            </span>
+            {(sortField || hasActiveColumnFilters) && (
+              <button
+                onClick={() => {
+                  setSortField(null);
+                  setSortDirection(null);
+                  handleClearAllColumnFilters();
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 transition cursor-pointer"
+                title="Limpar todas as ordenações e filtros de coluna"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Resetar Filtros
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Tabela de Pedidos */}
-        <div className="overflow-x-auto">
+        {/* Chips de Filtros Ativos */}
+        {(hasActiveColumnFilters || searchTerm) && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs border-t border-slate-100 dark:border-slate-700/50">
+            <span className="text-slate-400 text-[11px] font-semibold mr-1">Filtros ativos:</span>
+            {searchTerm && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium">
+                Busca: "{searchTerm}"
+                <button onClick={() => setSearchTerm('')} className="hover:text-rose-500 cursor-pointer ml-0.5"><X className="w-3 h-3" /></button>
+              </span>
+            )}
+            {columnFilters.numero && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-medium border border-indigo-200 dark:border-indigo-800">
+                Nº: {columnFilters.numero}
+                <button onClick={() => setColumnFilters(p => ({ ...p, numero: '' }))} className="hover:text-rose-500 cursor-pointer ml-0.5"><X className="w-3 h-3" /></button>
+              </span>
+            )}
+            {columnFilters.fornecedor && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-medium border border-indigo-200 dark:border-indigo-800">
+                Fornecedor: {columnFilters.fornecedor}
+                <button onClick={() => setColumnFilters(p => ({ ...p, fornecedor: '' }))} className="hover:text-rose-500 cursor-pointer ml-0.5"><X className="w-3 h-3" /></button>
+              </span>
+            )}
+            {columnFilters.data && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-medium border border-indigo-200 dark:border-indigo-800">
+                Data: {columnFilters.data}
+                <button onClick={() => setColumnFilters(p => ({ ...p, data: '' }))} className="hover:text-rose-500 cursor-pointer ml-0.5"><X className="w-3 h-3" /></button>
+              </span>
+            )}
+            {columnFilters.frete && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-medium border border-indigo-200 dark:border-indigo-800">
+                Frete: {columnFilters.frete}
+                <button onClick={() => setColumnFilters(p => ({ ...p, frete: '' }))} className="hover:text-rose-500 cursor-pointer ml-0.5"><X className="w-3 h-3" /></button>
+              </span>
+            )}
+            {columnFilters.status && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-medium border border-indigo-200 dark:border-indigo-800">
+                Status: {columnFilters.status}
+                <button onClick={() => setColumnFilters(p => ({ ...p, status: '' }))} className="hover:text-rose-500 cursor-pointer ml-0.5"><X className="w-3 h-3" /></button>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Backdrop para fechar dropdowns de filtro abertos */}
+        {activeFilterDropdown && (
+          <div 
+            className="fixed inset-0 z-30 bg-transparent" 
+            onClick={() => setActiveFilterDropdown(null)} 
+          />
+        )}
+
+        {/* Tabela de Pedidos com Filtro nos Títulos das Colunas */}
+        <div className="overflow-x-auto min-h-[360px]">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                <th className="py-3 px-4 whitespace-nowrap min-w-[110px]">Pedido / Número</th>
-                <th className="py-3 px-3 min-w-[200px]">Fornecedor</th>
-                <th className="py-3 px-3 whitespace-nowrap min-w-[105px]">Data</th>
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[70px]">Itens</th>
-                <th className="py-3 px-3 text-right whitespace-nowrap min-w-[110px]">Volume Peças</th>
-                <th className="py-3 px-3 text-right whitespace-nowrap min-w-[130px]">Valor Total (R$)</th>
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[130px]">Status</th>
+                
+                {/* 1. PEDIDO / NÚMERO */}
+                <th className="py-3 px-4 whitespace-nowrap min-w-[130px] relative">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <button
+                      onClick={() => handleSortToggle('numero')}
+                      className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition"
+                      title="Clique para ordenar por número do pedido"
+                    >
+                      <span>Pedido / Número</span>
+                      {sortField === 'numero' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveFilterDropdown(activeFilterDropdown === 'numero' ? null : 'numero');
+                      }}
+                      className={`p-1 rounded-md transition cursor-pointer relative ${
+                        columnFilters.numero ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/80 ring-1 ring-indigo-400/50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'
+                      }`}
+                      title="Filtrar por número do pedido"
+                    >
+                      <Filter className="w-3 h-3" />
+                      {columnFilters.numero && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />}
+                    </button>
+                  </div>
+
+                  {/* Popover de Filtro: Número */}
+                  {activeFilterDropdown === 'numero' && (
+                    <div className="absolute top-full left-4 mt-2 z-40 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 min-w-[220px] normal-case text-slate-800 dark:text-slate-100 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                        <span>Filtrar Pedido</span>
+                        {columnFilters.numero && (
+                          <button onClick={() => setColumnFilters(p => ({ ...p, numero: '' }))} className="text-[10px] text-rose-500 hover:underline cursor-pointer">
+                            Limpar
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={columnFilters.numero}
+                        onChange={(e) => setColumnFilters(p => ({ ...p, numero: e.target.value }))}
+                        placeholder="Ex: PED-140..."
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
+                      />
+                      <div className="flex items-center gap-1 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                        <button
+                          onClick={() => { setSortField('numero'); setSortDirection('asc'); }}
+                          className={`flex-1 py-1 text-[11px] rounded-md font-semibold cursor-pointer ${sortField === 'numero' && sortDirection === 'asc' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                        >
+                          A → Z
+                        </button>
+                        <button
+                          onClick={() => { setSortField('numero'); setSortDirection('desc'); }}
+                          className={`flex-1 py-1 text-[11px] rounded-md font-semibold cursor-pointer ${sortField === 'numero' && sortDirection === 'desc' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                        >
+                          Z → A
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* 2. FORNECEDOR */}
+                <th className="py-3 px-3 min-w-[210px] relative">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <button
+                      onClick={() => handleSortToggle('fornecedor')}
+                      className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition"
+                      title="Clique para ordenar por fornecedor"
+                    >
+                      <span>Fornecedor</span>
+                      {sortField === 'fornecedor' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveFilterDropdown(activeFilterDropdown === 'fornecedor' ? null : 'fornecedor');
+                      }}
+                      className={`p-1 rounded-md transition cursor-pointer relative ${
+                        columnFilters.fornecedor ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/80 ring-1 ring-indigo-400/50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'
+                      }`}
+                      title="Filtrar por fornecedor"
+                    >
+                      <Filter className="w-3 h-3" />
+                      {columnFilters.fornecedor && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />}
+                    </button>
+                  </div>
+
+                  {/* Popover de Filtro: Fornecedor */}
+                  {activeFilterDropdown === 'fornecedor' && (
+                    <div className="absolute top-full left-3 mt-2 z-40 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 min-w-[250px] max-w-[300px] normal-case text-slate-800 dark:text-slate-100 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                        <span>Filtrar Fornecedor</span>
+                        {columnFilters.fornecedor && (
+                          <button onClick={() => setColumnFilters(p => ({ ...p, fornecedor: '' }))} className="text-[10px] text-rose-500 hover:underline cursor-pointer">
+                            Limpar
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={columnFilters.fornecedor}
+                        onChange={(e) => setColumnFilters(p => ({ ...p, fornecedor: e.target.value }))}
+                        placeholder="Digitar nome ou rep..."
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
+                      />
+                      <div className="max-h-40 overflow-y-auto space-y-1 divide-y divide-slate-100 dark:divide-slate-700/40 text-xs">
+                        {uniqueSuppliers
+                          .filter(s => !columnFilters.fornecedor || s.name.toLowerCase().includes(columnFilters.fornecedor.toLowerCase()))
+                          .map(s => (
+                            <button
+                              key={s.name}
+                              onClick={() => {
+                                setColumnFilters(p => ({ ...p, fornecedor: s.name }));
+                                setActiveFilterDropdown(null);
+                              }}
+                              className="w-full text-left py-1.5 px-2 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded flex items-center justify-between cursor-pointer transition"
+                            >
+                              <span className="truncate font-medium">{s.name}</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 ml-2 shrink-0">{s.count}</span>
+                            </button>
+                          ))}
+                      </div>
+                      <div className="flex items-center gap-1 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                        <button
+                          onClick={() => { setSortField('fornecedor'); setSortDirection('asc'); }}
+                          className={`flex-1 py-1 text-[11px] rounded-md font-semibold cursor-pointer ${sortField === 'fornecedor' && sortDirection === 'asc' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                        >
+                          A → Z
+                        </button>
+                        <button
+                          onClick={() => { setSortField('fornecedor'); setSortDirection('desc'); }}
+                          className={`flex-1 py-1 text-[11px] rounded-md font-semibold cursor-pointer ${sortField === 'fornecedor' && sortDirection === 'desc' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                        >
+                          Z → A
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* 3. DATA */}
+                <th className="py-3 px-3 whitespace-nowrap min-w-[115px] relative">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <button
+                      onClick={() => handleSortToggle('data')}
+                      className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition"
+                      title="Clique para ordenar por data"
+                    >
+                      <span>Data</span>
+                      {sortField === 'data' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveFilterDropdown(activeFilterDropdown === 'data' ? null : 'data');
+                      }}
+                      className={`p-1 rounded-md transition cursor-pointer relative ${
+                        columnFilters.data ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/80 ring-1 ring-indigo-400/50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'
+                      }`}
+                      title="Filtrar por data"
+                    >
+                      <Filter className="w-3 h-3" />
+                      {columnFilters.data && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />}
+                    </button>
+                  </div>
+
+                  {/* Popover de Filtro: Data */}
+                  {activeFilterDropdown === 'data' && (
+                    <div className="absolute top-full left-3 mt-2 z-40 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 min-w-[210px] normal-case text-slate-800 dark:text-slate-100 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                        <span>Filtrar por Data</span>
+                        {columnFilters.data && (
+                          <button onClick={() => setColumnFilters(p => ({ ...p, data: '' }))} className="text-[10px] text-rose-500 hover:underline cursor-pointer">
+                            Limpar
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={columnFilters.data}
+                        onChange={(e) => setColumnFilters(p => ({ ...p, data: e.target.value }))}
+                        placeholder="Ex: 15/09 ou 2026..."
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
+                      />
+                      <div className="flex items-center gap-1 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                        <button
+                          onClick={() => { setSortField('data'); setSortDirection('desc'); }}
+                          className={`flex-1 py-1 text-[11px] rounded-md font-semibold cursor-pointer ${sortField === 'data' && sortDirection === 'desc' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                        >
+                          Recentes
+                        </button>
+                        <button
+                          onClick={() => { setSortField('data'); setSortDirection('asc'); }}
+                          className={`flex-1 py-1 text-[11px] rounded-md font-semibold cursor-pointer ${sortField === 'data' && sortDirection === 'asc' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                        >
+                          Antigos
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* 4. ITENS */}
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[75px]">
+                  <button
+                    onClick={() => handleSortToggle('itens')}
+                    className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition mx-auto"
+                    title="Clique para ordenar por quantidade de itens"
+                  >
+                    <span>Itens</span>
+                    {sortField === 'itens' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                    )}
+                  </button>
+                </th>
+
+                {/* 5. VOLUME PEÇAS */}
+                <th className="py-3 px-3 text-right whitespace-nowrap min-w-[115px]">
+                  <button
+                    onClick={() => handleSortToggle('pecas')}
+                    className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition ml-auto"
+                    title="Clique para ordenar por volume de peças"
+                  >
+                    <span>Volume Peças</span>
+                    {sortField === 'pecas' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                    )}
+                  </button>
+                </th>
+
+                {/* 6. VALOR TOTAL (R$) */}
+                <th className="py-3 px-3 text-right whitespace-nowrap min-w-[135px]">
+                  <button
+                    onClick={() => handleSortToggle('valor')}
+                    className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition ml-auto"
+                    title="Clique para ordenar por valor total"
+                  >
+                    <span>Valor Total (R$)</span>
+                    {sortField === 'valor' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                    )}
+                  </button>
+                </th>
+
+                {/* 7. FRETE (NOVA COLUNA SOLICITADA) */}
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[115px] relative">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <button
+                      onClick={() => handleSortToggle('frete')}
+                      className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition"
+                      title="Clique para ordenar por modalidade de frete"
+                    >
+                      <Truck className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Frete</span>
+                      {sortField === 'frete' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveFilterDropdown(activeFilterDropdown === 'frete' ? null : 'frete');
+                      }}
+                      className={`p-1 rounded-md transition cursor-pointer relative ${
+                        columnFilters.frete ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/80 ring-1 ring-indigo-400/50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'
+                      }`}
+                      title="Filtrar por modalidade de frete"
+                    >
+                      <Filter className="w-3 h-3" />
+                      {columnFilters.frete && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />}
+                    </button>
+                  </div>
+
+                  {/* Popover de Filtro: Frete */}
+                  {activeFilterDropdown === 'frete' && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-40 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 min-w-[190px] normal-case text-slate-800 dark:text-slate-100 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                        <span>Modalidade Frete</span>
+                        {columnFilters.frete && (
+                          <button onClick={() => setColumnFilters(p => ({ ...p, frete: '' }))} className="text-[10px] text-rose-500 hover:underline cursor-pointer">
+                            Limpar
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        <button
+                          onClick={() => { setColumnFilters(p => ({ ...p, frete: '' })); setActiveFilterDropdown(null); }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between cursor-pointer font-medium transition ${!columnFilters.frete ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' : 'hover:bg-slate-100 dark:hover:bg-slate-700/60'}`}
+                        >
+                          <span>Todos</span>
+                          <span className="font-mono text-[10px] text-slate-400">{orders.length}</span>
+                        </button>
+                        <button
+                          onClick={() => { setColumnFilters(p => ({ ...p, frete: 'CIF' })); setActiveFilterDropdown(null); }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between cursor-pointer font-bold transition ${columnFilters.frete === 'CIF' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'hover:bg-slate-100 dark:hover:bg-slate-700/60 text-emerald-700 dark:text-emerald-400'}`}
+                        >
+                          <span>CIF (Fornecedor)</span>
+                          <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">{freteCounts.CIF}</span>
+                        </button>
+                        <button
+                          onClick={() => { setColumnFilters(p => ({ ...p, frete: 'FOB' })); setActiveFilterDropdown(null); }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between cursor-pointer font-bold transition ${columnFilters.frete === 'FOB' ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300' : 'hover:bg-slate-100 dark:hover:bg-slate-700/60 text-amber-700 dark:text-amber-400'}`}
+                        >
+                          <span>FOB (Comprador)</span>
+                          <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">{freteCounts.FOB}</span>
+                        </button>
+                        <button
+                          onClick={() => { setColumnFilters(p => ({ ...p, frete: 'Retira' })); setActiveFilterDropdown(null); }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between cursor-pointer font-bold transition ${columnFilters.frete === 'Retira' ? 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300' : 'hover:bg-slate-100 dark:hover:bg-slate-700/60 text-sky-700 dark:text-sky-400'}`}
+                        >
+                          <span>Retira</span>
+                          <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300">{freteCounts.Retira}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* 8. STATUS */}
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[135px] relative">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <button
+                      onClick={() => handleSortToggle('status')}
+                      className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition"
+                      title="Clique para ordenar por status"
+                    >
+                      <span>Status</span>
+                      {sortField === 'status' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveFilterDropdown(activeFilterDropdown === 'status' ? null : 'status');
+                      }}
+                      className={`p-1 rounded-md transition cursor-pointer relative ${
+                        columnFilters.status ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/80 ring-1 ring-indigo-400/50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'
+                      }`}
+                      title="Filtrar por status"
+                    >
+                      <Filter className="w-3 h-3" />
+                      {columnFilters.status && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />}
+                    </button>
+                  </div>
+
+                  {/* Popover de Filtro: Status */}
+                  {activeFilterDropdown === 'status' && (
+                    <div className="absolute top-full right-0 mt-2 z-40 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 min-w-[210px] normal-case text-slate-800 dark:text-slate-100 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                        <span>Filtrar Status</span>
+                        {columnFilters.status && (
+                          <button onClick={() => setColumnFilters(p => ({ ...p, status: '' }))} className="text-[10px] text-rose-500 hover:underline cursor-pointer">
+                            Limpar
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        <button
+                          onClick={() => { setColumnFilters(p => ({ ...p, status: '' })); setActiveFilterDropdown(null); }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between cursor-pointer font-medium transition ${!columnFilters.status ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' : 'hover:bg-slate-100 dark:hover:bg-slate-700/60'}`}
+                        >
+                          <span>Todos</span>
+                          <span className="font-mono text-[10px] text-slate-400">{orders.length}</span>
+                        </button>
+                        {(['Em Cotação', 'Aprovado', 'Em Distribuição', 'Em Separação', 'Finalizado'] as const).map(st => (
+                          <button
+                            key={st}
+                            onClick={() => { setColumnFilters(p => ({ ...p, status: st })); setActiveFilterDropdown(null); }}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between cursor-pointer text-xs font-semibold transition ${columnFilters.status === st ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300' : 'hover:bg-slate-100 dark:hover:bg-slate-700/60'}`}
+                          >
+                            <span>{st}</span>
+                            <span className="font-mono text-[10px] text-slate-500">{countByStatus[st] || 0}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </th>
+
+                {/* 9. AVANÇAR ESTEIRA */}
                 <th className="py-3 px-3 text-center whitespace-nowrap min-w-[140px]">Avançar Esteira</th>
+
+                {/* 10. AÇÕES */}
                 <th className="py-3 px-3 text-center whitespace-nowrap min-w-[120px]">Ações</th>
               </tr>
             </thead>
+
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              {filteredOrders.length === 0 ? (
+              {processedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-slate-400">
-                    Nenhum pedido encontrado com os filtros selecionados.
+                  <td colSpan={10} className="text-center py-12 text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Search className="w-8 h-8 text-slate-300 dark:text-slate-600 stroke-1" />
+                      <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">Nenhum pedido encontrado</p>
+                      <p className="text-xs text-slate-400">Tente ajustar a busca ou os filtros aplicados nas colunas.</p>
+                      {(hasActiveColumnFilters || searchTerm) && (
+                        <button
+                          onClick={() => {
+                            setSearchTerm('');
+                            handleClearAllColumnFilters();
+                          }}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 transition cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Limpar todos os filtros
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((ord) => {
+                processedOrders.map((ord) => {
                   const totals = calculateOrderTotals(ord);
                   const totalPedido = totals.totalGeral;
                   const totalPecas = totals.totalPecas;
                   const statusAtual = ord.header.status || 'Em Cotação';
+                  const modalidadeFrete = getOrderFreteModalidade(ord);
+                  const rawFreteVal = Number(ord.header?.valorFrete ?? ord.header?.valorFreteGlobal ?? 0);
 
                   return (
                     <tr key={ord.header.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition group">
                       
+                      {/* Pedido / Número */}
                       <td className="py-3.5 px-4 font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
                         {ord.header.numeroPedido}
                       </td>
 
+                      {/* Fornecedor */}
                       <td className="py-3.5 px-3">
                         <div className="font-bold text-slate-900 dark:text-white">
                           {ord.header.fornecedor}
@@ -305,22 +1010,40 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         )}
                       </td>
 
+                      {/* Data */}
                       <td className="py-3.5 px-3 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
                         {toBrDate(ord.header.dataPedido || ord.header.createdAt)}
                       </td>
 
+                      {/* Itens */}
                       <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {totals.validItemsCount}
                       </td>
 
+                      {/* Volume Peças */}
                       <td className="py-3.5 px-3 text-right font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
                         {totalPecas.toLocaleString('pt-BR')} un
                       </td>
 
+                      {/* Valor Total */}
                       <td className="py-3.5 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                         R$ {totalPedido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
 
+                      {/* Modalidade Frete (NOVA COLUNA) */}
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                        <span className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-extrabold border uppercase tracking-wider ${getFreteBadgeClass(modalidadeFrete)}`}>
+                          <Truck className="w-3 h-3" />
+                          <span>{modalidadeFrete}</span>
+                        </span>
+                        {modalidadeFrete === 'FOB' && rawFreteVal > 0 && (
+                          <div className="text-[10px] font-mono text-amber-700 dark:text-amber-400 mt-0.5">
+                            R$ {rawFreteVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Status */}
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold border whitespace-nowrap ${getStatusBadgeClass(statusAtual)}`}>
                           {statusAtual}
@@ -366,6 +1089,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         )}
                       </td>
 
+                      {/* Ações */}
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           

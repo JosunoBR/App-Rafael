@@ -133,7 +133,15 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   };
 
   const handleSaveCurrentAsPreset = async () => {
-    if (!newPresetName.trim() || !onSavePreset) return;
+    const trimmedName = newPresetName.trim();
+    if (!trimmedName || !onSavePreset) return;
+
+    const totalAlloc = Object.values(allocations).reduce((a, b) => a + (Number(b) || 0), 0);
+    if (totalAlloc <= 0) {
+      alert('Distribua ao menos uma unidade nas lojas antes de salvar como novo modelo.');
+      return;
+    }
+
     const { storeWeights, reserveStockPercent } = extractPresetFromAllocations(
       allocations,
       item.qtdTotalUnidades,
@@ -142,7 +150,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
     );
     const newPreset: SeparationPreset = {
       id: 'preset_' + Date.now(),
-      name: newPresetName.trim(),
+      name: trimmedName,
       description: `Criado a partir de ${item.descricao}`,
       storeWeights,
       reserveStockPercent,
@@ -150,10 +158,14 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    await onSavePreset(newPreset);
-    setIsSavingPresetModal(false);
-    setNewPresetName('');
-    setSelectedPresetId(newPreset.id);
+    try {
+      await onSavePreset(newPreset);
+      setIsSavingPresetModal(false);
+      setNewPresetName('');
+      setSelectedPresetId(newPreset.id);
+    } catch (err: any) {
+      alert(`Erro ao salvar modelo no banco: ${err.message || 'Falha de comunicação'}`);
+    }
   };
 
   const handleSave = () => {

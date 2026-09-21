@@ -24,7 +24,8 @@ import {
   Bookmark,
   BookmarkPlus,
   Layers,
-  ChevronDown
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User, SeparationPreset } from '../shared/types';
 import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations, adjustSeparationReserveProportionally } from '../shared/separationEngine';
@@ -94,6 +95,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   const [selectedPresetId, setSelectedPresetId] = useState<string>(() => presets[0]?.id || 'preset_default_clusters');
   const [presetInputValue, setPresetInputValue] = useState<string>(() => presets[0]?.name || 'Padrão Rede (Clusters A, B e C)');
   const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState<boolean>(false);
+  const [isSavingPreset, setIsSavingPreset] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   const showFeedback = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
@@ -138,16 +140,20 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     showFeedback(`Padrão "${targetPreset.name}" aplicado a todos os ${updatedItems.length} produtos!`, 'success');
   };
 
-  // Selecionar um preset existente a partir da lista
+  // Selecionar um preset existente a partir da lista (sem sobrescrever a grade automaticamente)
   const handleSelectPreset = (preset: SeparationPreset) => {
     setSelectedPresetId(preset.id);
     setPresetInputValue(preset.name);
     setIsPresetDropdownOpen(false);
-    handleApplyPresetToAll(preset.id);
   };
 
-  // Salvar as proporções da 1ª linha de produtos diretamente no banco
+  // Salvar as proporções da 1ª linha de produtos diretamente no banco de dados SQLite
   const handleDirectSavePreset = async () => {
+    if (currentUser?.role === 'separacao') {
+      showFeedback('Seu perfil de conferente não possui permissão para criar modelos de separação.', 'error');
+      return;
+    }
+
     const name = presetInputValue.trim();
     if (!name) {
       showFeedback('Por favor, digite o nome do modelo para salvar.', 'error');
@@ -155,10 +161,25 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     }
     if (!onSavePreset) return;
 
-    // A primeira linha de produtos como referência
+    // Apenas a primeira linha de produtos serve de referência oficial para o modelo
     const firstItem = order.items[0];
     if (!firstItem) {
       showFeedback('Nenhum produto encontrado no pedido para servir de referência.', 'error');
+      return;
+    }
+
+    // Valida se a 1ª linha possui ao menos uma unidade distribuída nas lojas para não salvar modelo zerado
+    const totalAllocatedInFirstItem = activeStores.reduce((sum, s) => sum + (Number(firstItem.separacaoLojas?.[s.id]) || 0), 0);
+    if (totalAllocatedInFirstItem <= 0) {
+      showFeedback(`A 1ª linha (${firstItem.descricao || 'Produto 1'}) não possui unidades distribuídas nas lojas. Preencha a distribuição da 1ª linha antes de salvar o modelo.`, 'error');
+      return;
+    }
+
+    const existingPreset = presets.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+
+    // Não permitir sobrescrever o padrão oficial do sistema
+    if (existingPreset?.isDefault || name.toLowerCase() === 'padrão rede (clusters a, b e c)') {
+      showFeedback('O "Padrão Rede" é o modelo oficial fixo do sistema. Digite um nome personalizado para salvar seu modelo no banco.', 'error');
       return;
     }
 
@@ -169,19 +190,18 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
       stores
     );
 
-    const existingPreset = presets.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
-
     const newPreset: SeparationPreset = {
       id: existingPreset ? existingPreset.id : ('preset_' + Date.now()),
       name: name,
-      description: `Referência: 1ª linha (${firstItem.descricao})`,
+      description: `Referência: 1ª linha (${firstItem.descricao || 'Item 1'})`,
       storeWeights,
       reserveStockPercent,
-      isDefault: existingPreset ? existingPreset.isDefault : false,
+      isDefault: false,
       createdAt: existingPreset ? existingPreset.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
+    setIsSavingPreset(true);
     try {
       await onSavePreset(newPreset);
       setSelectedPresetId(newPreset.id);
@@ -189,7 +209,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
       setIsPresetDropdownOpen(false);
       showFeedback(`⭐ Modelo "${newPreset.name}" salvo no banco com base na 1ª linha!`, 'success');
     } catch (err: any) {
-      showFeedback(`Erro ao salvar modelo: ${err.message}`, 'error');
+      showFeedback(`Erro ao salvar modelo no banco: ${err.message || 'Falha de comunicação'}`, 'error');
+    } finally {
+      setIsSavingPreset(false);
     }
   };
 
@@ -900,17 +922,21 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <span>Aplicar</span>
           </button>
 
-          {/* Botão Salvar */}
-          {onSavePreset && (
+          {/* Botão Salvar (visível apenas para perfis com permissão de gestão de compras/depósito) */}
+          {onSavePreset && currentUser?.role !== 'separacao' && (
             <button
               type="button"
               onClick={handleDirectSavePreset}
-              disabled={!presetInputValue.trim()}
-              className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer disabled:opacity-50"
-              title="Salvar modelo com as proporções da 1ª linha de produtos"
+              disabled={!presetInputValue.trim() || isSavingPreset}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer disabled:opacity-50"
+              title="Salvar modelo no banco de dados SQLite com as proporções da 1ª linha de produtos"
             >
-              <Bookmark className="w-3.5 h-3.5" />
-              <span>Salvar</span>
+              {isSavingPreset ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Bookmark className="w-3.5 h-3.5" />
+              )}
+              <span>{isSavingPreset ? 'Salvando...' : 'Salvar'}</span>
             </button>
           )}
 

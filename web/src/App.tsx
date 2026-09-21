@@ -2147,42 +2147,48 @@ export function App() {
   const handleSaveSeparationPreset = async (preset: SeparationPreset) => {
     try {
       const saved = await saveSeparationPresetToDb(preset);
-      setSeparationPresets(prev => {
-        const existingIdx = prev.findIndex(p => p.id === saved.id);
-        const updated = existingIdx >= 0
-          ? prev.map(p => p.id === saved.id ? saved : p)
-          : [...prev, saved];
-        saveSeparationPresetsList(updated);
-        return updated;
-      });
+      const refreshed = await fetchSeparationPresetsFromDb().catch(() => null);
+      if (refreshed && refreshed.length > 0) {
+        setSeparationPresets(refreshed);
+        saveSeparationPresetsList(refreshed);
+      } else {
+        setSeparationPresets(prev => {
+          const existingIdx = prev.findIndex(p => p.id === saved.id);
+          const updated = existingIdx >= 0
+            ? prev.map(p => p.id === saved.id ? saved : p)
+            : [...prev, saved];
+          saveSeparationPresetsList(updated);
+          return updated;
+        });
+      }
       showToast(`⭐ Modelo "${saved.name}" salvo no SQLite!`, 'success');
       return saved;
     } catch (err: any) {
-      console.warn('Persistindo preset localmente:', err);
-      setSeparationPresets(prev => {
-        const existingIdx = prev.findIndex(p => p.id === preset.id);
-        const updated = existingIdx >= 0
-          ? prev.map(p => p.id === preset.id ? preset : p)
-          : [...prev, preset];
-        saveSeparationPresetsList(updated);
-        return updated;
-      });
-      showToast(`Modelo "${preset.name}" salvo localmente.`, 'info');
-      return preset;
+      console.error('Erro ao persistir preset no SQLite:', err);
+      showToast(`Erro ao salvar modelo no banco: ${err.message || 'Falha de comunicação'}`, 'error');
+      throw err;
     }
   };
 
   const handleDeleteSeparationPreset = async (presetId: string) => {
     try {
       await deleteSeparationPresetFromDb(presetId);
-      setSeparationPresets(prev => {
-        const updated = prev.filter(p => p.id !== presetId);
-        saveSeparationPresetsList(updated);
-        return updated;
-      });
-      showToast('Modelo de separação removido com sucesso.', 'info');
+      const refreshed = await fetchSeparationPresetsFromDb().catch(() => null);
+      if (refreshed && refreshed.length > 0) {
+        setSeparationPresets(refreshed);
+        saveSeparationPresetsList(refreshed);
+      } else {
+        setSeparationPresets(prev => {
+          const updated = prev.filter(p => p.id !== presetId);
+          saveSeparationPresetsList(updated);
+          return updated;
+        });
+      }
+      showToast('Modelo de separação removido do banco com sucesso.', 'info');
     } catch (err: any) {
+      console.error('Erro ao remover modelo do banco:', err);
       showToast(`Erro ao remover modelo: ${err.message}`, 'error');
+      throw err;
     }
   };
 

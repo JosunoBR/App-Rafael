@@ -17,7 +17,8 @@ import {
   Layers,
   Search,
   Filter,
-  Edit3
+  Edit3,
+  History
 } from 'lucide-react';
 import { FinancialEntry, FinancialStatus, FinancialCategory } from '../shared/types';
 import { toBrDate } from '../utils/masks';
@@ -30,6 +31,7 @@ interface FinancialDailyViewProps {
   onSelectEntry: (entry: FinancialEntry) => void;
   onDeleteEntry: (id: string) => void;
   onEditEntry?: (entry: FinancialEntry) => void;
+  onViewAudit?: (entry: FinancialEntry) => void;
   metaDiaria?: number;
   selectedIds?: string[];
   onToggleSelect?: (id: string) => void;
@@ -53,6 +55,7 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
   onSelectEntry,
   onDeleteEntry,
   onEditEntry,
+  onViewAudit,
   metaDiaria,
   selectedIds,
   onToggleSelect
@@ -459,6 +462,16 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                                     className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-400 hover:text-amber-600 transition-all cursor-pointer"
                                   >
                                     <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {onViewAudit && (
+                                  <button
+                                    type="button"
+                                    title="Ver Histórico de Auditoria"
+                                    onClick={() => onViewAudit(item)}
+                                    className="p-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-400 hover:text-purple-600 transition-all cursor-pointer"
+                                  >
+                                    <History className="w-3.5 h-3.5" />
                                   </button>
                                 )}
                               </div>

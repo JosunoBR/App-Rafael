@@ -834,10 +834,12 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
 
     const updatedItem = { ...item, [field]: value };
 
-    // Se o campo alterado for a descrição, verifica se corresponde a um produto já cadastrado no catálogo do fornecedor
+    // Se o campo alterado for a descrição, só herda do catálogo se o item ainda NÃO tiver um código próprio definido,
+    // permitindo perfeitamente produtos com a mesma descrição e códigos diferentes
     if (field === 'descricao') {
       const cleanDesc = String(value || '').trim().toLowerCase();
-      if (cleanDesc && catalogLookup.byDesc.has(cleanDesc)) {
+      const currentCode = (updatedItem.codigoInterno || updatedItem.codigo || '').trim();
+      if (!currentCode && cleanDesc && catalogLookup.byDesc.has(cleanDesc)) {
         const catProd = catalogLookup.byDesc.get(cleanDesc)!;
         if (catProd.codigoInterno || catProd.codigo) {
           updatedItem.codigoInterno = catProd.codigoInterno || catProd.codigo;

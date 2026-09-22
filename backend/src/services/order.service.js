@@ -1,5 +1,6 @@
 const orderRepository = require('../repositories/orderRepository');
 const fiscalRepository = require('../repositories/fiscalRepository');
+const distributionAuditRepo = require('../repositories/distributionAuditRepository');
 
 class OrderService {
   async listOrders() {
@@ -355,6 +356,14 @@ class OrderService {
       throw err;
     }
 
+    // Validação de Regra de Negócio: Não pode confirmar recebimento em Cotação ou Aprovado
+    const currentStatus = order.header.status || 'Em Cotação';
+    if (currentStatus === 'Em Cotação' || currentStatus === 'Rascunho' || currentStatus === 'Aprovado') {
+      const err = new Error(`Não é permitido confirmar o recebimento de pedidos no status "${currentStatus}". O pedido deve estar em Distribuição, Separação ou Faturamento.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
     // Atualizar campos de recebimento no cabeçalho
     order.header.recebidoMatriz = true;
     order.header.dataRecebimentoMatriz = dataRecebimento || new Date().toISOString().split('T')[0];
@@ -412,6 +421,212 @@ class OrderService {
     return {
       success: true,
       message: `Recebimento do pedido ${saved.header.numeroPedido} confirmado na Matriz!${autorizarBoletos && currentUser.role === 'diretoria' ? ' Boletos liberados para o Financeiro.' : ''}`,
+      order: saved
+    };
+  }
+
+  /**
+   * Envia o pedido aprovado para a Distribuição entre as lojas.
+   * Permitido: diretoria, comprador, deposito
+   */
+  async sendToDistribution(orderId, currentUser) {
+    const allowedRoles = ['diretoria', 'comprador', 'deposito'];
+    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
+      const err = new Error('Apenas Diretoria, Comprador ou Depósito podem enviar o pedido para Distribuição.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    order.header.status = 'Em Distribuição';
+    order.header.updatedAt = new Date().toISOString();
+
+    const saved = await orderRepository.save(order);
+
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || 'Operador',
+      usuarioRole: currentUser.role,
+      acao: 'ENVIO_DISTRIBUICAO',
+      observacoes: 'Pedido enviado para a esteira de Distribuição entre as lojas'
+    }).catch(e => console.error('Erro ao registrar log de auditoria:', e));
+
+    return {
+      success: true,
+      message: `Pedido ${saved.header.numeroPedido} enviado para Distribuição com sucesso!`,
+      order: saved
+    };
+  }
+
+  /**
+   * Conclui a distribuição física entre as 20 lojas e libera o pedido para o perfil Separação.
+   * Permitido: deposito, diretoria
+   */
+  async releaseToSeparation(orderId, payload = {}, currentUser) {
+    const allowedRoles = ['deposito', 'diretoria'];
+    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
+      const err = new Error('Apenas o Depósito ou a Diretoria podem concluir a distribuição e liberar para a Separação.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Calcular estatísticas de lojas afetadas e peças totais
+    let totalPecas = 0;
+    const lojasSet = new Set();
+    if (Array.isArray(order.items)) {
+      order.items.forEach(item => {
+        if (item.gradeDistribucao && typeof item.gradeDistribucao === 'object') {
+          Object.entries(item.gradeDistribucao).forEach(([loja, q]) => {
+            const qtd = Number(q) || 0;
+            if (qtd > 0) {
+              lojasSet.add(loja);
+              totalPecas += qtd;
+            }
+          });
+        }
+      });
+    }
+
+    order.header.status = 'Em Separação';
+    order.header.distribuicaoConcluida = true;
+    order.header.distribuidoPor = currentUser.nome || 'Depósito';
+    order.header.dataDistribuicao = new Date().toISOString();
+    order.header.updatedAt = new Date().toISOString();
+    if (payload.observacoes) {
+      order.header.observacaoDistribuicao = payload.observacoes;
+    }
+
+    const saved = await orderRepository.save(order);
+
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || 'Depósito',
+      usuarioRole: currentUser.role,
+      acao: 'LIBERADO_SEPARACAO',
+      lojasAfetadasJson: Array.from(lojasSet),
+      totalPecasDistribuidas: totalPecas,
+      observacoes: payload.observacoes || 'Distribuição concluída entre as lojas e liberada para o perfil Separação'
+    }).catch(e => console.error('Erro ao registrar log de auditoria:', e));
+
+    return {
+      success: true,
+      message: `Distribuição concluída! Pedido ${saved.header.numeroPedido} liberado para a equipe de Separação.`,
+      order: saved
+    };
+  }
+
+  /**
+   * Conclui a conferência física/apontamento de avarias e encaminha o pedido para o Faturamento.
+   * Permitido: separacao, deposito, diretoria
+   */
+  async sendToFaturamento(orderId, payload = {}, currentUser) {
+    const allowedRoles = ['separacao', 'deposito', 'diretoria'];
+    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
+      const err = new Error('Apenas Separação, Depósito ou Diretoria podem encaminhar o pedido para Faturamento.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    order.header.status = 'Faturamento';
+    order.header.separacaoConcluida = true;
+    order.header.separadoPor = currentUser.nome || 'Conferente Separação';
+    order.header.dataSeparacao = new Date().toISOString();
+    order.header.updatedAt = new Date().toISOString();
+
+    if (payload.avarias) {
+      order.header.avariasApontadas = payload.avarias;
+    }
+    if (payload.observacoes) {
+      order.header.observacaoSeparacao = payload.observacoes;
+    }
+
+    const saved = await orderRepository.save(order);
+
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || 'Separação',
+      usuarioRole: currentUser.role,
+      acao: 'CONFERENCIA_SEPARACAO',
+      detalhesJson: { avarias: payload.avarias || [] },
+      observacoes: payload.observacoes || 'Conferência física e separação concluídas, pedido encaminhado para Faturamento'
+    }).catch(e => console.error('Erro ao registrar log de auditoria:', e));
+
+    return {
+      success: true,
+      message: `Conferência concluída! Pedido ${saved.header.numeroPedido} encaminhado para Faturamento.`,
+      order: saved
+    };
+  }
+
+  /**
+   * Finaliza o pedido na esteira (boletos validados e conferência física concluída).
+   * Permitido: faturamento, diretoria
+   */
+  async finalizeOrder(orderId, currentUser) {
+    const allowedRoles = ['faturamento', 'diretoria'];
+    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
+      const err = new Error('Apenas Faturamento ou Diretoria podem finalizar o pedido.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    order.header.status = 'Finalizado';
+    order.header.finalizadoPor = currentUser.nome || 'Faturamento';
+    order.header.dataFinalizacao = new Date().toISOString();
+    order.header.updatedAt = new Date().toISOString();
+
+    const saved = await orderRepository.save(order);
+
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || 'Faturamento',
+      usuarioRole: currentUser.role,
+      acao: 'FINALIZACAO_PEDIDO',
+      observacoes: 'Pedido finalizado com sucesso na esteira'
+    }).catch(e => console.error('Erro ao registrar log de auditoria:', e));
+
+    return {
+      success: true,
+      message: `Pedido ${saved.header.numeroPedido} finalizado com sucesso!`,
       order: saved
     };
   }

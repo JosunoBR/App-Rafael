@@ -78,7 +78,7 @@ class FinancialController {
   async updateEntry(req, res) {
     try {
       const { id } = req.params;
-      const updated = await financialService.updateEntry(id, req.body);
+      const updated = await financialService.updateEntry(id, req.body, req.user);
       return res.status(200).json({
         success: true,
         data: updated,
@@ -94,7 +94,7 @@ class FinancialController {
     try {
       const { id } = req.params;
       const { dataPagamento, valorPago, observacao } = req.body;
-      const paid = await financialService.markAsPaid(id, { dataPagamento, valorPago, observacao });
+      const paid = await financialService.markAsPaid(id, { dataPagamento, valorPago, observacao }, req.user);
       return res.status(200).json({
         success: true,
         data: paid,
@@ -112,7 +112,7 @@ class FinancialController {
       if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ success: false, error: 'Lista de IDs para baixa em lote não informada.' });
       }
-      const updatedList = await financialService.markMultipleAsPaid(ids, { dataPagamento, observacao });
+      const updatedList = await financialService.markMultipleAsPaid(ids, { dataPagamento, observacao }, req.user);
       return res.status(200).json({
         success: true,
         data: updatedList,

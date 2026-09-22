@@ -185,7 +185,7 @@ export interface OrderItem {
   ruptura?: boolean;            // Item em ruptura (não será entregue pelo fornecedor - descontado de todos os cálculos do pedido)
 }
 
-export type OrderStatus = 'Em Cotação' | 'Aprovado' | 'Em Distribuição' | 'Em Separação' | 'Finalizado';
+export type OrderStatus = 'Em Cotação' | 'Aprovado' | 'Em Distribuição' | 'Em Separação' | 'Faturamento' | 'Finalizado';
 
 export interface OrderHeader {
   id: string;
@@ -243,6 +243,17 @@ export interface OrderHeader {
   dataLiberacaoSeparacao?: string;
   finalizadoPor?: string;
   dataFinalizacao?: string;
+
+  // Distribuição & Separação (Esteira Unificada)
+  distribuicaoConcluida?: boolean;
+  distribuidoPor?: string;
+  dataDistribuicao?: string;
+  observacaoDistribuicao?: string;
+  separacaoConcluida?: boolean;
+  separadoPor?: string;
+  dataSeparacao?: string;
+  observacaoSeparacao?: string;
+  avariasApontadas?: any[];
 
   // Recebimento Físico na Matriz (Marco de Entrega do Fornecedor)
   recebidoMatriz?: boolean;            // true = carga recebida fisicamente no CD/Matriz
@@ -334,8 +345,8 @@ export interface PurchaseOrder {
   installments?: PaymentInstallment[];
 }
 
-// 7. Tipos de Usuários & Níveis de Acesso (RBAC: Diretoria, Comprador, Depósito, Separação)
-export type UserRole = 'diretoria' | 'comprador' | 'deposito' | 'separacao';
+// 7. Tipos de Usuários & Níveis de Acesso (RBAC: Diretoria, Comprador, Depósito, Separação, Faturamento)
+export type UserRole = 'diretoria' | 'comprador' | 'deposito' | 'separacao' | 'faturamento';
 
 export interface User {
   id: string;
@@ -428,5 +439,41 @@ export interface FinancialSummary {
   byCategory: Record<string, { total: number; count: number; pago: number }>;
   byStore: Record<string, { total: number; count: number; pago: number }>;
   dailyList: FinancialDaySummary[];
+}
+
+export interface DistributionAuditLog {
+  id: string;
+  orderId: string;
+  numeroPedido: string;
+  fornecedor: string;
+  usuarioId?: string;
+  usuarioNome: string;
+  usuarioRole: string;
+  acao: string;
+  lojasAfetadasJson?: string | string[];
+  totalPecasDistribuidas?: number;
+  detalhesJson?: string | Record<string, any>;
+  observacoes?: string;
+  timestamp: string;
+  createdAt: string;
+}
+
+export interface FinancialAuditLog {
+  id: string;
+  entryId?: string;
+  orderId?: string;
+  numeroPedido?: string;
+  descricao?: string;
+  usuarioId?: string;
+  usuarioNome: string;
+  usuarioRole: string;
+  acao: string;
+  campoAlterado?: string;
+  valorAnterior?: string;
+  valorNovo?: string;
+  snapshotJson?: string | Record<string, any>;
+  observacao?: string;
+  timestamp: string;
+  createdAt: string;
 }
 

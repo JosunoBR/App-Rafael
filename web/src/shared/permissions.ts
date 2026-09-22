@@ -39,10 +39,12 @@ export function canAccessTab(role?: UserRole | null, tab?: ActiveNavTab | null):
       return role === 'diretoria' || role === 'comprador' || role === 'deposito';
 
     case 'dashboard':
-    case 'financial':
     case 'fiscal':
     case 'users':
       return role === 'diretoria'; // Restrito à Diretoria
+
+    case 'financial':
+      return role === 'diretoria' || role === 'faturamento'; // Diretoria e Faturamento
 
     case 'suppliers':
     case 'history':
@@ -62,7 +64,7 @@ export function canCreateOrEditOrders(role?: UserRole | null): boolean {
 
 /**
  * Permite editar pedidos que já foram fechados ou que estão em andamento na esteira
- * (ex: Aprovado, Em Distribuição, Em Separação, Finalizado).
+ * (ex: Aprovado, Em Distribuição, Em Separação, Faturamento, Finalizado).
  * Regra: Exclusivo da Diretoria Executiva.
  */
 export function canEditClosedOrders(role?: UserRole | null): boolean {
@@ -87,9 +89,10 @@ export function canEditSpecificOrder(role?: UserRole | null, orderStatus?: strin
 
 /**
  * Permite visualizar valores monetários de compra (custo, R$ total de cotações, etc.)
+ * Estritamente bloqueado para Depósito e Separação conforme regra de negócio.
  */
 export function canViewFinancialValues(role?: UserRole | null): boolean {
-  return role === 'diretoria' || role === 'comprador';
+  return role === 'diretoria' || role === 'comprador' || role === 'faturamento';
 }
 
 /**
@@ -107,6 +110,13 @@ export function canManagePipelineDistribution(role?: UserRole | null): boolean {
 }
 
 /**
+ * Permite gerenciar faturamento e boletos
+ */
+export function canManageFaturamento(role?: UserRole | null): boolean {
+  return role === 'diretoria' || role === 'faturamento';
+}
+
+/**
  * Permite aprovar formalmente pedidos na esteira
  */
 export function canApproveOrder(role?: UserRole | null): boolean {
@@ -118,6 +128,7 @@ export function canApproveOrder(role?: UserRole | null): boolean {
  */
 export function getDefaultNavForRole(role?: UserRole | null): ActiveNavTab {
   if (role === 'separacao') return 'separation';
+  if (role === 'faturamento') return 'financial';
   if (role === 'deposito') return 'home';
   return 'home';
 }
@@ -125,9 +136,15 @@ export function getDefaultNavForRole(role?: UserRole | null): ActiveNavTab {
 /**
  * Permite confirmar o recebimento físico de um pedido na Matriz (entrega do fornecedor).
  * Perfil 'separacao' NÃO pode confirmar entrega — é restrito à conferência na doca.
+ * Regra: Pedidos em 'Em Cotação', 'Rascunho' ou 'Aprovado' NÃO podem ter recebimento confirmado.
+ * O pedido precisa estar no mínimo em Distribuição.
  */
-export function canConfirmReceipt(role?: UserRole | null): boolean {
-  return role === 'diretoria' || role === 'comprador' || role === 'deposito';
+export function canConfirmReceipt(role?: UserRole | null, orderStatus?: string | null): boolean {
+  const allowedRole = role === 'diretoria' || role === 'comprador' || role === 'deposito';
+  if (!allowedRole) return false;
+  if (!orderStatus) return true;
+  const blockedStatuses = ['Em Cotação', 'Rascunho', 'Aprovado'];
+  return !blockedStatuses.includes(orderStatus);
 }
 
 /**

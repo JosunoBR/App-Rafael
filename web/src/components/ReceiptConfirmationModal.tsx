@@ -29,8 +29,10 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
   const isDiretoria = canAuthorizeFinancialRelease(currentUser?.role);
   const totalPecas = order.items?.reduce((s, it) => s + (it.qtdTotalUnidades || 0), 0) || 0;
   const totalVolumes = order.items?.reduce((s, it) => s + (it.qtdPacotes || 0), 0) || 0;
+  const isStatusBlocked = order.header.status === 'Em Cotação' || order.header.status === 'Rascunho' || order.header.status === 'Aprovado';
 
   const handleSubmit = async () => {
+    if (isStatusBlocked) return;
     setIsSubmitting(true);
     try {
       await onConfirm({
@@ -68,6 +70,17 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Bloqueio de status anterior à distribuição */}
+        {isStatusBlocked && (
+          <div className="m-4 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+            <div>
+              <p className="font-bold">Recebimento Bloqueado:</p>
+              <p>Pedidos em "{order.header.status || 'Em Cotação'}" não podem ter o recebimento confirmado. O pedido precisa ser aprovado e encaminhado para Distribuição.</p>
+            </div>
+          </div>
+        )}
 
         {/* Resumo do Pedido */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
@@ -186,7 +199,7 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!dataRecebimento || isSubmitting}
+            disabled={!dataRecebimento || isSubmitting || isStatusBlocked}
             className="px-5 py-2.5 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-600/25 transition flex items-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isSubmitting ? (

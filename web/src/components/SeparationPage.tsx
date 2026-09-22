@@ -49,6 +49,11 @@ interface SeparationPageProps {
   onFinalizeOrder?: (order: PurchaseOrder) => void;
   onReleaseToSeparation?: (order: PurchaseOrder) => void;
   onApproveOrder?: (order: PurchaseOrder) => void;
+  onSendToDistribution?: (order: PurchaseOrder) => void;
+  onSendToFaturamento?: (order: PurchaseOrder) => void;
+  onConfirmReceipt?: (order: PurchaseOrder) => void;
+  onAuthorizeFinancial?: (order: PurchaseOrder) => void;
+  onViewAuditLogs?: (order: PurchaseOrder) => void;
   onSavePreset?: (preset: SeparationPreset) => Promise<any> | void;
   onDeletePreset?: (id: string) => Promise<any> | void;
 }
@@ -86,6 +91,11 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   onFinalizeOrder,
   onReleaseToSeparation,
   onApproveOrder,
+  onSendToDistribution,
+  onSendToFaturamento,
+  onConfirmReceipt,
+  onAuthorizeFinancial,
+  onViewAuditLogs,
   presets = [],
   onSavePreset,
   onDeletePreset
@@ -675,11 +685,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         order={order}
         currentUser={currentUser}
         onApproveOrder={onApproveOrder}
+        onSendToDistribution={onSendToDistribution}
         onReleaseToSeparation={onReleaseToSeparation}
         onOpenSeparation={(ord) => {
           if (onSelectOrder) onSelectOrder(ord);
         }}
+        onSendToFaturamento={onSendToFaturamento}
         onFinalizeSeparation={onFinalizeOrder}
+        onConfirmReceipt={onConfirmReceipt}
+        onAuthorizeFinancial={onAuthorizeFinancial}
+        onViewAuditLogs={onViewAuditLogs}
       />
 
       {/* Banner Informativo quando o pedido ainda NÃO foi recebido fisicamente na Matriz */}

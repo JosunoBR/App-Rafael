@@ -1,4 +1,4 @@
-import { PurchaseOrder, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition, FinancialEntry, FinancialSummary } from '../shared/types';
+import { PurchaseOrder, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition, FinancialEntry, FinancialSummary, DistributionAuditLog, FinancialAuditLog } from '../shared/types';
 import { API_BASE_URL } from './config';
 import { getNextOrderNumber } from './storage';
 
@@ -566,5 +566,53 @@ export async function restoreDatabaseBackupApi(backupData: any): Promise<{
 
 export async function exportDatabaseBackupApi(): Promise<Record<string, string>> {
   const res = await apiFetch('/config/export-backup');
+  return res.json();
+}
+
+export async function sendOrderToDistributionApi(orderId: string): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
+  const res = await apiFetch(`/orders/${orderId}/send-to-distribution`, {
+    method: 'POST'
+  });
+  return res.json();
+}
+
+export async function releaseOrderToSeparationApi(orderId: string, payload: any = {}): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
+  const res = await apiFetch(`/orders/${orderId}/release-to-separation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+export async function sendOrderToFaturamentoApi(orderId: string, payload: any = {}): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
+  const res = await apiFetch(`/orders/${orderId}/send-to-faturamento`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+export async function finalizeOrderPipelineApi(orderId: string): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
+  const res = await apiFetch(`/orders/${orderId}/finalize`, {
+    method: 'POST'
+  });
+  return res.json();
+}
+
+export async function fetchDistributionAuditLogs(orderId?: string): Promise<DistributionAuditLog[]> {
+  const url = orderId ? `/audit/distribution/${orderId}` : '/audit/distribution';
+  const res = await apiFetch(url);
+  return res.json();
+}
+
+export async function fetchFinancialAuditLogs(params: { entryId?: string; orderId?: string } = {}): Promise<FinancialAuditLog[]> {
+  const query = new URLSearchParams();
+  if (params.entryId) query.append('entryId', params.entryId);
+  if (params.orderId) query.append('orderId', params.orderId);
+  const qs = query.toString();
+  const url = qs ? `/audit/financial?${qs}` : '/audit/financial';
+  const res = await apiFetch(url);
   return res.json();
 }

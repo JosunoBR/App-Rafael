@@ -18,7 +18,8 @@ import {
   Lock,
   Mail,
   Phone,
-  Briefcase
+  Briefcase,
+  Receipt
 } from 'lucide-react';
 import { User, UserRole } from '../shared/types';
 import { maskPhone } from '../utils/masks';
@@ -159,6 +160,13 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
             📦 Separação & Doca
           </span>
         );
+      case 'faturamento':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
+            <Receipt className="w-3 h-3 text-purple-600" />
+            💳 Faturamento & Boletos
+          </span>
+        );
       default:
         return null;
     }
@@ -235,6 +243,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
             <option value="comprador">🛒 Compras & Cotações</option>
             <option value="deposito">🏢 Depósito & CD</option>
             <option value="separacao">📦 Separação & Doca</option>
+            <option value="faturamento">💳 Faturamento & Boletos</option>
           </select>
         </div>
 
@@ -375,6 +384,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                     <option value="comprador">🛒 Compras (Cotação & Fornecedores)</option>
                     <option value="deposito">🏢 Depósito (Estoque & Rateio)</option>
                     <option value="separacao">📦 Separação (Doca & Lojas)</option>
+                    <option value="faturamento">💳 Faturamento (Boletos & Financeiro)</option>
                   </select>
                 </div>
 

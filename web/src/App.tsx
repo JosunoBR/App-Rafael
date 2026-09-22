@@ -82,6 +82,9 @@ import {
 import { 
   DeleteOrderConfirmModal 
 } from './components/DeleteOrderConfirmModal';
+import { 
+  OrderAuditModal 
+} from './components/OrderAuditModal';
 
 import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem, SeparationPreset, FiscalPreset } from './shared/types';
 import { 
@@ -153,7 +156,11 @@ import {
   verifyServerSession,
   isJwtExpired,
   confirmReceiptInDb,
-  authorizeFinancialInDb
+  authorizeFinancialInDb,
+  sendOrderToDistributionApi,
+  releaseOrderToSeparationApi,
+  sendOrderToFaturamentoApi,
+  finalizeOrderPipelineApi
 } from './utils/api';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
 import { exportOrderToExcel } from './utils/excelExporter';
@@ -275,6 +282,7 @@ export function App() {
   const [supplierModalEditTarget, setSupplierModalEditTarget] = useState<Supplier | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [receiptModalOrder, setReceiptModalOrder] = useState<PurchaseOrder | null>(null);
+  const [pipelineAuditOrder, setPipelineAuditOrder] = useState<PurchaseOrder | null>(null);
 
   // Lista consolidada de pedidos (o pedido em edição em memória sobrepõe a versão antiga salva)
   const effectiveOrders = useMemo(() => {
@@ -565,9 +573,11 @@ export function App() {
       const assignedSupplierId = order.header.supplierId || fallbackSupplier?.id || '';
       const assignedSupplierNome = order.header.fornecedor || fallbackSupplier?.razaoSocial || '';
 
-      // 🛡️ Busca primeiro por código; se for por descrição, busca estritamente no catálogo DO MESMO FORNECEDOR
-      const existing = (code ? existingCodeSet.get(code) : undefined) || 
-                       (cleanDesc ? (existingDescSet.get(`${assignedSupplierId}:::${cleanDesc}`) || existingDescSet.get(`:::${cleanDesc}`)) : undefined);
+      // 🛡️ Se o item já tiver código próprio informado, busca estritamente por esse código.
+      // Se NÃO tiver código, busca por descrição. Isso permite que produtos com a mesma descrição mas códigos distintos sejam produtos separados no catálogo.
+      const existing = code 
+        ? existingCodeSet.get(code) 
+        : (cleanDesc ? (existingDescSet.get(`${assignedSupplierId}:::${cleanDesc}`) || existingDescSet.get(`:::${cleanDesc}`)) : undefined);
 
       if (!existing) {
         const codInterno = it.codigoInterno || it.codigo || `PRD-${String(currentProds.length + 1).padStart(3, '0')}`;
@@ -1739,6 +1749,81 @@ export function App() {
     }
   };
 
+  // Handler para Envio do Pedido Aprovado para a Distribuição das Lojas
+  const handleSendToDistribution = async (orderToSend: PurchaseOrder) => {
+    try {
+      const res = await sendOrderToDistributionApi(orderToSend.header.id);
+      const updatedOrder = res.order || {
+        ...orderToSend,
+        header: {
+          ...orderToSend.header,
+          status: 'Em Distribuição',
+          updatedAt: new Date().toISOString()
+        }
+      };
+      saveOrderToHistory(updatedOrder);
+      const refreshed = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(refreshed);
+      setOrder(updatedOrder);
+      showToast(`Pedido ${updatedOrder.header.numeroPedido} enviado para a Distribuição das Lojas!`, 'success');
+    } catch (err: any) {
+      const updatedOrder: PurchaseOrder = {
+        ...orderToSend,
+        header: {
+          ...orderToSend.header,
+          status: 'Em Distribuição' as any,
+          updatedAt: new Date().toISOString()
+        }
+      };
+      await saveOrderToDb(updatedOrder).catch(() => {});
+      saveOrderToHistory(updatedOrder);
+      setSavedOrders(loadSavedOrdersList());
+      setOrder(updatedOrder);
+      showToast(`Pedido ${updatedOrder.header.numeroPedido} enviado para Distribuição!`, 'success');
+    }
+  };
+
+  // Handler para Conclusão de Separação e Envio para Faturamento
+  const handleSendToFaturamento = async (orderToSend: PurchaseOrder) => {
+    try {
+      const res = await sendOrderToFaturamentoApi(orderToSend.header.id);
+      const updatedOrder = res.order || {
+        ...orderToSend,
+        header: {
+          ...orderToSend.header,
+          status: 'Faturamento',
+          separacaoConcluida: true,
+          separadoPor: currentUser?.nome || 'Separação',
+          dataSeparacao: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      };
+      saveOrderToHistory(updatedOrder);
+      const refreshed = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(refreshed);
+      setOrder(updatedOrder);
+      confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
+      showToast(`Separação concluída! Pedido ${updatedOrder.header.numeroPedido} encaminhado para Faturamento.`, 'success');
+    } catch (err: any) {
+      const updatedOrder: PurchaseOrder = {
+        ...orderToSend,
+        header: {
+          ...orderToSend.header,
+          status: 'Faturamento' as any,
+          separacaoConcluida: true,
+          separadoPor: currentUser?.nome || 'Separação',
+          dataSeparacao: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      };
+      await saveOrderToDb(updatedOrder).catch(() => {});
+      saveOrderToHistory(updatedOrder);
+      setSavedOrders(loadSavedOrdersList());
+      setOrder(updatedOrder);
+      showToast(`Pedido ${updatedOrder.header.numeroPedido} encaminhado para Faturamento!`, 'info');
+    }
+  };
+
   // Atualização direta de parcela / acordo comercial
   const handleUpdateInstallment = async (orderId: string, updatedInstallment: PaymentInstallment) => {
     try {
@@ -2749,6 +2834,7 @@ export function App() {
                     order={order}
                     currentUser={currentUser}
                     onApproveOrder={handleApproveOrder}
+                    onSendToDistribution={handleSendToDistribution}
                     onOpenDistribution={(ord) => {
                       setOrder(ord);
                       setActiveNav('separation');
@@ -2758,9 +2844,11 @@ export function App() {
                       setOrder(ord);
                       setActiveNav('separation');
                     }}
+                    onSendToFaturamento={handleSendToFaturamento}
                     onFinalizeSeparation={handleFinalizeSeparation}
                     onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
                     onAuthorizeFinancial={handleAuthorizeFinancial}
+                    onViewAuditLogs={(ord) => setPipelineAuditOrder(ord)}
                   />
 
                   {/* Banner Informativo de Pedido Fechado / Edição da Diretoria */}
@@ -2910,6 +2998,11 @@ export function App() {
                     onFinalizeOrder={handleFinalizeSeparation}
                     onReleaseToSeparation={handleReleaseToSeparation}
                     onApproveOrder={handleApproveOrder}
+                    onSendToDistribution={handleSendToDistribution}
+                    onSendToFaturamento={handleSendToFaturamento}
+                    onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
+                    onAuthorizeFinancial={handleAuthorizeFinancial}
+                    onViewAuditLogs={(ord) => setPipelineAuditOrder(ord)}
                     onSavePreset={handleSaveSeparationPreset}
                     onDeletePreset={handleDeleteSeparationPreset}
                   />
@@ -3122,6 +3215,14 @@ export function App() {
           currentUser={currentUser}
           onConfirm={handleConfirmReceipt}
           onClose={() => setReceiptModalOrder(null)}
+        />
+      )}
+
+      {/* Modal de Trilha de Auditoria da Esteira */}
+      {pipelineAuditOrder && (
+        <OrderAuditModal
+          order={pipelineAuditOrder}
+          onClose={() => setPipelineAuditOrder(null)}
         />
       )}
 

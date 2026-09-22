@@ -26,7 +26,8 @@ import {
   Layers,
   Trash2,
   Target,
-  Download
+  Download,
+  History
 } from 'lucide-react';
 import { 
   PurchaseOrder, 
@@ -52,6 +53,7 @@ import { exportFinancialToExcel, exportFinancialToPdf } from '../utils/financial
 import { FinancialEntryModal } from './FinancialEntryModal';
 import { FinancialEditModal } from './FinancialEditModal';
 import { FinancialDailyView } from './FinancialDailyView';
+import { FinancialAuditModal } from './FinancialAuditModal';
 
 interface FinancialBoletosPageProps {
   orders: PurchaseOrder[];
@@ -107,6 +109,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
 
   // Modal de Edição de Lançamento
   const [editingEntry, setEditingEntry] = useState<FinancialEntry | null>(null);
+  const [auditingEntry, setAuditingEntry] = useState<FinancialEntry | null>(null);
 
   // Estados de Dados do Backend
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
@@ -861,6 +864,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
           onSelectEntry={(entry) => console.log('Selecionou:', entry)}
           onDeleteEntry={handleDeleteEntry}
           onEditEntry={(entry) => setEditingEntry(entry)}
+          onViewAudit={(entry) => setAuditingEntry(entry)}
           metaDiaria={metaDiaria}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
@@ -1047,6 +1051,14 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                               className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-400 hover:text-amber-600 transition-colors cursor-pointer"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAuditingEntry(item)}
+                              title="Ver Trilha de Auditoria deste Lançamento"
+                              className="p-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-400 hover:text-purple-600 transition-colors cursor-pointer"
+                            >
+                              <History className="w-3.5 h-3.5" />
                             </button>
                             {item.recorrente && item.recorrenciaId && (
                               <button
@@ -1339,6 +1351,16 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal de Trilha de Auditoria do Boleto / Lançamento */}
+      {auditingEntry && (
+        <FinancialAuditModal
+          entryId={auditingEntry.id}
+          orderId={auditingEntry.orderId || undefined}
+          entryDescription={`${auditingEntry.descricao} - R$ ${auditingEntry.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+          onClose={() => setAuditingEntry(null)}
+        />
       )}
 
     </div>

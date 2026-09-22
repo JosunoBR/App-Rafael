@@ -1,4 +1,5 @@
 const financialRepo = require('../repositories/financialRepository');
+const financialAuditRepo = require('../repositories/financialAuditRepository');
 const orderRepo = require('../repositories/orderRepository');
 const path = require('path');
 const fs = require('fs');
@@ -330,11 +331,41 @@ class FinancialService {
     return createdEntries;
   }
 
-  async updateEntry(id, data) {
+  async updateEntry(id, data, currentUser = null) {
+    const before = await financialRepo.findById(id);
+    if (!before) {
+      throw new Error('Lançamento não encontrado.');
+    }
+
     const updated = await financialRepo.update(id, data);
     if (!updated) {
       throw new Error('Lançamento não encontrado.');
     }
+
+    // Auditoria para faturamento e diretoria
+    if (currentUser) {
+      const auditedFields = ['dataVencimento', 'valor', 'statusPrevisao', 'bancoConta', 'formaPagamento', 'observacao', 'documentoRef', 'status', 'categoria', 'lojaNome', 'fornecedor'];
+      for (const field of auditedFields) {
+        if (data[field] !== undefined && String(data[field]) !== String(before[field])) {
+          await financialAuditRepo.create({
+            entryId: id,
+            orderId: before.orderId || null,
+            numeroPedido: before.numeroPedido || '',
+            descricao: before.descricao || '',
+            usuarioId: currentUser.id || null,
+            usuarioNome: currentUser.nome || 'Operador',
+            usuarioRole: currentUser.role || 'faturamento',
+            acao: 'UPDATE_BOLETO',
+            campoAlterado: field,
+            valorAnterior: before[field],
+            valorNovo: data[field],
+            snapshotJson: { before, after: updated },
+            observacao: `Alteração de ${field} de "${before[field]}" para "${data[field]}"`
+          }).catch(err => console.error('Erro ao registrar auditoria de boleto:', err));
+        }
+      }
+    }
+
     const todayIso = new Date().toISOString().substring(0, 10);
     return {
       ...updated,
@@ -342,20 +373,61 @@ class FinancialService {
     };
   }
 
-  async markAsPaid(id, paymentData = {}) {
+  async markAsPaid(id, paymentData = {}, currentUser = null) {
+    const before = await financialRepo.findById(id);
     const updated = await financialRepo.markAsPaid(id, paymentData);
     if (!updated) {
       throw new Error('Lançamento não encontrado para baixa.');
     }
+
+    if (currentUser) {
+      await financialAuditRepo.create({
+        entryId: id,
+        orderId: updated.orderId || null,
+        numeroPedido: updated.numeroPedido || '',
+        descricao: updated.descricao || '',
+        usuarioId: currentUser.id || null,
+        usuarioNome: currentUser.nome || 'Operador',
+        usuarioRole: currentUser.role || 'faturamento',
+        acao: 'BAIXA_BOLETO',
+        campoAlterado: 'status',
+        valorAnterior: before ? before.status : 'A Vencer',
+        valorNovo: 'Pago',
+        snapshotJson: { paymentData, updated },
+        observacao: `Baixa de boleto realizada: R$ ${paymentData.valorPago || updated.valorPago || updated.valor} em ${paymentData.dataPagamento || new Date().toISOString().substring(0, 10)}`
+      }).catch(err => console.error('Erro ao registrar auditoria de baixa:', err));
+    }
+
     return updated;
   }
 
-  async markMultipleAsPaid(ids, paymentData = {}) {
+  async markMultipleAsPaid(ids, paymentData = {}, currentUser = null) {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new Error('Nenhum lançamento informado para baixa em lote.');
     }
     const updatedList = await financialRepo.markMultipleAsPaid(ids, paymentData);
     const todayIso = new Date().toISOString().substring(0, 10);
+
+    if (currentUser) {
+      for (const item of updatedList) {
+        await financialAuditRepo.create({
+          entryId: item.id,
+          orderId: item.orderId || null,
+          numeroPedido: item.numeroPedido || '',
+          descricao: item.descricao || '',
+          usuarioId: currentUser.id || null,
+          usuarioNome: currentUser.nome || 'Operador',
+          usuarioRole: currentUser.role || 'faturamento',
+          acao: 'BAIXA_BOLETO_LOTE',
+          campoAlterado: 'status',
+          valorAnterior: 'A Vencer',
+          valorNovo: 'Pago',
+          snapshotJson: { paymentData, item },
+          observacao: `Baixa em lote de boleto realizada em ${paymentData.dataPagamento || todayIso}`
+        }).catch(err => console.error('Erro ao registrar auditoria de baixa em lote:', err));
+      }
+    }
+
     return updatedList.map(item => ({
       ...item,
       status: this._computeStatus(item, todayIso)

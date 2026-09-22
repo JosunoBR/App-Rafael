@@ -5,8 +5,8 @@ const { requireRole } = require('../middlewares/rbac.middleware');
 
 const router = Router();
 
-// Gestão Financeira protegida por RBAC (Restrito à Diretoria)
-router.use(authMiddleware, requireRole('diretoria'));
+// Gestão Financeira protegida por RBAC (Diretoria e Faturamento)
+router.use(authMiddleware, requireRole('diretoria', 'faturamento'));
 
 router.get('/entries', (req, res) => financialController.getEntries(req, res));
 router.get('/summary', (req, res) => financialController.getSummary(req, res));

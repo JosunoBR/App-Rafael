@@ -237,6 +237,43 @@ async function getDatabase() {
       FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS order_distribution_logs (
+      id TEXT PRIMARY KEY,
+      orderId TEXT NOT NULL,
+      numeroPedido TEXT NOT NULL,
+      fornecedor TEXT,
+      usuarioId TEXT,
+      usuarioNome TEXT NOT NULL,
+      usuarioRole TEXT NOT NULL,
+      acao TEXT NOT NULL,
+      lojasAfetadasJson TEXT,
+      totalPecasDistribuidas INTEGER DEFAULT 0,
+      detalhesJson TEXT,
+      observacoes TEXT,
+      timestamp TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS financial_audit_logs (
+      id TEXT PRIMARY KEY,
+      entryId TEXT,
+      orderId TEXT,
+      numeroPedido TEXT,
+      descricao TEXT,
+      usuarioId TEXT,
+      usuarioNome TEXT NOT NULL,
+      usuarioRole TEXT NOT NULL,
+      acao TEXT NOT NULL,
+      campoAlterado TEXT,
+      valorAnterior TEXT,
+      valorNovo TEXT,
+      snapshotJson TEXT,
+      observacao TEXT,
+      timestamp TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
       codigo TEXT NOT NULL UNIQUE,

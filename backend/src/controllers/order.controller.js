@@ -88,6 +88,42 @@ class OrderController {
     }
   }
 
+  async sendToDistribution(req, res, next) {
+    try {
+      const result = await orderService.sendToDistribution(req.params.id, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async releaseToSeparation(req, res, next) {
+    try {
+      const result = await orderService.releaseToSeparation(req.params.id, req.body, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async sendToFaturamento(req, res, next) {
+    try {
+      const result = await orderService.sendToFaturamento(req.params.id, req.body, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async finalizeOrder(req, res, next) {
+    try {
+      const result = await orderService.finalizeOrder(req.params.id, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async authorizeFinancial(req, res, next) {
     try {
       const result = await orderService.authorizeFinancialRelease(req.params.id, req.user);

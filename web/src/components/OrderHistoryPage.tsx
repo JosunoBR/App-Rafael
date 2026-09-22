@@ -1123,7 +1123,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
 
                           {/* Coluna 2: Ação de Recebimento Físico / Financeiro (Largura fixa com cores suaves) */}
                           <div className="w-[160px] flex items-center justify-center">
-                            {!ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser?.role) ? (
+                            {!ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser?.role, ord.header.status) ? (
                               <button
                                 onClick={() => onConfirmReceipt(ord)}
                                 className="w-full h-7 px-2 bg-emerald-50/90 hover:bg-emerald-100/90 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 rounded-lg text-[10.5px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs active:scale-98"

@@ -1,4 +1,4 @@
-import { PurchaseOrder, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition, FinancialEntry, FinancialSummary, DistributionAuditLog, FinancialAuditLog } from '../shared/types';
+import { PurchaseOrder, OrderStatus, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition, FinancialEntry, FinancialSummary, DistributionAuditLog, FinancialAuditLog } from '../shared/types';
 import { API_BASE_URL } from './config';
 import { getNextOrderNumber } from './storage';
 
@@ -597,6 +597,15 @@ export async function sendOrderToFaturamentoApi(orderId: string, payload: any = 
 export async function finalizeOrderPipelineApi(orderId: string): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
   const res = await apiFetch(`/orders/${orderId}/finalize`, {
     method: 'POST'
+  });
+  return res.json();
+}
+
+export async function rollbackOrderStatusApi(orderId: string, payload: { targetStatus: OrderStatus; reason: string }): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
+  const res = await apiFetch(`/orders/${orderId}/rollback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
   });
   return res.json();
 }

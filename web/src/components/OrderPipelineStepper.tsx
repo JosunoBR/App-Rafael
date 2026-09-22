@@ -12,15 +12,18 @@ import {
   History,
   ShieldCheck,
   User as UserIcon,
-  Clock
+  Clock,
+  RotateCcw
 } from 'lucide-react';
 import { PurchaseOrder, User, OrderStatus } from '../shared/types';
+import { OrderRollbackModal } from './OrderRollbackModal';
 import { 
   canManagePipelineDistribution, 
   canConfirmReceipt, 
   canAuthorizeFinancialRelease,
   canApproveOrder,
-  canManageFaturamento
+  canManageFaturamento,
+  canRollbackOrderStatus
 } from '../shared/permissions';
 
 interface OrderPipelineStepperProps {
@@ -36,6 +39,7 @@ interface OrderPipelineStepperProps {
   onConfirmReceipt?: (order: PurchaseOrder) => void;
   onAuthorizeFinancial?: (order: PurchaseOrder) => void;
   onViewAuditLogs?: (order: PurchaseOrder) => void;
+  onRollbackSuccess?: (updatedOrder: PurchaseOrder) => void;
 }
 
 export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
@@ -50,9 +54,11 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
   onFinalizeSeparation,
   onConfirmReceipt,
   onAuthorizeFinancial,
-  onViewAuditLogs
+  onViewAuditLogs,
+  onRollbackSuccess
 }) => {
   const [showAuditTrail, setShowAuditTrail] = useState(false);
+  const [showRollbackModal, setShowRollbackModal] = useState(false);
   const currentStatus = order.header.status || 'Em Cotação';
   const role = currentUser?.role || 'diretoria';
 
@@ -167,6 +173,19 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             <History className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden sm:inline">Auditoria</span>
           </button>
+
+          {/* Botão de Retrocesso de Etapa (Exclusivo Diretoria para pedidos além de Cotação) */}
+          {canRollbackOrderStatus(currentUser) && currentIndex > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowRollbackModal(true)}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/80 transition flex items-center gap-1 cursor-pointer active:scale-98"
+              title="Retroceder o status deste pedido na esteira (Ação restrita à Diretoria)"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+              <span className="hidden sm:inline">Retroceder</span>
+            </button>
+          )}
 
           {/* Confirmar Recebimento Físico na Matriz:
               Bloqueado para 'Em Cotação', 'Rascunho' e 'Aprovado'.
@@ -304,6 +323,18 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal de Retrocesso Seguro de Status (Diretoria) */}
+      <OrderRollbackModal
+        isOpen={showRollbackModal}
+        onClose={() => setShowRollbackModal(false)}
+        order={order}
+        onSuccess={(updatedOrder) => {
+          if (onRollbackSuccess) {
+            onRollbackSuccess(updatedOrder);
+          }
+        }}
+      />
     </div>
   );
 };

@@ -165,9 +165,6 @@ export const HomePage: React.FC<HomePageProps> = ({
   }, [savedOrders]);
 
   // Pedidos recebidos fisicamente na matriz aguardando liberação de boletos pela Diretoria
-  const pedidosAguardandoBoletos = useMemo(() => {
-    return savedOrders.filter(o => o.header.recebidoMatriz && !o.header.boletosLiberados);
-  }, [savedOrders]);
 
   // Pedidos aprovados aguardando recebimento físico na Matriz
   const pedidosAguardandoEntrega = useMemo(() => {
@@ -388,36 +385,6 @@ export const HomePage: React.FC<HomePageProps> = ({
 
       </div>
 
-      {/* Alerta de Governança Financeira (Exclusivo Diretoria) */}
-      {canAuthorizeFinancialRelease(currentUser?.role) && pedidosAguardandoBoletos.length > 0 && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-300/80 dark:border-amber-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wider">
-                  Boletos Pendentes de Autorização
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white">
-                  {pedidosAguardandoBoletos.length} pedido(s)
-                </span>
-              </div>
-              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                Mercadorias recebidas fisicamente na Matriz aguardando autorização da Diretoria para liberar os títulos no Contas a Pagar.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => onNavigate('orders')}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition cursor-pointer flex items-center gap-1.5 shrink-0 shadow-xs"
-          >
-            <span>Ver no Histórico</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
 
       {/* 3. Área Principal do Cockpit: Fila de Trabalho (65%) + Central de Alertas (35%) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -477,7 +444,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                     : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/30'
                 }`}
               >
-                <span>🟡 1. Em Cotação (Compras)</span>
+                <span>🟡 1. Em Cotação</span>
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
                   {countByStatus['Em Cotação']}
                 </span>
@@ -507,7 +474,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                     : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
                 }`}
               >
-                <span>🟣 3. Em Distribuição (CD)</span>
+                <span>🟣 3. Em Distribuição</span>
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
                   {countByStatus['Em Distribuição']}
                 </span>
@@ -522,7 +489,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                     : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50 dark:hover:bg-purple-950/30'
                 }`}
               >
-                <span>📦 4. Em Separação (Doca)</span>
+                <span>📦 4. Em Separação</span>
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
                   {countByStatus['Em Separação']}
                 </span>

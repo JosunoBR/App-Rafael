@@ -695,26 +695,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         onConfirmReceipt={onConfirmReceipt}
         onAuthorizeFinancial={onAuthorizeFinancial}
         onViewAuditLogs={onViewAuditLogs}
+        onRollbackSuccess={onChangeOrder}
       />
-
-      {/* Banner Informativo quando o pedido ainda NÃO foi recebido fisicamente na Matriz */}
-      {isReceiptPending && (
-        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-              <Truck className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase tracking-wider block">
-                Mercadoria Não Recebida na Matriz
-              </span>
-              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                Este pedido precisa ter a entrega física registrada no Histórico de Pedidos antes de liberar a separação das lojas ou dar entrada no Estoque Central.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Banner Informativo quando visualizando pedido já finalizado */}
       {isCurrentFinalized && (

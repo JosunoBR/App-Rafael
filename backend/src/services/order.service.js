@@ -677,6 +677,188 @@ class OrderService {
       order: saved
     };
   }
+
+  /**
+   * Retrocede o status de um pedido na esteira operacional.
+   * Restrito estritamente à Diretoria (RBAC), com justificativa obrigatória e validações financeiras/estoque.
+   */
+  async rollbackOrderStatus(orderId, { targetStatus, reason } = {}, currentUser) {
+    const isDiretoriaOrRoot = currentUser && (
+      currentUser.role === 'diretoria' || 
+      currentUser.role === 'root' || 
+      currentUser.id === 'usr_root' || 
+      currentUser.email?.toLowerCase() === 'root' ||
+      currentUser.nome?.toLowerCase() === 'root'
+    );
+    if (!isDiretoriaOrRoot) {
+      const err = new Error('Apenas a Diretoria possui autorização para retroceder o status de um pedido na esteira.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
+      const err = new Error('É obrigatório informar uma justificativa detalhada com no mínimo 10 caracteres para o retrocesso.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const currentStatus = order.header?.status || 'Em Cotação';
+    const PIPELINE_ORDER = {
+      'Em Cotação': 0,
+      'Rascunho': 0,
+      'Aprovado': 1,
+      'Em Distribuição': 2,
+      'Em Separação': 2.5,
+      'Faturamento': 3,
+      'Finalizado': 4
+    };
+
+    const currentRank = PIPELINE_ORDER[currentStatus] ?? -1;
+    const targetRank = PIPELINE_ORDER[targetStatus] ?? -1;
+
+    if (targetRank < 0) {
+      const err = new Error(`Status de destino inválido: "${targetStatus}".`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (targetRank >= currentRank) {
+      const err = new Error(`O status de destino ("${targetStatus}") deve ser anterior ao status atual ("${currentStatus}").`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Trava de Segurança Financeira: impedir se houver qualquer parcela paga
+    const financialRepo = require('../repositories/financialRepository');
+    const entries = await financialRepo.findByOrderId(orderId);
+    const hasPaidFinancial = entries.some(e => String(e.status).toLowerCase() === 'pago');
+    const hasPaidInstallment = Array.isArray(order.installments) && order.installments.some(i => String(i.status).toLowerCase() === 'pago');
+
+    if (hasPaidFinancial || hasPaidInstallment) {
+      const err = new Error('Não é possível retroceder o status do pedido: existem parcelas/boletos já quitados no financeiro. Cancele ou estorne a baixa no Contas a Pagar antes de retroceder.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Estorno de Estoque Central do CD se retroceder de Separação/Faturamento para Distribuição ou antes
+    if (currentRank >= 2.5 && targetRank <= 2 && Array.isArray(order.items)) {
+      try {
+        const stockRepository = require('../repositories/stockRepository');
+        const allStock = await stockRepository.findAll();
+        for (const it of order.items) {
+          const reserveQty = Number(it.qtdReservaEstoque || 0);
+          if (reserveQty > 0) {
+            const match = allStock.find(s =>
+              (s.codigo && it.codigo && s.codigo.trim().toLowerCase() === it.codigo.trim().toLowerCase()) ||
+              (s.descricao && it.descricao && s.descricao.trim().toLowerCase() === it.descricao.trim().toLowerCase()) ||
+              (s.productId && (s.productId === it.id || s.productId === it.productId))
+            );
+            if (match) {
+              await stockRepository.updateBalance(match.id, -reserveQty);
+            }
+          }
+        }
+      } catch (stockErr) {
+        console.warn('Aviso ao estornar reserva de estoque no retrocesso:', stockErr.message);
+      }
+    }
+
+    // Atualização de cabeçalho e reset seguro de etapas desfeitas
+    order.header.status = targetStatus;
+    order.header.updatedAt = new Date().toISOString();
+
+    if (targetStatus === 'Em Cotação') {
+      order.header.aprovadoPor = null;
+      order.header.dataAprovacao = null;
+      order.header.recebidoMatriz = false;
+      order.header.dataRecebimentoMatriz = null;
+      order.header.recebidoPor = null;
+      order.header.distribuicaoConcluida = false;
+      order.header.distribuidoPor = null;
+      order.header.dataDistribuicao = null;
+      order.header.separacaoConcluida = false;
+      order.header.separadoPor = null;
+      order.header.dataSeparacao = null;
+      order.header.boletosLiberados = false;
+      order.header.boletosLiberadosPor = null;
+      order.header.boletosLiberadosEm = null;
+      order.header.finalizadoPor = null;
+      order.header.dataFinalizacao = null;
+    } else if (targetStatus === 'Aprovado') {
+      order.header.recebidoMatriz = false;
+      order.header.dataRecebimentoMatriz = null;
+      order.header.recebidoPor = null;
+      order.header.distribuicaoConcluida = false;
+      order.header.distribuidoPor = null;
+      order.header.dataDistribuicao = null;
+      order.header.separacaoConcluida = false;
+      order.header.separadoPor = null;
+      order.header.dataSeparacao = null;
+      order.header.boletosLiberados = false;
+      order.header.boletosLiberadosPor = null;
+      order.header.boletosLiberadosEm = null;
+      order.header.finalizadoPor = null;
+      order.header.dataFinalizacao = null;
+    } else if (targetStatus === 'Em Distribuição') {
+      order.header.distribuicaoConcluida = false;
+      order.header.distribuidoPor = null;
+      order.header.dataDistribuicao = null;
+      order.header.separacaoConcluida = false;
+      order.header.separadoPor = null;
+      order.header.dataSeparacao = null;
+      order.header.finalizadoPor = null;
+      order.header.dataFinalizacao = null;
+    } else if (targetStatus === 'Em Separação') {
+      order.header.separacaoConcluida = false;
+      order.header.separadoPor = null;
+      order.header.dataSeparacao = null;
+      order.header.finalizadoPor = null;
+      order.header.dataFinalizacao = null;
+    } else if (targetStatus === 'Faturamento') {
+      order.header.finalizadoPor = null;
+      order.header.dataFinalizacao = null;
+    }
+
+    const saved = await orderRepository.save(order);
+
+    // Ressincronizar com o financeiro (as parcelas retornam para status PREVISTO/Aguardando confirmação)
+    try {
+      const financialService = require('./financialService');
+      await financialService.syncSingleOrder(saved);
+    } catch (finErr) {
+      console.error('Erro ao sincronizar com o financeiro no retrocesso:', finErr);
+    }
+
+    // Registrar log de auditoria imutável
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || 'Diretoria',
+      usuarioRole: currentUser.role,
+      acao: 'RETROCESSO_STATUS',
+      detalhesJson: {
+        statusAnterior: currentStatus,
+        statusNovo: targetStatus,
+        motivo: reason.trim()
+      },
+      observacoes: `Retrocesso de [${currentStatus}] para [${targetStatus}]. Motivo: ${reason.trim()}`
+    }).catch(e => console.error('Erro ao registrar auditoria de retrocesso:', e));
+
+    return {
+      success: true,
+      message: `Status do pedido ${saved.header.numeroPedido} retrocedido de "${currentStatus}" para "${targetStatus}" com sucesso!`,
+      order: saved
+    };
+  }
 }
 
 module.exports = new OrderService();

@@ -12,8 +12,9 @@ function requireRole(...allowedRoles) {
 
     const userRole = req.user.role;
 
-    // Diretoria possui acesso irrestrito a todas as operações
-    if (userRole === 'diretoria') {
+    // Diretoria e Administrador Raiz (Root) possuem acesso irrestrito a todas as operações
+    const isRoot = req.user.id === 'usr_root' || req.user.email?.toLowerCase() === 'root' || req.user.nome?.toLowerCase() === 'root';
+    if (userRole === 'diretoria' || userRole === 'root' || isRoot) {
       return next();
     }
 

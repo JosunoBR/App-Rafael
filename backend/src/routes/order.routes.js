@@ -18,6 +18,7 @@ router.post('/:id/release-to-separation', authMiddleware, (req, res, next) => or
 router.post('/:id/send-to-faturamento', authMiddleware, (req, res, next) => orderController.sendToFaturamento(req, res, next));
 router.post('/:id/finalize', authMiddleware, (req, res, next) => orderController.finalizeOrder(req, res, next));
 router.post('/:id/authorize-financial', authMiddleware, (req, res, next) => orderController.authorizeFinancial(req, res, next));
+router.post('/:id/rollback', authMiddleware, requireRole(['diretoria']), (req, res, next) => orderController.rollbackOrderStatus(req, res, next));
 router.delete('/:id', authMiddleware, (req, res, next) => orderController.delete(req, res, next));
 
 module.exports = router;

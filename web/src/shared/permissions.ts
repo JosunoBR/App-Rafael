@@ -154,3 +154,16 @@ export function canConfirmReceipt(role?: UserRole | null, orderStatus?: string |
 export function canAuthorizeFinancialRelease(role?: UserRole | null): boolean {
   return role === 'diretoria';
 }
+
+/**
+ * Permite retroceder o status de um pedido na esteira operacional.
+ * Restrito exclusivamente à Diretoria Executiva ou usuário Root/Superadmin.
+ */
+export function canRollbackOrderStatus(user?: { role?: UserRole; id?: string; email?: string; nome?: string } | null): boolean {
+  if (!user) return false;
+  return user.role === 'diretoria' || 
+         user.role === ('root' as any) || 
+         user.id === 'usr_root' || 
+         user.email?.toLowerCase() === 'root' || 
+         user.nome?.toLowerCase() === 'root';
+}

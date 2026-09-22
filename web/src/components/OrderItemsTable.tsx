@@ -1852,7 +1852,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-visible">
+    <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs mb-8 overflow-hidden w-full max-w-full min-w-0">
       
       {/* Header bar com ações e busca inteligente rápida */}
       <div className="px-5 py-4 bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-200/70 dark:border-slate-700/70 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -2003,7 +2003,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
       </div>
 
       {/* Table responsive container com visual e comportamento de planilha do Excel */}
-      <div className="overflow-x-auto overflow-y-visible">
+      <div className="overflow-x-auto overflow-y-visible w-full max-w-full min-w-0 scrollbar-thin">
         <table 
           style={{ 
             tableLayout: 'fixed', 

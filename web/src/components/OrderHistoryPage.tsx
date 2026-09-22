@@ -24,8 +24,9 @@ import { exportOrderToExcel } from '../utils/excelExporter';
 import { toBrDate } from '../utils/masks';
 import { PurchaseControlCard } from './PurchaseControlCard';
 import { DeleteOrderConfirmModal } from './DeleteOrderConfirmModal';
+import { OrderRollbackModal } from './OrderRollbackModal';
 import { User } from '../shared/types';
-import { canConfirmReceipt, canAuthorizeFinancialRelease, canEditSpecificOrder } from '../shared/permissions';
+import { canConfirmReceipt, canAuthorizeFinancialRelease, canEditSpecificOrder, canRollbackOrderStatus } from '../shared/permissions';
 
 interface OrderHistoryPageProps {
   orders: PurchaseOrder[];
@@ -37,6 +38,7 @@ interface OrderHistoryPageProps {
   onNavigateToSeparation?: (order: PurchaseOrder) => void;
   onConfirmReceipt?: (order: PurchaseOrder) => void;
   onAuthorizeFinancial?: (order: PurchaseOrder) => void;
+  onRollbackSuccess?: (updatedOrder: PurchaseOrder) => void;
 }
 
 type SortField = 'numero' | 'fornecedor' | 'data' | 'itens' | 'pecas' | 'valor' | 'frete' | 'status';
@@ -81,12 +83,14 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   onUpdateOrderStatus,
   onNavigateToSeparation,
   onConfirmReceipt,
-  onAuthorizeFinancial
+  onAuthorizeFinancial,
+  onRollbackSuccess
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('todos');
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
+  const [orderToRollback, setOrderToRollback] = useState<PurchaseOrder | null>(null);
 
   // Ordenação e Filtros por Coluna
   const [sortField, setSortField] = useState<SortField | null>(null);
@@ -377,7 +381,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50'
           }`}
         >
-          <span>🟡 1. Em Cotação (Compras)</span>
+          <span>🟡 1. Em Cotação</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Em Cotação']}
           </span>
@@ -405,7 +409,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-50'
           }`}
         >
-          <span>🟣 3. Em Distribuição (CD)</span>
+          <span>🟣 3. Em Distribuição</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Em Distribuição']}
           </span>
@@ -419,7 +423,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50'
           }`}
         >
-          <span>📦 4. Em Separação (Doca)</span>
+          <span>📦 4. Em Separação</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
             {countByStatus['Em Separação']}
           </span>
@@ -1181,6 +1185,17 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             <FileSpreadsheet className="w-4 h-4" />
                           </button>
 
+                          {/* Botão de Retrocesso (Diretoria) para pedidos além de Cotação */}
+                          {canRollbackOrderStatus(currentUser) && statusAtual !== 'Em Cotação' && statusAtual !== 'Rascunho' && (
+                            <button
+                              onClick={() => setOrderToRollback(ord)}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
+                              title="Retroceder etapa deste pedido (Diretoria)"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
+
                           {onDeleteOrder && (
                             <button
                               onClick={() => setOrderToDelete(ord)}
@@ -1215,6 +1230,21 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
             await onDeleteOrder(orderToDelete.id || orderToDelete.header.id, authPayload);
             setOrderToDelete(null);
           }
+        }}
+      />
+
+      {/* Modal de Retrocesso Seguro de Status (Diretoria) */}
+      <OrderRollbackModal
+        isOpen={Boolean(orderToRollback)}
+        onClose={() => setOrderToRollback(null)}
+        order={orderToRollback}
+        onSuccess={(updatedOrder) => {
+          if (onRollbackSuccess) {
+            onRollbackSuccess(updatedOrder);
+          } else if (onUpdateOrderStatus) {
+            onUpdateOrderStatus(updatedOrder, updatedOrder.header.status);
+          }
+          setOrderToRollback(null);
         }}
       />
 

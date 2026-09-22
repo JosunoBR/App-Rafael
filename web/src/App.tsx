@@ -2828,7 +2828,7 @@ export function App() {
 
               {/* PÁGINA 1: COTAÇÃO E PEDIDOS (Diretoria & Compradores) */}
               {activeNav === 'orders' && canAccessTab(currentUser?.role, 'orders') && (
-                <div className="space-y-6 animate-in fade-in duration-200">
+                <div className="space-y-6 animate-in fade-in duration-200 w-full max-w-full min-w-0">
                   {/* Esteira Operacional Visual do Pedido (Compras ➔ Depósito ➔ Separação ➔ Finalizado) */}
                   <OrderPipelineStepper
                     order={order}
@@ -2849,31 +2849,12 @@ export function App() {
                     onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
                     onAuthorizeFinancial={handleAuthorizeFinancial}
                     onViewAuditLogs={(ord) => setPipelineAuditOrder(ord)}
+                    onRollbackSuccess={(updated) => {
+                      setOrder(updated);
+                      saveOrderToHistory(updated);
+                      fetchOrdersFromDb().then(setSavedOrders).catch(() => setSavedOrders(loadSavedOrdersList()));
+                    }}
                   />
-
-                  {/* Banner Informativo de Pedido Fechado / Edição da Diretoria */}
-                  {order.header.status && order.header.status !== 'Em Cotação' && order.header.status !== 'Rascunho' && (
-                    currentUser?.role === 'diretoria' ? (
-                      <div className="p-3.5 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200 text-xs font-semibold flex items-center justify-between shadow-2xs">
-                        <div className="flex items-center gap-2.5">
-                          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <span>
-                            <b>Edição Liberada para a Diretoria:</b> Este pedido está fechado na esteira ({order.header.status}). Você pode editar dados, itens e parcelas livremente. Ao salvar, suas alterações manterão o fluxo do pedido ativo.
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 shrink-0">
-                          Diretoria
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="p-3.5 px-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center gap-2.5 shadow-2xs">
-                        <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                        <span>
-                          <b>Modo de Visualização (Somente Leitura):</b> Este pedido já foi fechado ({order.header.status}). Apenas a Diretoria possui autorização para alterar pedidos já fechados.
-                        </span>
-                      </div>
-                    )
-                  )}
 
                   <fieldset 
                     disabled={Boolean(
@@ -2882,12 +2863,13 @@ export function App() {
                       order.header.status !== 'Rascunho' && 
                       currentUser?.role !== 'diretoria'
                     )}
+                    style={{ minWidth: 0 }}
                     className={Boolean(
                       order.header.status && 
                       order.header.status !== 'Em Cotação' && 
                       order.header.status !== 'Rascunho' && 
                       currentUser?.role !== 'diretoria'
-                    ) ? 'space-y-6 opacity-85 pointer-events-none select-none border-none p-0 m-0' : 'space-y-6 border-none p-0 m-0'}
+                    ) ? 'space-y-6 opacity-85 pointer-events-none select-none border-none p-0 m-0 w-full max-w-full min-w-0' : 'space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0'}
                   >
                     <OrderHeaderForm 
                       header={order.header} 
@@ -3088,6 +3070,11 @@ export function App() {
                   onNavigateToSeparation={(selected) => handleOpenSelectedOrder(selected, 'separation')}
                   onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
                   onAuthorizeFinancial={handleAuthorizeFinancial}
+                  onRollbackSuccess={(updated) => {
+                    setOrder(updated);
+                    saveOrderToHistory(updated);
+                    fetchOrdersFromDb().then(setSavedOrders).catch(() => setSavedOrders(loadSavedOrdersList()));
+                  }}
                 />
               )}
 

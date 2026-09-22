@@ -155,6 +155,32 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     });
   }, [modoParcelamento, parcelasCount, valorTotalNum, datasCustomizadas, dataBase]);
 
+  // Pré-visualização da projeção contínua de 6 meses para despesas fixas recorrentes
+  const recurringPreview = useMemo(() => {
+    if (!isRecorrente || modoParcelamento !== 'a_vista' || !dataBase) return [];
+    const [anoStr, mesStr, diaStr] = dataBase.split('-');
+    const baseDay = parseInt(diaStr, 10) || 1;
+    const baseMonthIdx = parseInt(mesStr, 10) - 1;
+    const baseYear = parseInt(anoStr, 10);
+    const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    const list = [];
+    for (let i = 0; i < 6; i++) {
+      const targetDate = new Date(baseYear, baseMonthIdx + i, 1);
+      const y = targetDate.getFullYear();
+      const m = targetDate.getMonth();
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      const actualDay = Math.min(baseDay, lastDay);
+      const dateFormatted = `${String(actualDay).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`;
+      list.push({
+        mesLabel: `${MESES_ABREV[m]}/${String(y).slice(-2)}`,
+        data: dateFormatted,
+        valor: valorTotalNum
+      });
+    }
+    return list;
+  }, [isRecorrente, modoParcelamento, dataBase, valorTotalNum]);
+
   const handleCustomDateChange = (index: number, newDate: string) => {
     const updated = [...datasCustomizadas];
     updated[index] = newDate;
@@ -201,7 +227,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
         primeiroVencimento: dataBase,
         dataVencimento: dataBase,
         datasCustomizadas: modoParcelamento === 'parcelado' ? datasCustomizadas : [dataBase],
-        recorrente: isRecorrente
+        recorrente: isRecorrente,
+        mesesProjecao: 6
       };
 
       await onSaveEntry(payload);
@@ -491,21 +518,58 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                   </div>
                 </>
               ) : (
-                <div className="sm:col-span-4 flex items-center pt-5">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="sm:col-span-4 flex items-center pt-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none p-2 rounded-xl hover:bg-amber-500/5 transition-colors">
                     <input
                       type="checkbox"
                       checked={isRecorrente}
                       onChange={e => setIsRecorrente(e.target.checked)}
                       className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300"
                     />
-                    <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">
-                      Despesa Fixa Recorrente (renova mensalmente)
-                    </span>
+                    <div>
+                      <span className="text-xs text-slate-800 dark:text-slate-200 font-bold block">
+                        {categoria === 'IMPOSTOS'
+                          ? '🔁 Tributo / Imposto Recorrente (Janela de 6 Meses)'
+                          : '🔁 Despesa Fixa Recorrente (Janela de 6 Meses)'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
+                        {categoria === 'IMPOSTOS'
+                          ? 'Gera 6 meses de impostos (DAS/Simples, ICMS, etc.) e mantém a régua sempre 6 meses à frente'
+                          : 'Gera e mantém 6 meses à frente no fluxo de caixa (Aluguel, Luz, Água com auto-renovação)'}
+                      </span>
+                    </div>
                   </label>
                 </div>
               )}
             </div>
+
+            {/* Pré-visualização da Projeção de 6 Meses para Despesas Recorrentes */}
+            {isRecorrente && modoParcelamento === 'a_vista' && recurringPreview.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <span>🔁 Projeção dos Próximos 6 Meses (Régua Contínua):</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                    A cada virada de mês, o sistema lança automaticamente mais 1 mês
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {recurringPreview.map((item, idx) => (
+                    <div 
+                      key={idx} 
+                      className="p-2 rounded-xl bg-amber-500/5 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/50 text-center"
+                    >
+                      <span className="text-[10px] font-extrabold text-amber-700 dark:text-amber-300 block">{item.mesLabel}</span>
+                      <span className="text-[11px] font-mono font-bold text-slate-800 dark:text-slate-200 block mt-0.5">{item.data}</span>
+                      <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block">
+                        R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Grade de Preview das Parcelas Calculadas */}
             {modoParcelamento === 'parcelado' && previewParcelas.length > 0 && (
@@ -542,9 +606,27 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
           {/* 4. Forma de Pagamento e Banco */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
             <div className="sm:col-span-6">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Forma de Pagamento
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Forma de Pagamento
+                </label>
+                <div className="flex items-center gap-1">
+                  {(['BOLETO', 'DEPÓSITO', 'PIX', 'DINHEIRO'] as const).map(quickFp => (
+                    <button
+                      key={quickFp}
+                      type="button"
+                      onClick={() => setFormaPagamento(quickFp)}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
+                        formaPagamento === quickFp
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      {quickFp === 'DEPÓSITO' ? 'Depósito' : quickFp}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <select
                 value={formaPagamento}
                 onChange={e => setFormaPagamento(e.target.value as any)}

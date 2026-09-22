@@ -4,6 +4,10 @@ const path = require('path');
 const fs = require('fs');
 
 class FinancialService {
+  constructor() {
+    this._lastRecurrenceCheck = 0;
+  }
+
   /**
    * Calcula o status dinâmico com base na data de vencimento e data atual
    */
@@ -27,6 +31,14 @@ class FinancialService {
   }
 
   async listEntries(filters = {}) {
+    // Sincroniza a janela deslizante de 6 meses de despesas recorrentes (throttle de 60 segundos)
+    if (Date.now() - this._lastRecurrenceCheck > 60000) {
+      this._lastRecurrenceCheck = Date.now();
+      await this.ensureRollingRecurringHorizon(6).catch(err => {
+        console.warn('Aviso ao sincronizar horizonte recorrente:', err.message);
+      });
+    }
+
     const entries = await financialRepo.findAll(filters);
     const todayIso = new Date().toISOString().substring(0, 10);
 
@@ -47,6 +59,10 @@ class FinancialService {
     let countVenceHoje = 0;
     let totalEmAtraso = 0;
     let countEmAtraso = 0;
+    let totalConfirmado = 0;
+    let countConfirmado = 0;
+    let totalPrevistoValor = 0;
+    let countPrevisto = 0;
 
     const byCategory = {};
     const byStore = {};
@@ -55,6 +71,15 @@ class FinancialService {
     entries.forEach(entry => {
       const val = Number(entry.valor) || 0;
       totalGeral += val;
+
+      const isPrevisto = (entry.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO';
+      if (isPrevisto) {
+        totalPrevistoValor += val;
+        countPrevisto++;
+      } else {
+        totalConfirmado += val;
+        countConfirmado++;
+      }
 
       const isPaid = entry.status === 'Pago';
       if (isPaid) {
@@ -117,6 +142,10 @@ class FinancialService {
       countVenceHoje,
       totalEmAtraso,
       countEmAtraso,
+      totalConfirmado,
+      countConfirmado,
+      totalPrevistoValor,
+      countPrevisto,
       totalEntries: entries.length,
       byCategory,
       byStore,
@@ -157,7 +186,8 @@ class FinancialService {
       bancoConta = '',
       documentoRef = '',
       observacao = '',
-      recorrente = false
+      recorrente = false,
+      statusPrevisao = 'CONFIRMADO'
     } = data;
 
     const totalQtd = Math.max(1, parseInt(parcelasCount, 10) || 1);
@@ -171,6 +201,60 @@ class FinancialService {
     }
 
     const dataBase = primeiroVencimento || dataVencimento || new Date().toISOString().substring(0, 10);
+
+    // Se for Despesa Fixa Recorrente (Projeção Automática de 6 meses à frente)
+    if (Boolean(recorrente)) {
+      const recId = data.recorrenciaId || ('rec_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+      const horizonMonths = Math.max(6, parseInt(data.mesesProjecao, 10) || 6);
+      const createdList = [];
+
+      // Extrai dia base do vencimento original (ex: dia 22)
+      const [anoStr, mesStr, diaStr] = dataBase.split('-');
+      const baseDay = parseInt(diaStr, 10) || 1;
+      const baseMonthIdx = parseInt(mesStr, 10) - 1;
+      const baseYear = parseInt(anoStr, 10);
+
+      const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+      for (let offset = 0; offset < horizonMonths; offset++) {
+        const targetDate = new Date(baseYear, baseMonthIdx + offset, 1);
+        const y = targetDate.getFullYear();
+        const m = targetDate.getMonth();
+        const lastDayOfTargetMonth = new Date(y, m + 1, 0).getDate();
+        const actualDay = Math.min(baseDay, lastDayOfTargetMonth);
+
+        const dueIso = `${y}-${String(m + 1).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`;
+        const mesAbrev = MESES_ABREV[m];
+        const anoAbrev = String(y).slice(-2);
+        const parcelaDesc = `Recorrente ${mesAbrev}/${anoAbrev}`;
+
+        const entry = await financialRepo.create({
+          tipo,
+          descricao: descricao.trim(),
+          categoria,
+          fornecedor,
+          storeId,
+          lojaNome,
+          empresa,
+          formaPagamento,
+          bancoConta,
+          documentoRef,
+          parcelaNumero: offset + 1,
+          parcelaTotal: horizonMonths,
+          parcelaDesc,
+          dataVencimento: dueIso,
+          valor: montanteTotal,
+          status: 'A Vencer',
+          observacao,
+          recorrente: true,
+          recorrenciaId: recId,
+          statusPrevisao: (statusPrevisao || 'CONFIRMADO').toUpperCase()
+        });
+        createdList.push(entry);
+      }
+
+      return createdList[0];
+    }
 
     // Se for parcela única (1x)
     if (totalQtd === 1) {
@@ -192,7 +276,9 @@ class FinancialService {
         valor: montanteTotal,
         status: 'A Vencer',
         observacao,
-        recorrente: Boolean(recorrente)
+        recorrente: false,
+        recorrenciaId: null,
+        statusPrevisao: (statusPrevisao || 'CONFIRMADO').toUpperCase()
       });
     }
 
@@ -234,7 +320,8 @@ class FinancialService {
         valor: valorItem,
         status: 'A Vencer',
         observacao,
-        recorrente: Boolean(recorrente)
+        recorrente: Boolean(recorrente),
+        statusPrevisao: (statusPrevisao || 'CONFIRMADO').toUpperCase()
       });
 
       createdEntries.push(entry);
@@ -263,6 +350,18 @@ class FinancialService {
     return updated;
   }
 
+  async markMultipleAsPaid(ids, paymentData = {}) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new Error('Nenhum lançamento informado para baixa em lote.');
+    }
+    const updatedList = await financialRepo.markMultipleAsPaid(ids, paymentData);
+    const todayIso = new Date().toISOString().substring(0, 10);
+    return updatedList.map(item => ({
+      ...item,
+      status: this._computeStatus(item, todayIso)
+    }));
+  }
+
   async deleteEntry(id) {
     return await financialRepo.delete(id);
   }
@@ -271,22 +370,33 @@ class FinancialService {
    * Sincroniza automaticamente as parcelas de um pedido específico com o Financeiro
    */
   async syncSingleOrder(order) {
-    if (!order || !order.id) return;
+    if (!order) return;
+    const orderId = order.id || order.header?.id;
+    if (!orderId) return;
 
     // Pedidos de transferência interna (CD -> Lojas) não geram títulos a pagar nem boletos
     const isTransf = order.header?.supplierId === 'cd_matriz' ||
       (order.header?.condicaoPagamento && order.header.condicaoPagamento.toLowerCase().includes('transferência')) ||
       (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência')) ||
-      String(order.id).startsWith('order_transf_cd_') ||
+      String(orderId).startsWith('order_transf_cd_') ||
       String(order.header?.numeroPedido || '').startsWith('CD-');
 
     if (isTransf) {
-      await financialRepo.deleteByOrderId(order.id);
+      await financialRepo.deleteByOrderId(orderId);
       return;
     }
 
+    // Governança Financeira Mega 12:
+    // Todos os boletos dos pedidos são lançados para o financeiro como PREVISÃO.
+    // Apenas quando confirmado o recebimento físico do produto na Matriz (recebidoMatriz)
+    // E a Diretoria autorizar expressamente o boleto (boletosLiberados), ele muda para CONFIRMADO.
+    const isRecebido = order.header?.recebidoMatriz === true || order.header?.recebidoMatriz === 1;
+    const isAutorizado = order.header?.boletosLiberados === true || order.header?.boletosLiberados === 1;
+    const isConfirmado = isRecebido && isAutorizado;
+    const statusPrevisao = isConfirmado ? 'CONFIRMADO' : 'PREVISTO';
+
     // Buscar lançamentos existentes para preservar status se alguma parcela já foi baixada como Paga
-    const existingEntries = await financialRepo.findByOrderId(order.id);
+    const existingEntries = await financialRepo.findByOrderId(orderId);
     const existingMap = new Map();
     for (const ent of existingEntries) {
       if (ent.installmentId) {
@@ -297,7 +407,7 @@ class FinancialService {
     }
 
     // Remover lançamentos antigos deste pedido para recriar sincronizado
-    await financialRepo.deleteByOrderId(order.id);
+    await financialRepo.deleteByOrderId(orderId);
 
     const installments = (order.installments && order.installments.length > 0)
       ? order.installments
@@ -314,9 +424,18 @@ class FinancialService {
       const dataPagamento = inst.dataPagamento || existing?.dataPagamento || null;
       const valorPago = isPaid ? (inst.valorPago || existing?.valorPago || inst.valor) : 0;
 
+      // Limpar tags antigas de previsão/confirmação para evitar duplicação
+      const rawObs = inst.observacao || existing?.observacao || (condicao ? `Condição: ${condicao}` : '');
+      const cleanObs = rawObs.replace(/\[(PREVISÃO|CONFIRMADO)[^\]]*\]/gi, '').trim();
+
+      const obsStatus = isConfirmado
+        ? '[CONFIRMADO - Autorizado pela Diretoria]'
+        : '[PREVISÃO - Aguardando recebimento e autorização da Diretoria]';
+      const finalObs = cleanObs ? `${obsStatus} ${cleanObs}` : obsStatus;
+
       await financialRepo.create({
         tipo: 'pedido_parcela',
-        orderId: order.id,
+        orderId: orderId,
         installmentId: inst.id,
         descricao: `${fornecedor} - Pedido ${numPedido} (${inst.numeroParcela}/${inst.totalParcelas})`,
         categoria: 'PRODUTOS',
@@ -335,7 +454,8 @@ class FinancialService {
         status: isPaid ? 'Pago' : 'A Vencer',
         dataPagamento: dataPagamento,
         valorPago: valorPago,
-        observacao: inst.observacao || existing?.observacao || `Condição: ${condicao}`
+        observacao: finalObs,
+        statusPrevisao: statusPrevisao
       });
     }
   }
@@ -348,66 +468,12 @@ class FinancialService {
     let createdCount = 0;
 
     for (const ord of orders) {
-      if (!ord || !ord.id) continue;
-
-      // Pedidos de transferência interna (CD -> Lojas) não geram títulos a pagar nem boletos
-      const isTransf = ord.header?.supplierId === 'cd_matriz' ||
-        (ord.header?.condicaoPagamento && ord.header.condicaoPagamento.toLowerCase().includes('transferência')) ||
-        (ord.header?.fornecedor && ord.header.fornecedor.toLowerCase().includes('transferência')) ||
-        String(ord.id).startsWith('order_transf_cd_') ||
-        String(ord.header?.numeroPedido || '').startsWith('CD-');
-
-      if (isTransf) {
-        await financialRepo.deleteByOrderId(ord.id);
-        continue;
-      }
-
-      // Verificar se já foram sincronizadas
-      const existingFin = await financialRepo.findByOrderId(ord.id);
-      if (existingFin && existingFin.length > 0) {
-        continue;
-      }
-
-      const fornecedor = ord.header?.fornecedor || 'Fornecedor';
-      const numPedido = ord.header?.numeroPedido || 'S/N';
-      const formaPgto = ord.header?.formaPagamento || 'BOLETO';
-      const condicao = ord.header?.condicaoPagamento || '';
-      
-      const installments = (ord.installments && ord.installments.length > 0)
-        ? ord.installments
-        : [];
-
-      if (installments.length > 0) {
-        for (const inst of installments) {
-          await financialRepo.create({
-            tipo: 'pedido_parcela',
-            orderId: ord.id,
-            installmentId: inst.id,
-            descricao: `${fornecedor} - Pedido ${numPedido} (${inst.numeroParcela}/${inst.totalParcelas})`,
-            categoria: 'PRODUTOS',
-            fornecedor: fornecedor,
-            storeId: 'matriz',
-            lojaNome: 'Depósito Central / Matriz',
-            empresa: 'ALS',
-            formaPagamento: (inst.metodoPagamento || formaPgto).toUpperCase(),
-            bancoConta: '',
-            documentoRef: inst.documentoRef || numPedido,
-            parcelaNumero: inst.numeroParcela,
-            parcelaTotal: inst.totalParcelas,
-            parcelaDesc: `${inst.numeroParcela}/${inst.totalParcelas}`,
-            dataVencimento: inst.dataVencimento,
-            valor: inst.valor,
-            status: inst.status === 'Pago' ? 'Pago' : 'A Vencer',
-            dataPagamento: inst.dataPagamento || null,
-            valorPago: inst.status === 'Pago' ? inst.valor : 0,
-            observacao: inst.observacao || `Condição: ${condicao}`
-          });
-          createdCount++;
-        }
-      }
+      if (!ord) continue;
+      await this.syncSingleOrder(ord);
+      createdCount++;
     }
 
-    return { createdCount, message: `${createdCount} parcelas de pedidos sincronizadas para o financeiro.` };
+    return { createdCount, message: `${createdCount} pedidos sincronizados para o financeiro.` };
   }
 
   /**
@@ -508,6 +574,99 @@ class FinancialService {
       totalValor,
       message: `${importedCount} lançamentos importados com sucesso da planilha (Total: R$ ${totalValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
     };
+  }
+
+  /**
+   * Mantém a janela contínua deslizante de despesas recorrentes (Rolling Horizon de N meses).
+   * Para cada série recorrente ativa, verifica a última data gerada.
+   * Se estiver a menos de horizonMonths da data atual, projeta os meses faltantes.
+   */
+  async ensureRollingRecurringHorizon(horizonMonths = 6) {
+    try {
+      const activeSeries = await financialRepo.findActiveRecurringSeries();
+      if (!activeSeries || activeSeries.length === 0) return 0;
+
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth(); // 0-indexed
+
+      // Data limite do horizonte (hoje + horizonMonths - 1 meses)
+      const targetHorizonDate = new Date(currentYear, currentMonth + horizonMonths - 1, 1);
+      const targetYearMonth = targetHorizonDate.getFullYear() * 12 + targetHorizonDate.getMonth();
+
+      let addedCount = 0;
+      const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+      for (const series of activeSeries) {
+        if (!series.maxVencimento) continue;
+
+        let seriesAddedCount = 0;
+        const [maxYStr, maxMStr, maxDStr] = series.maxVencimento.split('-');
+        const maxY = parseInt(maxYStr, 10);
+        const maxM = parseInt(maxMStr, 10) - 1;
+        const baseDay = parseInt(maxDStr, 10) || 1;
+
+        let lastYearMonth = maxY * 12 + maxM;
+
+        // Se o último vencimento cadastrado estiver antes do final da janela de 6 meses
+        while (lastYearMonth < targetYearMonth) {
+          lastYearMonth++;
+          const nextYear = Math.floor(lastYearMonth / 12);
+          const nextMonth = lastYearMonth % 12;
+
+          const lastDayOfTargetMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
+          const actualDay = Math.min(baseDay, lastDayOfTargetMonth);
+          const dueIso = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`;
+
+          const mesAbrev = MESES_ABREV[nextMonth];
+          const anoAbrev = String(nextYear).slice(-2);
+          const parcelaDesc = `Recorrente ${mesAbrev}/${anoAbrev}`;
+
+          // Cria a próxima parcela da janela deslizante com numeração isolada da série
+          await financialRepo.create({
+            tipo: series.tipo || 'despesa',
+            descricao: series.descricao,
+            categoria: series.categoria || 'FIXO',
+            fornecedor: series.fornecedor || '',
+            storeId: series.storeId || '',
+            lojaNome: series.lojaNome || '',
+            empresa: series.empresa || 'ALS',
+            formaPagamento: series.formaPagamento || 'BOLETO',
+            bancoConta: series.bancoConta || '',
+            documentoRef: series.documentoRef || '',
+            parcelaNumero: (series.totalParcelas || 0) + seriesAddedCount + 1,
+            parcelaTotal: (series.totalParcelas || 0) + seriesAddedCount + 1,
+            parcelaDesc,
+            dataVencimento: dueIso,
+            valor: Number(series.valor) || 0,
+            status: 'A Vencer',
+            observacao: series.observacao || '',
+            recorrente: true,
+            recorrenciaId: series.recorrenciaId,
+            statusPrevisao: (series.statusPrevisao || 'CONFIRMADO').toUpperCase()
+          });
+          seriesAddedCount++;
+          addedCount++;
+        }
+      }
+
+      if (addedCount > 0) {
+        console.log(`[Financeiro] Janela deslizante de 6 meses: ${addedCount} novos lançamentos recorrentes projetados.`);
+      }
+      return addedCount;
+    } catch (err) {
+      console.error('Erro ao sincronizar janela deslizante de despesas recorrentes:', err);
+      return 0;
+    }
+  }
+
+  /**
+   * Cancela uma série recorrente (remove previsões futuras em aberto a partir de hoje)
+   */
+  async cancelRecurringSeries(recorrenciaId, fromDate = null) {
+    if (!recorrenciaId) throw new Error('Identificador da recorrência é obrigatório.');
+    const from = fromDate || new Date().toISOString().substring(0, 10);
+    return await financialRepo.deleteFutureRecurringEntries(recorrenciaId, from);
   }
 }
 

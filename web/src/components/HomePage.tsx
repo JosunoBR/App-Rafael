@@ -18,11 +18,13 @@ import {
   ExternalLink,
   Store,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Truck,
+  CreditCard
 } from 'lucide-react';
 import { PurchaseOrder, User, Supplier, StoreConfig, CentralStockItem, Product } from '../shared/types';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
-import { ActiveNavTab, canAccessTab, canCreateOrEditOrders } from '../shared/permissions';
+import { ActiveNavTab, canAccessTab, canCreateOrEditOrders, canAuthorizeFinancialRelease, canConfirmReceipt } from '../shared/permissions';
 import { toBrDate } from '../utils/masks';
 
 interface HomePageProps {
@@ -39,9 +41,11 @@ interface HomePageProps {
   onDiscardDraft: () => void;
   onSelectOrder: (order: PurchaseOrder) => void;
   onSwitchViewMode: (mode: 'desktop' | 'mobile_purchases' | 'mobile_separation') => void;
+  onConfirmReceipt?: (order: PurchaseOrder) => void;
+  onAuthorizeFinancial?: (order: PurchaseOrder) => void;
 }
 
-type TabFilter = 'todos' | 'doca' | 'distribuicao' | 'cotacao' | 'finalizados';
+type TabFilter = 'todos' | 'Em Cotação' | 'Aprovado' | 'Em Distribuição' | 'Em Separação' | 'Finalizado';
 
 export const HomePage: React.FC<HomePageProps> = ({
   currentUser,
@@ -56,7 +60,9 @@ export const HomePage: React.FC<HomePageProps> = ({
   onContinueDraft,
   onDiscardDraft,
   onSelectOrder,
-  onSwitchViewMode
+  onSwitchViewMode,
+  onConfirmReceipt,
+  onAuthorizeFinancial
 }) => {
   const [activeTab, setActiveTab] = useState<TabFilter>('todos');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -146,16 +152,31 @@ export const HomePage: React.FC<HomePageProps> = ({
     return centralStock.reduce((acc, it) => acc + (it.saldoUnidades || 0), 0);
   }, [centralStock]);
 
-  // Contagens por aba
-  const counts = useMemo(() => {
+  // Contagens por status da Esteira Operacional
+  const countByStatus = useMemo(() => {
     return {
       todos: savedOrders.length,
-      doca: pedidosNaDoca.length,
-      distribuicao: savedOrders.filter(o => o.header.status === 'Em Distribuição').length,
-      cotacao: savedOrders.filter(o => (o.header.status || 'Em Cotação') === 'Em Cotação' || o.header.status === 'Rascunho').length,
-      finalizados: savedOrders.filter(o => o.header.status === 'Finalizado').length,
+      'Em Cotação': savedOrders.filter(o => (o.header.status || 'Em Cotação') === 'Em Cotação' || o.header.status === 'Rascunho').length,
+      'Aprovado': savedOrders.filter(o => o.header.status === 'Aprovado').length,
+      'Em Distribuição': savedOrders.filter(o => o.header.status === 'Em Distribuição').length,
+      'Em Separação': savedOrders.filter(o => o.header.status === 'Em Separação').length,
+      'Finalizado': savedOrders.filter(o => o.header.status === 'Finalizado').length,
     };
-  }, [savedOrders, pedidosNaDoca]);
+  }, [savedOrders]);
+
+  // Pedidos recebidos fisicamente na matriz aguardando liberação de boletos pela Diretoria
+  const pedidosAguardandoBoletos = useMemo(() => {
+    return savedOrders.filter(o => o.header.recebidoMatriz && !o.header.boletosLiberados);
+  }, [savedOrders]);
+
+  // Pedidos aprovados aguardando recebimento físico na Matriz
+  const pedidosAguardandoEntrega = useMemo(() => {
+    return savedOrders.filter(o => 
+      (o.header.status === 'Aprovado' || o.header.status === 'Em Distribuição') && 
+      !o.header.recebidoMatriz &&
+      o.header.supplierId !== 'cd_matriz'
+    );
+  }, [savedOrders]);
 
   // Filtragem da Fila de Pedidos
   const filteredOrders = useMemo(() => {
@@ -170,14 +191,12 @@ export const HomePage: React.FC<HomePageProps> = ({
       );
     }
 
-    if (activeTab === 'doca') {
-      list = list.filter(o => o.header.status === 'Em Separação' || o.header.status === 'Aprovado');
-    } else if (activeTab === 'distribuicao') {
-      list = list.filter(o => o.header.status === 'Em Distribuição');
-    } else if (activeTab === 'cotacao') {
-      list = list.filter(o => (o.header.status || 'Em Cotação') === 'Em Cotação' || o.header.status === 'Rascunho');
-    } else if (activeTab === 'finalizados') {
-      list = list.filter(o => o.header.status === 'Finalizado');
+    if (activeTab !== 'todos') {
+      if (activeTab === 'Em Cotação') {
+        list = list.filter(o => (o.header.status || 'Em Cotação') === 'Em Cotação' || o.header.status === 'Rascunho');
+      } else {
+        list = list.filter(o => o.header.status === activeTab);
+      }
     }
 
     if (searchTerm.trim()) {
@@ -304,7 +323,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
               {canAccessOrders && valorTotalEmFluxo > 0
                 ? `R$ ${valorTotalEmFluxo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} em andamento`
-                : `${counts.cotacao} em cotação • ${counts.doca} na doca`}
+                : `${countByStatus['Em Cotação']} em cotação • ${countByStatus['Em Separação']} na doca`}
             </p>
           </div>
         </div>
@@ -369,6 +388,37 @@ export const HomePage: React.FC<HomePageProps> = ({
 
       </div>
 
+      {/* Alerta de Governança Financeira (Exclusivo Diretoria) */}
+      {canAuthorizeFinancialRelease(currentUser?.role) && pedidosAguardandoBoletos.length > 0 && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-300/80 dark:border-amber-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+              <CreditCard className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wider">
+                  Boletos Pendentes de Autorização
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white">
+                  {pedidosAguardandoBoletos.length} pedido(s)
+                </span>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                Mercadorias recebidas fisicamente na Matriz aguardando autorização da Diretoria para liberar os títulos no Contas a Pagar.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate('orders')}
+            className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition cursor-pointer flex items-center gap-1.5 shrink-0 shadow-xs"
+          >
+            <span>Ver no Histórico</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* 3. Área Principal do Cockpit: Fila de Trabalho (65%) + Central de Alertas (35%) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
@@ -401,77 +451,95 @@ export const HomePage: React.FC<HomePageProps> = ({
               </div>
             </div>
 
-            {/* Abas Rápidas de Filtragem */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            {/* Esteira Operacional de Pedidos (Padrão Oficial Mega 12) */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 overflow-x-auto pb-1">
               <button
+                type="button"
                 onClick={() => setActiveTab('todos')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'todos'
                     ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/50'
                 }`}
               >
-                <span>Todos</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${activeTab === 'todos' ? 'bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
-                  {counts.todos}
+                <span>Todos os Pedidos</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20 dark:bg-white/20">
+                  {countByStatus.todos}
                 </span>
               </button>
 
               <button
-                onClick={() => setActiveTab('doca')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'doca'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 hover:text-purple-600'
+                type="button"
+                onClick={() => setActiveTab('Em Cotação')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  activeTab === 'Em Cotação'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/30'
                 }`}
               >
-                <span>Na Doca Hoje</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${activeTab === 'doca' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                  {counts.doca}
+                <span>🟡 1. Em Cotação (Compras)</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                  {countByStatus['Em Cotação']}
                 </span>
               </button>
 
               <button
-                onClick={() => setActiveTab('distribuicao')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'distribuicao'
+                type="button"
+                onClick={() => setActiveTab('Aprovado')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  activeTab === 'Aprovado'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-50 dark:hover:bg-blue-950/30'
+                }`}
+              >
+                <span>🔵 2. Aprovados</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                  {countByStatus['Aprovado']}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('Em Distribuição')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  activeTab === 'Em Distribuição'
                     ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600'
+                    : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
                 }`}
               >
-                <span>Distribuição CD</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${activeTab === 'distribuicao' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                  {counts.distribuicao}
+                <span>🟣 3. Em Distribuição (CD)</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                  {countByStatus['Em Distribuição']}
                 </span>
               </button>
 
-              {canAccessOrders && (
-                <button
-                  onClick={() => setActiveTab('cotacao')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                    activeTab === 'cotacao'
-                      ? 'bg-amber-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600'
-                  }`}
-                >
-                  <span>Em Cotação</span>
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${activeTab === 'cotacao' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                    {counts.cotacao}
-                  </span>
-                </button>
-              )}
-
               <button
-                onClick={() => setActiveTab('finalizados')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'finalizados'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600'
+                type="button"
+                onClick={() => setActiveTab('Em Separação')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  activeTab === 'Em Separação'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50 dark:hover:bg-purple-950/30'
                 }`}
               >
-                <span>Finalizados</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${activeTab === 'finalizados' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                  {counts.finalizados}
+                <span>📦 4. Em Separação (Doca)</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                  {countByStatus['Em Separação']}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('Finalizado')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  activeTab === 'Finalizado'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                }`}
+              >
+                <span>🟢 5. Finalizados</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                  {countByStatus['Finalizado']}
                 </span>
               </button>
             </div>
@@ -536,15 +604,53 @@ export const HomePage: React.FC<HomePageProps> = ({
                           <span className={`px-2.5 py-0.8 rounded-full text-[10px] font-extrabold border ${getStatusBadge(ord.header.status)}`}>
                             {ord.header.status}
                           </span>
+                          <div className="mt-1 flex flex-col items-center gap-0.5">
+                            {ord.header.recebidoMatriz ? (
+                              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                                ✓ Recebido Matriz
+                              </span>
+                            ) : (ord.header.status === 'Aprovado' || ord.header.status === 'Em Distribuição') && ord.header.supplierId !== 'cd_matriz' ? (
+                              <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                                Aguardando entrega
+                              </span>
+                            ) : null}
+                            {ord.header.recebidoMatriz && !ord.header.boletosLiberados && (
+                              <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                                🔒 Boletos retidos
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => onSelectOrder(ord)}
-                            className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition cursor-pointer inline-flex items-center gap-1 shadow-2xs"
-                          >
-                            <span>{getActionButtonLabel(ord.header.status)}</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {!ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser?.role) && (
+                              <button
+                                onClick={() => onConfirmReceipt(ord)}
+                                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
+                                title="Confirmar o recebimento físico da mercadoria na Matriz"
+                              >
+                                <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                <span>Receber</span>
+                              </button>
+                            )}
+                            {ord.header.recebidoMatriz && !ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser?.role) && (
+                              <button
+                                onClick={() => onAuthorizeFinancial(ord)}
+                                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50/90 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
+                                title="Liberar boletos para o Contas a Pagar"
+                              >
+                                <CreditCard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                <span>Liberar Boletos</span>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => onSelectOrder(ord)}
+                              className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                            >
+                              <span>{getActionButtonLabel(ord.header.status)}</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

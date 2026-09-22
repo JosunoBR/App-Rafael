@@ -21,7 +21,7 @@ class OrderController {
 
   async save(req, res, next) {
     try {
-      const result = await orderService.saveOrder(req.body);
+      const result = await orderService.saveOrder(req.body, req.user);
       return res.json(result);
     } catch (err) {
       next(err);
@@ -69,6 +69,28 @@ class OrderController {
       const { numero } = req.params;
       const { excludeId } = req.query;
       const result = await orderService.checkNumeroAvailable(numero, excludeId);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+  async confirmReceipt(req, res, next) {
+    try {
+      const { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos } = req.body;
+      const result = await orderService.confirmReceipt(
+        req.params.id,
+        { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos },
+        req.user
+      );
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async authorizeFinancial(req, res, next) {
+    try {
+      const result = await orderService.authorizeFinancialRelease(req.params.id, req.user);
       return res.json(result);
     } catch (err) {
       next(err);

@@ -139,15 +139,19 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
       </div>
 
       {/* 2. Banner de Totais Executivos no Topo (Identico ao topo da planilha do cliente) */}
-      <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800">
-        <div className="text-[11px] font-mono font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
-          <Layers className="w-3.5 h-3.5 text-amber-400" />
-          <span>Resumo Geral de Compras & Projeção Mensal</span>
+      <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800 space-y-3">
+        <div className="text-[11px] font-mono font-bold uppercase tracking-widest text-slate-400 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers className="w-3.5 h-3.5 text-amber-400" />
+            <span>Resumo Geral de Compras & Projeção Mensal</span>
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium">
+            {matrixData.sortedMonths.length} meses projetados no ciclo de compras
+          </span>
         </div>
 
-        {/* Grade de Cards de Totais */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-          
+        {/* Grade de Cards de Totais Principais */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {/* TO. MENOR (Verde) */}
           <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-xl p-2.5">
             <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
@@ -187,19 +191,47 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
               R$ {filteredTotals.media12.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
+        </div>
 
-          {/* Colunas dos Meses */}
-          {matrixData.sortedMonths.slice(0, 4).map(m => (
-            <div key={m} className="bg-slate-800/90 border border-slate-700 rounded-xl p-2.5">
-              <div className="text-[10px] font-bold text-slate-300 uppercase truncate">
-                {formatMonthName(m)}
-              </div>
-              <div className="text-xs sm:text-sm font-black text-white font-mono mt-0.5">
-                R$ {(filteredTotals.monthSums[m] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-            </div>
-          ))}
-
+        {/* Projeção de Vencimentos em Todos os Meses (Fluxo Contínuo além de Dezembro) */}
+        <div className="pt-2 border-t border-slate-800">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-blue-400">
+              <Calendar className="w-3 h-3" />
+              <span>Vencimentos por Mês (Fluxo Contínuo além de Dezembro)</span>
+            </span>
+            <span className="text-[10px] text-slate-500 font-normal">
+              Role horizontalmente para ver todos os meses futuros ➔
+            </span>
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5">
+            {matrixData.sortedMonths.map(m => {
+              const currentYearStr = String(new Date().getFullYear());
+              const isFutureYear = !m.startsWith(currentYearStr);
+              return (
+                <div 
+                  key={m} 
+                  className={`shrink-0 min-w-[140px] rounded-xl p-2.5 border transition-all ${
+                    isFutureYear
+                      ? 'bg-blue-950/40 border-blue-500/40 text-blue-200'
+                      : 'bg-slate-800/90 border-slate-700 text-slate-200'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold uppercase truncate flex items-center justify-between gap-1">
+                    <span className="truncate">{formatMonthName(m)}</span>
+                    {isFutureYear && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                        {m.split('-')[0]}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs sm:text-sm font-black font-mono mt-0.5 text-white">
+                    R$ {(filteredTotals.monthSums[m] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -210,7 +242,9 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
             <thead>
               {/* Header Principal da Tabela */}
               <tr className="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider">
-                <th className="py-3 px-3.5 border-r border-slate-800 min-w-[200px]">EMPRESA</th>
+                <th className="py-3 px-3.5 border-r border-slate-800 min-w-[220px] sticky left-0 z-20 bg-slate-900 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.4)]">
+                  EMPRESA
+                </th>
                 <th className="py-3 px-2.5 border-r border-slate-800 text-center w-20">NOTA</th>
                 <th className="py-3 px-3 border-r border-slate-800 text-right min-w-[120px] bg-emerald-950 text-emerald-300">
                   VALOR MENOR
@@ -251,21 +285,23 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
                       onClick={() => targetOrder && onSelectOrder(targetOrder)}
                       title="Clique para abrir detalhes do pedido deste fornecedor"
                     >
-                      {/* Empresa */}
-                      <td className="py-2.5 px-3.5 border-r border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 transition shrink-0" />
-                          <span className="truncate">{row.empresa}</span>
+                      {/* Empresa (Sticky) */}
+                      <td className="py-2.5 px-3.5 border-r border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white sticky left-0 z-10 bg-white dark:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] group-hover:bg-slate-100 dark:group-hover:bg-slate-700">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 transition shrink-0" />
+                            <span className="truncate">{row.empresa}</span>
+                          </div>
+                          {row.pedidosList.length > 1 ? (
+                            <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-100 dark:bg-blue-950 dark:text-blue-300 px-1.5 py-0.5 rounded shrink-0">
+                              {row.pedidosList.length} pedidos
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                              {row.pedidosList[0] || 'S/N'}
+                            </span>
+                          )}
                         </div>
-                        {row.pedidosList.length > 1 ? (
-                          <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-100 dark:bg-blue-950 dark:text-blue-300 px-1.5 py-0.5 rounded shrink-0">
-                            {row.pedidosList.length} pedidos
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
-                            {row.pedidosList[0] || 'S/N'}
-                          </span>
-                        )}
                       </td>
 
                       {/* NOTA (%) */}
@@ -327,7 +363,7 @@ export const MonthlyPurchasesMatrixView: React.FC<MonthlyPurchasesMatrixViewProp
             {/* Linha de Totais no Rodapé */}
             <tfoot>
               <tr className="bg-slate-100 dark:bg-slate-800 font-bold text-xs text-slate-900 dark:text-white border-t-2 border-slate-300 dark:border-slate-700">
-                <td className="py-3 px-3.5 border-r border-slate-200 dark:border-slate-700 font-black">
+                <td className="py-3 px-3.5 border-r border-slate-200 dark:border-slate-700 font-black sticky left-0 z-10 bg-slate-100 dark:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
                   TOTAIS GERAIS ({filteredRows.length} FORNECEDORES)
                 </td>
                 <td className="py-3 px-2.5 border-r border-slate-200 dark:border-slate-700 text-center">

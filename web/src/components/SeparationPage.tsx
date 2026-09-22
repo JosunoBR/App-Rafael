@@ -25,7 +25,8 @@ import {
   BookmarkPlus,
   Layers,
   ChevronDown,
-  Loader2
+  Loader2,
+  Truck
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User, SeparationPreset } from '../shared/types';
 import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations, adjustSeparationReserveProportionally } from '../shared/separationEngine';
@@ -233,11 +234,26 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     }
   };
 
+  // Verifica se o pedido atual é transferência interna ou se depende de recebimento físico na Matriz
+  const isTransfer = order.header?.supplierId === 'cd_matriz' || 
+                     String(order.header?.numeroPedido || '').startsWith('CD-') || 
+                     String(order.header?.id || '').startsWith('order_transf_cd_') ||
+                     Boolean(order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+
+  const isReceiptPending = !isTransfer && !order.header.recebidoMatriz;
+
   // Inclui pedidos fechados ou em andamento na esteira conforme o perfil do usuário
   const availableDepositOrders = useMemo(() => {
     const isSeparacao = currentUser?.role === 'separacao';
     const list = orders.filter(o => {
+      const isTransf = o.header?.supplierId === 'cd_matriz' || 
+                       String(o.header?.numeroPedido || '').startsWith('CD-') || 
+                       String(o.header?.id || '').startsWith('order_transf_cd_') ||
+                       Boolean(o.header?.fornecedor && o.header.fornecedor.toLowerCase().includes('transferência'));
+
       if (isSeparacao) {
+        // Conferentes de doca (separação) só veem pedidos já recebidos fisicamente na Matriz (ou transferências internas)
+        if (!isTransf && !o.header.recebidoMatriz) return false;
         return o.header.status === 'Em Separação' || o.header.status === 'Aprovado' || o.header.status === 'Em Distribuição';
       }
       return (
@@ -666,6 +682,25 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         onFinalizeSeparation={onFinalizeOrder}
       />
 
+      {/* Banner Informativo quando o pedido ainda NÃO foi recebido fisicamente na Matriz */}
+      {isReceiptPending && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <Truck className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase tracking-wider block">
+                Mercadoria Não Recebida na Matriz
+              </span>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                Este pedido precisa ter a entrega física registrada no Histórico de Pedidos antes de liberar a separação das lojas ou dar entrada no Estoque Central.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Banner Informativo quando visualizando pedido já finalizado */}
       {isCurrentFinalized && (
         <div className="p-3.5 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -1007,13 +1042,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 {activeStores.map(store => (
                   <th 
                     key={store.id} 
+                    title={store.name}
                     className={`py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 min-w-[60px] whitespace-nowrap font-bold text-[11px] ${
                       store.cluster === 'A' ? 'bg-blue-50/30 dark:bg-blue-950/20 text-slate-700 dark:text-slate-300' : 
                       store.cluster === 'B' ? 'bg-slate-50/50 dark:bg-slate-900/30 text-slate-700 dark:text-slate-300' : 
                       'bg-teal-50/30 dark:bg-teal-950/20 text-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    {store.name.replace('Ponta Grossa ', 'PG ').replace('Depósito Central', 'CD Central')}
+                    {store.shortName || store.name}
                   </th>
                 ))}
               </tr>
@@ -1437,11 +1473,20 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             {(order.header.status === 'Aprovado' || order.header.status === 'Em Distribuição') && onReleaseToSeparation && (
               <button
                 type="button"
-                onClick={() => onReleaseToSeparation(order)}
-                className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer hover:scale-102"
+                disabled={isReceiptPending}
+                onClick={() => {
+                  if (isReceiptPending) return;
+                  onReleaseToSeparation(order);
+                }}
+                className={`w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 ${
+                  isReceiptPending
+                    ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed shadow-none opacity-80'
+                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-indigo-600/30 cursor-pointer hover:scale-102'
+                }`}
+                title={isReceiptPending ? 'O fornecedor precisa entregar a mercadoria na Matriz antes de liberar a separação' : 'Confirmar Distribuição & Dar Entrada no Estoque'}
               >
-                <Boxes className="w-4 h-4" />
-                <span>Confirmar Distribuição & Dar Entrada no Estoque</span>
+                {isReceiptPending ? <Truck className="w-4 h-4" /> : <Boxes className="w-4 h-4" />}
+                <span>{isReceiptPending ? 'Aguardando Recebimento na Matriz' : 'Confirmar Distribuição & Dar Entrada no Estoque'}</span>
               </button>
             )}
 

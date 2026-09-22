@@ -10,10 +10,11 @@ import {
   ShieldCheck, 
   Truck, 
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  CreditCard
 } from 'lucide-react';
 import { PurchaseOrder, User, OrderStatus } from '../shared/types';
-import { canManagePipelineDistribution } from '../shared/permissions';
+import { canManagePipelineDistribution, canConfirmReceipt, canAuthorizeFinancialRelease } from '../shared/permissions';
 
 interface OrderPipelineStepperProps {
   order: PurchaseOrder;
@@ -23,6 +24,8 @@ interface OrderPipelineStepperProps {
   onReleaseToSeparation?: (order: PurchaseOrder) => void;
   onOpenSeparation?: (order: PurchaseOrder) => void;
   onFinalizeSeparation?: (order: PurchaseOrder) => void;
+  onConfirmReceipt?: (order: PurchaseOrder) => void;
+  onAuthorizeFinancial?: (order: PurchaseOrder) => void;
 }
 
 export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
@@ -32,7 +35,9 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
   onOpenDistribution,
   onReleaseToSeparation,
   onOpenSeparation,
-  onFinalizeSeparation
+  onFinalizeSeparation,
+  onConfirmReceipt,
+  onAuthorizeFinancial
 }) => {
   const currentStatus = order.header.status || 'Em Cotação';
   const role = currentUser?.role || 'diretoria';
@@ -159,8 +164,37 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
           </div>
         </div>
 
-        {/* Lado Direito: Ações rápidas de esteira */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Lado Direito: Ações rápidas de esteira e recebimento */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {!order.header.recebidoMatriz && order.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser?.role) && (
+            <button
+              onClick={() => onConfirmReceipt(order)}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"
+              title="Registrar a entrega física do fornecedor na Matriz"
+            >
+              <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Confirmar Recebimento</span>
+            </button>
+          )}
+
+          {order.header.recebidoMatriz && !order.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser?.role) && (
+            <button
+              onClick={() => onAuthorizeFinancial(order)}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50/90 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"
+              title="Autorizar o envio dos boletos deste pedido para o Contas a Pagar"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Liberar Boletos</span>
+            </button>
+          )}
+
+          {order.header.recebidoMatriz && (
+            <span className="px-2.5 py-1 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1">
+              <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Recebido Matriz ✓</span>
+            </span>
+          )}
+
           {currentIndex <= 1 && onOpenDistribution && canManagePipelineDistribution(currentUser?.role) && (
             <button
               onClick={() => onOpenDistribution(order)}

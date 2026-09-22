@@ -3,7 +3,7 @@ const financialService = require('../services/financialService');
 class FinancialController {
   async getEntries(req, res) {
     try {
-      const { month, year, storeId, lojaNome, categoria, status, tipo, search, empresa } = req.query;
+      const { month, year, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = req.query;
       const entries = await financialService.listEntries({
         month,
         year,
@@ -13,7 +13,9 @@ class FinancialController {
         status,
         tipo,
         search,
-        empresa
+        empresa,
+        statusPrevisao,
+        formaPagamento
       });
       return res.status(200).json({ success: true, data: entries });
     } catch (error) {
@@ -24,7 +26,7 @@ class FinancialController {
 
   async getSummary(req, res) {
     try {
-      const { month, year, storeId, lojaNome, categoria, status, tipo, search, empresa } = req.query;
+      const { month, year, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = req.query;
       const summary = await financialService.getSummary({
         month,
         year,
@@ -34,7 +36,9 @@ class FinancialController {
         status,
         tipo,
         search,
-        empresa
+        empresa,
+        statusPrevisao,
+        formaPagamento
       });
       return res.status(200).json({ success: true, data: summary });
     } catch (error) {
@@ -102,6 +106,25 @@ class FinancialController {
     }
   }
 
+  async batchPay(req, res) {
+    try {
+      const { ids, dataPagamento, observacao } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ success: false, error: 'Lista de IDs para baixa em lote não informada.' });
+      }
+      const updatedList = await financialService.markMultipleAsPaid(ids, { dataPagamento, observacao });
+      return res.status(200).json({
+        success: true,
+        data: updatedList,
+        count: updatedList.length,
+        message: `${updatedList.length} pagamentos baixados com sucesso!`
+      });
+    } catch (error) {
+      console.error('Erro ao baixar pagamentos em lote:', error);
+      return res.status(400).json({ success: false, error: error.message || 'Erro ao liquidar pagamentos em lote.' });
+    }
+  }
+
   async deleteEntry(req, res) {
     try {
       const { id } = req.params;
@@ -131,6 +154,17 @@ class FinancialController {
     } catch (error) {
       console.error('Erro ao importar planilha do cliente:', error);
       return res.status(500).json({ success: false, error: error.message || 'Erro ao importar planilha do cliente.' });
+    }
+  }
+
+  async cancelRecurrence(req, res) {
+    try {
+      const { recorrenciaId } = req.params;
+      await financialService.cancelRecurringSeries(recorrenciaId);
+      return res.status(200).json({ success: true, message: 'Recorrência futura cancelada com sucesso.' });
+    } catch (error) {
+      console.error('Erro ao cancelar série recorrente:', error);
+      return res.status(400).json({ success: false, error: error.message || 'Erro ao cancelar série recorrente.' });
     }
   }
 }

@@ -499,8 +499,15 @@ export function generateOrderInstallments(
   const netTotal = calculateOrderNetTotal(order);
   const customDates = order.header.datasVencimentoPersonalizadas;
 
-  // A primeira parcela a prazo é contada a partir da data de entrega da mercadoria
-  const baseDeliveryDate = addDaysToDate(order.header.dataEntregaPrevista || order.header.dataPedido || new Date().toISOString().split('T')[0], 0);
+  // A primeira parcela a prazo é contada a partir da data REAL de entrega da mercadoria na Matriz.
+  // Prioridade: (1) data de recebimento físico confirmado, (2) data de entrega prevista, (3) data do pedido.
+  const baseDeliveryDate = addDaysToDate(
+    order.header.dataRecebimentoMatriz ||
+    order.header.dataEntregaPrevista ||
+    order.header.dataPedido ||
+    new Date().toISOString().split('T')[0],
+    0
+  );
   const orderDate = addDaysToDate(order.header.dataPedido || new Date().toISOString().split('T')[0], 0);
 
   const existingMap = new Map<number, PaymentInstallment>();

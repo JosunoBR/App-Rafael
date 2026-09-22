@@ -4,7 +4,7 @@ class FinancialRepository {
   /**
    * Busca registros com filtros múltiplos: mês, ano, loja, categoria, status, tipo, busca de texto.
    */
-  async findAll({ month, year, storeId, lojaNome, categoria, status, tipo, search, empresa } = {}) {
+  async findAll({ month, year, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = {}) {
     let sql = 'SELECT * FROM financial_entries WHERE 1=1';
     const params = [];
 
@@ -56,6 +56,28 @@ class FinancialRepository {
       params.push(empresa);
     }
 
+    if (statusPrevisao && statusPrevisao !== 'all') {
+      sql += ' AND UPPER(statusPrevisao) = ?';
+      params.push(statusPrevisao.toUpperCase());
+    }
+
+    if (formaPagamento && formaPagamento !== 'all') {
+      const fpUpper = formaPagamento.toUpperCase();
+      if (fpUpper === 'BOLETO') {
+        sql += ' AND UPPER(formaPagamento) LIKE ?';
+        params.push('%BOLETO%');
+      } else if (fpUpper === 'DEPOSITO' || fpUpper === 'DEPÓSITO') {
+        sql += ' AND (UPPER(formaPagamento) LIKE ? OR UPPER(formaPagamento) LIKE ?)';
+        params.push('%DEPÓSITO%', '%DEPOSITO%');
+      } else if (fpUpper === 'DINHEIRO_PIX' || fpUpper === 'PIX' || fpUpper === 'DINHEIRO') {
+        sql += ' AND (UPPER(formaPagamento) LIKE ? OR UPPER(formaPagamento) LIKE ?)';
+        params.push('%DINHEIRO%', '%PIX%');
+      } else {
+        sql += ' AND UPPER(formaPagamento) = ?';
+        params.push(fpUpper);
+      }
+    }
+
     if (search && search.trim()) {
       const term = `%${search.trim().toLowerCase()}%`;
       sql += ' AND (LOWER(descricao) LIKE ? OR LOWER(fornecedor) LIKE ? OR LOWER(documentoRef) LIKE ? OR LOWER(observacao) LIKE ?)';
@@ -87,8 +109,8 @@ class FinancialRepository {
         id, tipo, orderId, installmentId, descricao, categoria, fornecedor,
         storeId, lojaNome, empresa, formaPagamento, bancoConta, documentoRef,
         parcelaNumero, parcelaTotal, parcelaDesc, dataVencimento, valor,
-        status, dataPagamento, valorPago, observacao, recorrente, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        status, dataPagamento, valorPago, observacao, recorrente, recorrenciaId, statusPrevisao, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       entry.tipo || 'despesa',
@@ -113,6 +135,8 @@ class FinancialRepository {
       entry.valorPago !== undefined ? parseFloat(entry.valorPago) : (entry.status === 'Pago' ? parseFloat(entry.valor) : 0),
       entry.observacao || '',
       entry.recorrente ? 1 : 0,
+      entry.recorrenciaId || null,
+      (entry.statusPrevisao || 'CONFIRMADO').toUpperCase(),
       entry.createdAt || now,
       now
     ]);
@@ -159,6 +183,8 @@ class FinancialRepository {
         valorPago = ?,
         observacao = ?,
         recorrente = ?,
+        recorrenciaId = ?,
+        statusPrevisao = ?,
         updatedAt = ?
       WHERE id = ?
     `, [
@@ -184,6 +210,8 @@ class FinancialRepository {
       entry.valorPago !== undefined ? parseFloat(entry.valorPago) : existing.valorPago,
       entry.observacao !== undefined ? entry.observacao : existing.observacao,
       entry.recorrente !== undefined ? (entry.recorrente ? 1 : 0) : (existing.recorrente ? 1 : 0),
+      entry.recorrenciaId !== undefined ? entry.recorrenciaId : existing.recorrenciaId,
+      entry.statusPrevisao !== undefined ? entry.statusPrevisao.toUpperCase() : (existing.statusPrevisao || 'CONFIRMADO'),
       now,
       id
     ]);
@@ -212,6 +240,34 @@ class FinancialRepository {
     return await this.findById(id);
   }
 
+  async markMultipleAsPaid(ids, { dataPagamento, observacao } = {}) {
+    if (!Array.isArray(ids) || ids.length === 0) return [];
+    const now = new Date().toISOString();
+    const payDate = dataPagamento || now.substring(0, 10);
+
+    const placeholders = ids.map(() => '?').join(',');
+    let sql = `
+      UPDATE financial_entries SET
+        status = 'Pago',
+        dataPagamento = ?,
+        valorPago = CASE WHEN valorPago IS NULL OR valorPago = 0 THEN valor ELSE valorPago END,
+        updatedAt = ?
+    `;
+    const params = [payDate, now];
+    if (observacao && observacao.trim()) {
+      sql += `, observacao = CASE WHEN observacao IS NOT NULL AND observacao != '' THEN observacao || ' | ' || ? ELSE ? END`;
+      params.push(observacao.trim(), observacao.trim());
+    }
+    sql += ` WHERE id IN (${placeholders})`;
+    params.push(...ids);
+
+    await execute(sql, params);
+
+    const selectSql = `SELECT * FROM financial_entries WHERE id IN (${placeholders})`;
+    const rows = await queryAll(selectSql, ids);
+    return rows.map(r => this._hydrate(r));
+  }
+
   async delete(id) {
     await execute('DELETE FROM financial_entries WHERE id = ?', [id]);
     return true;
@@ -219,6 +275,58 @@ class FinancialRepository {
 
   async deleteByOrderId(orderId) {
     await execute('DELETE FROM financial_entries WHERE orderId = ?', [orderId]);
+    return true;
+  }
+
+  /**
+   * Retorna as séries recorrentes ativas agrupadas por recorrenciaId
+   * com a data da última parcela existente no banco e os dados do contrato base.
+   */
+  async findActiveRecurringSeries() {
+    const rows = await queryAll(`
+      SELECT 
+        recorrenciaId,
+        descricao,
+        categoria,
+        fornecedor,
+        storeId,
+        lojaNome,
+        empresa,
+        formaPagamento,
+        bancoConta,
+        documentoRef,
+        valor,
+        tipo,
+        statusPrevisao,
+        observacao,
+        MAX(dataVencimento) as maxVencimento,
+        MIN(dataVencimento) as minVencimento,
+        COUNT(*) as totalParcelas
+      FROM financial_entries
+      WHERE recorrente = 1 AND recorrenciaId IS NOT NULL AND recorrenciaId != ''
+      GROUP BY recorrenciaId
+    `);
+    return rows;
+  }
+
+  /**
+   * Remove parcelas futuras em aberto de uma série recorrente (ex: encerramento de contrato)
+   */
+  async deleteFutureRecurringEntries(recorrenciaId, fromDate) {
+    await execute(`
+      DELETE FROM financial_entries 
+      WHERE recorrenciaId = ? 
+        AND dataVencimento >= ? 
+        AND status != 'Pago'
+    `, [recorrenciaId, fromDate]);
+
+    // Marca os registros remanescentes da série como não-recorrentes para impedir reativação pela janela deslizante
+    await execute(`
+      UPDATE financial_entries 
+      SET recorrente = 0 
+      WHERE recorrenciaId = ?
+    `, [recorrenciaId]);
+
     return true;
   }
 
@@ -244,10 +352,12 @@ class FinancialRepository {
       dataVencimento: row.dataVencimento,
       valor: Number(row.valor) || 0,
       status: row.status || 'A Vencer',
+      statusPrevisao: (row.statusPrevisao || 'CONFIRMADO').toUpperCase(),
       dataPagamento: row.dataPagamento || null,
       valorPago: Number(row.valorPago) || 0,
       observacao: row.observacao || '',
       recorrente: Boolean(row.recorrente),
+      recorrenciaId: row.recorrenciaId || null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt
     };

@@ -5,26 +5,26 @@
  */
 
 const DEFAULT_STORES = [
-  { id: 'pg_centro', name: 'Ponta Grossa Centro', cluster: 'A', defaultWeight: 2.5 },
-  { id: 'reserva', name: 'Reserva', cluster: 'A', defaultWeight: 2.5 },
-  { id: 'tibagi', name: 'Tibagi', cluster: 'A', defaultWeight: 2.5 },
-  { id: 'nova_russia', name: 'Nova Rússia', cluster: 'A', defaultWeight: 2.5 },
-  { id: 'javert', name: 'Javert', cluster: 'A', defaultWeight: 2.5 },
-  { id: 'ivai', name: 'Ivaí', cluster: 'A', defaultWeight: 2.5 },
-  { id: 'irati_centro', name: 'Irati Centro', cluster: 'A', defaultWeight: 2.5 },
-  { id: 'campo_largo', name: 'Campo Largo', cluster: 'A', defaultWeight: 2.5 },
-  { id: 'castro', name: 'Castro', cluster: 'B', defaultWeight: 1.75 },
-  { id: 'imbituva', name: 'Imbituva', cluster: 'B', defaultWeight: 1.75 },
-  { id: 'santa_paula', name: 'Santa Paula', cluster: 'B', defaultWeight: 1.75 },
-  { id: 'prudentopolis', name: 'Prudentópolis', cluster: 'B', defaultWeight: 1.75 },
-  { id: 'guarapuava', name: 'Guarapuava', cluster: 'B', defaultWeight: 1.75 },
-  { id: 'imbau', name: 'Imbaú', cluster: 'B', defaultWeight: 1.75 },
-  { id: 'rio_azul', name: 'Rio Azul', cluster: 'B', defaultWeight: 1.75 },
-  { id: 'reboucas', name: 'Rebouças', cluster: 'B', defaultWeight: 1.75 },
-  { id: 'deposito_central', name: 'Depósito Central', cluster: 'C', defaultWeight: 1.25 },
-  { id: 'teixeira_soares', name: 'Teixeira Soares', cluster: 'C', defaultWeight: 1.25 },
-  { id: 'mallet', name: 'Mallet', cluster: 'C', defaultWeight: 1.25 },
-  { id: 'ipiranga', name: 'Ipiranga', cluster: 'C', defaultWeight: 1.25 }
+  { id: 'pg_centro', name: 'Ponta Grossa Centro', shortName: 'PG Centro', cluster: 'A', defaultWeight: 2.5 },
+  { id: 'reserva', name: 'Reserva', shortName: 'Reserva', cluster: 'A', defaultWeight: 2.5 },
+  { id: 'tibagi', name: 'Tibagi', shortName: 'Tibagi', cluster: 'A', defaultWeight: 2.5 },
+  { id: 'nova_russia', name: 'Nova Rússia', shortName: 'Nova Rússia', cluster: 'A', defaultWeight: 2.5 },
+  { id: 'javert', name: 'Javert', shortName: 'Javert', cluster: 'A', defaultWeight: 2.5 },
+  { id: 'ivai', name: 'Ivaí', shortName: 'Ivaí', cluster: 'A', defaultWeight: 2.5 },
+  { id: 'irati_centro', name: 'Irati Centro', shortName: 'Irati Centro', cluster: 'A', defaultWeight: 2.5 },
+  { id: 'campo_largo', name: 'Campo Largo', shortName: 'Campo Largo', cluster: 'A', defaultWeight: 2.5 },
+  { id: 'castro', name: 'Castro', shortName: 'Castro', cluster: 'B', defaultWeight: 1.75 },
+  { id: 'imbituva', name: 'Imbituva', shortName: 'Imbituva', cluster: 'B', defaultWeight: 1.75 },
+  { id: 'santa_paula', name: 'Santa Paula', shortName: 'Santa Paula', cluster: 'B', defaultWeight: 1.75 },
+  { id: 'prudentopolis', name: 'Prudentópolis', shortName: 'Prudentópolis', cluster: 'B', defaultWeight: 1.75 },
+  { id: 'guarapuava', name: 'Guarapuava', shortName: 'Guarapuava', cluster: 'B', defaultWeight: 1.75 },
+  { id: 'imbau', name: 'Imbaú', shortName: 'Imbaú', cluster: 'B', defaultWeight: 1.75 },
+  { id: 'rio_azul', name: 'Rio Azul', shortName: 'Rio Azul', cluster: 'B', defaultWeight: 1.75 },
+  { id: 'reboucas', name: 'Rebouças', shortName: 'Rebouças', cluster: 'B', defaultWeight: 1.75 },
+  { id: 'deposito_central', name: 'Depósito Central', shortName: 'CD Central', cluster: 'C', defaultWeight: 1.25 },
+  { id: 'teixeira_soares', name: 'Teixeira Soares', shortName: 'Teixeira Soares', cluster: 'C', defaultWeight: 1.25 },
+  { id: 'mallet', name: 'Mallet', shortName: 'Mallet', cluster: 'C', defaultWeight: 1.25 },
+  { id: 'ipiranga', name: 'Ipiranga', shortName: 'Ipiranga', cluster: 'C', defaultWeight: 1.25 }
 ];
 
 const DEFAULT_SUPPLIERS = [];
@@ -54,7 +54,7 @@ function runFullDatabaseSeed(db) {
   const storeCheck = db.exec("SELECT COUNT(*) as count FROM stores");
   if (!storeCheck[0] || storeCheck[0].values[0][0] === 0) {
     DEFAULT_STORES.forEach(s => {
-      db.run("INSERT INTO stores (id, name, cluster, defaultWeight, active) VALUES (?, ?, ?, ?, ?)", [s.id, s.name, s.cluster, s.defaultWeight, 1]);
+      db.run("INSERT INTO stores (id, name, shortName, cluster, defaultWeight, active) VALUES (?, ?, ?, ?, ?, ?)", [s.id, s.name, s.shortName || s.name, s.cluster, s.defaultWeight, 1]);
     });
   }
 

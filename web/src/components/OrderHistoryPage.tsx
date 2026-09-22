@@ -15,7 +15,8 @@ import {
   ArrowDown,
   Truck,
   X,
-  RotateCcw
+  RotateCcw,
+  CreditCard
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { calculateOrderTotals } from '../shared/orderCalculationEngine';
@@ -24,6 +25,7 @@ import { toBrDate } from '../utils/masks';
 import { PurchaseControlCard } from './PurchaseControlCard';
 import { DeleteOrderConfirmModal } from './DeleteOrderConfirmModal';
 import { User } from '../shared/types';
+import { canConfirmReceipt, canAuthorizeFinancialRelease, canEditSpecificOrder } from '../shared/permissions';
 
 interface OrderHistoryPageProps {
   orders: PurchaseOrder[];
@@ -33,6 +35,8 @@ interface OrderHistoryPageProps {
   onNewOrder: () => void;
   onUpdateOrderStatus?: (order: PurchaseOrder, newStatus: string) => void;
   onNavigateToSeparation?: (order: PurchaseOrder) => void;
+  onConfirmReceipt?: (order: PurchaseOrder) => void;
+  onAuthorizeFinancial?: (order: PurchaseOrder) => void;
 }
 
 type SortField = 'numero' | 'fornecedor' | 'data' | 'itens' | 'pecas' | 'valor' | 'frete' | 'status';
@@ -75,7 +79,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   onDeleteOrder,
   onNewOrder,
   onUpdateOrderStatus,
-  onNavigateToSeparation
+  onNavigateToSeparation,
+  onConfirmReceipt,
+  onAuthorizeFinancial
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('todos');
@@ -943,7 +949,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                 </th>
 
                 {/* 9. AVANÇAR ESTEIRA */}
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[140px]">Avançar Esteira</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[280px]">Avançar Esteira</th>
 
                 {/* 10. AÇÕES */}
                 <th className="py-3 px-3 text-center whitespace-nowrap min-w-[120px]">Ações</th>
@@ -986,13 +992,21 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                     <tr key={ord.header.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition group">
                       
                       {/* Pedido / Número */}
-                      <td className="py-3.5 px-4 font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
-                        {ord.header.numeroPedido}
+                      <td 
+                        className="py-3.5 px-4 font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 transition"
+                        onClick={() => handleOpenOrder(ord)}
+                        title={canEditSpecificOrder(currentUser?.role, ord.header.status) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
+                      >
+                        <span className="underline decoration-dotted underline-offset-4">{ord.header.numeroPedido}</span>
                       </td>
 
                       {/* Fornecedor */}
-                      <td className="py-3.5 px-3">
-                        <div className="font-bold text-slate-900 dark:text-white">
+                      <td 
+                        className="py-3.5 px-3 cursor-pointer hover:text-emerald-600 transition"
+                        onClick={() => handleOpenOrder(ord)}
+                        title={canEditSpecificOrder(currentUser?.role, ord.header.status) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
+                      >
+                        <div className="font-bold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition">
                           {ord.header.fornecedor}
                         </div>
                         {ord.header.vendedor && (
@@ -1040,45 +1054,100 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold border whitespace-nowrap ${getStatusBadgeClass(statusAtual)}`}>
                           {statusAtual}
                         </span>
+                        {/* Badges de Recebimento e Boletos */}
+                        <div className="mt-1 flex flex-col items-center gap-0.5">
+                          {ord.header.recebidoMatriz ? (
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                              Recebido em: {toBrDate(ord.header.dataRecebimentoMatriz || '')}
+                            </span>
+                          ) : (statusAtual !== 'Em Cotação' && statusAtual !== 'Rascunho') ? (
+                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                              Aguardando entrega
+                            </span>
+                          ) : null}
+                          {ord.header.recebidoMatriz && (
+                            ord.header.boletosLiberados ? (
+                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                                💳 Boletos liberados
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-rose-500 dark:text-rose-400">
+                                🔒 Boletos retidos
+                              </span>
+                            )
+                          )}
+                        </div>
                       </td>
 
                       {/* Botão de Avanço Rápido de Status da Esteira */}
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        {statusAtual === 'Em Cotação' && onUpdateOrderStatus && (
-                          <button
-                            onClick={() => onUpdateOrderStatus(ord, 'Aprovado')}
-                            className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 mx-auto"
-                            title="Aprovar este pedido e encaminhar para a distribuição do Depósito"
-                          >
-                            <span>✓ Aprovar</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        )}
-                        {(statusAtual === 'Aprovado' || statusAtual === 'Em Distribuição') && (
-                          <button
-                            onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
-                            className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 mx-auto"
-                            title="Abrir a matriz de distribuição do Depósito para ratear nas lojas e dar entrada no estoque"
-                          >
-                            <Boxes className="w-3.5 h-3.5" />
-                            <span>Distribuir CD</span>
-                          </button>
-                        )}
-                        {statusAtual === 'Em Separação' && (
-                          <button
-                            onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition shadow-xs cursor-pointer mx-auto"
-                            title="Conferir separação física na Doca"
-                          >
-                            <PackageCheck className="w-3.5 h-3.5" />
-                            <span>Separar Doca</span>
-                          </button>
-                        )}
-                        {statusAtual === 'Finalizado' && (
-                          <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold inline-flex items-center gap-1 mx-auto">
-                            <Check className="w-3.5 h-3.5" /> Concluído
-                          </span>
-                        )}
+                        <div className="inline-grid grid-cols-[100px_160px] gap-2 items-center justify-center text-center">
+                          {/* Coluna 1: Ação da Esteira (Largura fixa e alinhada com cores suaves) */}
+                          <div className="w-[100px] flex items-center justify-center">
+                            {statusAtual === 'Em Cotação' && onUpdateOrderStatus && (
+                              <button
+                                onClick={() => onUpdateOrderStatus(ord, 'Aprovado')}
+                                className="w-full h-7 px-2 bg-blue-50/90 hover:bg-blue-100/90 text-blue-700 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs active:scale-98"
+                                title="Aprovar este pedido e encaminhar para a distribuição do Depósito"
+                              >
+                                <span>✓ Aprovar</span>
+                                <ArrowRight className="w-3 h-3 text-blue-500 dark:text-blue-400" />
+                              </button>
+                            )}
+                            {(statusAtual === 'Aprovado' || statusAtual === 'Em Distribuição') && (
+                              <button
+                                onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
+                                className="w-full h-7 px-2 bg-indigo-50/90 hover:bg-indigo-100/90 text-indigo-700 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs active:scale-98"
+                                title="Abrir a matriz de distribuição do Depósito para ratear nas lojas e dar entrada no estoque"
+                              >
+                                <Boxes className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+                                <span>Distribuir CD</span>
+                              </button>
+                            )}
+                            {statusAtual === 'Em Separação' && (
+                              <button
+                                onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
+                                className="w-full h-7 px-2 bg-purple-50/90 hover:bg-purple-100/90 text-purple-700 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/60 rounded-lg text-[11px] font-semibold transition shadow-2xs cursor-pointer flex items-center justify-center gap-1 active:scale-98"
+                                title="Conferir separação física na Doca"
+                              >
+                                <PackageCheck className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" />
+                                <span>Separar Doca</span>
+                              </button>
+                            )}
+                            {statusAtual === 'Finalizado' && (
+                              <span className="w-full h-7 text-slate-500 dark:text-slate-400 text-[11px] font-medium inline-flex items-center justify-center gap-1 bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 rounded-lg">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Concluído
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Coluna 2: Ação de Recebimento Físico / Financeiro (Largura fixa com cores suaves) */}
+                          <div className="w-[160px] flex items-center justify-center">
+                            {!ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser?.role) ? (
+                              <button
+                                onClick={() => onConfirmReceipt(ord)}
+                                className="w-full h-7 px-2 bg-emerald-50/90 hover:bg-emerald-100/90 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 rounded-lg text-[10.5px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs active:scale-98"
+                                title="Registrar a entrega física do fornecedor na Matriz"
+                              >
+                                <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span>Confirmar Recebimento</span>
+                              </button>
+                            ) : ord.header.recebidoMatriz && !ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser?.role) ? (
+                              <button
+                                onClick={() => onAuthorizeFinancial(ord)}
+                                className="w-full h-7 px-2 bg-amber-50/90 hover:bg-amber-100/90 text-amber-800 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 rounded-lg text-[10.5px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs active:scale-98"
+                                title="Autorizar o envio dos boletos deste pedido para o Contas a Pagar"
+                              >
+                                <CreditCard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                <span>Liberar Boletos</span>
+                              </button>
+                            ) : ord.header.recebidoMatriz ? (
+                              <span className="w-full h-7 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-medium inline-flex items-center justify-center gap-1 border border-emerald-200/60 dark:border-emerald-800/40 rounded-lg bg-emerald-50/40 dark:bg-emerald-950/20">
+                                <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Recebido Matriz ✓
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
                       </td>
 
                       {/* Ações */}
@@ -1089,7 +1158,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             onClick={() => handleOpenOrder(ord)}
                             disabled={openingOrderId === ord.header.id}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 active:scale-95 transition cursor-pointer disabled:opacity-75 disabled:cursor-wait"
-                            title="Abrir este pedido no editor"
+                            title={canEditSpecificOrder(currentUser?.role, ord.header.status) ? "Abrir este pedido para edição" : "Visualizar detalhes do pedido (Somente leitura)"}
                           >
                             {openingOrderId === ord.header.id ? (
                               <>
@@ -1098,7 +1167,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                               </>
                             ) : (
                               <>
-                                <span>Abrir</span>
+                                <span>{canEditSpecificOrder(currentUser?.role, ord.header.status) ? 'Editar' : 'Visualizar'}</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </>
                             )}

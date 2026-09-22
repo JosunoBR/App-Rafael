@@ -71,11 +71,38 @@ class OrderService {
     }
   }
 
-  async saveOrder(orderData) {
+  async saveOrder(orderData, currentUser) {
     if (!orderData || !orderData.header || !orderData.header.numeroPedido) {
       const err = new Error('Dados do pedido inválidos: número do pedido é obrigatório.');
       err.statusCode = 400;
       throw err;
+    }
+
+    // Validação de Permissão: Pedidos fechados / em esteira
+    const currentId = orderData.header.id;
+    if (currentId) {
+      const existing = await orderRepository.findById(currentId);
+      if (existing && existing.header) {
+        const existingStatus = existing.header.status || 'Em Cotação';
+        const isClosed = existingStatus !== 'Em Cotação' && existingStatus !== 'Rascunho';
+        if (isClosed && currentUser) {
+          // Comprador: bloqueia alteração em pedido fechado com aviso amigável
+          if (currentUser.role === 'comprador') {
+            const err = new Error(`Este pedido já foi aprovado e está na esteira operacional (${existingStatus}). Para efetuar alterações comerciais ou de quantidades, solicite a liberação à Diretoria.`);
+            err.statusCode = 403;
+            err.code = 'ORDER_LOCKED';
+            throw err;
+          }
+          // Operadores de Depósito e Separação podem atualizar campos operacionais (separação/conferência)
+          // Demais perfis que não sejam diretoria nem operacionais são bloqueados
+          if (currentUser.role !== 'diretoria' && currentUser.role !== 'separacao' && currentUser.role !== 'deposito') {
+            const err = new Error(`Apenas a Diretoria possui autorização para editar pedidos que já foram fechados (Status atual: ${existingStatus}).`);
+            err.statusCode = 403;
+            err.code = 'ORDER_LOCKED';
+            throw err;
+          }
+        }
+      }
     }
 
     // Validação de integridade financeira antes de salvar
@@ -307,6 +334,133 @@ class OrderService {
       };
     }
     return { available: true, message: `O número "${num}" está disponível.` };
+  }
+
+  /**
+   * Confirma o recebimento físico de um pedido na Matriz (entrega do fornecedor).
+   * Permitido para: diretoria, comprador, deposito. Bloqueado para: separacao.
+   */
+  async confirmReceipt(orderId, { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos }, currentUser) {
+    const allowedRoles = ['diretoria', 'comprador', 'deposito'];
+    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
+      const err = new Error('Apenas Diretoria, Comprador ou Depósito podem confirmar o recebimento na Matriz.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Atualizar campos de recebimento no cabeçalho
+    order.header.recebidoMatriz = true;
+    order.header.dataRecebimentoMatriz = dataRecebimento || new Date().toISOString().split('T')[0];
+    order.header.recebidoPor = recebidoPor || currentUser.nome || 'Operador';
+    order.header.numeroNotaFiscal = numeroNotaFiscal || order.header.numeroNotaFiscal || '';
+    order.header.updatedAt = new Date().toISOString();
+
+    // Recalcular as datas de vencimento das parcelas a partir da data de recebimento na Matriz
+    const dataRecebimentoEfetiva = order.header.dataRecebimentoMatriz;
+    if (dataRecebimentoEfetiva && Array.isArray(order.installments) && order.installments.length > 0) {
+      const baseDt = new Date(`${dataRecebimentoEfetiva}T12:00:00Z`);
+      order.installments = order.installments.map((inst, index) => {
+        // Se a parcela já foi baixada como paga, preserva seus dados
+        if (inst.status === 'Pago') return inst;
+
+        let offsetDays = Number(inst.dias);
+        if (isNaN(offsetDays) || offsetDays <= 0) {
+          if (inst.vencimento && (order.header.dataPedido || order.header.previsaoEntrega)) {
+            const originalBase = new Date(`${order.header.previsaoEntrega || order.header.dataPedido}T12:00:00Z`);
+            const originalDue = new Date(`${inst.vencimento}T12:00:00Z`);
+            const diff = Math.round((originalDue.getTime() - originalBase.getTime()) / (1000 * 60 * 60 * 24));
+            if (diff > 0) offsetDays = diff;
+          }
+        }
+        if (isNaN(offsetDays) || offsetDays <= 0) {
+          offsetDays = (index + 1) * 30;
+        }
+
+        const newDue = new Date(baseDt.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+        const y = newDue.getUTCFullYear();
+        const m = String(newDue.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(newDue.getUTCDate()).padStart(2, '0');
+        const newDueIso = `${y}-${m}-${d}`;
+
+        return {
+          ...inst,
+          vencimento: newDueIso,
+          dataVencimento: newDueIso,
+          dias: offsetDays,
+          status: 'Previsto' // Conforme diretriz Mega 12: permanece Previsto até efetivo pagamento
+        };
+      });
+    }
+
+    const saved = await orderRepository.save(order);
+
+    // Sincronizar com o financeiro (só vai efetivamente criar títulos se recebido + autorizado)
+    try {
+      const financialService = require('./financialService');
+      await financialService.syncSingleOrder(saved);
+    } catch (finErr) {
+      console.error('Erro ao sincronizar recebimento com o financeiro:', finErr);
+    }
+
+    return {
+      success: true,
+      message: `Recebimento do pedido ${saved.header.numeroPedido} confirmado na Matriz!${autorizarBoletos && currentUser.role === 'diretoria' ? ' Boletos liberados para o Financeiro.' : ''}`,
+      order: saved
+    };
+  }
+
+  /**
+   * Autoriza a liberação dos boletos de um pedido para o Contas a Pagar (Financeiro).
+   * Restrito estritamente à Diretoria (RBAC).
+   */
+  async authorizeFinancialRelease(orderId, currentUser) {
+    if (!currentUser || currentUser.role !== 'diretoria') {
+      const err = new Error('Apenas a Diretoria pode autorizar a liberação de boletos para o Financeiro.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (!order.header.recebidoMatriz) {
+      const err = new Error('O pedido precisa estar fisicamente recebido na Matriz antes de liberar os boletos.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Marcar como autorizado
+    order.header.boletosLiberados = true;
+    order.header.boletosLiberadosPor = currentUser.nome || 'Diretoria';
+    order.header.boletosLiberadosEm = new Date().toISOString();
+    order.header.updatedAt = new Date().toISOString();
+
+    const saved = await orderRepository.save(order);
+
+    // Sincronizar com o financeiro — agora recebido + autorizado, os títulos serão criados
+    try {
+      const financialService = require('./financialService');
+      await financialService.syncSingleOrder(saved);
+    } catch (finErr) {
+      console.error('Erro ao sincronizar boletos autorizados com o financeiro:', finErr);
+    }
+
+    return {
+      success: true,
+      message: `Boletos do pedido ${saved.header.numeroPedido} liberados para o Contas a Pagar!`,
+      order: saved
+    };
   }
 }
 

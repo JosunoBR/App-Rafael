@@ -5,6 +5,7 @@ export type StoreCluster = 'A' | 'B' | 'C';
 export interface StoreConfig {
   id: string;
   name: string;
+  shortName?: string;
   cluster: StoreCluster;
   defaultWeight: number;
   active: boolean;
@@ -243,6 +244,17 @@ export interface OrderHeader {
   finalizadoPor?: string;
   dataFinalizacao?: string;
 
+  // Recebimento Físico na Matriz (Marco de Entrega do Fornecedor)
+  recebidoMatriz?: boolean;            // true = carga recebida fisicamente no CD/Matriz
+  dataRecebimentoMatriz?: string;      // Data ISO (YYYY-MM-DD) do recebimento físico
+  recebidoPor?: string;                // Nome do usuário que confirmou o recebimento
+  numeroNotaFiscal?: string;           // Número da NF de entrega do fornecedor
+
+  // Governança Financeira: Liberação de Boletos ao Contas a Pagar
+  boletosLiberados?: boolean;          // true = títulos autorizados para o financeiro
+  boletosLiberadosPor?: string;        // Usuário da diretoria que autorizou a liberação
+  boletosLiberadosEm?: string;         // Timestamp ISO da autorização
+
   // Resumo Financeiro Oficial Consolidado
   totalBruto?: number;
   totalIpi?: number;
@@ -381,10 +393,12 @@ export interface FinancialEntry {
   dataVencimento: string; // YYYY-MM-DD
   valor: number;
   status: FinancialStatus;
+  statusPrevisao?: 'PREVISTO' | 'CONFIRMADO';
   dataPagamento?: string | null; // YYYY-MM-DD
   valorPago?: number;
   observacao?: string;
   recorrente?: boolean;
+  recorrenciaId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -406,6 +420,10 @@ export interface FinancialSummary {
   countVenceHoje: number;
   totalEmAtraso: number;
   countEmAtraso: number;
+  totalConfirmado?: number;
+  countConfirmado?: number;
+  totalPrevistoValor?: number;
+  countPrevisto?: number;
   totalEntries: number;
   byCategory: Record<string, { total: number; count: number; pago: number }>;
   byStore: Record<string, { total: number; count: number; pago: number }>;

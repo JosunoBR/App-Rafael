@@ -48,10 +48,11 @@ class FiscalRepository {
       if (existing) {
         await execute(`
           UPDATE stores SET
-            name = ?, cluster = ?, defaultWeight = ?, active = ?
+            name = ?, shortName = ?, cluster = ?, defaultWeight = ?, active = ?
           WHERE id = ?
         `, [
           (store.name || '').trim(),
+          (store.shortName || store.name || '').trim(),
           store.cluster || 'A',
           Math.max(0, Number(store.defaultWeight) || 0),
           store.active ? 1 : 0,
@@ -59,11 +60,12 @@ class FiscalRepository {
         ]);
       } else {
         await execute(`
-          INSERT INTO stores (id, name, cluster, defaultWeight, active)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO stores (id, name, shortName, cluster, defaultWeight, active)
+          VALUES (?, ?, ?, ?, ?, ?)
         `, [
           store.id,
           (store.name || '').trim(),
+          (store.shortName || store.name || '').trim(),
           store.cluster || 'A',
           Math.max(0, Number(store.defaultWeight) || 0),
           store.active ? 1 : 0

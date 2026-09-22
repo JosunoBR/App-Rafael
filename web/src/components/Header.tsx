@@ -25,7 +25,9 @@ import {
   ChevronDown,
   Check,
   Warehouse,
-  Copy
+  Copy,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { ActiveNavTab, canAccessTab, canCreateOrEditOrders } from '../shared/permissions';
@@ -92,14 +94,18 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [isOrdersDropdownOpen]);
 
-  // Filtra exclusivamente os pedidos salvos que ainda NÃO seguiram o fluxo da esteira (apenas 'Em Cotação' ou 'Rascunho')
+  // Para a Diretoria, disponibiliza todos os pedidos salvos (inclusive os já fechados) para edição
+  // Para outros perfis (comprador), filtra apenas pedidos em cotação ou rascunho
   const openSavedOrders = useMemo(() => {
     if (!savedOrders) return [];
+    if (currentUser?.role === 'diretoria') {
+      return savedOrders;
+    }
     return savedOrders.filter(o => {
       const status = o.header?.status || 'Em Cotação';
       return status === 'Em Cotação' || status === 'Rascunho';
     });
-  }, [savedOrders]);
+  }, [savedOrders, currentUser?.role]);
 
   const filteredOrders = useMemo(() => {
     if (!orderSearchTerm.trim()) return openSavedOrders;
@@ -113,6 +119,10 @@ export const Header: React.FC<HeaderProps> = ({
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
+      case 'Finalizado':
+        return { label: 'Finalizado', cls: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' };
+      case 'Em Distribuição':
+        return { label: 'Em Distribuição', cls: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30' };
       case 'Aprovado':
         return { label: 'Aprovado', cls: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30' };
       case 'Em Separação':
@@ -459,24 +469,47 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* Subgrupo: Ações Principais (Salvar & Fechar Pedido) */}
               <div className="flex items-center gap-1.5">
-                <button
-                  onClick={onSaveOrder}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-amber-400 hover:text-amber-700 dark:hover:text-amber-400 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                  title="Salvar alterações e manter pedido em espera/rascunho"
-                >
-                  <Save className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Salvar pedido</span>
-                </button>
+                {order.header.status && order.header.status !== 'Em Cotação' && order.header.status !== 'Rascunho' ? (
+                  currentUser?.role === 'diretoria' ? (
+                    <button
+                      onClick={onSaveOrder}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer hover:scale-102"
+                      title="Salvar alterações mantendo o pedido no fluxo operacional atual"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-emerald-200" />
+                      <span>Salvar alterações</span>
+                    </button>
+                  ) : (
+                    <div 
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 select-none"
+                      title="Este pedido já foi fechado. Apenas a Diretoria possui autorização para editá-lo."
+                    >
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Fechado (Somente Leitura)</span>
+                    </div>
+                  )
+                ) : (
+                  <>
+                    <button
+                      onClick={onSaveOrder}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-amber-400 hover:text-amber-700 dark:hover:text-amber-400 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                      title="Salvar alterações e manter pedido em espera/rascunho"
+                    >
+                      <Save className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Salvar pedido</span>
+                    </button>
 
-                {onCloseOrder && (
-                  <button
-                    onClick={onCloseOrder}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer hover:scale-102"
-                    title="Fechar pedido e enviar para a separação do depósito"
-                  >
-                    <PackageCheck className="w-3.5 h-3.5" />
-                    <span>Fechar pedido</span>
-                  </button>
+                    {onCloseOrder && (
+                      <button
+                        onClick={onCloseOrder}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer hover:scale-102"
+                        title="Fechar pedido e enviar para a separação do depósito"
+                      >
+                        <PackageCheck className="w-3.5 h-3.5" />
+                        <span>Fechar pedido</span>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
 

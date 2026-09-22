@@ -14,6 +14,57 @@ import { ensureTrailingBlankItem } from '../../utils/orderItemUtils';
 import { getNextOrderNumber } from '../../utils/storage';
 
 /**
+ * Localiza a loja correspondente comparando ID, nome completo ou nome abreviado (shortName).
+ * Tolera variações de maiúsculas/minúsculas, acentuação e pontuação.
+ */
+export function findMatchingStore(targetCol: string, stores: StoreConfig[]): StoreConfig | undefined {
+  if (!targetCol) return undefined;
+  const rawTarget = targetCol.trim();
+  const cleanTarget = rawTarget.toLowerCase();
+  const normTarget = cleanTarget.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
+  // 1. Casamento direto por ID
+  const byId = stores.find(s => s.id.toLowerCase() === cleanTarget || s.id === rawTarget);
+  if (byId) return byId;
+
+  // 2. Casamento por ID normalizado (ex: "deposito_central" -> "depositocentral")
+  const byNormId = stores.find(s => s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === normTarget);
+  if (byNormId) return byNormId;
+
+  // 3. Casamento exato por nome completo ou shortName (case-insensitive)
+  const byNameOrShort = stores.find(s => {
+    const sName = s.name.toLowerCase().trim();
+    const sShort = (s.shortName || '').toLowerCase().trim();
+    return sName === cleanTarget || (sShort && sShort === cleanTarget);
+  });
+  if (byNameOrShort) return byNameOrShort;
+
+  // 4. Casamento normalizado (sem acentos ou símbolos)
+  const byNormName = stores.find(s => {
+    const sNameNorm = s.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    const sShortNorm = (s.shortName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    return sNameNorm === normTarget || (sShortNorm && sShortNorm === normTarget);
+  });
+  if (byNormName) return byNormName;
+
+  // 5. Inclusão de substring para tolerar sufixos ou abreviações parciais
+  return stores.find(s => {
+    const sNameNorm = s.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    const sShortNorm = (s.shortName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    const sIdNorm = s.id.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    return (
+      (sNameNorm.length >= 4 && normTarget.includes(sNameNorm)) ||
+      (normTarget.length >= 4 && sNameNorm.includes(normTarget)) ||
+      (sShortNorm.length >= 3 && normTarget.includes(sShortNorm)) ||
+      (normTarget.length >= 3 && sShortNorm.includes(normTarget)) ||
+      (sIdNorm.length >= 4 && normTarget.includes(sIdNorm)) ||
+      (normTarget.length >= 4 && sIdNorm.includes(normTarget))
+    );
+  });
+}
+
+/**
  * Converte os dados estruturados da planilha em um PurchaseOrder pronto para o sistema.
  */
 export function mapParsedExcelToOrder(
@@ -96,11 +147,8 @@ export function mapParsedExcelToOrder(
       for (const [storeName, itemsMap] of Object.entries(parsed.storeAllocations)) {
         const qty = itemsMap[rawItem.codigo] || itemsMap[finalCode] || 0;
         if (qty > 0) {
-          // Tenta associar com o id da loja cadastrada no sistema
-          const matchedStore = storeConfigs.find(s => 
-            s.name.toLowerCase().trim() === storeName.toLowerCase().trim() ||
-            storeName.toLowerCase().includes(s.name.toLowerCase().trim())
-          );
+          // Tenta associar com o id da loja cadastrada no sistema (por ID, nome completo ou nome abreviado da coluna)
+          const matchedStore = findMatchingStore(storeName, storeConfigs);
           const storeKey = matchedStore ? matchedStore.id : storeName;
           itemAllocations[storeKey] = qty;
           allocCount += qty;

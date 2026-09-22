@@ -152,7 +152,10 @@ class OrderRepository {
           separationStatus = ?, totalBruto = ?, totalIpi = ?, totalDesconto = ?, totalLiquido = ?, totalGeral = ?, totalVolumes = ?, totalPecas = ?, installmentsJson = ?,
           fiscalConfigJson = ?, aliquotaIpi = ?, aliquotaFrete = ?, aliquotaIcmsEntrada = ?,
           aliquotaCustoFixo = ?, aliquotaIcmsSaida = ?, aliquotaPisCofinsIr = ?,
-          itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, inspectionJson = ?, updatedAt = ?
+          itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, inspectionJson = ?,
+          recebidoMatriz = ?, dataRecebimentoMatriz = ?, recebidoPor = ?, numeroNotaFiscal = ?,
+          boletosLiberados = ?, boletosLiberadosPor = ?, boletosLiberadosEm = ?,
+          updatedAt = ?
         WHERE id = ?
       `;
       await execute(sql, [
@@ -197,6 +200,13 @@ class OrderRepository {
         separationJson,
         paymentConfigJson,
         order.inspection ? JSON.stringify(order.inspection) : null,
+        order.header.recebidoMatriz ? 1 : 0,
+        order.header.dataRecebimentoMatriz || null,
+        order.header.recebidoPor || null,
+        order.header.numeroNotaFiscal || null,
+        order.header.boletosLiberados ? 1 : 0,
+        order.header.boletosLiberadosPor || null,
+        order.header.boletosLiberadosEm || null,
         now,
         targetId
       ]);
@@ -211,7 +221,10 @@ class OrderRepository {
           separationStatus, totalBruto, totalIpi, totalDesconto, totalLiquido, totalGeral, totalVolumes, totalPecas, installmentsJson,
           fiscalConfigJson, aliquotaIpi, aliquotaFrete, aliquotaIcmsEntrada,
           aliquotaCustoFixo, aliquotaIcmsSaida, aliquotaPisCofinsIr,
-          itemsJson, separationDistributionJson, paymentConfigJson, inspectionJson, createdAt, updatedAt
+          itemsJson, separationDistributionJson, paymentConfigJson, inspectionJson,
+          recebidoMatriz, dataRecebimentoMatriz, recebidoPor, numeroNotaFiscal,
+          boletosLiberados, boletosLiberadosPor, boletosLiberadosEm,
+          createdAt, updatedAt
         ) VALUES (
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
@@ -221,7 +234,10 @@ class OrderRepository {
           ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
-          ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?,
+          ?, ?
         )
       `;
       await execute(sql, [
@@ -267,6 +283,13 @@ class OrderRepository {
         separationJson,
         paymentConfigJson,
         order.inspection ? JSON.stringify(order.inspection) : null,
+        order.header.recebidoMatriz ? 1 : 0,
+        order.header.dataRecebimentoMatriz || null,
+        order.header.recebidoPor || null,
+        order.header.numeroNotaFiscal || null,
+        order.header.boletosLiberados ? 1 : 0,
+        order.header.boletosLiberadosPor || null,
+        order.header.boletosLiberadosEm || null,
         order.header.createdAt || now,
         now
       ]);
@@ -709,6 +732,13 @@ class OrderRepository {
         observacoes: r.observacoes,
         status: r.status,
         separationStatus: r.separationStatus,
+        recebidoMatriz: r.recebidoMatriz === 1,
+        dataRecebimentoMatriz: r.dataRecebimentoMatriz || null,
+        recebidoPor: r.recebidoPor || null,
+        numeroNotaFiscal: r.numeroNotaFiscal || null,
+        boletosLiberados: r.boletosLiberados === 1,
+        boletosLiberadosPor: r.boletosLiberadosPor || null,
+        boletosLiberadosEm: r.boletosLiberadosEm || null,
         totalBruto,
         totalIpi,
         totalDesconto,

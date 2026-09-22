@@ -69,6 +69,7 @@ async function getDatabase() {
     CREATE TABLE IF NOT EXISTS stores (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      shortName TEXT,
       cluster TEXT NOT NULL,
       defaultWeight REAL NOT NULL,
       active INTEGER NOT NULL DEFAULT 1
@@ -333,6 +334,8 @@ async function getDatabase() {
       valorPago REAL DEFAULT 0,
       observacao TEXT DEFAULT '',
       recorrente INTEGER DEFAULT 0,
+      recorrenciaId TEXT,
+      statusPrevisao TEXT NOT NULL DEFAULT 'CONFIRMADO', -- 'PREVISTO' | 'CONFIRMADO'
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE SET NULL
@@ -409,7 +412,14 @@ async function getDatabase() {
         descontoComercialTotal: "REAL DEFAULT 0",
         descontoComercialTipo: "TEXT DEFAULT '%'",
         inspectionJson: "TEXT",
-        isDraft: "INTEGER DEFAULT 0"
+        isDraft: "INTEGER DEFAULT 0",
+        recebidoMatriz: "INTEGER DEFAULT 0",
+        dataRecebimentoMatriz: "TEXT",
+        recebidoPor: "TEXT",
+        numeroNotaFiscal: "TEXT",
+        boletosLiberados: "INTEGER DEFAULT 0",
+        boletosLiberadosPor: "TEXT",
+        boletosLiberadosEm: "TEXT"
       };
 
       Object.entries(requiredCols).forEach(([col, def]) => {
@@ -512,6 +522,39 @@ async function getDatabase() {
         }
       });
     }
+    // Migração de colunas da tabela stores (suporte a Nome Abreviado / Coluna)
+    try {
+      const storesTableInfo = dbInstance.exec("PRAGMA table_info(stores)");
+      if (storesTableInfo[0]) {
+        const colNames = storesTableInfo[0].values.map(v => v[1]);
+        if (!colNames.includes('shortName')) {
+          try { dbInstance.run("ALTER TABLE stores ADD COLUMN shortName TEXT"); } catch (e) {}
+        }
+      }
+      // Inicializa shortName para lojas padrão ou com shortName vazio
+      dbInstance.run(`
+        UPDATE stores SET shortName = 'PG Centro' WHERE id = 'pg_centro' AND (shortName IS NULL OR shortName = '');
+        UPDATE stores SET shortName = 'CD Central' WHERE id = 'deposito_central' AND (shortName IS NULL OR shortName = '');
+        UPDATE stores SET shortName = name WHERE (shortName IS NULL OR shortName = '');
+      `);
+    } catch (e) {}
+    // Migração de colunas da tabela financial_entries (suporte a boletos previstos e confirmados)
+    try {
+      const finTableInfo = dbInstance.exec("PRAGMA table_info(financial_entries)");
+      if (finTableInfo[0]) {
+        const colNames = finTableInfo[0].values.map(v => v[1]);
+        if (!colNames.includes('statusPrevisao')) {
+          try { dbInstance.run("ALTER TABLE financial_entries ADD COLUMN statusPrevisao TEXT DEFAULT 'CONFIRMADO'"); } catch (e) {}
+        }
+        if (!colNames.includes('recorrenciaId')) {
+          try { dbInstance.run("ALTER TABLE financial_entries ADD COLUMN recorrenciaId TEXT"); } catch (e) {}
+        }
+      }
+      try {
+        dbInstance.run("CREATE INDEX IF NOT EXISTS idx_fin_status_previsao ON financial_entries(statusPrevisao)");
+        dbInstance.run("CREATE INDEX IF NOT EXISTS idx_fin_recorrencia ON financial_entries(recorrenciaId)");
+      } catch (e) {}
+    } catch (e) {}
     // Sanitização de nomes de fornecedores de transferência e remoção de títulos indevidos
     try {
       dbInstance.run("UPDATE purchase_orders SET fornecedor = REPLACE(fornecedor, 'Depósito Central Mega 12', 'Depósito Central') WHERE fornecedor LIKE '%Depósito Central Mega 12%'");
@@ -554,16 +597,74 @@ async function getDatabase() {
   return dbInstance;
 }
 
-function saveDatabaseToDisk() {
+// Persistência em disco com debounce e gravação atômica assíncrona
+let saveTimeout = null;
+let isWritingDisk = false;
+let pendingDiskSave = false;
+
+function scheduleDatabaseSave(delayMs = 2000) {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    saveDatabaseToDiskAsync();
+  }, delayMs);
+}
+
+async function saveDatabaseToDiskAsync() {
   if (!dbInstance) return;
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
+  }
+  if (isWritingDisk) {
+    pendingDiskSave = true;
+    return;
+  }
+  isWritingDisk = true;
   try {
     const data = dbInstance.export();
     const buffer = Buffer.from(data);
-    fs.writeFileSync(dbPath, buffer);
+    const tmpPath = `${dbPath}.tmp`;
+    await fs.promises.writeFile(tmpPath, buffer);
+    await fs.promises.rename(tmpPath, dbPath);
   } catch (err) {
-    console.error('Erro ao salvar banco no disco:', err);
+    console.error('Erro ao salvar banco no disco assincronamente:', err);
+  } finally {
+    isWritingDisk = false;
+    if (pendingDiskSave) {
+      pendingDiskSave = false;
+      scheduleDatabaseSave(500);
+    }
   }
 }
+
+function saveDatabaseToDisk() {
+  if (!dbInstance) return;
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
+  }
+  try {
+    const data = dbInstance.export();
+    const buffer = Buffer.from(data);
+    const tmpPath = `${dbPath}.tmp`;
+    fs.writeFileSync(tmpPath, buffer);
+    fs.renameSync(tmpPath, dbPath);
+  } catch (err) {
+    console.error('Erro ao salvar banco no disco sincronamente:', err);
+  }
+}
+
+function flushDatabaseToDisk() {
+  saveDatabaseToDisk();
+}
+
+// Garante flush imediato ao receber sinais de finalização do container
+process.on('SIGTERM', () => {
+  flushDatabaseToDisk();
+});
+process.on('SIGINT', () => {
+  flushDatabaseToDisk();
+});
 
 // Helpers de Execução de Queries
 async function queryAll(sql, params = []) {
@@ -586,12 +687,15 @@ async function queryOne(sql, params = []) {
 async function execute(sql, params = []) {
   const db = await getDatabase();
   db.run(sql, params);
-  saveDatabaseToDisk();
+  // Operação em memória concluída instantaneamente; disco é persistido em segundo plano com debounce
+  scheduleDatabaseSave(2000);
 }
 
 module.exports = {
   getDatabase,
   saveDatabaseToDisk,
+  scheduleDatabaseSave,
+  flushDatabaseToDisk,
   dbPath,
   queryAll,
   queryOne,

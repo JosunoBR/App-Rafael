@@ -14,8 +14,10 @@ router.get('/entries/:id', (req, res) => financialController.getEntryById(req, r
 router.post('/entries', (req, res) => financialController.createEntry(req, res));
 router.put('/entries/:id', (req, res) => financialController.updateEntry(req, res));
 router.post('/entries/:id/pay', (req, res) => financialController.payEntry(req, res));
+router.post('/entries/batch-pay', (req, res) => financialController.batchPay(req, res));
 router.delete('/entries/:id', (req, res) => financialController.deleteEntry(req, res));
 router.post('/sync-orders', (req, res) => financialController.syncOrders(req, res));
 router.post('/import-sheet', (req, res) => financialController.importSheet(req, res));
+router.delete('/recurring/:recorrenciaId', (req, res) => financialController.cancelRecurrence(req, res));
 
 module.exports = router;

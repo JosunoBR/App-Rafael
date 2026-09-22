@@ -31,6 +31,7 @@ class BackupRestoreService {
     const productsList = parseKey('mega12_products_v1') || parseKey('mega12_products') || parseKey('products') || [];
     const suppliersList = parseKey('mega12_suppliers_v1') || parseKey('mega12_suppliers') || parseKey('suppliers') || [];
     const paymentConds = parseKey('mega12_payment_conditions') || parseKey('payment_conditions') || [];
+    const storesList = parseKey('mega12_stores_v1') || parseKey('stores') || [];
 
     // 2. Restaurar / Reconstruir Fornecedores
     const supplierMap = new Map();
@@ -379,6 +380,18 @@ class BackupRestoreService {
       }
     }
 
+    // 6. Restaurar Matriz de Lojas (se presente no backup)
+    let restoredStoresCount = 0;
+    if (Array.isArray(storesList) && storesList.length > 0) {
+      try {
+        const fiscalRepository = require('../repositories/fiscalRepository');
+        await fiscalRepository.updateStores(storesList);
+        restoredStoresCount = storesList.length;
+      } catch (storeErr) {
+        console.warn('Aviso ao restaurar lojas do backup:', storeErr.message);
+      }
+    }
+
     saveDatabaseToDisk();
 
     return {
@@ -387,7 +400,8 @@ class BackupRestoreService {
       restoredProductsCount,
       restoredOrdersCount,
       restoredItemsCount,
-      restoredConditionsCount
+      restoredConditionsCount,
+      restoredStoresCount
     };
   }
 

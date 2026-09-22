@@ -52,6 +52,9 @@ import {
 import { 
   OrderHistoryPage 
 } from './components/OrderHistoryPage';
+import {
+  ReceiptConfirmationModal
+} from './components/ReceiptConfirmationModal';
 import { 
   FiscalSettingsPage 
 } from './components/FiscalSettingsPage';
@@ -148,7 +151,9 @@ import {
   fetchHealth,
   duplicateOrderInDb,
   verifyServerSession,
-  isJwtExpired
+  isJwtExpired,
+  confirmReceiptInDb,
+  authorizeFinancialInDb
 } from './utils/api';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
 import { exportOrderToExcel } from './utils/excelExporter';
@@ -157,8 +162,8 @@ import { calculateItemFiscal, normalizeRateToDecimal } from './shared/fiscalEngi
 import { DEFAULT_FISCAL_CONFIG } from './shared/constants';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem, generateNextProductCode } from './utils/orderItemUtils';
-import { CheckCircle2, AlertCircle, Plus } from 'lucide-react';
-import { canAccessTab, canCreateOrEditOrders, getDefaultNavForRole } from './shared/permissions';
+import { CheckCircle2, AlertCircle, Plus, Lock, ShieldCheck } from 'lucide-react';
+import { canAccessTab, canCreateOrEditOrders, getDefaultNavForRole, canEditSpecificOrder } from './shared/permissions';
 
 export function App() {
   // 1. Estado de Autenticação (RBAC) - Validação prévia de expiração local
@@ -269,6 +274,7 @@ export function App() {
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState<boolean>(false);
   const [supplierModalEditTarget, setSupplierModalEditTarget] = useState<Supplier | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [receiptModalOrder, setReceiptModalOrder] = useState<PurchaseOrder | null>(null);
 
   // Lista consolidada de pedidos (o pedido em edição em memória sobrepõe a versão antiga salva)
   const effectiveOrders = useMemo(() => {
@@ -531,16 +537,183 @@ export function App() {
     }
   }, [isDark]);
 
-  // Auto-save active order in local storage and SQLite (debounced para evitar engasgos ao abrir ou navegar entre pedidos)
+  // Registro automático de produtos novos no catálogo ao salvar pedidos
+  const autoRegisterProductsFromOrder = async (validItems: OrderItem[]) => {
+    const itemsToAutoRegister = validItems.filter(it => it.descricao && it.descricao.trim().length > 0);
+    if (itemsToAutoRegister.length === 0) return;
+
+    const newProdsToRegister: Product[] = [];
+    const prodsToUpdate: Product[] = [];
+    let currentProds = [...products];
+
+    // Índices em memória para busca instantânea O(1) escopados por fornecedor
+    const existingDescSet = new Map<string, Product>();
+    const existingCodeSet = new Map<string, Product>();
+    currentProds.forEach(p => {
+      const supKey = (p.supplierId || '').trim();
+      if (p.descricao) {
+        existingDescSet.set(`${supKey}:::${p.descricao.trim().toLowerCase()}`, p);
+      }
+      if (p.codigo) existingCodeSet.set(p.codigo.trim().toLowerCase(), p);
+      if (p.codigoInterno) existingCodeSet.set(p.codigoInterno.trim().toLowerCase(), p);
+    });
+
+    for (const it of itemsToAutoRegister) {
+      const cleanDesc = it.descricao.trim().toLowerCase();
+      const code = (it.codigo || it.codigoInterno || '').trim().toLowerCase();
+      const fallbackSupplier = suppliers[0];
+      const assignedSupplierId = order.header.supplierId || fallbackSupplier?.id || '';
+      const assignedSupplierNome = order.header.fornecedor || fallbackSupplier?.razaoSocial || '';
+
+      // 🛡️ Busca primeiro por código; se for por descrição, busca estritamente no catálogo DO MESMO FORNECEDOR
+      const existing = (code ? existingCodeSet.get(code) : undefined) || 
+                       (cleanDesc ? (existingDescSet.get(`${assignedSupplierId}:::${cleanDesc}`) || existingDescSet.get(`:::${cleanDesc}`)) : undefined);
+
+      if (!existing) {
+        const codInterno = it.codigoInterno || it.codigo || `PRD-${String(currentProds.length + 1).padStart(3, '0')}`;
+        const newProd: Product = {
+          id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+          codigoInterno: codInterno,
+          codigo: codInterno,
+          codigoFornecedor: it.codigoFornecedor || '',
+          codigoBarras: '',
+          eanBarcode: '',
+          descricao: it.descricao.trim(),
+          categoria: 'Geral',
+          fotoUrl: it.fotoUrl || '',
+          qtdPorPacote: it.qtdNoPacote || it.qtdPorPacote || 1,
+          precoUnitarioPadrao: it.precoUnitario || 0,
+          pdvSugerido: it.pdvAlvo || 0,
+          ncm: '',
+          supplierId: assignedSupplierId,
+          nomeFornecedor: assignedSupplierNome,
+          ativo: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        newProdsToRegister.push(newProd);
+        currentProds.push(newProd);
+      } else if (!existing.supplierId || !existing.nomeFornecedor) {
+        existing.supplierId = assignedSupplierId;
+        existing.nomeFornecedor = assignedSupplierNome;
+        existing.updatedAt = new Date().toISOString();
+        prodsToUpdate.push(existing);
+      }
+    }
+
+    const prodsToSync = [...newProdsToRegister, ...prodsToUpdate];
+    if (prodsToSync.length > 0) {
+      try {
+        await saveProductsBatchToDb(prodsToSync);
+      } catch {
+        for (const p of prodsToSync) {
+          await saveProductToDb(p).catch(() => {});
+        }
+      }
+      try {
+        saveBatchProductsToStorage(prodsToSync);
+      } catch (storageErr) {
+        console.warn('Aviso: falha ao sincronizar produtos no cache local:', storageErr);
+      }
+      const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
+      setProducts(refreshed);
+    }
+  };
+
+  // Salva o pedido silenciosamente para contingência e troca segura de telas/pedidos sem perda de dados
+  const saveOrderSilently = async (targetOrder: PurchaseOrder) => {
+    const validItems = (targetOrder.items || []).filter(it => !isOrderItemBlank(it));
+    if (validItems.length === 0 && (!targetOrder.header.fornecedor || targetOrder.header.fornecedor.trim() === '')) {
+      return;
+    }
+
+    const cleanNum = (targetOrder.header.numeroPedido || '').trim().toUpperCase();
+    if (!cleanNum) return;
+
+    // 🛡️ Não permite salvar se o número de pedido colidir com outro pedido existente
+    const duplicate = savedOrders.find(o => 
+      o.header.id !== targetOrder.header.id && 
+      o.header.numeroPedido && 
+      o.header.numeroPedido.trim().toUpperCase() === cleanNum
+    );
+    if (duplicate) {
+      console.warn(`[AutoSave] Abortado: número ${cleanNum} já pertence a outro pedido (${duplicate.header.fornecedor}).`);
+      return;
+    }
+
+    // Registra novos produtos no catálogo em segundo plano sem travar a interface
+    autoRegisterProductsFromOrder(validItems).catch(err => {
+      console.warn('Aviso ao sincronizar produtos em segundo plano:', err);
+    });
+
+    const today = new Date().toISOString().split('T')[0];
+    const targetDate = targetOrder.header.dataPedido || targetOrder.header.dataEmissao || today;
+
+    // Recupera valor de frete das parcelas caso o header tenha ficado zerado
+    const existingFrete = Array.isArray(targetOrder.installments)
+      ? targetOrder.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
+      : undefined;
+
+    let targetValorFrete = Number(targetOrder.header.valorFrete ?? targetOrder.header.valorFreteGlobal) || 0;
+    if (targetValorFrete <= 0 && existingFrete && existingFrete.valor > 0) {
+      targetValorFrete = existingFrete.valor;
+    }
+    let targetTipoFrete = targetOrder.header.tipoFrete;
+    if (targetValorFrete > 0 && (!targetTipoFrete || targetTipoFrete === 'CIF')) {
+      targetTipoFrete = 'FOB';
+    }
+
+    // Preserva fielmente o status do pedido (não rebaixa pedidos Aprovados ou Em Distribuição para Em Cotação)
+    const headerWithFrete = {
+      ...targetOrder.header,
+      tipoFrete: targetTipoFrete || targetOrder.header.tipoFrete || 'CIF',
+      valorFrete: targetValorFrete,
+      valorFreteGlobal: targetValorFrete,
+      dataPedido: targetDate,
+      dataEmissao: targetOrder.header.dataEmissao || targetDate,
+      isDraft: targetOrder.header.isDraft !== undefined ? targetOrder.header.isDraft : true,
+      status: targetOrder.header.status || 'Em Cotação',
+      updatedAt: new Date().toISOString()
+    };
+
+    const orderToSave: PurchaseOrder = {
+      ...targetOrder,
+      items: validItems,
+      header: headerWithFrete,
+      installments: generateOrderInstallments({ ...targetOrder, header: headerWithFrete }, undefined, undefined, true)
+    };
+
+    // Atualiza imediatamente o histórico local e o estado em memória sem re-baixar todos os pedidos pela rede
+    saveOrderToHistory(orderToSave);
+    setSavedOrders(prev => {
+      const idx = prev.findIndex(o => o.header.id === orderToSave.header.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = orderToSave;
+        return next;
+      }
+      return [orderToSave, ...prev];
+    });
+
+    try {
+      await saveOrderToDb(orderToSave);
+    } catch (err) {
+      console.warn('Aviso ao sincronizar pedido silenciosamente com o SQLite:', err);
+    }
+  };
+
+  // Auto-save active order in local storage and SQLite (unificado para 1 minuto de inatividade)
   useEffect(() => {
+    // 1. Salva imediatamente o rascunho no localStorage para segurança máxima a cada tecla
+    saveCurrentOrder(order);
+
+    // 2. Sincroniza silenciosamente com o banco SQLite a cada 60 segundos de inatividade
     const timer = setTimeout(() => {
-      saveCurrentOrder(order);
-      // Sincroniza silenciosamente com SQLite se houver itens válidos ou fornecedor preenchido
       const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
       if (validItems.length > 0 || (order.header?.fornecedor && order.header.fornecedor.trim() !== '')) {
         saveOrderSilently(order).catch(() => {});
       }
-    }, 1000);
+    }, 60000); // 1 minuto unificado conforme validação do usuário
     return () => clearTimeout(timer);
   }, [order]);
 
@@ -815,9 +988,14 @@ export function App() {
   };
 
   const handleDuplicateItem = (itemToClone: OrderItem) => {
+    // 🛡️ Gera um novo código interno único e sequencial para prevenir colisão de sabores ou produtos diferentes
+    const newCode = generateNextProductCode(products, order.items);
     const clonedItem: OrderItem = {
       ...itemToClone,
       id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      codigo: newCode,
+      codigoInterno: newCode,
+      codigoFornecedor: '', // limpa para obrigar ref correta do fornecedor ou evitar duplicidade
       descricao: itemToClone.descricao
     };
 
@@ -831,7 +1009,7 @@ export function App() {
         items: synced.items
       };
     });
-    showToast('Item duplicado com sucesso!');
+    showToast(`Item duplicado com novo código (${newCode})! Ajuste a descrição ou sabor conforme necessário.`, 'success');
   };
 
   // Iniciar novo pedido em branco (com proteção automática para não perder rascunho anterior em digitação)
@@ -1047,171 +1225,6 @@ export function App() {
     showToast(`📦 Compra Padrão de "${targetSup.razaoSocial}" carregada (${template.items.length} itens)!`, 'success');
   };
 
-  // Registro automático de produtos novos no catálogo ao salvar pedidos
-  const autoRegisterProductsFromOrder = async (validItems: OrderItem[]) => {
-    const itemsToAutoRegister = validItems.filter(it => it.descricao && it.descricao.trim().length > 0);
-    if (itemsToAutoRegister.length === 0) return;
-
-    const newProdsToRegister: Product[] = [];
-    const prodsToUpdate: Product[] = [];
-    let currentProds = [...products];
-
-    // Índices em memória para busca instantânea O(1) escopados por fornecedor
-    const existingDescSet = new Map<string, Product>();
-    const existingCodeSet = new Map<string, Product>();
-    currentProds.forEach(p => {
-      const supKey = (p.supplierId || '').trim();
-      if (p.descricao) {
-        existingDescSet.set(`${supKey}:::${p.descricao.trim().toLowerCase()}`, p);
-      }
-      if (p.codigo) existingCodeSet.set(p.codigo.trim().toLowerCase(), p);
-      if (p.codigoInterno) existingCodeSet.set(p.codigoInterno.trim().toLowerCase(), p);
-    });
-
-    for (const it of itemsToAutoRegister) {
-      const cleanDesc = it.descricao.trim().toLowerCase();
-      const code = (it.codigo || it.codigoInterno || '').trim().toLowerCase();
-      const fallbackSupplier = suppliers[0];
-      const assignedSupplierId = order.header.supplierId || fallbackSupplier?.id || '';
-      const assignedSupplierNome = order.header.fornecedor || fallbackSupplier?.razaoSocial || '';
-
-      // 🛡️ Busca primeiro por código; se for por descrição, busca estritamente no catálogo DO MESMO FORNECEDOR
-      const existing = (code ? existingCodeSet.get(code) : undefined) || 
-                       (cleanDesc ? (existingDescSet.get(`${assignedSupplierId}:::${cleanDesc}`) || existingDescSet.get(`:::${cleanDesc}`)) : undefined);
-
-      if (!existing) {
-        const codInterno = it.codigoInterno || it.codigo || `PRD-${String(currentProds.length + 1).padStart(3, '0')}`;
-        const newProd: Product = {
-          id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-          codigoInterno: codInterno,
-          codigo: codInterno,
-          codigoFornecedor: it.codigoFornecedor || '',
-          codigoBarras: '',
-          eanBarcode: '',
-          descricao: it.descricao.trim(),
-          categoria: 'Geral',
-          fotoUrl: it.fotoUrl || '',
-          qtdPorPacote: it.qtdNoPacote || it.qtdPorPacote || 1,
-          precoUnitarioPadrao: it.precoUnitario || 0,
-          pdvSugerido: it.pdvAlvo || 0,
-          ncm: '',
-          supplierId: assignedSupplierId,
-          nomeFornecedor: assignedSupplierNome,
-          ativo: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        newProdsToRegister.push(newProd);
-        currentProds.push(newProd);
-      } else if (!existing.supplierId || !existing.nomeFornecedor) {
-        existing.supplierId = assignedSupplierId;
-        existing.nomeFornecedor = assignedSupplierNome;
-        existing.updatedAt = new Date().toISOString();
-        prodsToUpdate.push(existing);
-      }
-    }
-
-    const prodsToSync = [...newProdsToRegister, ...prodsToUpdate];
-    if (prodsToSync.length > 0) {
-      try {
-        await saveProductsBatchToDb(prodsToSync);
-      } catch {
-        for (const p of prodsToSync) {
-          await saveProductToDb(p).catch(() => {});
-        }
-      }
-      try {
-        saveBatchProductsToStorage(prodsToSync);
-      } catch (storageErr) {
-        console.warn('Aviso: falha ao sincronizar produtos no cache local:', storageErr);
-      }
-      const refreshed = await fetchProductsFromDb().catch(() => getProductsList());
-      setProducts(refreshed);
-    }
-  };
-
-  // Salva o pedido silenciosamente para contingência e troca segura de telas/pedidos sem perda de dados
-  const saveOrderSilently = async (targetOrder: PurchaseOrder) => {
-    const validItems = (targetOrder.items || []).filter(it => !isOrderItemBlank(it));
-    if (validItems.length === 0 && (!targetOrder.header.fornecedor || targetOrder.header.fornecedor.trim() === '')) {
-      return;
-    }
-
-    const cleanNum = (targetOrder.header.numeroPedido || '').trim().toUpperCase();
-    if (!cleanNum) return;
-
-    // 🛡️ Não permite salvar se o número de pedido colidir com outro pedido existente
-    const duplicate = savedOrders.find(o => 
-      o.header.id !== targetOrder.header.id && 
-      o.header.numeroPedido && 
-      o.header.numeroPedido.trim().toUpperCase() === cleanNum
-    );
-    if (duplicate) {
-      console.warn(`[AutoSave] Abortado: número ${cleanNum} já pertence a outro pedido (${duplicate.header.fornecedor}).`);
-      return;
-    }
-
-    // Registra novos produtos no catálogo em segundo plano sem travar a interface
-    autoRegisterProductsFromOrder(validItems).catch(err => {
-      console.warn('Aviso ao sincronizar produtos em segundo plano:', err);
-    });
-
-    const today = new Date().toISOString().split('T')[0];
-    const targetDate = targetOrder.header.dataPedido || targetOrder.header.dataEmissao || today;
-
-    // Recupera valor de frete das parcelas caso o header tenha ficado zerado
-    const existingFrete = Array.isArray(targetOrder.installments)
-      ? targetOrder.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
-      : undefined;
-
-    let targetValorFrete = Number(targetOrder.header.valorFrete ?? targetOrder.header.valorFreteGlobal) || 0;
-    if (targetValorFrete <= 0 && existingFrete && existingFrete.valor > 0) {
-      targetValorFrete = existingFrete.valor;
-    }
-    let targetTipoFrete = targetOrder.header.tipoFrete;
-    if (targetValorFrete > 0 && (!targetTipoFrete || targetTipoFrete === 'CIF')) {
-      targetTipoFrete = 'FOB';
-    }
-
-    // Preserva fielmente o status do pedido (não rebaixa pedidos Aprovados ou Em Distribuição para Em Cotação)
-    const headerWithFrete = {
-      ...targetOrder.header,
-      tipoFrete: targetTipoFrete || targetOrder.header.tipoFrete || 'CIF',
-      valorFrete: targetValorFrete,
-      valorFreteGlobal: targetValorFrete,
-      dataPedido: targetDate,
-      dataEmissao: targetOrder.header.dataEmissao || targetDate,
-      isDraft: targetOrder.header.isDraft !== undefined ? targetOrder.header.isDraft : true,
-      status: targetOrder.header.status || 'Em Cotação',
-      updatedAt: new Date().toISOString()
-    };
-
-    const orderToSave: PurchaseOrder = {
-      ...targetOrder,
-      items: validItems,
-      header: headerWithFrete,
-      installments: generateOrderInstallments({ ...targetOrder, header: headerWithFrete }, undefined, undefined, true)
-    };
-
-    // Atualiza imediatamente o histórico local e o estado em memória sem re-baixar todos os pedidos pela rede
-    saveOrderToHistory(orderToSave);
-    setSavedOrders(prev => {
-      const idx = prev.findIndex(o => o.header.id === orderToSave.header.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = orderToSave;
-        return next;
-      }
-      return [orderToSave, ...prev];
-    });
-
-    try {
-      await saveOrderToDb(orderToSave);
-    } catch (err) {
-      console.warn('Aviso ao sincronizar pedido silenciosamente com o SQLite:', err);
-    }
-  };
-
   // Carrega com segurança e resposta instantânea (0ms) o pedido selecionado
   const handleOpenSelectedOrder = (selected: PurchaseOrder, destinationTab: ActiveNavTab = 'orders') => {
     // 1. Ao trocar de pedido, se havia trabalho no pedido atual, preserva silenciosamente no banco SQLite
@@ -1300,6 +1313,7 @@ export function App() {
     // startTransition garante prioridade máxima para a resposta de clique do usuário
     startTransition(() => {
       setOrder(updatedOrder);
+      setViewMode('desktop');
       if (activeNav !== targetTab) {
         setActiveNav(targetTab);
       }
@@ -1338,6 +1352,18 @@ export function App() {
     const today = new Date().toISOString().split('T')[0];
     const targetDate = order.header.dataPedido || order.header.dataEmissao || today;
 
+    const isClosed = Boolean(
+      order.header.status && 
+      order.header.status !== 'Em Cotação' && 
+      order.header.status !== 'Rascunho'
+    );
+
+    // 🛡️ Se o pedido já foi fechado, compradores não podem alterar pedidos em esteira sem liberação da Diretoria
+    if (isClosed && currentUser?.role !== 'diretoria') {
+      showToast('Este pedido já foi aprovado e está na esteira operacional. Para efetuar alterações comerciais ou de quantidades, solicite a liberação à Diretoria.', 'error');
+      return;
+    }
+
     const orderToSave: PurchaseOrder = {
       ...order,
       items: validItems,
@@ -1345,8 +1371,8 @@ export function App() {
         ...order.header,
         dataPedido: targetDate,
         dataEmissao: order.header.dataEmissao || targetDate,
-        isDraft: true,
-        status: order.header.status === 'Em Separação' || order.header.status === 'Finalizado' ? order.header.status : 'Em Cotação',
+        isDraft: isClosed ? false : true,
+        status: isClosed ? order.header.status : (order.header.status || 'Em Cotação'),
         updatedAt: new Date().toISOString()
       }
     };
@@ -1369,7 +1395,11 @@ export function App() {
         ...orderWithInstallments,
         items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
       });
-      showToast(`Pedido ${order.header.numeroPedido} salvo com sucesso em espera!`, 'success');
+      if (isClosed) {
+        showToast(`Pedido ${order.header.numeroPedido} atualizado com sucesso pela Diretoria!`, 'success');
+      } else {
+        showToast(`Pedido ${order.header.numeroPedido} salvo com sucesso em espera!`, 'success');
+      }
     } catch (err: any) {
       console.error('Erro ao salvar pedido no servidor:', err);
       if (isOfflineError(err)) {
@@ -1600,6 +1630,17 @@ export function App() {
 
   // Handler para Liberação da Distribuição para a Doca com Entrada Automática no Estoque Central
   const handleReleaseToSeparation = async (orderToRelease: PurchaseOrder) => {
+    // Governança: Para compras de fornecedores externos, a mercadoria precisa ter sido fisicamente recebida na Matriz
+    const isTransfer = orderToRelease.header?.supplierId === 'cd_matriz' || 
+                       String(orderToRelease.header?.numeroPedido || '').startsWith('CD-') || 
+                       String(orderToRelease.header?.id || '').startsWith('order_transf_cd_') ||
+                       Boolean(orderToRelease.header?.fornecedor && orderToRelease.header.fornecedor.toLowerCase().includes('transferência'));
+
+    if (!isTransfer && !orderToRelease.header?.recebidoMatriz) {
+      showToast('Atenção: O pedido precisa ser confirmado como recebido na Matriz antes de liberar a separação!', 'info');
+      return;
+    }
+
     // 1. Dar entrada automática no Estoque Central para itens com reserva no CD (qtdReservaEstoque > 0)
     let totalPecasEstoqueEntrada = 0;
     try {
@@ -1819,6 +1860,106 @@ export function App() {
     }
   };
 
+  // Handler para confirmação de recebimento físico na Matriz
+  const handleConfirmReceipt = async (payload: {
+    dataRecebimento: string;
+    recebidoPor: string;
+    numeroNotaFiscal: string;
+    autorizarBoletos: boolean;
+  }) => {
+    if (!receiptModalOrder) return;
+    const targetOrder = receiptModalOrder;
+
+    try {
+      // 1. Persistir no backend SQLite
+      const res = await confirmReceiptInDb(targetOrder.header.id, payload);
+
+      // 2. Atualizar cabeçalho localmente com campos de recebimento e liberação
+      const updatedHeader = {
+        ...targetOrder.header,
+        recebidoMatriz: true,
+        dataRecebimentoMatriz: payload.dataRecebimento,
+        recebidoPor: payload.recebidoPor,
+        numeroNotaFiscal: payload.numeroNotaFiscal || targetOrder.header.numeroNotaFiscal,
+        ...(payload.autorizarBoletos && currentUser?.role === 'diretoria' ? {
+          boletosLiberados: true,
+          boletosLiberadosPor: currentUser?.nome || 'Diretoria',
+          boletosLiberadosEm: new Date().toISOString()
+        } : {}),
+        updatedAt: new Date().toISOString()
+      };
+
+      const intermediateOrder: PurchaseOrder = {
+        ...targetOrder,
+        header: updatedHeader
+      };
+
+      // 3. Recalcular datas de vencimento com base na data de recebimento real na Matriz
+      const updatedOrderWithInstallments: PurchaseOrder = {
+        ...intermediateOrder,
+        installments: generateOrderInstallments(intermediateOrder, undefined, undefined, true)
+      };
+
+      // 4. Salvar versão com parcelas recalculadas
+      await saveOrderToDb(updatedOrderWithInstallments).catch(() => {});
+      saveOrderToHistory(updatedOrderWithInstallments);
+      const refreshedList = loadSavedOrdersList();
+      setSavedOrders(refreshedList);
+
+      if (order.header.id === targetOrder.header.id) {
+        setOrder(updatedOrderWithInstallments);
+      }
+
+      setReceiptModalOrder(null);
+      confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
+      showToast(res?.message || `Recebimento do pedido ${targetOrder.header.numeroPedido} confirmado na Matriz!`, 'success');
+    } catch (err: any) {
+      showToast(`Erro ao confirmar recebimento: ${err.message || 'Falha de comunicação'}`, 'error');
+    }
+  };
+
+  // Handler para liberação de boletos pela Diretoria
+  const handleAuthorizeFinancial = async (targetOrder: PurchaseOrder) => {
+    if (currentUser?.role !== 'diretoria') {
+      showToast('Apenas a Diretoria pode autorizar a liberação de boletos para o Financeiro.', 'error');
+      return;
+    }
+
+    if (!targetOrder.header.recebidoMatriz) {
+      showToast('O pedido precisa estar fisicamente recebido na Matriz antes de liberar os boletos.', 'info');
+      return;
+    }
+
+    try {
+      const res = await authorizeFinancialInDb(targetOrder.header.id);
+
+      const updated: PurchaseOrder = {
+        ...targetOrder,
+        header: {
+          ...targetOrder.header,
+          boletosLiberados: true,
+          boletosLiberadosPor: currentUser?.nome || 'Diretoria',
+          boletosLiberadosEm: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      };
+
+      await saveOrderToDb(updated).catch(() => {});
+      saveOrderToHistory(updated);
+      const refreshedList = loadSavedOrdersList();
+      setSavedOrders(refreshedList);
+
+      if (order.header.id === targetOrder.header.id) {
+        setOrder(updated);
+      }
+
+      confetti({ particleCount: 50, spread: 50, origin: { y: 0.6 } });
+      showToast(res?.message || `Boletos do pedido ${targetOrder.header.numeroPedido} liberados com sucesso!`, 'success');
+    } catch (err: any) {
+      showToast(`Erro ao liberar boletos: ${err.message || 'Falha de comunicação'}`, 'error');
+    }
+  };
+
   // Handlers do Módulo de Estoque do Depósito Central
   const handleUpdateStockBalance = async (stockId: string, deltaUnidades: number, newLocation?: string) => {
     try {
@@ -1880,13 +2021,13 @@ export function App() {
     }
   };
 
-  const handleClearAllStock = async () => {
+  const _handleClearAllStock = async () => {
     try {
       await clearAllStockFromDb();
       setCentralStock([]);
       saveCentralStock([]);
       showToast('Todo o estoque da matriz foi limpo com sucesso!', 'success');
-    } catch (err: any) {
+    } catch {
       saveCentralStock([]);
       setCentralStock([]);
       showToast('Estoque limpo localmente.', 'info');
@@ -1901,6 +2042,7 @@ export function App() {
       });
       saveOrderToHistory(transfOrder);
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(updatedOrders);
       // Garante que a cotação comercial permaneça limpa e nunca seja poluída com romaneio de transferência interna
       if (
         order.header.supplierId === 'cd_matriz' || 
@@ -2246,6 +2388,41 @@ export function App() {
     }
   };
 
+  const handleSaveStoresOnly = async (newStores: StoreConfig[]) => {
+    try {
+      await saveStoresToDb(newStores);
+      saveStoresConfig(newStores);
+      setStoreConfigs(newStores);
+
+      // Recalcular itens do pedido ativo com as novas lojas
+      setOrder(prev => {
+        const recalculatedItems = prev.items.map(item => {
+          const sepRes = item.separacaoManual 
+            ? { allocations: item.separacaoLojas || {} } 
+            : calculateAutomaticSeparation(item.qtdTotalUnidades, newStores, item.qtdReservaEstoque || 0);
+
+          return {
+            ...item,
+            separacaoLojas: sepRes.allocations
+          };
+        });
+
+        return {
+          ...prev,
+          storeConfigs: newStores,
+          items: recalculatedItems
+        };
+      });
+
+      showToast('Matriz de lojas atualizada no SQLite com sucesso!', 'success');
+    } catch (err: any) {
+      console.warn('Falha ao gravar lojas no SQLite, mantendo backup local:', err);
+      saveStoresConfig(newStores);
+      setStoreConfigs(newStores);
+      showToast(`Lojas salvas localmente (${err.message || 'offline'})`, 'info');
+    }
+  };
+
   // Handlers para Modelos / Saves de Separação
   const handleSaveSeparationPreset = async (preset: SeparationPreset) => {
     try {
@@ -2559,6 +2736,8 @@ export function App() {
                   onDiscardDraft={handleDiscardDraft}
                   onSelectOrder={(selected) => handleOpenSelectedOrder(selected, canCreateOrEditOrders(currentUser?.role) ? 'orders' : 'separation')}
                   onSwitchViewMode={(mode) => setViewMode(mode)}
+                  onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
+                  onAuthorizeFinancial={handleAuthorizeFinancial}
                 />
               )}
 
@@ -2580,70 +2759,111 @@ export function App() {
                       setActiveNav('separation');
                     }}
                     onFinalizeSeparation={handleFinalizeSeparation}
+                    onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
+                    onAuthorizeFinancial={handleAuthorizeFinancial}
                   />
 
-                  <OrderHeaderForm 
-                    header={order.header} 
-                    suppliers={suppliers}
-                    existingOrders={savedOrders}
-                    onChange={handleHeaderChange} 
-                    onOpenSupplierModal={(supToEdit) => {
-                      setSupplierModalEditTarget(supToEdit || null);
-                      setIsSupplierModalOpen(true);
-                    }}
-                    orderTotal={calculateOrderNetTotal(order)}
-                    onSaveAsSupplierTemplate={handleSaveAsSupplierTemplate}
-                    onLoadSupplierTemplate={handleLoadSupplierTemplate}
-                    hasSupplierTemplate={Boolean(activeSupplierTemplate)}
-                    supplierTemplateItemsCount={activeSupplierTemplate?.items?.length || 0}
-                    showToast={showToast}
-                  />
+                  {/* Banner Informativo de Pedido Fechado / Edição da Diretoria */}
+                  {order.header.status && order.header.status !== 'Em Cotação' && order.header.status !== 'Rascunho' && (
+                    currentUser?.role === 'diretoria' ? (
+                      <div className="p-3.5 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200 text-xs font-semibold flex items-center justify-between shadow-2xs">
+                        <div className="flex items-center gap-2.5">
+                          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span>
+                            <b>Edição Liberada para a Diretoria:</b> Este pedido está fechado na esteira ({order.header.status}). Você pode editar dados, itens e parcelas livremente. Ao salvar, suas alterações manterão o fluxo do pedido ativo.
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 shrink-0">
+                          Diretoria
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 px-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center gap-2.5 shadow-2xs">
+                        <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <span>
+                          <b>Modo de Visualização (Somente Leitura):</b> Este pedido já foi fechado ({order.header.status}). Apenas a Diretoria possui autorização para alterar pedidos já fechados.
+                        </span>
+                      </div>
+                    )
+                  )}
 
-                  {/* Card Retrátil de Engenharia Fiscal do Pedido (Entrada e Saída) */}
-                  <OrderFiscalCard
-                    fiscalConfig={order.fiscalConfig || fiscalConfig}
-                    onChangeFiscalConfig={handleOrderFiscalConfigChange}
-                    aliquotaStHeader={order.header.aliquotaSt}
-                    onUpdateHeaderSt={(newSt) => {
-                      handleHeaderChange({
-                        ...order.header,
-                        aliquotaSt: newSt
-                      });
-                    }}
-                    valorFreteHeader={order.header.valorFrete}
-                    onUpdateHeaderFrete={(newFrete) => {
-                      handleHeaderChange({
-                        ...order.header,
-                        valorFrete: newFrete,
-                        valorFreteGlobal: newFrete
-                      });
-                    }}
-                    totalMercadorias={calculateOrderMerchandiseTotal(order)}
-                    averageItemPrice={averageItemPrice}
-                    samplePdv={samplePdv}
-                    fiscalPresets={fiscalPresets}
-                    onSaveFiscalPreset={handleSaveFiscalPreset}
-                    onDeleteFiscalPreset={handleDeleteFiscalPreset}
-                  />
+                  <fieldset 
+                    disabled={Boolean(
+                      order.header.status && 
+                      order.header.status !== 'Em Cotação' && 
+                      order.header.status !== 'Rascunho' && 
+                      currentUser?.role !== 'diretoria'
+                    )}
+                    className={Boolean(
+                      order.header.status && 
+                      order.header.status !== 'Em Cotação' && 
+                      order.header.status !== 'Rascunho' && 
+                      currentUser?.role !== 'diretoria'
+                    ) ? 'space-y-6 opacity-85 pointer-events-none select-none border-none p-0 m-0' : 'space-y-6 border-none p-0 m-0'}
+                  >
+                    <OrderHeaderForm 
+                      header={order.header} 
+                      suppliers={suppliers}
+                      existingOrders={savedOrders}
+                      onChange={handleHeaderChange} 
+                      onOpenSupplierModal={(supToEdit) => {
+                        setSupplierModalEditTarget(supToEdit || null);
+                        setIsSupplierModalOpen(true);
+                      }}
+                      orderTotal={calculateOrderNetTotal(order)}
+                      onSaveAsSupplierTemplate={handleSaveAsSupplierTemplate}
+                      onLoadSupplierTemplate={handleLoadSupplierTemplate}
+                      hasSupplierTemplate={Boolean(activeSupplierTemplate)}
+                      supplierTemplateItemsCount={activeSupplierTemplate?.items?.length || 0}
+                      showToast={showToast}
+                    />
+
+                    {/* Card Retrátil de Engenharia Fiscal do Pedido (Entrada e Saída) */}
+                    <OrderFiscalCard
+                      fiscalConfig={order.fiscalConfig || fiscalConfig}
+                      onChangeFiscalConfig={handleOrderFiscalConfigChange}
+                      aliquotaStHeader={order.header.aliquotaSt}
+                      onUpdateHeaderSt={(newSt) => {
+                        handleHeaderChange({
+                          ...order.header,
+                          aliquotaSt: newSt
+                        });
+                      }}
+                      valorFreteHeader={order.header.valorFrete}
+                      onUpdateHeaderFrete={(newFrete) => {
+                        handleHeaderChange({
+                          ...order.header,
+                          valorFrete: newFrete,
+                          valorFreteGlobal: newFrete
+                        });
+                      }}
+                      totalMercadorias={calculateOrderMerchandiseTotal(order)}
+                      averageItemPrice={averageItemPrice}
+                      samplePdv={samplePdv}
+                      fiscalPresets={fiscalPresets}
+                      onSaveFiscalPreset={handleSaveFiscalPreset}
+                      onDeleteFiscalPreset={handleDeleteFiscalPreset}
+                    />
 
 
-                  <OrderItemsTable
-                    items={order.items}
-                    orderHeader={order.header}
-                    globalFiscal={order.fiscalConfig || fiscalConfig}
-                    stores={storeConfigs}
-                    products={products}
-                    suppliers={suppliers}
-                    currentSupplierName={order.header.fornecedor}
-                    currentSupplierId={order.header.supplierId}
-                    percentualDescontoOff={order.header.percentualDescontoOff}
-                    onUpdateItem={handleUpdateItem}
-                    onAddItem={handleAddItem}
-                    onDuplicateItem={handleDuplicateItem}
-                    onDeleteItem={handleDeleteItem}
-                    onSaveProduct={handleSaveProduct}
-                    onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
-                  />
+                    <OrderItemsTable
+                      items={order.items}
+                      orderHeader={order.header}
+                      globalFiscal={order.fiscalConfig || fiscalConfig}
+                      stores={storeConfigs}
+                      products={products}
+                      suppliers={suppliers}
+                      currentSupplierName={order.header.fornecedor}
+                      currentSupplierId={order.header.supplierId}
+                      percentualDescontoOff={order.header.percentualDescontoOff}
+                      onUpdateItem={handleUpdateItem}
+                      onAddItem={handleAddItem}
+                      onDuplicateItem={handleDuplicateItem}
+                      onDeleteItem={handleDeleteItem}
+                      onSaveProduct={handleSaveProduct}
+                      onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
+                    />
+                  </fieldset>
                 </div>
               )}
 
@@ -2773,6 +2993,8 @@ export function App() {
                   onNewOrder={handleNewOrder}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
                   onNavigateToSeparation={(selected) => handleOpenSelectedOrder(selected, 'separation')}
+                  onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
+                  onAuthorizeFinancial={handleAuthorizeFinancial}
                 />
               )}
 
@@ -2783,6 +3005,7 @@ export function App() {
                   storeConfigs={storeConfigs}
                   currentUser={currentUser}
                   onSave={handleSaveGlobalSettings}
+                  onSaveStores={handleSaveStoresOnly}
                   onRestoreSuccess={async () => {
                     await loadFromSqlite();
                     showToast('Base de dados SQLite restaurada e sincronizada com sucesso!', 'success');
@@ -2891,6 +3114,16 @@ export function App() {
           }
         }}
       />
+
+      {/* Modal de Confirmação de Recebimento Físico na Matriz */}
+      {receiptModalOrder && (
+        <ReceiptConfirmationModal
+          order={receiptModalOrder}
+          currentUser={currentUser}
+          onConfirm={handleConfirmReceipt}
+          onClose={() => setReceiptModalOrder(null)}
+        />
+      )}
 
     </div>
   );

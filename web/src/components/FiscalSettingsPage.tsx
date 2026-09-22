@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Percent, 
   Store, 
@@ -36,6 +36,7 @@ interface FiscalSettingsPageProps {
   storeConfigs: StoreConfig[];
   currentUser?: User | null;
   onSave: (fiscal: FiscalConfig, stores: StoreConfig[]) => void;
+  onSaveStores?: (stores: StoreConfig[]) => Promise<void> | void;
   onRestoreSuccess?: () => void;
 }
 
@@ -44,10 +45,18 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
   storeConfigs,
   currentUser,
   onSave,
+  onSaveStores,
   onRestoreSuccess
 }) => {
   const [fiscal, setFiscal] = useState<FiscalConfig>({ ...fiscalConfig });
   const [stores, setStores] = useState<StoreConfig[]>(() => storeConfigs.map(s => ({ ...s })));
+
+  // Sincronizar lojas reativamente quando as propriedades globais atualizarem
+  useEffect(() => {
+    if (storeConfigs && storeConfigs.length > 0) {
+      setStores(storeConfigs.map(s => ({ ...s })));
+    }
+  }, [storeConfigs]);
 
   // Verificação estrita de usuário Root
   const isRoot = currentUser?.id === 'usr_root' || 
@@ -67,6 +76,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
   const [modalStore, setModalStore] = useState<{
     id?: string;
     name: string;
+    shortName?: string;
     cluster: 'A' | 'B' | 'C';
     defaultWeight: number;
     active: boolean;
@@ -87,7 +97,11 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
   };
 
   const handleStoreToggle = (storeId: string) => {
-    setStores(prev => prev.map(s => s.id === storeId ? { ...s, active: !s.active } : s));
+    const updated = stores.map(s => s.id === storeId ? { ...s, active: !s.active } : s);
+    setStores(updated);
+    if (onSaveStores) {
+      onSaveStores(updated);
+    }
   };
 
   const handleStoreWeightChange = (storeId: string, weight: number) => {
@@ -96,7 +110,11 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
 
   const handleResetStoresDefaults = () => {
     if (confirm('Deseja restaurar a matriz original de lojas com os percentuais iniciais?')) {
-      setStores(DEFAULT_STORES.map(s => ({ ...s })));
+      const def = DEFAULT_STORES.map(s => ({ ...s }));
+      setStores(def);
+      if (onSaveStores) {
+        onSaveStores(def);
+      }
     }
   };
 
@@ -106,15 +124,19 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
     if (!modalStore || !modalStore.name.trim()) return;
 
     const trimmedName = modalStore.name.trim();
+    const trimmedShortName = (modalStore.shortName || '').trim() || trimmedName;
+
+    let updatedStores: StoreConfig[];
 
     if (modalStore.id) {
       // Edição
-      setStores(prev => prev.map(s => s.id === modalStore.id ? {
+      updatedStores = stores.map(s => s.id === modalStore.id ? {
         ...s,
         name: trimmedName,
+        shortName: trimmedShortName,
         cluster: modalStore.cluster,
         defaultWeight: Math.max(0, Number(modalStore.defaultWeight) || 0)
-      } : s));
+      } : s);
     } else {
       // Nova Filial
       const slug = trimmedName
@@ -129,21 +151,31 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
       const newStore: StoreConfig = {
         id: newId,
         name: trimmedName,
+        shortName: trimmedShortName,
         cluster: modalStore.cluster,
         defaultWeight: Math.max(0, Number(modalStore.defaultWeight) || (modalStore.cluster === 'A' ? 5 : modalStore.cluster === 'B' ? 3 : 2)),
         active: true
       };
 
-      setStores(prev => [...prev, newStore]);
+      updatedStores = [...stores, newStore];
     }
 
+    setStores(updatedStores);
     setModalStore(null);
+
+    if (onSaveStores) {
+      onSaveStores(updatedStores);
+    }
   };
 
   // Excluir Filial
   const handleDeleteStore = (storeId: string, storeName: string) => {
     if (confirm(`Tem certeza que deseja remover a filial "${storeName}" da rede?`)) {
-      setStores(prev => prev.filter(s => s.id !== storeId));
+      const updatedStores = stores.filter(s => s.id !== storeId);
+      setStores(updatedStores);
+      if (onSaveStores) {
+        onSaveStores(updatedStores);
+      }
     }
   };
 
@@ -509,7 +541,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
               {/* Botão Nova Filial */}
               <button
                 type="button"
-                onClick={() => setModalStore({ name: '', cluster: 'A', defaultWeight: 5, active: true })}
+                onClick={() => setModalStore({ name: '', shortName: '', cluster: 'A', defaultWeight: 5, active: true })}
                 className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -569,9 +601,16 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                         onChange={() => handleStoreToggle(store.id)}
                         className="rounded-sm text-emerald-600 focus:ring-0 cursor-pointer shrink-0"
                       />
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={store.name}>
-                        {store.name}
-                      </span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={store.name}>
+                          {store.name}
+                        </span>
+                        {store.shortName && store.shortName !== store.name && (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium truncate" title={`Nome na coluna: ${store.shortName}`}>
+                            Coluna: <b>{store.shortName}</b>
+                          </span>
+                        )}
+                      </div>
                     </label>
 
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -589,8 +628,8 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setModalStore({ ...store })}
-                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors"
+                        onClick={() => setModalStore({ ...store, shortName: store.shortName || store.name })}
+                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors cursor-pointer"
                         title="Renomear / Editar Filial"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -599,7 +638,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDeleteStore(store.id, store.name)}
-                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
                         title="Remover Filial da Rede"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -634,9 +673,16 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                         onChange={() => handleStoreToggle(store.id)}
                         className="rounded-sm text-emerald-600 focus:ring-0 cursor-pointer shrink-0"
                       />
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={store.name}>
-                        {store.name}
-                      </span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={store.name}>
+                          {store.name}
+                        </span>
+                        {store.shortName && store.shortName !== store.name && (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium truncate" title={`Nome na coluna: ${store.shortName}`}>
+                            Coluna: <b>{store.shortName}</b>
+                          </span>
+                        )}
+                      </div>
                     </label>
 
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -654,8 +700,8 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setModalStore({ ...store })}
-                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors"
+                        onClick={() => setModalStore({ ...store, shortName: store.shortName || store.name })}
+                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors cursor-pointer"
                         title="Renomear / Editar Filial"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -664,7 +710,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDeleteStore(store.id, store.name)}
-                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
                         title="Remover Filial da Rede"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -699,9 +745,16 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                         onChange={() => handleStoreToggle(store.id)}
                         className="rounded-sm text-emerald-600 focus:ring-0 cursor-pointer shrink-0"
                       />
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={store.name}>
-                        {store.name}
-                      </span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={store.name}>
+                          {store.name}
+                        </span>
+                        {store.shortName && store.shortName !== store.name && (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium truncate" title={`Nome na coluna: ${store.shortName}`}>
+                            Coluna: <b>{store.shortName}</b>
+                          </span>
+                        )}
+                      </div>
                     </label>
 
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -719,8 +772,8 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setModalStore({ ...store })}
-                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors"
+                        onClick={() => setModalStore({ ...store, shortName: store.shortName || store.name })}
+                        className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors cursor-pointer"
                         title="Renomear / Editar Filial"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -729,7 +782,7 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDeleteStore(store.id, store.name)}
-                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
                         title="Remover Filial da Rede"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -874,16 +927,32 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
             <form onSubmit={handleSaveModalStore} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Nome da Filial / Cidade <span className="text-rose-500">*</span>
+                  Nome da Filial / Razão Social (Completo) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: Ponta Grossa Nova Rússia 2, Curitiba Centro..."
+                  placeholder="Ex: Ponta Grossa Centro, Depósito Central..."
                   value={modalStore.name}
                   onChange={e => setModalStore({ ...modalStore, name: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Nome da Coluna (Abreviado / Grade & Romaneio)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: PG Centro, CD Central... (Se vazio, usa o nome completo)"
+                  value={modalStore.shortName || ''}
+                  onChange={e => setModalStore({ ...modalStore, shortName: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="text-[10px] text-slate-400 block mt-1">
+                  Texto compacto exibido nos cabeçalhos da Grade de Distribuição e Romaneios PDF.
+                </span>
               </div>
 
               <div>

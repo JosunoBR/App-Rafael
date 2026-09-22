@@ -804,7 +804,7 @@ class ExportService {
       'Total Compra',
       'Estoque CD',
       'Total Lojas', 
-      ...activeStores.map(s => s.name.replace('Ponta Grossa ', 'PG ').replace('Depósito Central', 'CD Central').replace('Prudentópolis', 'Prudentóp.'))
+      ...activeStores.map(s => s.shortName || s.name)
     ];
 
     const bodyRows = (order.items || []).map(item => {

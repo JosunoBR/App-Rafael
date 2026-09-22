@@ -1079,8 +1079,8 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                                     }`}>
                                       {store.cluster}
                                     </span>
-                                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                                      {store.name.replace('Ponta Grossa ', 'PG ')}
+                                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate" title={store.name}>
+                                      {store.shortName || store.name}
                                     </span>
                                   </div>
                                   <span className="text-[10px] text-slate-400">

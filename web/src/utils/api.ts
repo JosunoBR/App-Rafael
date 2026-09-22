@@ -216,6 +216,25 @@ export async function updateInstallmentInDb(
   });
 }
 
+export async function confirmReceiptInDb(
+  orderId: string,
+  payload: { dataRecebimento: string; recebidoPor?: string; numeroNotaFiscal?: string; autorizarBoletos?: boolean }
+): Promise<any> {
+  const res = await apiFetch(`/orders/${orderId}/confirm-receipt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+export async function authorizeFinancialInDb(orderId: string): Promise<any> {
+  const res = await apiFetch(`/orders/${orderId}/authorize-financial`, {
+    method: 'POST'
+  });
+  return res.json();
+}
+
 export async function fetchStoresFromDb(): Promise<StoreConfig[]> {
   const res = await apiFetch('/config/stores');
   return res.json();
@@ -432,6 +451,8 @@ export interface FinancialFilters {
   tipo?: string;
   search?: string;
   empresa?: string;
+  statusPrevisao?: string;
+  formaPagamento?: string;
 }
 
 export async function fetchFinancialEntriesFromDb(filters: FinancialFilters = {}): Promise<FinancialEntry[]> {
@@ -484,8 +505,27 @@ export async function payFinancialEntryInDb(id: string, paymentData: { dataPagam
   return json.data;
 }
 
+export async function batchPayFinancialEntriesInDb(
+  ids: string[],
+  paymentData: { dataPagamento?: string; observacao?: string } = {}
+): Promise<{ count: number; data: FinancialEntry[]; message: string }> {
+  const res = await apiFetch('/financial/entries/batch-pay', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, ...paymentData })
+  });
+  const json = await res.json();
+  return json;
+}
+
 export async function deleteFinancialEntryFromDb(id: string): Promise<void> {
   await apiFetch(`/financial/entries/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function cancelRecurringSeriesInDb(recorrenciaId: string): Promise<void> {
+  await apiFetch(`/financial/recurring/${encodeURIComponent(recorrenciaId)}`, {
     method: 'DELETE'
   });
 }

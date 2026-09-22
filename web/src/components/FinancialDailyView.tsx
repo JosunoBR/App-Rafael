@@ -16,7 +16,8 @@ import {
   Store,
   Layers,
   Search,
-  Filter
+  Filter,
+  Edit3
 } from 'lucide-react';
 import { FinancialEntry, FinancialStatus, FinancialCategory } from '../shared/types';
 import { toBrDate } from '../utils/masks';
@@ -28,6 +29,10 @@ interface FinancialDailyViewProps {
   onPayEntry: (id: string) => void;
   onSelectEntry: (entry: FinancialEntry) => void;
   onDeleteEntry: (id: string) => void;
+  onEditEntry?: (entry: FinancialEntry) => void;
+  metaDiaria?: number;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string) => void;
 }
 
 const CATEGORIA_BADGES: Record<FinancialCategory | string, { label: string; bg: string; text: string }> = {
@@ -46,7 +51,11 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
   selectedMonth,
   onPayEntry,
   onSelectEntry,
-  onDeleteEntry
+  onDeleteEntry,
+  onEditEntry,
+  metaDiaria,
+  selectedIds,
+  onToggleSelect
 }) => {
   const [collapsedDays, setCollapsedDays] = useState<Record<string, boolean>>({});
 
@@ -212,6 +221,17 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                           <Check className="w-3 h-3" /> Quitado
                         </span>
                       )}
+                      {metaDiaria && metaDiaria > 0 ? (
+                        group.totalDia > metaDiaria ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 flex items-center gap-1">
+                            <AlertTriangle className="w-2.5 h-2.5" /> +R$ {(group.totalDia - metaDiaria).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} da meta
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                            <Check className="w-2.5 h-2.5" /> No limite diário
+                          </span>
+                        )
+                      ) : null}
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {group.entries.length} {group.entries.length === 1 ? 'conta / parcela' : 'contas / parcelas'}
@@ -221,14 +241,34 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
 
                 {/* Subtotais do Dia */}
                 <div className="flex items-center gap-4 pl-12 sm:pl-0">
-                  <div className="text-right">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                      Subtotal Previsto do Dia
-                    </span>
-                    <span className="text-base font-extrabold text-slate-900 dark:text-white font-mono">
-                      R$ {group.totalDia.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
+                  {(() => {
+                    const previstoDia = group.entries
+                      .filter(e => (e.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO')
+                      .reduce((acc, e) => acc + (Number(e.valor) || 0), 0);
+                    const confirmadoDia = group.totalDia - previstoDia;
+
+                    return (
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                          Subtotal do Dia
+                        </span>
+                        <span className="text-base font-extrabold text-slate-900 dark:text-white font-mono">
+                          R$ {group.totalDia.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        {previstoDia > 0 && confirmadoDia > 0 && (
+                          <div className="flex items-center justify-end gap-1.5 text-[9px] font-bold mt-0.5">
+                            <span className="text-emerald-600 dark:text-emerald-400">
+                              ✓ R$ {confirmadoDia.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </span>
+                            <span className="text-slate-300 dark:text-slate-600">•</span>
+                            <span className="text-blue-600 dark:text-blue-400">
+                              ⏳ R$ {previstoDia.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {group.pagoDia > 0 && (
                     <div className="hidden md:block text-right border-l border-slate-200 dark:border-slate-700 pl-4">
@@ -249,7 +289,9 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="bg-slate-50/60 dark:bg-slate-800/60 text-slate-400 uppercase font-semibold text-[10px] border-b border-slate-100 dark:border-slate-700/60">
+                        {onToggleSelect && <th className="py-2.5 px-3 w-8"></th>}
                         <th className="py-2.5 px-4">Fornecedor / Despesa</th>
+                        <th className="py-2.5 px-3">Situação</th>
                         <th className="py-2.5 px-3">Categoria</th>
                         <th className="py-2.5 px-3">Loja / Unidade</th>
                         <th className="py-2.5 px-3">Forma Pgto</th>
@@ -264,24 +306,70 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                       {group.entries.map(item => {
                         const catBadge = CATEGORIA_BADGES[item.categoria] || CATEGORIA_BADGES.OUTROS;
                         const isPaid = item.status === 'Pago';
+                        const isPrevisto = (item.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO';
 
                         return (
                           <tr
                             key={item.id}
-                            className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors ${
-                              isPaid ? 'opacity-60 bg-slate-50/30 dark:bg-slate-800/30' : ''
-                            }`}
+                            className={`transition-colors border-l-4 ${
+                              isPrevisto
+                                ? 'border-l-blue-500 bg-blue-50/20 dark:bg-blue-950/20 hover:bg-blue-50/35 dark:hover:bg-blue-950/35'
+                                : 'border-l-emerald-500 hover:bg-slate-50/80 dark:hover:bg-slate-700/30'
+                            } ${isPaid ? 'opacity-60 bg-slate-50/30 dark:bg-slate-800/30' : ''}`}
                           >
+                            {onToggleSelect && (
+                              <td className="py-2.5 px-3">
+                                {!isPaid ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedIds?.includes(item.id) || false}
+                                    onChange={() => onToggleSelect(item.id)}
+                                    className="w-3.5 h-3.5 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
+                                  />
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600 text-xs">✓</span>
+                                )}
+                              </td>
+                            )}
                             {/* Descrição / Favorecido */}
                             <td className="py-2.5 px-4">
-                              <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                                 <span className={isPaid ? 'line-through text-slate-400' : ''}>
                                   {item.descricao}
                                 </span>
+                                {item.recorrente && (
+                                  <span 
+                                    className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 inline-flex items-center gap-0.5" 
+                                    title="Despesa Fixa Recorrente (Régua de 6 meses)"
+                                  >
+                                    🔁 Recorrente 6M
+                                  </span>
+                                )}
                               </div>
                               {item.observacao && (
                                 <span className="text-[10px] text-slate-400 block truncate max-w-xs">
                                   {item.observacao}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Situação: Previsão (Azul) vs Confirmado (Esmeralda) */}
+                            <td className="py-2.5 px-3 whitespace-nowrap">
+                              {isPrevisto ? (
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 inline-flex items-center gap-1 shadow-xs"
+                                  title="Boleto Previsto — aguardando recebimento na Matriz e autorização da Diretoria"
+                                >
+                                  <Clock className="w-2.5 h-2.5 text-blue-500" />
+                                  <span>Previsão</span>
+                                </span>
+                              ) : (
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 shadow-xs"
+                                  title="Boleto Confirmado — recebimento na Matriz confirmado e liberado pela Diretoria"
+                                >
+                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                                  <span>Confirmado</span>
                                 </span>
                               )}
                             </td>
@@ -340,7 +428,14 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
 
                             {/* Valor */}
                             <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
-                              R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              <div>
+                                R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                              {isPaid && item.valorPago !== undefined && item.valorPago !== null && Math.abs(Number(item.valorPago) - Number(item.valor)) > 0.01 && (
+                                <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 block font-sans">
+                                  Pago: R$ {Number(item.valorPago).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                              )}
                             </td>
 
                             {/* Ações */}
@@ -351,9 +446,19 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                                     type="button"
                                     title="Baixar / Quitar Pagamento"
                                     onClick={() => onPayEntry(item.id)}
-                                    className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 hover:text-white transition-all"
+                                    className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 hover:text-white transition-all cursor-pointer"
                                   >
                                     <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {onEditEntry && (
+                                  <button
+                                    type="button"
+                                    title="Editar Lançamento"
+                                    onClick={() => onEditEntry(item)}
+                                    className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-400 hover:text-amber-600 transition-all cursor-pointer"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
                                   </button>
                                 )}
                               </div>

@@ -17,7 +17,8 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
-  AlertOctagon
+  AlertOctagon,
+  Truck
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, User, StoreItemCheck } from '../shared/types';
 import { convertAvariaToUnits } from './SeparationPage';
@@ -40,15 +41,28 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
   onUpdateOrder,
   onFinalizeOrder
 }) => {
-  // Lista de pedidos aguardando separação física (status 'Em Separação')
+  // Lista de pedidos aguardando separação física (status 'Em Separação' e já recebidos fisicamente na Matriz, ou transferência de CD)
   const pendingSeparationOrders = useMemo(() => {
-    return orders.filter(o => o.header.status === 'Em Separação');
+    return orders.filter(o => {
+      const isTransf = o.header?.supplierId === 'cd_matriz' || 
+                       String(o.header?.numeroPedido || '').startsWith('CD-') || 
+                       String(o.header?.id || '').startsWith('order_transf_cd_') ||
+                       Boolean(o.header?.fornecedor && o.header.fornecedor.toLowerCase().includes('transferência'));
+      return o.header.status === 'Em Separação' && (isTransf || o.header.recebidoMatriz);
+    });
   }, [orders]);
 
   // Pedido ativo para separação
-  const activeOrder = order.header.status === 'Em Separação' 
+  const activeOrder = (order.header.status === 'Em Separação' && (order.header.recebidoMatriz || order.header.supplierId === 'cd_matriz'))
     ? order 
     : (pendingSeparationOrders[0] || order);
+
+  const isTransfer = activeOrder.header?.supplierId === 'cd_matriz' || 
+                     String(activeOrder.header?.numeroPedido || '').startsWith('CD-') || 
+                     String(activeOrder.header?.id || '').startsWith('order_transf_cd_') ||
+                     Boolean(activeOrder.header?.fornecedor && activeOrder.header.fornecedor.toLowerCase().includes('transferência'));
+
+  const isReceiptPending = !isTransfer && !activeOrder.header.recebidoMatriz;
 
   const activeStores = useMemo(() => {
     return (activeOrder.storeConfigs || []).filter(s => s.active);
@@ -375,6 +389,41 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
       setIsSavingAction(false);
     }
   };
+
+  if (isReceiptPending) {
+    return (
+      <div className="space-y-4 max-w-xl mx-auto pb-24 animate-in fade-in duration-200">
+        <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 text-center shadow-lg space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-sm">
+            <Truck className="w-8 h-8" />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 dark:text-white">
+            Aguardando Recebimento na Matriz
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            O pedido <b>{activeOrder.header.numeroPedido}</b> ({activeOrder.header.fornecedor}) ainda não teve a entrega física confirmada na Matriz. A conferência e separação só podem ser iniciadas após o recebimento da mercadoria.
+          </p>
+          {pendingSeparationOrders.length > 0 && onSelectOrder && (
+            <div className="pt-2">
+              <span className="text-[11px] font-bold text-slate-400 block mb-2 uppercase">Outros pedidos recebidos na doca:</span>
+              <div className="space-y-2">
+                {pendingSeparationOrders.map(p => (
+                  <button
+                    key={p.header.id}
+                    onClick={() => onSelectOrder(p)}
+                    className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs font-bold hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition cursor-pointer"
+                  >
+                    <span>{p.header.numeroPedido} - {p.header.fornecedor}</span>
+                    <span className="text-emerald-600 font-mono">Separar →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 max-w-xl mx-auto pb-24 animate-in fade-in duration-200">

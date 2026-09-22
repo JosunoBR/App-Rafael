@@ -61,8 +61,8 @@ export function buildMonthlyMatrixData(orders: PurchaseOrder[]) {
   const monthsSet = new Set<string>();
   const now = new Date();
   
-  // Garantir pelo menos 7 meses consecutivos a partir do mês atual
-  for (let i = 0; i < 7; i++) {
+  // Garantir pelo menos 12 meses consecutivos a partir do mês atual (horizonte anual completo)
+  for (let i = 0; i < 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');

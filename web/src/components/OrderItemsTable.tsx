@@ -626,14 +626,33 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     return { byCode, byDesc };
   }, [products]);
 
+  // Mapa de detecção de códigos colidentes com descrições diferentes no mesmo pedido
+  const conflictingCodes = useMemo(() => {
+    const codeToDescs = new Map<string, Set<string>>();
+    items.forEach(it => {
+      const code = (it.codigoInterno || it.codigo || '').trim().toUpperCase();
+      const desc = (it.descricao || '').trim().toLowerCase();
+      if (code && desc) {
+        if (!codeToDescs.has(code)) codeToDescs.set(code, new Set());
+        codeToDescs.get(code)!.add(desc);
+      }
+    });
+    const conflictSet = new Set<string>();
+    codeToDescs.forEach((descs, code) => {
+      if (descs.size > 1) conflictSet.add(code);
+    });
+    return conflictSet;
+  }, [items]);
+
   // Encontra produto no catálogo correspondente ao item em O(1)
   const findCatalogProduct = (item: OrderItem): Product | undefined => {
-    const codInt = (item.codigoInterno || item.codigo || '').trim().toLowerCase();
-    if (codInt && catalogLookup.byCode.has(codInt)) return catalogLookup.byCode.get(codInt);
-    const codForn = (item.codigoFornecedor || '').trim().toLowerCase();
-    if (codForn && catalogLookup.byCode.has(codForn)) return catalogLookup.byCode.get(codForn);
+    // 🛡️ Prioriza correspondência exata de descrição no catálogo para que variações de sabor não herdem código errado
     const desc = (item.descricao || '').trim().toLowerCase();
     if (desc && catalogLookup.byDesc.has(desc)) return catalogLookup.byDesc.get(desc);
+    const codForn = (item.codigoFornecedor || '').trim().toLowerCase();
+    if (codForn && catalogLookup.byCode.has(codForn)) return catalogLookup.byCode.get(codForn);
+    const codInt = (item.codigoInterno || item.codigo || '').trim().toLowerCase();
+    if (codInt && catalogLookup.byCode.has(codInt)) return catalogLookup.byCode.get(codInt);
     return undefined;
   };
 
@@ -814,6 +833,21 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     }
 
     const updatedItem = { ...item, [field]: value };
+
+    // Se o campo alterado for a descrição, verifica se corresponde a um produto já cadastrado no catálogo do fornecedor
+    if (field === 'descricao') {
+      const cleanDesc = String(value || '').trim().toLowerCase();
+      if (cleanDesc && catalogLookup.byDesc.has(cleanDesc)) {
+        const catProd = catalogLookup.byDesc.get(cleanDesc)!;
+        if (catProd.codigoInterno || catProd.codigo) {
+          updatedItem.codigoInterno = catProd.codigoInterno || catProd.codigo;
+          updatedItem.codigo = catProd.codigoInterno || catProd.codigo;
+        }
+        if (catProd.codigoFornecedor) {
+          updatedItem.codigoFornecedor = catProd.codigoFornecedor;
+        }
+      }
+    }
 
     // Auto-cálculo de embalagem e peças totais:
     if (field === 'qtdNoPacote' || field === 'qtdPacotes') {
@@ -1312,9 +1346,11 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           </td>
         );
 
-      case 'codigoInterno':
+      case 'codigoInterno': {
+        const codeVal = (item.codigoInterno || item.codigo || '').trim().toUpperCase();
+        const hasConflict = Boolean(codeVal && conflictingCodes.has(codeVal));
         return (
-          <td key="codigoInterno" style={cellStyle} className="p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative">
+          <td key="codigoInterno" style={cellStyle} className={`p-0 border-r border-slate-200 dark:border-slate-700/80 whitespace-nowrap relative ${hasConflict ? 'bg-amber-500/10 ring-1 ring-amber-500 ring-inset' : ''}`}>
             <input
               type="text"
               data-excel-row={index}
@@ -1338,11 +1374,15 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 setAutocompleteQuery(e.target.value);
               }}
               placeholder="CÓD INT"
-              className="w-full h-full min-h-[38px] px-2 py-1.5 text-xs text-center font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap"
-              title="Código Interno Mega12"
+              className={`w-full h-full min-h-[38px] px-2 py-1.5 text-xs text-center font-mono font-bold ${hasConflict ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-700 dark:text-indigo-300'} bg-transparent border-0 outline-hidden focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition-colors whitespace-nowrap`}
+              title={hasConflict ? `⚠️ Atenção: Código ${codeVal} compartilhado por produtos com descrições diferentes no mesmo pedido!` : "Código Interno Mega12"}
             />
+            {hasConflict && (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Código repetido para produtos diferentes" />
+            )}
           </td>
         );
+      }
 
       case 'codigoBarras':
         return (

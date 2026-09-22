@@ -61,6 +61,31 @@ export function canCreateOrEditOrders(role?: UserRole | null): boolean {
 }
 
 /**
+ * Permite editar pedidos que já foram fechados ou que estão em andamento na esteira
+ * (ex: Aprovado, Em Distribuição, Em Separação, Finalizado).
+ * Regra: Exclusivo da Diretoria Executiva.
+ */
+export function canEditClosedOrders(role?: UserRole | null): boolean {
+  return role === 'diretoria';
+}
+
+/**
+ * Avalia se o usuário tem permissão para editar um pedido específico considerando o status atual dele.
+ * - Diretoria: pode editar sempre, em qualquer status.
+ * - Comprador: só pode editar enquanto for Rascunho ou Em Cotação.
+ * - Outros perfis: somente leitura.
+ */
+export function canEditSpecificOrder(role?: UserRole | null, orderStatus?: string | null): boolean {
+  if (!role) return false;
+  if (role === 'diretoria') return true;
+  if (role === 'comprador') {
+    const st = orderStatus || 'Em Cotação';
+    return st === 'Em Cotação' || st === 'Rascunho';
+  }
+  return false;
+}
+
+/**
  * Permite visualizar valores monetários de compra (custo, R$ total de cotações, etc.)
  */
 export function canViewFinancialValues(role?: UserRole | null): boolean {
@@ -95,4 +120,20 @@ export function getDefaultNavForRole(role?: UserRole | null): ActiveNavTab {
   if (role === 'separacao') return 'separation';
   if (role === 'deposito') return 'home';
   return 'home';
+}
+
+/**
+ * Permite confirmar o recebimento físico de um pedido na Matriz (entrega do fornecedor).
+ * Perfil 'separacao' NÃO pode confirmar entrega — é restrito à conferência na doca.
+ */
+export function canConfirmReceipt(role?: UserRole | null): boolean {
+  return role === 'diretoria' || role === 'comprador' || role === 'deposito';
+}
+
+/**
+ * Permite autorizar a liberação dos boletos de um pedido para o Contas a Pagar (Financeiro).
+ * Exclusivo da Diretoria — requer análise prévia dos títulos e valores.
+ */
+export function canAuthorizeFinancialRelease(role?: UserRole | null): boolean {
+  return role === 'diretoria';
 }

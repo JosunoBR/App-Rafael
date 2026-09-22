@@ -526,7 +526,7 @@ export async function buildModelWorkbook(): Promise<ExcelJS.Workbook> {
 
   const sepHeaders = [
     '#', 'CÓDIGO FORNEC.', 'DESCRIÇÃO DO PRODUTO', 'TOTAL PEDIDO', 'RESERVA CD',
-    ...stores.map(s => s.name.toUpperCase()),
+    ...stores.map(s => (s.shortName || s.name).toUpperCase()),
     'TOTAL ALOCADO', 'CONFERÊNCIA'
   ];
 

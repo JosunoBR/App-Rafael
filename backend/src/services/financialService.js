@@ -909,6 +909,42 @@ class FinancialService {
   }
 
   /**
+   * Importação em lote a partir do modal interativo de planilhas
+   */
+  async importSpreadsheetEntries({ entries, targetYear, targetMonth, mode = 'append' } = {}, user = null) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+      throw new Error('Nenhum lançamento válido fornecido para importação.');
+    }
+
+    const result = await financialRepo.importBatch({ entries, targetYear, targetMonth, mode });
+
+    // Trilha de auditoria segura (Security by Design)
+    if (user && financialAuditRepo) {
+      financialAuditRepo.create({
+        entryId: null,
+        descricao: `Importação de Planilha: ${result.count} lançamentos (${targetMonth}/${targetYear})`,
+        usuarioId: user.id || null,
+        usuarioNome: user.nome || 'Operador',
+        usuarioRole: user.role || 'faturamento',
+        acao: 'IMPORTACAO_PLANILHA',
+        campoAlterado: 'lote',
+        valorAnterior: mode === 'replace_month' ? 'Substituir Mês' : 'Adicionar',
+        valorNovo: `${result.count} contas (R$ ${result.totalValor.toFixed(2)})`,
+        snapshotJson: {
+          targetYear,
+          targetMonth,
+          mode,
+          count: result.count,
+          totalValor: result.totalValor
+        },
+        observacao: `Importação em lote de ${result.count} lançamentos para a competência ${targetMonth}/${targetYear} (Modo: ${mode}). Total: R$ ${result.totalValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+      }).catch(err => console.error('Erro ao registrar auditoria de importação financeira:', err));
+    }
+
+    return result;
+  }
+
+  /**
    * Mantém a janela contínua deslizante de despesas recorrentes (Rolling Horizon de N meses).
    * Para cada série recorrente ativa, verifica a última data gerada.
    * Se estiver a menos de horizonMonths da data atual, projeta os meses faltantes.

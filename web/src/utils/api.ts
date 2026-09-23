@@ -566,6 +566,25 @@ export async function batchPayFinancialEntriesInDb(
   return json;
 }
 
+export async function importFinancialSpreadsheetInDb(payload: {
+  entries: any[];
+  targetYear: string;
+  targetMonth: string;
+  mode: 'append' | 'replace_month';
+}): Promise<{ count: number; totalValor: number; message: string }> {
+  const res = await apiFetch('/financial/import-spreadsheet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const errorJson = await res.json().catch(() => null);
+    throw new Error(errorJson?.error || 'Erro ao importar lote de lançamentos da planilha.');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
 export async function deleteFinancialEntryFromDb(id: string): Promise<void> {
   await apiFetch(`/financial/entries/${id}`, {
     method: 'DELETE'

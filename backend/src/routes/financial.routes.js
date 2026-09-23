@@ -19,6 +19,7 @@ router.post('/entries/batch-pay', (req, res) => financialController.batchPay(req
 router.delete('/entries/:id', (req, res) => financialController.deleteEntry(req, res));
 router.post('/sync-orders', (req, res) => financialController.syncOrders(req, res));
 router.post('/import-sheet', (req, res) => financialController.importSheet(req, res));
+router.post('/import-spreadsheet', (req, res) => financialController.importSpreadsheet(req, res));
 router.delete('/recurring/:recorrenciaId', (req, res) => financialController.cancelRecurrence(req, res));
 
 module.exports = router;

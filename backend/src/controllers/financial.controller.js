@@ -176,6 +176,31 @@ class FinancialController {
     }
   }
 
+  async importSpreadsheet(req, res) {
+    try {
+      const { entries, targetYear, targetMonth, mode } = req.body;
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return res.status(400).json({ success: false, error: 'Lista de lançamentos para importação não informada ou vazia.' });
+      }
+
+      const result = await financialService.importSpreadsheetEntries({
+        entries,
+        targetYear,
+        targetMonth,
+        mode
+      }, req.user);
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+        message: result.message
+      });
+    } catch (error) {
+      console.error('Erro ao importar lançamentos de planilha:', error);
+      return res.status(400).json({ success: false, error: error.message || 'Erro ao importar lote de lançamentos.' });
+    }
+  }
+
   async cancelRecurrence(req, res) {
     try {
       const { recorrenciaId } = req.params;

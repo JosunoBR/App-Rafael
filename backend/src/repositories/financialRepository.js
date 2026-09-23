@@ -1,4 +1,4 @@
-const { queryAll, queryOne, execute } = require('../config/database');
+const { queryAll, queryOne, execute, getDatabase, flushDatabaseToDisk } = require('../config/database');
 
 /**
  * Converte qualquer data para formato brasileiro oficial DD/MM/YYYY
@@ -192,6 +192,105 @@ class FinancialRepository {
       results.push(created);
     }
     return results;
+  }
+
+  async importBatch({ entries, targetYear, targetMonth, mode = 'append' }) {
+    const db = await getDatabase();
+    const nowIso = new Date().toISOString();
+    const now = new Date();
+    const todayBr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+
+    // Transação SQLite atômica
+    db.run("BEGIN TRANSACTION;");
+    try {
+      if (mode === 'replace_month' && targetYear && targetMonth) {
+        const formattedMonth = String(targetMonth).padStart(2, '0');
+        const deleteSql = `
+          DELETE FROM financial_entries 
+          WHERE (dataVencimento LIKE ? OR dataVencimento LIKE ?)
+            AND status != 'Pago'
+            AND (tipo = 'despesa' OR orderId IS NULL)
+        `;
+        db.run(deleteSql, [`%/${formattedMonth}/${targetYear}`, `${targetYear}-${formattedMonth}-%`]);
+      }
+
+      const insertSql = `
+        INSERT INTO financial_entries (
+          id, tipo, orderId, installmentId, descricao, categoria, fornecedor,
+          storeId, lojaNome, empresa, formaPagamento, bancoConta, documentoRef,
+          parcelaNumero, parcelaTotal, parcelaDesc, dataVencimento, valor,
+          status, dataPagamento, valorPago, observacao, recorrente, recorrenciaId, statusPrevisao,
+          comprovanteNome, comprovanteTipo, comprovanteTamanho, comprovanteArquivo, comprovanteUrl,
+          comprovantesJson, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      `;
+
+      let insertedCount = 0;
+      let totalValor = 0;
+
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        const val = parseFloat(entry.valor) || 0;
+        if (val <= 0 && !entry.descricao) continue;
+
+        const id = entry.id || ('fin_imp_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substring(2, 6));
+        const normalizedVencimento = toBrDate(entry.dataVencimento) || todayBr;
+        const normalizedPagamento = entry.dataPagamento ? toBrDate(entry.dataPagamento) : null;
+        const status = entry.status || (entry.valorPago && entry.valorPago >= val ? 'Pago' : 'A Vencer');
+
+        db.run(insertSql, [
+          id,
+          entry.tipo || (entry.categoria === 'PRODUTOS' ? 'pedido_parcela' : 'despesa'),
+          entry.orderId || null,
+          entry.installmentId || null,
+          String(entry.descricao || 'Despesa').trim(),
+          String(entry.categoria || 'OPERACIONAL').trim().toUpperCase(),
+          String(entry.fornecedor || '').trim(),
+          String(entry.storeId || '').trim(),
+          String(entry.lojaNome || 'ALS').trim(),
+          String(entry.empresa || 'ALS').trim(),
+          String(entry.formaPagamento || 'BOLETO').trim().toUpperCase(),
+          String(entry.bancoConta || '').trim(),
+          String(entry.documentoRef || '').trim(),
+          parseInt(entry.parcelaNumero, 10) || 1,
+          parseInt(entry.parcelaTotal, 10) || 1,
+          String(entry.parcelaDesc || 'Única').trim(),
+          normalizedVencimento,
+          val,
+          status,
+          normalizedPagamento,
+          entry.valorPago !== undefined ? parseFloat(entry.valorPago) : (status === 'Pago' ? val : 0),
+          String(entry.observacao || '').trim(),
+          entry.recorrente ? 1 : 0,
+          entry.recorrenciaId || null,
+          (entry.statusPrevisao || 'CONFIRMADO').toUpperCase(),
+          entry.comprovanteNome || null,
+          entry.comprovanteTipo || null,
+          entry.comprovanteTamanho !== undefined && entry.comprovanteTamanho !== null ? Number(entry.comprovanteTamanho) : null,
+          entry.comprovanteArquivo || null,
+          entry.comprovanteUrl || null,
+          entry.comprovantesJson || (entry.comprovantes ? JSON.stringify(entry.comprovantes) : null),
+          entry.createdAt || nowIso,
+          nowIso
+        ]);
+
+        insertedCount++;
+        totalValor += val;
+      }
+
+      db.run("COMMIT;");
+      flushDatabaseToDisk();
+
+      return {
+        success: true,
+        count: insertedCount,
+        totalValor,
+        message: `${insertedCount} lançamentos importados com sucesso! (Total: R$ ${totalValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
+      };
+    } catch (err) {
+      try { db.run("ROLLBACK;"); } catch (_) {}
+      throw err;
+    }
   }
 
   async update(id, entry) {

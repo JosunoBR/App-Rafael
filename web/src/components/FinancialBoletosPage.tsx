@@ -30,6 +30,7 @@ import {
   History,
   Paperclip,
   Upload,
+  UploadCloud,
   FileCheck,
   Loader2
 } from 'lucide-react';
@@ -60,6 +61,7 @@ import { FinancialEntryModal } from './FinancialEntryModal';
 import { FinancialEditModal } from './FinancialEditModal';
 import { FinancialDailyView } from './FinancialDailyView';
 import { FinancialAuditModal } from './FinancialAuditModal';
+import { FinancialSheetImportModal } from './FinancialSheetImportModal';
 
 interface FinancialBoletosPageProps {
   orders: PurchaseOrder[];
@@ -124,6 +126,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
 
   // Modais
   const [isEntryModalOpen, setIsEntryModalOpen] = useState<boolean>(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [payingEntry, setPayingEntry] = useState<FinancialEntry | null>(null);
   const [payForm, setPayForm] = useState<{ dataPagamento: string; valorPago: number; observacao: string }>({
     dataPagamento: new Date().toISOString().substring(0, 10),
@@ -615,6 +618,17 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
               </span>
             </button>
           </div>
+
+          {/* Importar Planilha de Pagamentos Excel */}
+          <button
+            type="button"
+            onClick={() => setIsImportModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-300 dark:border-slate-700 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Importar lançamentos e contas a partir de planilha Excel (.xlsx / .xls)"
+          >
+            <UploadCloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            Importar
+          </button>
 
           {/* Novo Lançamento ERP */}
           <button
@@ -1656,6 +1670,16 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
           onSave={async (payload) => {
             return await saveFinancialEntryToDb(payload);
           }}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Modal Inteligente de Importação de Planilhas de Pagamento */}
+      {isImportModalOpen && (
+        <FinancialSheetImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          onSuccess={() => loadFinancialData()}
           showToast={showToast}
         />
       )}

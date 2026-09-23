@@ -263,3 +263,206 @@ export function calculateItemIpi(
 
   return { ipiAliq, valorIpi };
 }
+
+export interface FiscalAdjustmentResult {
+  updatedItems: OrderItem[];
+  diferencaTotal: number;
+  percentualVariacao: number;
+  totalAnterior: number;
+  novoTotal: number;
+}
+
+/**
+ * Distribui proporcionalmente a diferença entre o Valor da NF entregue e o Total do Pedido
+ * entre os produtos ativos (não rupturas), atualizando os preços unitários e valores brutos/líquidos
+ * com compensação de centavos residuais para garantir fechamento rigoroso ao centavo (R$ 0,01).
+ */
+export function distributeFiscalAdjustmentToItems(
+  items: OrderItem[],
+  targetNfValue: number,
+  header?: Partial<OrderHeader>,
+  fiscal?: FiscalConfig
+): FiscalAdjustmentResult {
+  const currentTotals = calculateOrderTotals(items, header, fiscal);
+  const totalAnterior = currentTotals.totalGeral;
+  const targetVal = Number(Math.max(0, targetNfValue).toFixed(2));
+
+  if (totalAnterior <= 0 || targetVal <= 0 || items.length === 0) {
+    return {
+      updatedItems: items,
+      diferencaTotal: 0,
+      percentualVariacao: 0,
+      totalAnterior,
+      novoTotal: totalAnterior
+    };
+  }
+
+  const diferencaTotal = Number((targetVal - totalAnterior).toFixed(2));
+  const percentualVariacao = Number(((diferencaTotal / totalAnterior) * 100).toFixed(2));
+
+  // Se a diferença for zero, nada a alterar
+  if (Math.abs(diferencaTotal) < 0.005) {
+    return {
+      updatedItems: items,
+      diferencaTotal: 0,
+      percentualVariacao: 0,
+      totalAnterior,
+      novoTotal: totalAnterior
+    };
+  }
+
+  const ratio = targetVal / totalAnterior;
+
+  // 1ª Passada: Atualiza cada item ativo proporcionalmente
+  const candidateItems: OrderItem[] = items.map(it => {
+    if (isBlankItem(it) || it.ruptura) {
+      return { ...it };
+    }
+
+    const pack = Number(it.qtdNoPacote) || Number(it.qtdPorPacote) || 1;
+    const pacotes = Number(it.qtdPacotes) || 0;
+    const pecas = Number(it.qtdTotalUnidades) || (pacotes * pack);
+
+    if (pecas <= 0) {
+      return { ...it };
+    }
+
+    // Salva o preço original para permitir reversão futura
+    const precoOrig = it.precoUnitarioOriginal !== undefined ? it.precoUnitarioOriginal : it.precoUnitario;
+    const brutoOrig = it.valorTotalBrutoOriginal !== undefined ? it.valorTotalBrutoOriginal : it.valorTotalBruto;
+
+    // Novo preço unitário (arredondado para 4 casas ou 2 casas se não houver perda)
+    let rawNovoPreco = Number((it.precoUnitario * ratio).toFixed(4));
+    if (Math.abs(Number(rawNovoPreco.toFixed(2)) - rawNovoPreco) < 0.0001) {
+      rawNovoPreco = Number(rawNovoPreco.toFixed(2));
+    }
+
+    const novoBruto = Number((pecas * rawNovoPreco).toFixed(2));
+
+    // Recalcula desconto proporcional se houver
+    const descPct = Math.max(0, Math.min(100, Number(it.percentualDesconto) || 0));
+    const novoValorDesc = descPct > 0 
+      ? Number((novoBruto * (descPct / 100)).toFixed(2)) 
+      : (it.valorDescontoItem ? Number((Number(it.valorDescontoItem) * ratio).toFixed(2)) : 0);
+
+    const novoLiquido = Math.max(0, Number((novoBruto - novoValorDesc).toFixed(2)));
+
+    // Recalcula IPI se houver
+    let novoValorIpi = it.valorIpi;
+    if (it.valorIpi !== undefined && it.valorIpi !== null && Number(it.valorIpi) > 0) {
+      novoValorIpi = Number((Number(it.valorIpi) * ratio).toFixed(2));
+    }
+
+    return {
+      ...it,
+      precoUnitarioOriginal: precoOrig,
+      valorTotalBrutoOriginal: brutoOrig,
+      precoUnitario: rawNovoPreco,
+      valorTotalBruto: novoBruto,
+      valorDescontoItem: novoValorDesc,
+      valorTotalLiquido: novoLiquido,
+      valorIpi: novoValorIpi
+    };
+  });
+
+  // 2ª Passada: Verificação de fechamento exato dos centavos
+  const candidateTotals = calculateOrderTotals(candidateItems, header, fiscal);
+  let diffCentavos = Number((targetVal - candidateTotals.totalGeral).toFixed(2));
+
+  if (Math.abs(diffCentavos) >= 0.01 && candidateItems.length > 0) {
+    // Encontra o item de maior valor financeiro ativo para absorver o resíduo de centavos
+    let maxIdx = -1;
+    let maxVal = -1;
+    candidateItems.forEach((it, idx) => {
+      if (!isBlankItem(it) && !it.ruptura && Number(it.valorTotalBruto) > maxVal) {
+        maxVal = Number(it.valorTotalBruto);
+        maxIdx = idx;
+      }
+    });
+
+    if (maxIdx !== -1) {
+      const targetItem = candidateItems[maxIdx];
+      const pecas = Number(targetItem.qtdTotalUnidades) || 1;
+      
+      // Ajusta o preço unitário do item alvo para compensar exatamente a diferença
+      const adjustedUnit = Number((targetItem.precoUnitario + (diffCentavos / pecas)).toFixed(4));
+      const adjustedBruto = Number((pecas * adjustedUnit).toFixed(2));
+      const descPct = Math.max(0, Math.min(100, Number(targetItem.percentualDesconto) || 0));
+      const adjustedDesc = descPct > 0 
+        ? Number((adjustedBruto * (descPct / 100)).toFixed(2)) 
+        : (targetItem.valorDescontoItem ? Number((Number(targetItem.valorDescontoItem) + diffCentavos).toFixed(2)) : 0);
+      const adjustedLiquido = Math.max(0, Number((adjustedBruto - adjustedDesc).toFixed(2)));
+
+      candidateItems[maxIdx] = {
+        ...targetItem,
+        precoUnitario: adjustedUnit,
+        valorTotalBruto: adjustedBruto,
+        valorDescontoItem: adjustedDesc,
+        valorTotalLiquido: adjustedLiquido
+      };
+    }
+  }
+
+  const finalTotals = calculateOrderTotals(candidateItems, header, fiscal);
+
+  return {
+    updatedItems: candidateItems,
+    diferencaTotal,
+    percentualVariacao,
+    totalAnterior,
+    novoTotal: finalTotals.totalGeral
+  };
+}
+
+/**
+ * Restaura os preços unitários e valores originais dos itens antes de qualquer Ajuste Fiscal
+ */
+export function restoreOriginalItemPrices(
+  items: OrderItem[],
+  header?: Partial<OrderHeader>,
+  fiscal?: FiscalConfig
+): FiscalAdjustmentResult {
+  const currentTotals = calculateOrderTotals(items, header, fiscal);
+  const totalAnterior = currentTotals.totalGeral;
+
+  const restoredItems: OrderItem[] = items.map(it => {
+    if (it.precoUnitarioOriginal === undefined && it.valorTotalBrutoOriginal === undefined) {
+      return { ...it };
+    }
+
+    const pack = Number(it.qtdNoPacote) || Number(it.qtdPorPacote) || 1;
+    const pacotes = Number(it.qtdPacotes) || 0;
+    const pecas = Number(it.qtdTotalUnidades) || (pacotes * pack);
+
+    const origPrice = it.precoUnitarioOriginal !== undefined ? it.precoUnitarioOriginal : it.precoUnitario;
+    const origBruto = it.valorTotalBrutoOriginal !== undefined 
+      ? it.valorTotalBrutoOriginal 
+      : Number((pecas * origPrice).toFixed(2));
+
+    const descPct = Math.max(0, Math.min(100, Number(it.percentualDesconto) || 0));
+    const origDesc = descPct > 0 ? Number((origBruto * (descPct / 100)).toFixed(2)) : (it.valorDescontoItem || 0);
+    const origLiquido = Math.max(0, Number((origBruto - origDesc).toFixed(2)));
+
+    const clone = { ...it };
+    clone.precoUnitario = origPrice;
+    clone.valorTotalBruto = origBruto;
+    clone.valorDescontoItem = origDesc;
+    clone.valorTotalLiquido = origLiquido;
+    delete clone.precoUnitarioOriginal;
+    delete clone.valorTotalBrutoOriginal;
+
+    return clone;
+  });
+
+  const finalTotals = calculateOrderTotals(restoredItems, header, fiscal);
+  const diferencaTotal = Number((finalTotals.totalGeral - totalAnterior).toFixed(2));
+  const percentualVariacao = totalAnterior > 0 ? Number(((diferencaTotal / totalAnterior) * 100).toFixed(2)) : 0;
+
+  return {
+    updatedItems: restoredItems,
+    diferencaTotal,
+    percentualVariacao,
+    totalAnterior,
+    novoTotal: finalTotals.totalGeral
+  };
+}

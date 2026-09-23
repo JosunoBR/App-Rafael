@@ -183,6 +183,8 @@ export interface OrderItem {
   separacaoManual?: boolean;    // Se foi editado manualmente
   qtdReservaEstoque?: number;   // Quantidade retida no Estoque Central / Matriz / CD
   ruptura?: boolean;            // Item em ruptura (não será entregue pelo fornecedor - descontado de todos os cálculos do pedido)
+  precoUnitarioOriginal?: number; // Preço unitário antes do Ajuste Fiscal (para permitir reversão)
+  valorTotalBrutoOriginal?: number; // Total bruto antes do Ajuste Fiscal
 }
 
 export type OrderStatus = 'Em Cotação' | 'Aprovado' | 'Em Distribuição' | 'Em Separação' | 'Faturamento' | 'Finalizado';
@@ -244,6 +246,12 @@ export interface OrderHeader {
   finalizadoPor?: string;
   dataFinalizacao?: string;
 
+  // Ajuste Fiscal da Entrega (Conciliação de NF)
+  valorNotaFiscalEntregue?: number;
+  ajusteFiscalDiferenca?: number;
+  ajusteFiscalData?: string;
+  ajusteFiscalUsuario?: string;
+
   // Distribuição & Separação (Esteira Unificada)
   distribuicaoConcluida?: boolean;
   distribuidoPor?: string;
@@ -298,6 +306,7 @@ export interface PaymentInstallment {
   isEntrada?: boolean;     // Identificador de parcela de entrada/depósito
   tipoTitulo?: 'mercadoria' | 'frete';
   metodoPagamento?: 'Boleto' | 'Depósito' | 'Cheque' | 'PIX' | string;
+  comprovanteUrl?: string;
   updatedAt?: string;
 }
 

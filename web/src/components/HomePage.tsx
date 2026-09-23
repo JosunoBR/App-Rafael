@@ -29,7 +29,7 @@ interface HomePageProps {
   onNewOrder: () => void;
   onContinueDraft: () => void;
   onDiscardDraft: () => void;
-  onSelectOrder: (order: PurchaseOrder) => void;
+  onSelectOrder: (order: PurchaseOrder, destinationTab?: ActiveNavTab) => void;
   onSwitchViewMode: (mode: 'desktop' | 'mobile_purchases' | 'mobile_separation') => void;
   onConfirmReceipt?: (order: PurchaseOrder) => void;
   onAuthorizeFinancial?: (order: PurchaseOrder) => void;
@@ -213,6 +213,20 @@ export const HomePage: React.FC<HomePageProps> = ({
     if (status === 'Em Distribuição') return 'Distribuir CD';
     if (status === 'Finalizado') return 'Ver Romaneio';
     return canAccessOrders ? 'Abrir Cotação' : 'Visualizar';
+  };
+
+  // Determina a aba de destino do pedido respeitando estritamente a segurança e o estágio operacional:
+  // "Conferir Doca", "Ver Romaneio" e "Distribuir CD" abrem obrigatoriamente na página Distribuição ('separation')
+  const getDestinationTabForOrder = (status: string): ActiveNavTab => {
+    if (status === 'Em Separação' || status === 'Em Distribuição' || status === 'Finalizado' || status === 'Aprovado') {
+      return 'separation';
+    }
+    return canAccessOrders && canAccessTab(currentUser?.role, 'orders') ? 'orders' : 'separation';
+  };
+
+  const handleSelectOrder = (ord: PurchaseOrder) => {
+    const targetTab = getDestinationTabForOrder(ord.header.status);
+    onSelectOrder(ord, targetTab);
   };
 
   return (
@@ -576,7 +590,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                       <tr 
                         key={ord.header.id}
                         className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer group"
-                        onClick={() => onSelectOrder(ord)}
+                        onClick={() => handleSelectOrder(ord)}
                       >
                         <td className="py-3.5 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">
                           {ord.header.numeroPedido}
@@ -639,7 +653,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                               </button>
                             )}
                             <button
-                              onClick={() => onSelectOrder(ord)}
+                              onClick={() => handleSelectOrder(ord)}
                               className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition cursor-pointer inline-flex items-center gap-1 shadow-2xs"
                             >
                               <span>{getActionButtonLabel(ord.header.status)}</span>

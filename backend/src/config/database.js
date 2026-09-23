@@ -597,19 +597,22 @@ async function getDatabase() {
       dbInstance.run(`
         UPDATE financial_entries 
         SET dataVencimento = printf('%s/%s/%s', SUBSTR(dataVencimento, 9, 2), SUBSTR(dataVencimento, 6, 2), SUBSTR(dataVencimento, 1, 4))
-        WHERE dataVencimento LIKE '____-__-__';
-
+        WHERE dataVencimento LIKE '____-__-__'
+      `);
+      dbInstance.run(`
         UPDATE financial_entries 
         SET dataPagamento = printf('%s/%s/%s', SUBSTR(dataPagamento, 9, 2), SUBSTR(dataPagamento, 6, 2), SUBSTR(dataPagamento, 1, 4))
-        WHERE dataPagamento LIKE '____-__-__';
-
+        WHERE dataPagamento LIKE '____-__-__'
+      `);
+      dbInstance.run(`
         UPDATE order_installments 
         SET dataVencimento = printf('%s/%s/%s', SUBSTR(dataVencimento, 9, 2), SUBSTR(dataVencimento, 6, 2), SUBSTR(dataVencimento, 1, 4))
-        WHERE dataVencimento LIKE '____-__-__';
-
+        WHERE dataVencimento LIKE '____-__-__'
+      `);
+      dbInstance.run(`
         UPDATE order_installments 
         SET dataPagamento = printf('%s/%s/%s', SUBSTR(dataPagamento, 9, 2), SUBSTR(dataPagamento, 6, 2), SUBSTR(dataPagamento, 1, 4))
-        WHERE dataPagamento LIKE '____-__-__';
+        WHERE dataPagamento LIKE '____-__-__'
       `);
     } catch (dateErr) {
       console.warn('Aviso ao migrar datas para formato brasileiro:', dateErr.message);

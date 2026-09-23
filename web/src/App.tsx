@@ -23,6 +23,9 @@ import {
   OrderItemsTable 
 } from './components/OrderItemsTable';
 import { 
+  OrderFiscalAdjustmentCard 
+} from './components/OrderFiscalAdjustmentCard';
+import { 
   FiscalPanelModal 
 } from './components/FiscalPanelModal';
 import { 
@@ -171,6 +174,11 @@ import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem, generateNextProductCode } from './utils/orderItemUtils';
 import { CheckCircle2, AlertCircle, Plus, Lock, ShieldCheck } from 'lucide-react';
 import { canAccessTab, canCreateOrEditOrders, getDefaultNavForRole, canEditSpecificOrder } from './shared/permissions';
+import { 
+  calculateOrderTotals, 
+  distributeFiscalAdjustmentToItems, 
+  restoreOriginalItemPrices 
+} from './shared/orderCalculationEngine';
 
 export function App() {
   // 1. Estado de Autenticação (RBAC) - Validação prévia de expiração local
@@ -1233,6 +1241,140 @@ export function App() {
     });
 
     showToast(`📦 Compra Padrão de "${targetSup.razaoSocial}" carregada (${template.items.length} itens)!`, 'success');
+  };
+
+  // 🛡️ Aplica o Ajuste Fiscal da Entrega (Conciliação com o Valor da NF)
+  const handleApplyFiscalAdjustment = async (targetNfValue: number) => {
+    if (targetNfValue <= 0) return;
+
+    const adjResult = distributeFiscalAdjustmentToItems(
+      order.items,
+      targetNfValue,
+      order.header,
+      order.fiscalConfig || fiscalConfig
+    );
+
+    const updatedHeader = {
+      ...order.header,
+      valorNotaFiscalEntregue: targetNfValue,
+      ajusteFiscalDiferenca: adjResult.diferencaTotal,
+      ajusteFiscalData: new Date().toISOString(),
+      ajusteFiscalUsuario: currentUser?.nome || currentUser?.email || 'Usuário'
+    };
+
+    const candidateOrder: PurchaseOrder = {
+      ...order,
+      header: updatedHeader,
+      items: adjResult.updatedItems
+    };
+
+    // Regenera parcelas/boletos com o novo total da NF para o faturamento liberar sem divergência
+    let updatedInstallments = generateOrderInstallments(candidateOrder, undefined, undefined, false);
+    if (order.installments && order.installments.length > 0) {
+      updatedInstallments = updatedInstallments.map(newInst => {
+        const prev = order.installments?.find(p => p.numeroParcela === newInst.numeroParcela && p.isBoletoFrete === newInst.isBoletoFrete);
+        if (prev && prev.status === 'Pago') {
+          return {
+            ...newInst,
+            status: 'Pago',
+            dataPagamento: prev.dataPagamento
+          };
+        }
+        return newInst;
+      });
+    }
+
+    const finalOrder: PurchaseOrder = {
+      ...candidateOrder,
+      installments: updatedInstallments
+    };
+
+    setOrder(finalOrder);
+    saveOrderToHistory(finalOrder);
+    setSavedOrders(prev => {
+      const idx = prev.findIndex(o => o.header.id === finalOrder.header.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = finalOrder;
+        return next;
+      }
+      return [finalOrder, ...prev];
+    });
+
+    try {
+      await saveOrderToDb(finalOrder);
+    } catch (e) {
+      console.warn('Aviso ao sincronizar ajuste fiscal no SQLite:', e);
+    }
+
+    const sinal = adjResult.diferencaTotal >= 0 ? '+' : '';
+    showToast(
+      `Ajuste Fiscal aplicado: ${sinal}R$ ${adjResult.diferencaTotal.toFixed(2)} distribuídos nos produtos. Boletos sincronizados com a NF (${targetNfValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`,
+      'success'
+    );
+  };
+
+  // 🛡️ Restaura os preços unitários originais dos produtos antes do Ajuste Fiscal
+  const handleRestoreFiscalAdjustment = async () => {
+    const restResult = restoreOriginalItemPrices(
+      order.items,
+      order.header,
+      order.fiscalConfig || fiscalConfig
+    );
+
+    const updatedHeader = {
+      ...order.header,
+      valorNotaFiscalEntregue: undefined,
+      ajusteFiscalDiferenca: undefined,
+      ajusteFiscalData: undefined,
+      ajusteFiscalUsuario: undefined
+    };
+
+    const candidateOrder: PurchaseOrder = {
+      ...order,
+      header: updatedHeader,
+      items: restResult.updatedItems
+    };
+
+    let updatedInstallments = generateOrderInstallments(candidateOrder, undefined, undefined, false);
+    if (order.installments && order.installments.length > 0) {
+      updatedInstallments = updatedInstallments.map(newInst => {
+        const prev = order.installments?.find(p => p.numeroParcela === newInst.numeroParcela && p.isBoletoFrete === newInst.isBoletoFrete);
+        if (prev && prev.status === 'Pago') {
+          return {
+            ...newInst,
+            status: 'Pago',
+            dataPagamento: prev.dataPagamento
+          };
+        }
+        return newInst;
+      });
+    }
+
+    const finalOrder: PurchaseOrder = {
+      ...candidateOrder,
+      installments: updatedInstallments
+    };
+
+    setOrder(finalOrder);
+    saveOrderToHistory(finalOrder);
+    setSavedOrders(prev => {
+      const idx = prev.findIndex(o => o.header.id === finalOrder.header.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = finalOrder;
+        return next;
+      }
+      return [finalOrder, ...prev];
+    });
+
+    try {
+      await saveOrderToDb(finalOrder);
+    } catch (e) {
+      console.warn('Aviso ao sincronizar restauração fiscal no SQLite:', e);
+    }
+
+    showToast('Preços originais dos produtos restaurados com sucesso!', 'info');
   };
 
   // Carrega com segurança e resposta instantânea (0ms) o pedido selecionado
@@ -2748,7 +2890,13 @@ export function App() {
           hasActiveDraft={hasActiveDraft}
           isSavedOrder={isCurrentOrderSaved}
           savedOrders={savedOrders}
-          onSelectOrder={(selected) => handleOpenSelectedOrder(selected, canCreateOrEditOrders(currentUser?.role) ? 'orders' : 'separation')}
+          onSelectOrder={(selected) => {
+            const st = selected.header.status;
+            const target = (activeNav === 'separation' || activeNav === 'separationHistory' || st === 'Em Separação' || st === 'Em Distribuição' || st === 'Finalizado' || st === 'Aprovado')
+              ? 'separation'
+              : (canAccessTab(currentUser?.role, 'orders') ? 'orders' : 'separation');
+            handleOpenSelectedOrder(selected, target);
+          }}
           onNewOrder={handleNewOrder}
           onSaveOrder={handleSaveDraftOrder}
           onCloseOrder={handleCloseOrder}
@@ -2813,7 +2961,16 @@ export function App() {
                   onNewOrder={handleNewOrder}
                   onContinueDraft={handleContinueDraft}
                   onDiscardDraft={handleDiscardDraft}
-                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, canCreateOrEditOrders(currentUser?.role) ? 'orders' : 'separation')}
+                  onSelectOrder={(selected, destinationTab) => {
+                    let target = destinationTab;
+                    if (!target) {
+                      const st = selected.header.status;
+                      target = (st === 'Em Separação' || st === 'Em Distribuição' || st === 'Finalizado' || st === 'Aprovado')
+                        ? 'separation'
+                        : (canAccessTab(currentUser?.role, 'orders') ? 'orders' : 'separation');
+                    }
+                    handleOpenSelectedOrder(selected, target);
+                  }}
                   onSwitchViewMode={(mode) => setViewMode(mode)}
                   onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
                   onAuthorizeFinancial={handleAuthorizeFinancial}
@@ -2930,6 +3087,20 @@ export function App() {
                       onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
                     />
                   </fieldset>
+
+                  {/* Card de Ajuste Fiscal da Entrega (Conciliação da Nota Fiscal com Produtos e Boletos) */}
+                  <OrderFiscalAdjustmentCard
+                    order={order}
+                    orderTotals={calculateOrderTotals(order)}
+                    currentUser={currentUser}
+                    onApplyAdjustment={handleApplyFiscalAdjustment}
+                    onRestoreOriginals={handleRestoreFiscalAdjustment}
+                    disabled={Boolean(
+                      currentUser?.role !== 'diretoria' && 
+                      currentUser?.role !== 'faturamento' && 
+                      currentUser?.role !== 'comprador'
+                    )}
+                  />
                 </div>
               )}
 
@@ -3013,7 +3184,13 @@ export function App() {
                 <DashboardView
                   orders={savedOrders}
                   suppliers={suppliers}
-                  onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
+                  onSelectOrder={(selected) => {
+                    const st = selected.header.status;
+                    const target = (st === 'Em Separação' || st === 'Em Distribuição' || st === 'Finalizado' || st === 'Aprovado')
+                      ? 'separation'
+                      : (canAccessTab(currentUser?.role, 'orders') ? 'orders' : 'separation');
+                    handleOpenSelectedOrder(selected, target);
+                  }}
                   onNavigateToOrders={() => setActiveNav('orders')}
                 />
               )}

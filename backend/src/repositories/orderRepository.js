@@ -97,7 +97,11 @@ class OrderRepository {
       depositoPrazoDias: order.header.depositoPrazoDias,
       saldoFormaPagamento: order.header.saldoFormaPagamento,
       saldoParcelasCount: order.header.saldoParcelasCount,
-      saldoPrazoDias: order.header.saldoPrazoDias
+      saldoPrazoDias: order.header.saldoPrazoDias,
+      valorNotaFiscalEntregue: order.header.valorNotaFiscalEntregue,
+      ajusteFiscalDiferenca: order.header.ajusteFiscalDiferenca,
+      ajusteFiscalData: order.header.ajusteFiscalData,
+      ajusteFiscalUsuario: order.header.ajusteFiscalUsuario
     };
     const paymentConfigJson = JSON.stringify(paymentConfig);
 

@@ -87,14 +87,14 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     categoria: '2. Esteira, CD & Separação',
     nome: 'Acessar tela de Distribuição e Separação',
     obs: 'Visão de grade de rateio das 20 lojas',
-    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'nav:separation_history',
     categoria: '2. Esteira, CD & Separação',
     nome: 'Acessar Histórico de Romaneios da Doca',
     obs: 'Consulta de pedidos finalizados na separação',
-    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'pipeline:send_distribution',

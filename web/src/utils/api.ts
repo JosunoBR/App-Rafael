@@ -505,6 +505,7 @@ export async function saveFinancialEntryToDb(entryData: any): Promise<FinancialE
 }
 
 export interface ComprovantePayload {
+  id?: string;
   nome: string;
   tipo: string;
   tamanho: number;
@@ -518,6 +519,7 @@ export async function payFinancialEntryInDb(
     valorPago?: number; 
     observacao?: string;
     comprovante?: ComprovantePayload;
+    comprovantes?: ComprovantePayload[];
   }
 ): Promise<FinancialEntry> {
   const res = await apiFetch(`/financial/entries/${id}/pay`, {
@@ -529,8 +531,9 @@ export async function payFinancialEntryInDb(
   return json.data;
 }
 
-export async function downloadFinancialComprovanteBlob(id: string): Promise<{ blob: Blob; filename: string; mimeType: string }> {
-  const res = await apiFetch(`/financial/entries/${id}/comprovante`);
+export async function downloadFinancialComprovanteBlob(id: string, index?: number): Promise<{ blob: Blob; filename: string; mimeType: string }> {
+  const query = index !== undefined ? `?index=${index}` : '';
+  const res = await apiFetch(`/financial/entries/${id}/comprovante${query}`);
   if (!res.ok) {
     const errorJson = await res.json().catch(() => null);
     throw new Error(errorJson?.error || 'Erro ao carregar comprovante.');

@@ -131,9 +131,13 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     observacao: ''
   });
 
-  // Estados para anexo obrigatório de comprovante
-  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
-  const [comprovanteBase64, setComprovanteBase64] = useState<string>('');
+  // Estados para anexo obrigatório de comprovante (suporte a múltiplos anexos)
+  interface AttachedComprovanteItem {
+    id: string;
+    file: File;
+    base64: string;
+  }
+  const [attachedComprovantes, setAttachedComprovantes] = useState<AttachedComprovanteItem[]>([]);
   const [uploadError, setUploadError] = useState<string>('');
   const [isSubmittingPay, setIsSubmittingPay] = useState<boolean>(false);
   const [isCompressingComprovante, setIsCompressingComprovante] = useState<boolean>(false);
@@ -144,6 +148,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   const [viewingBlobUrl, setViewingBlobUrl] = useState<string | null>(null);
   const [viewingMimeType, setViewingMimeType] = useState<string | null>(null);
   const [viewingFileName, setViewingFileName] = useState<string>('');
+  const [viewingIndex, setViewingIndex] = useState<number>(0);
   const [isLoadingComprovante, setIsLoadingComprovante] = useState<boolean>(false);
 
   // Carregar lançamentos e resumo do SQLite
@@ -217,62 +222,79 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     if (selectedYear === 'all') setSelectedYear(String(curYear));
   };
 
-  const handleFileSelect = async (file: File) => {
+  const handleFilesSelect = async (files: FileList | File[]) => {
     setUploadError('');
-    if (!file) return;
+    if (!files || files.length === 0) return;
 
     const allowedExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.pdf', '.txt', '.csv', '.ret', '.rem', '.log'];
-    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
-    if (!allowedExtensions.includes(ext)) {
-      setUploadError(`Formato não suportado (${ext || 'sem extensão'}). Formatos aceitos: Imagem (PNG, JPG, WEBP), PDF ou Arquivo de Texto (TXT, CSV).`);
-      return;
-    }
+    const fileArray = Array.from(files);
+    const newItems: AttachedComprovanteItem[] = [];
 
-    // Se for arquivo de imagem, comprime transparentemente com teto rígido de 1 MB e nitidez em 1600px
-    if (isImageFile(file)) {
-      try {
-        setIsCompressingComprovante(true);
-        const result = await compressImage(file, {
-          maxSizeBytes: 1024 * 1024, // 1 MB rígido
-          maxWidth: 1600,
-          maxHeight: 1600,
-          initialQuality: 0.85
-        });
+    setIsCompressingComprovante(true);
+    try {
+      for (const file of fileArray) {
+        const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+        if (!allowedExtensions.includes(ext)) {
+          setUploadError(`Formato não suportado no arquivo "${file.name}" (${ext || 'sem extensão'}). Formatos aceitos: Imagem (PNG, JPG, WEBP), PDF ou Arquivo de Texto (TXT, CSV).`);
+          continue;
+        }
 
-        setComprovanteFile(result.file);
-        setComprovanteBase64(result.dataUrl);
-      } catch (err: any) {
-        console.error('Erro na otimização de imagem do comprovante:', err);
-        setUploadError('Falha ao processar e comprimir imagem do comprovante. Tente outro arquivo.');
-      } finally {
-        setIsCompressingComprovante(false);
+        if (isImageFile(file)) {
+          try {
+            const result = await compressImage(file, {
+              maxSizeBytes: 1024 * 1024, // 1 MB rígido
+              maxWidth: 1600,
+              maxHeight: 1600,
+              initialQuality: 0.85
+            });
+            newItems.push({
+              id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              file: result.file,
+              base64: result.dataUrl
+            });
+          } catch (err: any) {
+            console.error('Erro na otimização de imagem do comprovante:', err);
+            setUploadError(`Falha ao comprimir imagem "${file.name}".`);
+          }
+        } else {
+          // PDFs ou textos
+          if (file.size > 10 * 1024 * 1024) {
+            setUploadError(`O arquivo "${file.name}" é maior que o limite de 10 MB.`);
+            continue;
+          }
+          await new Promise<void>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const base64 = e.target?.result as string;
+              newItems.push({
+                id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                file,
+                base64
+              });
+              resolve();
+            };
+            reader.onerror = () => {
+              setUploadError(`Falha ao ler o arquivo "${file.name}".`);
+              resolve();
+            };
+            reader.readAsDataURL(file);
+          });
+        }
       }
-      return;
-    }
 
-    // Para PDFs ou arquivos de texto (não-imagem)
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError('O arquivo selecionado é maior que o limite de 10 MB.');
-      return;
+      if (newItems.length > 0) {
+        setAttachedComprovantes(prev => [...prev, ...newItems]);
+      }
+    } finally {
+      setIsCompressingComprovante(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target?.result as string;
-      setComprovanteFile(file);
-      setComprovanteBase64(base64);
-    };
-    reader.onerror = () => {
-      setUploadError('Falha ao processar o arquivo selecionado.');
-    };
-    reader.readAsDataURL(file);
   };
 
   // Baixa rápida de Pagamento
   const handleOpenPayModal = (entry: FinancialEntry) => {
     setPayingEntry(entry);
-    setComprovanteFile(null);
-    setComprovanteBase64('');
+    setAttachedComprovantes([]);
     setUploadError('');
     setPayForm({
       dataPagamento: new Date().toISOString().substring(0, 10),
@@ -285,27 +307,34 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     e.preventDefault();
     if (!payingEntry) return;
 
-    if (!comprovanteFile || !comprovanteBase64) {
-      setUploadError('É obrigatório anexar o comprovante de pagamento (imagem, PDF ou texto) para dar baixa.');
+    if (attachedComprovantes.length === 0) {
+      setUploadError('É obrigatório anexar pelo menos um comprovante de pagamento para dar baixa.');
       showToast('Por favor, anexe o comprovante de pagamento para confirmar.', 'error');
       return;
     }
 
     try {
       setIsSubmittingPay(true);
+      const comprovantesPayload = attachedComprovantes.map(item => ({
+        nome: item.file.name,
+        tipo: item.file.type || (item.file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'text/plain'),
+        tamanho: item.file.size,
+        base64: item.base64
+      }));
+
       await payFinancialEntryInDb(payingEntry.id, {
         ...payForm,
-        comprovante: {
-          nome: comprovanteFile.name,
-          tipo: comprovanteFile.type || (comprovanteFile.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'text/plain'),
-          tamanho: comprovanteFile.size,
-          base64: comprovanteBase64
-        }
+        comprovantes: comprovantesPayload,
+        comprovante: comprovantesPayload[0]
       });
-      showToast(`Pagamento de R$ ${payForm.valorPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} liquidado com comprovante com sucesso!`, 'success');
+
+      const qtdAnexos = comprovantesPayload.length;
+      showToast(
+        `Pagamento de R$ ${payForm.valorPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} liquidado com ${qtdAnexos} comprovante${qtdAnexos > 1 ? 's' : ''} com sucesso!`,
+        'success'
+      );
       setPayingEntry(null);
-      setComprovanteFile(null);
-      setComprovanteBase64('');
+      setAttachedComprovantes([]);
       setUploadError('');
       await loadFinancialData();
     } catch (err: any) {
@@ -315,13 +344,17 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     }
   };
 
-  // Visualização e Download de Comprovante
-  const handleViewComprovante = async (entry: FinancialEntry) => {
+  // Visualização e Download de Comprovante (suporta índice para múltiplos anexos)
+  const handleViewComprovante = async (entry: FinancialEntry, index: number = 0) => {
     try {
       setIsLoadingComprovante(true);
-      const { blob, filename, mimeType } = await downloadFinancialComprovanteBlob(entry.id);
+      if (viewingBlobUrl) {
+        URL.revokeObjectURL(viewingBlobUrl);
+      }
+      const { blob, filename, mimeType } = await downloadFinancialComprovanteBlob(entry.id, index);
       const blobUrl = URL.createObjectURL(blob);
       setViewingComprovanteEntry(entry);
+      setViewingIndex(index);
       setViewingBlobUrl(blobUrl);
       setViewingMimeType(mimeType);
       setViewingFileName(filename);
@@ -340,6 +373,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     setViewingBlobUrl(null);
     setViewingMimeType(null);
     setViewingFileName('');
+    setViewingIndex(0);
   };
 
   const handleDirectDownloadComprovante = (blobUrl: string, fileName: string) => {
@@ -1180,15 +1214,20 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                                 <Check className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            {isPaid && (item.comprovanteNome || item.comprovanteUrl) && (
+                            {isPaid && (item.comprovanteNome || item.comprovanteUrl || (item.comprovantes && item.comprovantes.length > 0)) && (
                               <button
                                 type="button"
-                                onClick={() => handleViewComprovante(item)}
-                                title={`Ver Comprovante Anexo: ${item.comprovanteNome || 'comprovante'}`}
+                                onClick={() => handleViewComprovante(item, 0)}
+                                title={`Ver Comprovante${item.comprovantes && item.comprovantes.length > 1 ? `s (${item.comprovantes.length} anexos)` : `: ${item.comprovanteNome || 'comprovante'}`}`}
                                 disabled={isLoadingComprovante}
-                                className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500 text-blue-600 hover:text-white transition-all cursor-pointer"
+                                className="relative p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500 text-blue-600 hover:text-white transition-all cursor-pointer"
                               >
                                 <Paperclip className="w-3.5 h-3.5" />
+                                {item.comprovantes && item.comprovantes.length > 1 && (
+                                  <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-[14px] rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+                                    {item.comprovantes.length}
+                                  </span>
+                                )}
                               </button>
                             )}
                             <button
@@ -1310,25 +1349,39 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                 />
               </div>
 
-              {/* Anexo Obrigatório de Comprovante de Pagamento */}
+              {/* Anexo Obrigatório de Comprovante de Pagamento (Múltiplos Arquivos) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Comprovante de Pagamento
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5 text-emerald-600" />
+                    Comprovante(s) de Pagamento ({attachedComprovantes.length})
                   </label>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
-                    * Obrigatório
+                    * Pelo menos 1 obrigatório
                   </span>
                 </div>
 
-                {!comprovanteFile ? (
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf,.txt,.csv,.ret,.rem"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleFilesSelect(e.target.files);
+                    }
+                  }}
+                />
+
+                {attachedComprovantes.length === 0 ? (
                   <div
                     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     onDrop={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                        handleFileSelect(e.dataTransfer.files[0]);
+                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        handleFilesSelect(e.dataTransfer.files);
                       }
                     }}
                     onClick={() => fileInputRef.current?.click()}
@@ -1338,23 +1391,12 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                         : 'border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:bg-emerald-50/20 dark:hover:border-emerald-500'
                     }`}
                   >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*,application/pdf,.txt,.csv,.ret,.rem"
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleFileSelect(e.target.files[0]);
-                        }
-                      }}
-                    />
                     <div className="flex flex-col items-center gap-1.5">
                       {isCompressingComprovante ? (
                         <div className="py-2 flex flex-col items-center gap-1.5">
                           <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
                           <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                            Processando comprovante...
+                            Processando comprovantes...
                           </p>
                         </div>
                       ) : (
@@ -1364,10 +1406,10 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                           </div>
                           <div>
                             <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                              Clique ou arraste o comprovante aqui
+                              Clique ou arraste comprovante(s) aqui
                             </p>
                             <p className="text-[11px] text-slate-500">
-                              PDF, Imagem (PNG, JPG, WEBP) ou Texto (TXT, CSV) • máx. 10MB
+                              Selecione 1 ou vários arquivos • PDF, Imagens (PNG, JPG, WEBP) ou Texto (máx. 10MB)
                             </p>
                           </div>
                         </>
@@ -1375,38 +1417,74 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between p-3 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-9 h-9 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0">
-                        {comprovanteFile.type === 'application/pdf' || comprovanteFile.name.toLowerCase().endsWith('.pdf') ? (
-                          <FileText className="w-5 h-5 text-rose-500" />
-                        ) : comprovanteFile.type.startsWith('image/') ? (
-                          <FileCheck className="w-5 h-5 text-emerald-600" />
-                        ) : (
-                          <FileText className="w-5 h-5 text-blue-500" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {comprovanteFile.name}
-                        </p>
-                        <p className="text-[10px] text-slate-500 font-mono">
-                          {formatFileSize(comprovanteFile.size)} • Pronto para anexar
-                        </p>
-                      </div>
+                  <div className="space-y-2">
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                      {attachedComprovantes.map((item, idx) => {
+                        const isPdf = item.file.type === 'application/pdf' || item.file.name.toLowerCase().endsWith('.pdf');
+                        const isImg = isImageFile(item.file);
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0 overflow-hidden">
+                                {isImg ? (
+                                  <img src={item.base64} alt={item.file.name} className="w-full h-full object-cover" />
+                                ) : isPdf ? (
+                                  <FileText className="w-4 h-4 text-rose-500" />
+                                ) : (
+                                  <FileCheck className="w-4 h-4 text-emerald-600" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono mr-1">#{idx + 1}</span>
+                                  {item.file.name}
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-mono">
+                                  {formatFileSize(item.file.size)}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAttachedComprovantes(prev => prev.filter(p => p.id !== item.id));
+                              }}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                              title="Remover este comprovante"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setComprovanteFile(null);
-                        setComprovanteBase64('');
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                      title="Remover e escolher outro arquivo"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isCompressingComprovante}
+                        className="px-3 py-1.5 rounded-lg border border-dashed border-emerald-400 dark:border-emerald-700 bg-emerald-50/30 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-1.5 hover:bg-emerald-100/50 transition-colors cursor-pointer"
+                      >
+                        {isCompressingComprovante ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Adicionando...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            + Anexar outro comprovante
+                          </>
+                        )}
+                      </button>
+                      <span className="text-[11px] text-slate-500">
+                        {attachedComprovantes.length} anexo{attachedComprovantes.length > 1 ? 's' : ''} adicionado{attachedComprovantes.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
                   </div>
                 )}
 
@@ -1442,10 +1520,10 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingPay || !comprovanteFile}
-                  title={!comprovanteFile ? 'Anexe o comprovante para habilitar a confirmação' : 'Confirmar liquidação'}
+                  disabled={isSubmittingPay || attachedComprovantes.length === 0}
+                  title={attachedComprovantes.length === 0 ? 'Anexe pelo menos um comprovante para habilitar a confirmação' : 'Confirmar liquidação'}
                   className={`px-5 py-2 rounded-xl font-bold text-xs shadow-md flex items-center gap-1.5 transition-all ${
-                    !comprovanteFile
+                    attachedComprovantes.length === 0
                       ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed shadow-none'
                       : isSubmittingPay
                         ? 'bg-emerald-700 text-white cursor-wait opacity-80'
@@ -1460,7 +1538,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                   ) : (
                     <>
                       <Check className="w-3.5 h-3.5" />
-                      Confirmar Baixa
+                      Confirmar Baixa ({attachedComprovantes.length})
                     </>
                   )}
                 </button>
@@ -1511,6 +1589,34 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Seletor de Anexos quando houver múltiplos comprovantes */}
+            {viewingComprovanteEntry.comprovantes && viewingComprovanteEntry.comprovantes.length > 1 && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/60 overflow-x-auto">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
+                  Anexos ({viewingComprovanteEntry.comprovantes.length}):
+                </span>
+                <div className="flex items-center gap-1.5 overflow-x-auto">
+                  {viewingComprovanteEntry.comprovantes.map((anexo, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleViewComprovante(viewingComprovanteEntry, idx)}
+                      disabled={isLoadingComprovante || viewingIndex === idx}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                        viewingIndex === idx
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <Paperclip className="w-3 h-3" />
+                      <span className="max-w-[140px] truncate">{anexo.nome || `Anexo ${idx + 1}`}</span>
+                      {anexo.tamanho ? <span className="opacity-70 text-[10px]">({formatFileSize(anexo.tamanho)})</span> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Conteúdo Pré-visualizado */}
             <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-slate-100/50 dark:bg-slate-950/50 min-h-[350px]">

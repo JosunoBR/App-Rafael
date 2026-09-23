@@ -424,8 +424,20 @@ export interface FinancialEntry {
   comprovanteTipo?: string;
   comprovanteTamanho?: number;
   comprovanteUrl?: string;
+  comprovantesJson?: string;
+  comprovantes?: ComprovanteAnexo[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface ComprovanteAnexo {
+  id?: string;
+  nome: string;
+  tipo: string;
+  tamanho: number;
+  arquivo?: string;
+  url?: string;
+  base64?: string;
 }
 
 export interface FinancialDaySummary {

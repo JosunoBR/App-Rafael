@@ -144,8 +144,8 @@ class FinancialRepository {
         parcelaNumero, parcelaTotal, parcelaDesc, dataVencimento, valor,
         status, dataPagamento, valorPago, observacao, recorrente, recorrenciaId, statusPrevisao,
         comprovanteNome, comprovanteTipo, comprovanteTamanho, comprovanteArquivo, comprovanteUrl,
-        createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        comprovantesJson, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       entry.tipo || 'despesa',
@@ -177,6 +177,7 @@ class FinancialRepository {
       entry.comprovanteTamanho !== undefined && entry.comprovanteTamanho !== null ? Number(entry.comprovanteTamanho) : null,
       entry.comprovanteArquivo || null,
       entry.comprovanteUrl || null,
+      entry.comprovantesJson || (entry.comprovantes ? JSON.stringify(entry.comprovantes) : null),
       entry.createdAt || nowIso,
       nowIso
     ]);
@@ -279,7 +280,8 @@ class FinancialRepository {
     comprovanteTipo,
     comprovanteTamanho,
     comprovanteArquivo,
-    comprovanteUrl
+    comprovanteUrl,
+    comprovantesJson
   } = {}) {
     const existing = await this.findById(id);
     if (!existing) return null;
@@ -299,6 +301,7 @@ class FinancialRepository {
         comprovanteTamanho = COALESCE(?, comprovanteTamanho),
         comprovanteArquivo = COALESCE(?, comprovanteArquivo),
         comprovanteUrl = COALESCE(?, comprovanteUrl),
+        comprovantesJson = COALESCE(?, comprovantesJson),
         updatedAt = ?
       WHERE id = ?
     `, [
@@ -311,6 +314,7 @@ class FinancialRepository {
       comprovanteTamanho !== undefined ? comprovanteTamanho : null,
       comprovanteArquivo || null,
       comprovanteUrl || null,
+      comprovantesJson || null,
       now, 
       id
     ]);
@@ -441,6 +445,26 @@ class FinancialRepository {
       comprovanteTamanho: row.comprovanteTamanho !== null && row.comprovanteTamanho !== undefined ? Number(row.comprovanteTamanho) : null,
       comprovanteArquivo: row.comprovanteArquivo || null,
       comprovanteUrl: row.comprovanteUrl || null,
+      comprovantesJson: row.comprovantesJson || null,
+      comprovantes: (() => {
+        if (row.comprovantesJson) {
+          try {
+            const parsed = JSON.parse(row.comprovantesJson);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          } catch (e) {}
+        }
+        if (row.comprovanteArquivo) {
+          return [{
+            id: 'comp_0',
+            nome: row.comprovanteNome || 'comprovante',
+            tipo: row.comprovanteTipo || 'application/octet-stream',
+            tamanho: row.comprovanteTamanho || 0,
+            arquivo: row.comprovanteArquivo,
+            url: row.comprovanteUrl || `/api/financial/entries/${row.id}/comprovante`
+          }];
+        }
+        return [];
+      })(),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt
     };

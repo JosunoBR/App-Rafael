@@ -379,6 +379,7 @@ async function getDatabase() {
       comprovanteTamanho INTEGER,
       comprovanteArquivo TEXT,
       comprovanteUrl TEXT,
+      comprovantesJson TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE SET NULL
@@ -590,6 +591,18 @@ async function getDatabase() {
           try { dbInstance.run(`ALTER TABLE order_installments ADD COLUMN ${col} ${def}`); } catch (e) {}
         }
       });
+    }
+
+    try {
+      const finTableInfo = dbInstance.exec("PRAGMA table_info(financial_entries)");
+      if (finTableInfo[0]) {
+        const colNames = finTableInfo[0].values.map(v => v[1]);
+        if (!colNames.includes('comprovantesJson')) {
+          try { dbInstance.run("ALTER TABLE financial_entries ADD COLUMN comprovantesJson TEXT"); } catch (e) {}
+        }
+      }
+    } catch (finErr) {
+      console.warn('Aviso ao verificar coluna comprovantesJson em financial_entries:', finErr.message);
     }
 
     // Migração de datas legadas para o formato brasileiro oficial (DD/MM/YYYY)

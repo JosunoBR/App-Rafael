@@ -94,8 +94,8 @@ class FinancialController {
   async payEntry(req, res) {
     try {
       const { id } = req.params;
-      const { dataPagamento, valorPago, observacao, comprovante } = req.body;
-      const paid = await financialService.markAsPaid(id, { dataPagamento, valorPago, observacao, comprovante }, req.user);
+      const { dataPagamento, valorPago, observacao, comprovante, comprovantes } = req.body;
+      const paid = await financialService.markAsPaid(id, { dataPagamento, valorPago, observacao, comprovante, comprovantes }, req.user);
       return res.status(200).json({
         success: true,
         data: paid,
@@ -110,7 +110,8 @@ class FinancialController {
   async downloadComprovante(req, res) {
     try {
       const { id } = req.params;
-      const fileInfo = await financialService.getComprovante(id);
+      const { index, file } = req.query;
+      const fileInfo = await financialService.getComprovante(id, { index, file });
       
       res.setHeader('Content-Type', fileInfo.mimeType);
       res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileInfo.fileName)}"`);

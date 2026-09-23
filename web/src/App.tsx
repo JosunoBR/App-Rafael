@@ -1308,8 +1308,11 @@ export function App() {
     }
 
     const sinal = adjResult.diferencaTotal >= 0 ? '+' : '';
+    const residualMsg = adjResult.diferencaResidualNf && Math.abs(adjResult.diferencaResidualNf) >= 0.01
+      ? ` (Diferença de R$ ${Math.abs(adjResult.diferencaResidualNf).toFixed(2).replace('.', ',')} decorrente de centavos exatos)`
+      : '';
     showToast(
-      `Ajuste Fiscal aplicado: ${sinal}R$ ${adjResult.diferencaTotal.toFixed(2)} distribuídos nos produtos. Boletos sincronizados com a NF (${targetNfValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`,
+      `Ajuste Fiscal aplicado: ${sinal}R$ ${adjResult.diferencaTotal.toFixed(2).replace('.', ',')} nos produtos com preços unitários em centavos (2 casas). Total dos produtos: R$ ${adjResult.novoTotal.toFixed(2).replace('.', ',')}${residualMsg}.`,
       'success'
     );
   };

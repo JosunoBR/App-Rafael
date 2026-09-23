@@ -81,15 +81,21 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
     return (order.items || []).filter(it => !isBlankItem(it) && !it.ruptura && Number(it.qtdTotalUnidades || 0) > 0);
   }, [order.items]);
 
-  // Simulação de prévia do rateio
-  const previewItems = useMemo(() => {
-    if (!isModified || currentTotal <= 0) return [];
+  // Simulação de prévia do rateio com preços unitários estritamente em 2 casas decimais
+  const previewCalculation = useMemo(() => {
+    if (!isModified || currentTotal <= 0) {
+      return { previewItems: [], novoTotalProdutos: currentTotal, diferencaResidual: 0 };
+    }
     const ratio = parsedNfValue / currentTotal;
-    return activeItems.slice(0, 8).map(it => {
+    let novoTotalProdutos = 0;
+
+    const allMapped = activeItems.map(it => {
       const pecas = Number(it.qtdTotalUnidades) || 1;
-      const novoPreco = Number((it.precoUnitario * ratio).toFixed(4));
+      // Preço unitário sempre arredondado a 2 casas decimais (centavos normais)
+      const novoPreco = Number((it.precoUnitario * ratio).toFixed(2));
       const novoTotal = Number((pecas * novoPreco).toFixed(2));
-      const diffUnit = Number((novoPreco - it.precoUnitario).toFixed(4));
+      const diffUnit = Number((novoPreco - it.precoUnitario).toFixed(2));
+      novoTotalProdutos += novoTotal;
       return {
         id: it.id,
         codigo: it.codigoInterno || it.codigo || it.codigoFornecedor || '-',
@@ -102,7 +108,18 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
         novoTotal
       };
     });
+
+    novoTotalProdutos = Number(novoTotalProdutos.toFixed(2));
+    const diferencaResidual = Number((parsedNfValue - novoTotalProdutos).toFixed(2));
+
+    return {
+      previewItems: allMapped.slice(0, 8),
+      novoTotalProdutos,
+      diferencaResidual
+    };
   }, [isModified, parsedNfValue, currentTotal, activeItems]);
+
+  const { previewItems, novoTotalProdutos, diferencaResidual } = previewCalculation;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Permite apenas dígitos
@@ -373,10 +390,18 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
       {/* TABELA DE PRÉVIA DO RATEIO (SE ABERTO) */}
       {showPreview && isModified && (
         <div className="mt-4 overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm dark:border-indigo-900/50 dark:bg-slate-900">
-          <div className="border-b border-indigo-50 bg-indigo-50/50 px-4 py-2.5 dark:border-indigo-950 dark:bg-slate-800/60">
+          <div className="border-b border-indigo-50 bg-indigo-50/50 px-4 py-2.5 dark:border-indigo-950 dark:bg-slate-800/60 flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
               Amostra do Rateio nos Itens de Maior Valor ({previewItems.length} de {activeItems.length} produtos):
             </span>
+            <div className="text-[11px] text-slate-600 dark:text-slate-300">
+              <span>Novo Total dos Produtos: <strong className="text-indigo-700 dark:text-indigo-300">{formatCurrency(novoTotalProdutos)}</strong></span>
+              {Math.abs(diferencaResidual) >= 0.01 && (
+                <span className="ml-2 font-medium text-amber-700 dark:text-amber-400">
+                  (Diferença de {formatCurrency(Math.abs(diferencaResidual))} decorrente de centavos exatos a 2 casas)
+                </span>
+              )}
+            </div>
           </div>
           <div className="max-h-60 overflow-x-auto overflow-y-auto">
             <table className="w-full text-left text-xs">
@@ -399,10 +424,10 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
                     <td className="px-3 py-1.5 text-center text-slate-600 dark:text-slate-400">{p.pecas}</td>
                     <td className="px-3 py-1.5 text-right font-medium text-slate-600 dark:text-slate-400">{formatCurrency(p.precoAtual)}</td>
                     <td className="px-3 py-1.5 text-right font-bold text-indigo-700 dark:text-indigo-300">
-                      R$ {p.novoPreco.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      {formatCurrency(p.novoPreco)}
                     </td>
                     <td className={`px-3 py-1.5 text-right font-semibold ${p.diffUnit > 0 ? 'text-amber-600' : 'text-sky-600'}`}>
-                      {p.diffUnit > 0 ? '+' : ''}{p.diffUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      {p.diffUnit > 0 ? '+' : ''}{formatCurrency(p.diffUnit)}
                     </td>
                     <td className="px-3 py-1.5 text-right font-bold text-slate-800 dark:text-slate-100">{formatCurrency(p.novoTotal)}</td>
                   </tr>

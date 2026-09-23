@@ -270,6 +270,7 @@ export interface FiscalAdjustmentResult {
   percentualVariacao: number;
   totalAnterior: number;
   novoTotal: number;
+  diferencaResidualNf?: number;
 }
 
 /**
@@ -331,11 +332,8 @@ export function distributeFiscalAdjustmentToItems(
     const precoOrig = it.precoUnitarioOriginal !== undefined ? it.precoUnitarioOriginal : it.precoUnitario;
     const brutoOrig = it.valorTotalBrutoOriginal !== undefined ? it.valorTotalBrutoOriginal : it.valorTotalBruto;
 
-    // Novo preço unitário (arredondado para 4 casas ou 2 casas se não houver perda)
-    let rawNovoPreco = Number((it.precoUnitario * ratio).toFixed(4));
-    if (Math.abs(Number(rawNovoPreco.toFixed(2)) - rawNovoPreco) < 0.0001) {
-      rawNovoPreco = Number(rawNovoPreco.toFixed(2));
-    }
+    // Preço unitário estritamente em 2 casas decimais (R$ X,XX)
+    const rawNovoPreco = Number((it.precoUnitario * ratio).toFixed(2));
 
     const novoBruto = Number((pecas * rawNovoPreco).toFixed(2));
 
@@ -365,52 +363,18 @@ export function distributeFiscalAdjustmentToItems(
     };
   });
 
-  // 2ª Passada: Verificação de fechamento exato dos centavos
-  const candidateTotals = calculateOrderTotals(candidateItems, header, fiscal);
-  let diffCentavos = Number((targetVal - candidateTotals.totalGeral).toFixed(2));
-
-  if (Math.abs(diffCentavos) >= 0.01 && candidateItems.length > 0) {
-    // Encontra o item de maior valor financeiro ativo para absorver o resíduo de centavos
-    let maxIdx = -1;
-    let maxVal = -1;
-    candidateItems.forEach((it, idx) => {
-      if (!isBlankItem(it) && !it.ruptura && Number(it.valorTotalBruto) > maxVal) {
-        maxVal = Number(it.valorTotalBruto);
-        maxIdx = idx;
-      }
-    });
-
-    if (maxIdx !== -1) {
-      const targetItem = candidateItems[maxIdx];
-      const pecas = Number(targetItem.qtdTotalUnidades) || 1;
-      
-      // Ajusta o preço unitário do item alvo para compensar exatamente a diferença
-      const adjustedUnit = Number((targetItem.precoUnitario + (diffCentavos / pecas)).toFixed(4));
-      const adjustedBruto = Number((pecas * adjustedUnit).toFixed(2));
-      const descPct = Math.max(0, Math.min(100, Number(targetItem.percentualDesconto) || 0));
-      const adjustedDesc = descPct > 0 
-        ? Number((adjustedBruto * (descPct / 100)).toFixed(2)) 
-        : (targetItem.valorDescontoItem ? Number((Number(targetItem.valorDescontoItem) + diffCentavos).toFixed(2)) : 0);
-      const adjustedLiquido = Math.max(0, Number((adjustedBruto - adjustedDesc).toFixed(2)));
-
-      candidateItems[maxIdx] = {
-        ...targetItem,
-        precoUnitario: adjustedUnit,
-        valorTotalBruto: adjustedBruto,
-        valorDescontoItem: adjustedDesc,
-        valorTotalLiquido: adjustedLiquido
-      };
-    }
-  }
-
   const finalTotals = calculateOrderTotals(candidateItems, header, fiscal);
+  const novoTotal = finalTotals.totalGeral;
+  const diferencaEfetiva = Number((novoTotal - totalAnterior).toFixed(2));
+  const diferencaResidualNf = Number((targetVal - novoTotal).toFixed(2));
 
   return {
     updatedItems: candidateItems,
-    diferencaTotal,
+    diferencaTotal: diferencaEfetiva,
     percentualVariacao,
     totalAnterior,
-    novoTotal: finalTotals.totalGeral
+    novoTotal,
+    diferencaResidualNf
   };
 }
 

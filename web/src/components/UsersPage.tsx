@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchUsersFromDb, saveUserToDb, deleteUserFromDb } from '../utils/api';
+import { fetchUsersFromDb, saveUserToDb, deleteUserFromDb, saveUserPermissionsInDb } from '../utils/api';
 import {
   Users as UsersIcon, 
   UserPlus, 
@@ -19,10 +19,12 @@ import {
   Mail,
   Phone,
   Briefcase,
-  Receipt
+  Receipt,
+  Sliders
 } from 'lucide-react';
 import { User, UserRole } from '../shared/types';
 import { maskPhone } from '../utils/masks';
+import { UserPermissionsModal } from './UserPermissionsModal';
 
 interface UsersPageProps {
   currentUser: User;
@@ -33,6 +35,14 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [isEditing, setIsEditing] = useState(false);
+  const [permissionsUser, setPermissionsUser] = useState<User | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
   const [editingUser, setEditingUser] = useState<Partial<User> & { senha?: string }>({
     nome: '',
     email: '',
@@ -109,9 +119,15 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
       await saveUserToDb(editingUser);
       await loadUsers();
       setIsEditing(false);
+      showToast('Usuário salvo com sucesso!', 'success');
     } catch (err: any) {
       alert(err.message);
     }
+  };
+
+  const handleSavePermissions = async (userId: string, permissions: Record<string, boolean>) => {
+    await saveUserPermissionsInDb(userId, permissions);
+    await loadUsers();
   };
 
   const handleDelete = async (userId: string) => {
@@ -281,7 +297,14 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                   {u.email}
                 </td>
                 <td className="py-3 px-3">
-                  {getRoleBadge(u.role)}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {getRoleBadge(u.role)}
+                    {u.permissions && Object.keys(u.permissions).length > 0 && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800" title={`${Object.keys(u.permissions).length} permissões personalizadas`}>
+                        ★ Personalizado
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-3 px-3 text-slate-600 dark:text-slate-300">
                   {u.cargo || '-'}
@@ -302,6 +325,17 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                 </td>
                 <td className="py-3 px-3 text-center">
                   <div className="flex items-center justify-center gap-1.5">
+                    <button
+                      onClick={() => setPermissionsUser(u)}
+                      className="px-2.5 py-1.5 rounded-lg text-indigo-600 hover:text-white hover:bg-indigo-600 bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-600 dark:hover:text-white transition cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+                      title="Configurar Níveis e Permissões Granulares"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                      <span>Permissões</span>
+                      {u.permissions && Object.keys(u.permissions).length > 0 && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse ml-0.5" />
+                      )}
+                    </button>
                     <button
                       onClick={() => handleOpenEdit(u)}
                       className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 dark:text-slate-400 dark:hover:bg-emerald-950 transition cursor-pointer"
@@ -328,114 +362,137 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
 
       {/* 4. Modal de Criação / Edição de Usuário */}
       {isEditing && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-6">
             
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <UsersIcon className="w-4 h-4 text-emerald-500" />
-                {editingUser.id ? 'Editar Usuário' : 'Novo Usuário do Sistema'}
-              </h3>
-              <button
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+                  {editingUser.id ? <Edit2 className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    {editingUser.id ? 'Editar Usuário' : 'Novo Usuário do Sistema'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Preencha as informações cadastrais e defina o perfil
+                  </p>
+                </div>
+              </div>
+              <button 
                 onClick={() => setIsEditing(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white transition cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4 text-xs">
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <form onSubmit={handleSave} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Nome */}
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">Nome Completo</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nome Completo *</label>
                   <input
                     type="text"
-                    value={editingUser.nome || ''}
-                    onChange={(e) => setEditingUser(prev => ({ ...prev, nome: e.target.value }))}
-                    placeholder="ex: Rafael Silva"
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium"
                     required
+                    value={editingUser.nome || ''}
+                    onChange={(e) => setEditingUser({ ...editingUser, nome: e.target.value })}
+                    placeholder="Ex: João da Silva"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
 
+                {/* E-mail */}
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">E-mail de Login</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">E-mail (Login) *</label>
                   <input
                     type="email"
-                    value={editingUser.email || ''}
-                    onChange={(e) => setEditingUser(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="usuario@mega12.com.br"
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium"
                     required
+                    value={editingUser.email || ''}
+                    onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                    placeholder="joao@mega12.com.br"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Senha */}
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">Perfil de Acesso (Role)</label>
-                  <select
-                    value={editingUser.role || 'deposito'}
-                    onChange={(e) => setEditingUser(prev => ({ ...prev, role: e.target.value as UserRole }))}
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-bold"
-                  >
-                    <option value="diretoria">👑 Diretoria (Acesso Total)</option>
-                    <option value="comprador">🛒 Compras (Cotação & Fornecedores)</option>
-                    <option value="deposito">🏢 Depósito (Estoque & Rateio)</option>
-                    <option value="separacao">📦 Separação (Doca & Lojas)</option>
-                    <option value="faturamento">💳 Faturamento (Boletos & Financeiro)</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">
-                    Senha {editingUser.id && '(em branco p/ manter)'}
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {editingUser.id ? 'Nova Senha (opcional)' : 'Senha de Acesso *'}
                   </label>
                   <input
                     type="password"
+                    required={!editingUser.id}
                     value={editingUser.senha || ''}
-                    onChange={(e) => setEditingUser(prev => ({ ...prev, senha: e.target.value }))}
-                    placeholder="••••••••"
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium"
+                    onChange={(e) => setEditingUser({ ...editingUser, senha: e.target.value })}
+                    placeholder={editingUser.id ? 'Deixe em branco para manter' : 'Mínimo 6 caracteres'}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Perfil / Role */}
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">Cargo / Função</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Perfil de Acesso (Cargo) *</label>
+                  <select
+                    value={editingUser.role || 'deposito'}
+                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as UserRole })}
+                    className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                  >
+                    <option value="diretoria">👑 Diretoria (Executivo)</option>
+                    <option value="comprador">🛒 Compras (Comprador)</option>
+                    <option value="deposito">🏢 Depósito (CD / Estoque)</option>
+                    <option value="separacao">📦 Separação (Doca / Conferente)</option>
+                    <option value="faturamento">💳 Faturamento (Boletos / Caixa)</option>
+                  </select>
+                </div>
+
+                {/* Cargo */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Cargo / Função</label>
                   <input
                     type="text"
                     value={editingUser.cargo || ''}
-                    onChange={(e) => setEditingUser(prev => ({ ...prev, cargo: e.target.value }))}
-                    placeholder="ex: Comprador Líder"
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    onChange={(e) => setEditingUser({ ...editingUser, cargo: e.target.value })}
+                    placeholder="Ex: Gerente de Compras"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
 
+                {/* Telefone */}
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">Telefone / WhatsApp</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Telefone / WhatsApp</label>
                   <input
                     type="text"
-                    value={maskPhone(editingUser.telefone || '')}
-                    onChange={(e) => setEditingUser(prev => ({ ...prev, telefone: maskPhone(e.target.value) }))}
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
+                    value={editingUser.telefone || ''}
+                    onChange={(e) => setEditingUser({ ...editingUser, telefone: maskPhone(e.target.value) })}
+                    placeholder="(11) 99999-9999"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono"
                   />
                 </div>
+
               </div>
 
-              <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
+              {/* Status Ativo */}
+              <div className="pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={Boolean(editingUser.ativo)}
-                    onChange={(e) => setEditingUser(prev => ({ ...prev, ativo: e.target.checked ? 1 : 0 }))}
-                    className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                    onChange={(e) => setEditingUser({ ...editingUser, ativo: e.target.checked ? 1 : 0 })}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
                   />
-                  <span>Usuário Ativo no Sistema</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Usuário Ativo (Permitir login no sistema)
+                  </span>
                 </label>
+              </div>
 
+              {/* Ações */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <p className="text-[11px] text-slate-400">
+                  * Campos obrigatórios
+                </p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -457,6 +514,30 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
             </form>
 
           </div>
+        </div>
+      )}
+
+      {/* 5. Modal de Permissões Granulares por Usuário */}
+      {permissionsUser && (
+        <UserPermissionsModal
+          user={permissionsUser}
+          isOpen={Boolean(permissionsUser)}
+          onClose={() => setPermissionsUser(null)}
+          onSave={handleSavePermissions}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Toast Notification Flutuante */}
+      {toastMessage && (
+        <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl shadow-xl border text-xs font-bold flex items-center gap-2 animate-in slide-in-from-bottom duration-200 ${
+          toastMessage.type === 'success' 
+            ? 'bg-emerald-600 text-white border-emerald-500' 
+            : toastMessage.type === 'error'
+              ? 'bg-rose-600 text-white border-rose-500'
+              : 'bg-slate-900 text-white border-slate-700'
+        }`}>
+          <span>{toastMessage.text}</span>
         </div>
       )}
 

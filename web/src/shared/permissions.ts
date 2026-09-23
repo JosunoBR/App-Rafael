@@ -1,4 +1,5 @@
-import { UserRole } from './types';
+import { User, UserRole } from './types';
+import { PERMISSIONS_MAP } from './permissionsCatalog';
 
 export type ActiveNavTab = 
   | 'home' 
@@ -14,113 +15,156 @@ export type ActiveNavTab =
   | 'fiscal' 
   | 'users';
 
+export type UserLike = 
+  | User 
+  | { role?: UserRole | string; permissions?: Record<string, boolean>; id?: string; email?: string; nome?: string } 
+  | UserRole 
+  | string 
+  | null 
+  | undefined;
+
 /**
- * Determina se determinado perfil tem autorização de acesso a uma tela / aba específica.
- * Quando o retorno for false, o menu, atalho e a página devem ser completamente OCULTOS.
+ * Função mestre de resolução de permissões (RBAC + Exceções Granulares)
+ * Prioridade:
+ * 1. Root e Diretoria possuem acesso total irrestrito (bypass)
+ * 2. Exceção granular individual do usuário (se definida como true ou false)
+ * 3. Matriz padrão do cargo extraída do Catálogo Oficial
  */
-export function canAccessTab(role?: UserRole | null, tab?: ActiveNavTab | null): boolean {
-  if (!role || !tab) return false;
+export function hasPermission(userOrRole: UserLike, code: string): boolean {
+  if (!userOrRole) return false;
 
-  switch (tab) {
-    case 'home':
-      return role === 'diretoria' || role === 'comprador' || role === 'deposito';
+  let role: UserRole | string = '';
+  let permissions: Record<string, boolean> | undefined;
+  let isRoot = false;
 
-    case 'orders':
-      return role === 'diretoria' || role === 'comprador';
-
-    case 'stock':
-      return role === 'diretoria' || role === 'deposito';
-
-    case 'separation':
-    case 'separationHistory':
-      return true; // Diretoria, Comprador, Depósito e Separação têm acesso à esteira e romaneios
-
-    case 'products':
-      return role === 'diretoria' || role === 'comprador' || role === 'deposito';
-
-    case 'dashboard':
-    case 'fiscal':
-    case 'users':
-      return role === 'diretoria'; // Restrito à Diretoria
-
-    case 'financial':
-      return role === 'diretoria' || role === 'faturamento'; // Diretoria e Faturamento
-
-    case 'suppliers':
-    case 'history':
-      return role === 'diretoria' || role === 'comprador';
-
-    default:
-      return false;
+  if (typeof userOrRole === 'string') {
+    role = userOrRole;
+    isRoot = role === 'root' || role === 'diretoria';
+  } else {
+    role = userOrRole.role || '';
+    permissions = userOrRole.permissions;
+    isRoot = userOrRole.role === 'root' || 
+             userOrRole.role === 'diretoria' || 
+             userOrRole.id === 'usr_root' || 
+             userOrRole.email?.toLowerCase() === 'root' || 
+             userOrRole.nome?.toLowerCase() === 'root';
   }
+
+  // 1. Root e Diretoria possuem acesso irrestrito
+  if (isRoot || role === 'diretoria') {
+    return true;
+  }
+
+  // 2. Exceção individual configurada para o usuário
+  if (permissions && typeof permissions === 'object') {
+    if (permissions[code] === true) return true;
+    if (permissions[code] === false) return false;
+  }
+
+  // 3. Padrão do cargo no catálogo oficial
+  const def = PERMISSIONS_MAP[code];
+  if (def && def.roleDefaults) {
+    const roleKey = role as UserRole;
+    return Boolean(def.roleDefaults[roleKey]);
+  }
+
+  return false;
+}
+
+/**
+ * Determina se o usuário tem autorização de acesso a uma tela / aba específica.
+ */
+export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): boolean {
+  if (!userOrRole || !tab) return false;
+
+  if (tab === 'home') {
+    return hasPermission(userOrRole, 'nav:orders') || 
+           hasPermission(userOrRole, 'nav:separation') || 
+           hasPermission(userOrRole, 'nav:stock');
+  }
+
+  if (tab === 'separationHistory') {
+    return hasPermission(userOrRole, 'nav:separation_history');
+  }
+
+  return hasPermission(userOrRole, `nav:${tab}`);
 }
 
 /**
  * Permite criar ou editar pedidos de compra / cotação
  */
-export function canCreateOrEditOrders(role?: UserRole | null): boolean {
-  return role === 'diretoria' || role === 'comprador';
+export function canCreateOrEditOrders(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'orders:create') || hasPermission(userOrRole, 'orders:edit_draft');
 }
 
 /**
  * Permite editar pedidos que já foram fechados ou que estão em andamento na esteira
- * (ex: Aprovado, Em Distribuição, Em Separação, Faturamento, Finalizado).
- * Regra: Exclusivo da Diretoria Executiva.
  */
-export function canEditClosedOrders(role?: UserRole | null): boolean {
-  return role === 'diretoria';
+export function canEditClosedOrders(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'orders:edit_closed');
 }
 
 /**
- * Avalia se o usuário tem permissão para editar um pedido específico considerando o status atual dele.
- * - Diretoria: pode editar sempre, em qualquer status.
- * - Comprador: só pode editar enquanto for Rascunho ou Em Cotação.
- * - Outros perfis: somente leitura.
+ * Avalia se o usuário tem permissão para editar um pedido específico considerando o status dele.
  */
-export function canEditSpecificOrder(role?: UserRole | null, orderStatus?: string | null): boolean {
-  if (!role) return false;
-  if (role === 'diretoria') return true;
-  if (role === 'comprador') {
-    const st = orderStatus || 'Em Cotação';
-    return st === 'Em Cotação' || st === 'Rascunho';
+export function canEditSpecificOrder(userOrRole?: UserLike, orderStatus?: string | null): boolean {
+  if (!userOrRole) return false;
+  const st = orderStatus || 'Em Cotação';
+  const isClosed = st !== 'Em Cotação' && st !== 'Rascunho';
+
+  if (isClosed) {
+    return hasPermission(userOrRole, 'orders:edit_closed');
   }
-  return false;
+  return hasPermission(userOrRole, 'orders:edit_draft') || hasPermission(userOrRole, 'orders:create');
 }
 
 /**
  * Permite visualizar valores monetários de compra (custo, R$ total de cotações, etc.)
- * Estritamente bloqueado para Depósito e Separação conforme regra de negócio.
  */
-export function canViewFinancialValues(role?: UserRole | null): boolean {
-  return role === 'diretoria' || role === 'comprador' || role === 'faturamento';
+export function canViewFinancialValues(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'orders:view_values');
 }
 
 /**
  * Permite gerenciar o estoque central do CD
  */
-export function canManageStock(role?: UserRole | null): boolean {
-  return role === 'diretoria' || role === 'deposito';
+export function canManageStock(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'nav:stock');
 }
 
 /**
  * Permite interagir com as etapas de distribuição e liberação para doca na esteira
  */
-export function canManagePipelineDistribution(role?: UserRole | null): boolean {
-  return role === 'diretoria' || role === 'deposito';
+export function canManagePipelineDistribution(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'pipeline:distribute') || hasPermission(userOrRole, 'pipeline:send_distribution');
 }
 
 /**
  * Permite gerenciar faturamento e boletos
  */
-export function canManageFaturamento(role?: UserRole | null): boolean {
-  return role === 'diretoria' || role === 'faturamento';
+export function canManageFaturamento(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'nav:financial') || hasPermission(userOrRole, 'financial:view');
 }
 
 /**
  * Permite aprovar formalmente pedidos na esteira
  */
-export function canApproveOrder(role?: UserRole | null): boolean {
-  return role === 'diretoria';
+export function canApproveOrder(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'orders:approve');
+}
+
+/**
+ * Permite duplicar pedidos
+ */
+export function canDuplicateOrder(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'orders:duplicate');
+}
+
+/**
+ * Permite excluir pedidos ou cancelar itens
+ */
+export function canDeleteOrder(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'orders:delete');
 }
 
 /**
@@ -135,13 +179,9 @@ export function getDefaultNavForRole(role?: UserRole | null): ActiveNavTab {
 
 /**
  * Permite confirmar o recebimento físico de um pedido na Matriz (entrega do fornecedor).
- * Perfil 'separacao' NÃO pode confirmar entrega — é restrito à conferência na doca.
- * Regra: Pedidos em 'Em Cotação', 'Rascunho' ou 'Aprovado' NÃO podem ter recebimento confirmado.
- * O pedido precisa estar no mínimo em Distribuição.
  */
-export function canConfirmReceipt(role?: UserRole | null, orderStatus?: string | null): boolean {
-  const allowedRole = role === 'diretoria' || role === 'comprador' || role === 'deposito';
-  if (!allowedRole) return false;
+export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | null): boolean {
+  if (!hasPermission(userOrRole, 'pipeline:confirm_receipt')) return false;
   if (!orderStatus) return true;
   const blockedStatuses = ['Em Cotação', 'Rascunho', 'Aprovado'];
   return !blockedStatuses.includes(orderStatus);
@@ -149,10 +189,9 @@ export function canConfirmReceipt(role?: UserRole | null, orderStatus?: string |
 
 /**
  * Permite autorizar a liberação dos boletos de um pedido para o Contas a Pagar (Financeiro).
- * Exclusivo da Diretoria — requer análise prévia dos títulos e valores.
  */
-export function canAuthorizeFinancialRelease(role?: UserRole | null): boolean {
-  return role === 'diretoria';
+export function canAuthorizeFinancialRelease(userOrRole?: UserLike): boolean {
+  return hasPermission(userOrRole, 'financial:authorize_release');
 }
 
 /**

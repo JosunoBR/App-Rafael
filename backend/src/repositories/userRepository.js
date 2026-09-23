@@ -1,20 +1,42 @@
 const { queryAll, queryOne, execute } = require('../config/database');
 
 class UserRepository {
+  _hydrate(row) {
+    if (!row) return null;
+    let permissions = {};
+    if (row.permissions) {
+      if (typeof row.permissions === 'object') {
+        permissions = row.permissions;
+      } else {
+        try {
+          permissions = JSON.parse(row.permissions);
+        } catch {
+          permissions = {};
+        }
+      }
+    }
+    return {
+      ...row,
+      permissions
+    };
+  }
+
   async findAll() {
-    return await queryAll(
-      "SELECT id, nome, email, role, cargo, telefone, ativo, createdAt, updatedAt FROM users WHERE LOWER(email) != 'root' AND id != 'usr_root' AND LOWER(nome) != 'root' ORDER BY nome ASC"
+    const rows = await queryAll(
+      "SELECT id, nome, email, role, cargo, telefone, ativo, permissions, createdAt, updatedAt FROM users WHERE LOWER(email) != 'root' AND id != 'usr_root' AND LOWER(nome) != 'root' ORDER BY nome ASC"
     );
+    return rows.map(r => this._hydrate(r));
   }
 
   async findById(id) {
-    return await queryOne("SELECT * FROM users WHERE id = ?", [id]);
+    const row = await queryOne("SELECT * FROM users WHERE id = ?", [id]);
+    return this._hydrate(row);
   }
 
   async findByEmailOrAlias(identifier) {
     if (!identifier) return null;
     const clean = String(identifier).trim().toLowerCase();
-    return await queryOne(
+    const row = await queryOne(
       `SELECT * FROM users 
        WHERE (
          LOWER(email) = ? 
@@ -24,12 +46,17 @@ class UserRepository {
        ) AND ativo = 1`,
       [clean, clean, clean, clean, clean]
     );
+    return this._hydrate(row);
   }
 
   async create(user) {
+    const permissionsStr = typeof user.permissions === 'object' 
+      ? JSON.stringify(user.permissions) 
+      : (user.permissions || '{}');
+
     const sql = `
-      INSERT INTO users (id, nome, email, senha, role, cargo, telefone, ativo, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (id, nome, email, senha, role, cargo, telefone, ativo, permissions, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     await execute(sql, [
       user.id,
@@ -40,6 +67,7 @@ class UserRepository {
       user.cargo || '',
       user.telefone || '',
       user.ativo !== undefined ? (user.ativo ? 1 : 0) : 1,
+      permissionsStr,
       user.createdAt,
       user.updatedAt
     ]);
@@ -57,6 +85,10 @@ class UserRepository {
     if (user.cargo !== undefined) { fields.push("cargo = ?"); params.push(user.cargo); }
     if (user.telefone !== undefined) { fields.push("telefone = ?"); params.push(user.telefone); }
     if (user.ativo !== undefined) { fields.push("ativo = ?"); params.push(user.ativo ? 1 : 0); }
+    if (user.permissions !== undefined) {
+      fields.push("permissions = ?");
+      params.push(typeof user.permissions === 'object' ? JSON.stringify(user.permissions) : (user.permissions || '{}'));
+    }
 
     fields.push("updatedAt = ?");
     params.push(new Date().toISOString());

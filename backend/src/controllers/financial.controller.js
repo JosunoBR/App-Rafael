@@ -1,3 +1,4 @@
+const fs = require('fs');
 const financialService = require('../services/financialService');
 
 class FinancialController {
@@ -93,8 +94,8 @@ class FinancialController {
   async payEntry(req, res) {
     try {
       const { id } = req.params;
-      const { dataPagamento, valorPago, observacao } = req.body;
-      const paid = await financialService.markAsPaid(id, { dataPagamento, valorPago, observacao }, req.user);
+      const { dataPagamento, valorPago, observacao, comprovante } = req.body;
+      const paid = await financialService.markAsPaid(id, { dataPagamento, valorPago, observacao, comprovante }, req.user);
       return res.status(200).json({
         success: true,
         data: paid,
@@ -103,6 +104,23 @@ class FinancialController {
     } catch (error) {
       console.error('Erro ao baixar pagamento:', error);
       return res.status(400).json({ success: false, error: error.message || 'Erro ao liquidar pagamento.' });
+    }
+  }
+
+  async downloadComprovante(req, res) {
+    try {
+      const { id } = req.params;
+      const fileInfo = await financialService.getComprovante(id);
+      
+      res.setHeader('Content-Type', fileInfo.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileInfo.fileName)}"`);
+      res.setHeader('Content-Length', fileInfo.tamanho);
+      
+      const fileStream = fs.createReadStream(fileInfo.filePath);
+      return fileStream.pipe(res);
+    } catch (error) {
+      console.error('Erro ao obter comprovante:', error);
+      return res.status(404).json({ success: false, error: error.message || 'Comprovante não encontrado.' });
     }
   }
 

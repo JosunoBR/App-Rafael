@@ -10,6 +10,7 @@ router.get('/', authMiddleware, requireRole('diretoria'), (req, res, next) => us
 router.get('/:id', authMiddleware, requireRole('diretoria'), (req, res, next) => userController.getById(req, res, next));
 router.post('/', authMiddleware, requireRole('diretoria'), (req, res, next) => userController.create(req, res, next));
 router.put('/:id', authMiddleware, requireRole('diretoria'), (req, res, next) => userController.update(req, res, next));
+router.put('/:id/permissions', authMiddleware, requireRole('diretoria'), (req, res, next) => userController.updatePermissions(req, res, next));
 router.delete('/:id', authMiddleware, requireRole('diretoria'), (req, res, next) => userController.delete(req, res, next));
 
 module.exports = router;

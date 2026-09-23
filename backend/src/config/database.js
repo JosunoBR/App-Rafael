@@ -302,6 +302,7 @@ async function getDatabase() {
       cargo TEXT,
       telefone TEXT,
       ativo INTEGER NOT NULL DEFAULT 1,
+      permissions TEXT DEFAULT '{}',
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -373,6 +374,11 @@ async function getDatabase() {
       recorrente INTEGER DEFAULT 0,
       recorrenciaId TEXT,
       statusPrevisao TEXT NOT NULL DEFAULT 'CONFIRMADO', -- 'PREVISTO' | 'CONFIRMADO'
+      comprovanteNome TEXT,
+      comprovanteTipo TEXT,
+      comprovanteTamanho INTEGER,
+      comprovanteArquivo TEXT,
+      comprovanteUrl TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE SET NULL
@@ -586,6 +592,21 @@ async function getDatabase() {
         if (!colNames.includes('recorrenciaId')) {
           try { dbInstance.run("ALTER TABLE financial_entries ADD COLUMN recorrenciaId TEXT"); } catch (e) {}
         }
+        if (!colNames.includes('comprovanteNome')) {
+          try { dbInstance.run("ALTER TABLE financial_entries ADD COLUMN comprovanteNome TEXT"); } catch (e) {}
+        }
+        if (!colNames.includes('comprovanteTipo')) {
+          try { dbInstance.run("ALTER TABLE financial_entries ADD COLUMN comprovanteTipo TEXT"); } catch (e) {}
+        }
+        if (!colNames.includes('comprovanteTamanho')) {
+          try { dbInstance.run("ALTER TABLE financial_entries ADD COLUMN comprovanteTamanho INTEGER"); } catch (e) {}
+        }
+        if (!colNames.includes('comprovanteArquivo')) {
+          try { dbInstance.run("ALTER TABLE financial_entries ADD COLUMN comprovanteArquivo TEXT"); } catch (e) {}
+        }
+        if (!colNames.includes('comprovanteUrl')) {
+          try { dbInstance.run("ALTER TABLE financial_entries ADD COLUMN comprovanteUrl TEXT"); } catch (e) {}
+        }
       }
       try {
         dbInstance.run("CREATE INDEX IF NOT EXISTS idx_fin_status_previsao ON financial_entries(statusPrevisao)");
@@ -597,6 +618,17 @@ async function getDatabase() {
       dbInstance.run("UPDATE purchase_orders SET fornecedor = REPLACE(fornecedor, 'Depósito Central Mega 12', 'Depósito Central') WHERE fornecedor LIKE '%Depósito Central Mega 12%'");
       dbInstance.run("DELETE FROM financial_entries WHERE orderId LIKE 'order_transf_cd_%' OR documentoRef LIKE 'CD-%' OR fornecedor LIKE '%Transferência%'");
       dbInstance.run("DELETE FROM order_installments WHERE orderId LIKE 'order_transf_cd_%' OR orderId IN (SELECT id FROM purchase_orders WHERE supplierId = 'cd_matriz')");
+    } catch (e) {}
+
+    // Migração de permissões granulares por usuário na tabela users
+    try {
+      const usersTableInfo = dbInstance.exec("PRAGMA table_info(users)");
+      if (usersTableInfo[0]) {
+        const userCols = usersTableInfo[0].values.map(v => v[1]);
+        if (!userCols.includes('permissions')) {
+          try { dbInstance.run("ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT '{}'"); } catch (e) {}
+        }
+      }
     } catch (e) {}
   } catch (err) {
     console.error('Aviso na verificação de migrações:', err.message);

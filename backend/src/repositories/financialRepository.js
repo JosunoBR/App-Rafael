@@ -219,7 +219,16 @@ class FinancialRepository {
     return await this.findById(id);
   }
 
-  async markAsPaid(id, { dataPagamento, valorPago, observacao } = {}) {
+  async markAsPaid(id, { 
+    dataPagamento, 
+    valorPago, 
+    observacao,
+    comprovanteNome,
+    comprovanteTipo,
+    comprovanteTamanho,
+    comprovanteArquivo,
+    comprovanteUrl
+  } = {}) {
     const existing = await this.findById(id);
     if (!existing) return null;
 
@@ -233,9 +242,26 @@ class FinancialRepository {
         dataPagamento = ?,
         valorPago = ?,
         observacao = CASE WHEN ? != '' THEN ? ELSE observacao END,
+        comprovanteNome = COALESCE(?, comprovanteNome),
+        comprovanteTipo = COALESCE(?, comprovanteTipo),
+        comprovanteTamanho = COALESCE(?, comprovanteTamanho),
+        comprovanteArquivo = COALESCE(?, comprovanteArquivo),
+        comprovanteUrl = COALESCE(?, comprovanteUrl),
         updatedAt = ?
       WHERE id = ?
-    `, [payDate, paidAmount, observacao || '', observacao || '', now, id]);
+    `, [
+      payDate, 
+      paidAmount, 
+      observacao || '', 
+      observacao || '', 
+      comprovanteNome || null,
+      comprovanteTipo || null,
+      comprovanteTamanho !== undefined ? comprovanteTamanho : null,
+      comprovanteArquivo || null,
+      comprovanteUrl || null,
+      now, 
+      id
+    ]);
 
     return await this.findById(id);
   }
@@ -358,6 +384,11 @@ class FinancialRepository {
       observacao: row.observacao || '',
       recorrente: Boolean(row.recorrente),
       recorrenciaId: row.recorrenciaId || null,
+      comprovanteNome: row.comprovanteNome || null,
+      comprovanteTipo: row.comprovanteTipo || null,
+      comprovanteTamanho: row.comprovanteTamanho !== null && row.comprovanteTamanho !== undefined ? Number(row.comprovanteTamanho) : null,
+      comprovanteArquivo: row.comprovanteArquivo || null,
+      comprovanteUrl: row.comprovanteUrl || null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt
     };

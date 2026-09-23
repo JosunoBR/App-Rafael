@@ -415,6 +415,15 @@ export async function deleteUserFromDb(id: string): Promise<void> {
   });
 }
 
+export async function saveUserPermissionsInDb(userId: string, permissions: Record<string, boolean>): Promise<User> {
+  const res = await apiFetch(`/users/${userId}/permissions`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ permissions })
+  });
+  return res.json();
+}
+
 // Condições de Pagamento
 export async function fetchPaymentConditionsFromDb(activeOnly: boolean = false): Promise<PaymentCondition[]> {
   const query = activeOnly ? '?active=true' : '';
@@ -495,7 +504,22 @@ export async function saveFinancialEntryToDb(entryData: any): Promise<FinancialE
   return json.data;
 }
 
-export async function payFinancialEntryInDb(id: string, paymentData: { dataPagamento?: string; valorPago?: number; observacao?: string } = {}): Promise<FinancialEntry> {
+export interface ComprovantePayload {
+  nome: string;
+  tipo: string;
+  tamanho: number;
+  base64: string;
+}
+
+export async function payFinancialEntryInDb(
+  id: string, 
+  paymentData: { 
+    dataPagamento?: string; 
+    valorPago?: number; 
+    observacao?: string;
+    comprovante?: ComprovantePayload;
+  }
+): Promise<FinancialEntry> {
   const res = await apiFetch(`/financial/entries/${id}/pay`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -503,6 +527,27 @@ export async function payFinancialEntryInDb(id: string, paymentData: { dataPagam
   });
   const json = await res.json();
   return json.data;
+}
+
+export async function downloadFinancialComprovanteBlob(id: string): Promise<{ blob: Blob; filename: string; mimeType: string }> {
+  const res = await apiFetch(`/financial/entries/${id}/comprovante`);
+  if (!res.ok) {
+    const errorJson = await res.json().catch(() => null);
+    throw new Error(errorJson?.error || 'Erro ao carregar comprovante.');
+  }
+  const contentDisp = res.headers.get('Content-Disposition') || '';
+  let filename = 'comprovante';
+  const match = contentDisp.match(/filename="?([^"]+)"?/);
+  if (match && match[1]) {
+    try {
+      filename = decodeURIComponent(match[1]);
+    } catch {
+      filename = match[1];
+    }
+  }
+  const mimeType = res.headers.get('Content-Type') || 'application/octet-stream';
+  const blob = await res.blob();
+  return { blob, filename, mimeType };
 }
 
 export async function batchPayFinancialEntriesInDb(

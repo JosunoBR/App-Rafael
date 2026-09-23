@@ -44,6 +44,7 @@ class UserService {
       cargo: userData.cargo?.trim() || '',
       telefone: userData.telefone?.trim() || '',
       ativo: userData.ativo !== undefined ? userData.ativo : 1,
+      permissions: userData.permissions || {},
       createdAt: now,
       updatedAt: now
     };
@@ -80,6 +81,31 @@ class UserService {
     }
 
     const updated = await userRepository.update(id, dataToUpdate);
+    const { senha: _, ...safeUser } = updated;
+    return safeUser;
+  }
+
+  async updatePermissions(id, permissions) {
+    if (id === 'usr_root') {
+      const err = new Error('O usuário raiz (root) possui acesso irrestrito por design.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
+      const err = new Error('O campo permissions deve ser um objeto válido.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const existing = await userRepository.findById(id);
+    if (!existing) {
+      const err = new Error('Usuário não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const updated = await userRepository.update(id, { permissions });
     const { senha: _, ...safeUser } = updated;
     return safeUser;
   }

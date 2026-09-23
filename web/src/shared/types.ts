@@ -356,6 +356,7 @@ export interface User {
   cargo?: string;
   telefone?: string;
   ativo: number | boolean;
+  permissions?: Record<string, boolean>;
   token?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -410,6 +411,10 @@ export interface FinancialEntry {
   observacao?: string;
   recorrente?: boolean;
   recorrenciaId?: string | null;
+  comprovanteNome?: string;
+  comprovanteTipo?: string;
+  comprovanteTamanho?: number;
+  comprovanteUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }

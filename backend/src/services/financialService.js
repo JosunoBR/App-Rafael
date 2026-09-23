@@ -375,11 +375,70 @@ class FinancialService {
 
   async markAsPaid(id, paymentData = {}, currentUser = null) {
     const before = await financialRepo.findById(id);
-    const updated = await financialRepo.markAsPaid(id, paymentData);
-    if (!updated) {
+    if (!before) {
       throw new Error('Lançamento não encontrado para baixa.');
     }
 
+    // 1. Validação estrita de comprovante obrigatório (Zero Trust)
+    if (!paymentData.comprovante || !paymentData.comprovante.base64 || !paymentData.comprovante.nome) {
+      throw new Error('É obrigatório anexar o comprovante de pagamento (imagem, PDF ou arquivo de texto) para liquidar o título.');
+    }
+
+    const originalName = String(paymentData.comprovante.nome).trim();
+    const ext = path.extname(originalName).toLowerCase();
+    const allowedExts = ['.png', '.jpg', '.jpeg', '.webp', '.pdf', '.txt', '.csv', '.ret', '.rem', '.log'];
+
+    if (!allowedExts.includes(ext)) {
+      throw new Error(`Extensão de comprovante "${ext || 'sem extensão'}" não é permitida. Envie imagem (PNG, JPG, WEBP), PDF ou arquivo de texto (TXT, CSV, RET).`);
+    }
+
+    // 2. Decodificação segura do Base64 e validação de tamanho
+    let base64Data = paymentData.comprovante.base64;
+    const commaIndex = base64Data.indexOf(',');
+    if (commaIndex !== -1) {
+      base64Data = base64Data.substring(commaIndex + 1);
+    }
+
+    const fileBuffer = Buffer.from(base64Data, 'base64');
+    if (fileBuffer.length === 0) {
+      throw new Error('O arquivo de comprovante enviado está corrompido ou vazio.');
+    }
+
+    const maxBytes = 10 * 1024 * 1024; // 10 MB
+    if (fileBuffer.length > maxBytes) {
+      throw new Error('O tamanho do comprovante excede o limite máximo permitido de 10 MB.');
+    }
+
+    // 3. Gravação em disco no diretório seguro backend/data/comprovantes
+    const comprovantesDir = path.resolve(__dirname, '../../data/comprovantes');
+    if (!fs.existsSync(comprovantesDir)) {
+      fs.mkdirSync(comprovantesDir, { recursive: true });
+    }
+
+    const sanitizedBase = path.basename(originalName).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const uniqueFileName = `${id}_${Date.now()}_${sanitizedBase}`;
+    const targetFilePath = path.join(comprovantesDir, uniqueFileName);
+    fs.writeFileSync(targetFilePath, fileBuffer);
+
+    // 4. Metadados para persistência
+    const comprovanteMeta = {
+      comprovanteNome: originalName,
+      comprovanteTipo: paymentData.comprovante.tipo || (ext === '.pdf' ? 'application/pdf' : 'application/octet-stream'),
+      comprovanteTamanho: fileBuffer.length,
+      comprovanteArquivo: uniqueFileName,
+      comprovanteUrl: `/api/financial/entries/${id}/comprovante`
+    };
+
+    const updated = await financialRepo.markAsPaid(id, {
+      ...paymentData,
+      ...comprovanteMeta
+    });
+
+    if (!updated) {
+      throw new Error('Erro ao salvar liquidação do lançamento.');
+    }
+
+    // 5. Auditoria de Segurança
     if (currentUser) {
       await financialAuditRepo.create({
         entryId: id,
@@ -393,12 +452,49 @@ class FinancialService {
         campoAlterado: 'status',
         valorAnterior: before ? before.status : 'A Vencer',
         valorNovo: 'Pago',
-        snapshotJson: { paymentData, updated },
-        observacao: `Baixa de boleto realizada: R$ ${paymentData.valorPago || updated.valorPago || updated.valor} em ${paymentData.dataPagamento || new Date().toISOString().substring(0, 10)}`
+        snapshotJson: { 
+          paymentData: {
+            dataPagamento: paymentData.dataPagamento,
+            valorPago: paymentData.valorPago,
+            observacao: paymentData.observacao,
+            comprovante: {
+              nome: comprovanteMeta.comprovanteNome,
+              tipo: comprovanteMeta.comprovanteTipo,
+              tamanho: comprovanteMeta.comprovanteTamanho
+            }
+          }, 
+          updated 
+        },
+        observacao: `Baixa realizada com comprovante anexado (${comprovanteMeta.comprovanteNome} - ${(comprovanteMeta.comprovanteTamanho / 1024).toFixed(1)} KB): R$ ${paymentData.valorPago || updated.valorPago || updated.valor} em ${paymentData.dataPagamento || new Date().toISOString().substring(0, 10)}`
       }).catch(err => console.error('Erro ao registrar auditoria de baixa:', err));
     }
 
     return updated;
+  }
+
+  async getComprovante(id) {
+    const entry = await financialRepo.findById(id);
+    if (!entry) {
+      throw new Error('Lançamento não encontrado.');
+    }
+    if (!entry.comprovanteArquivo) {
+      throw new Error('Nenhum comprovante anexado a este lançamento.');
+    }
+
+    const comprovantesDir = path.resolve(__dirname, '../../data/comprovantes');
+    const safePath = path.resolve(comprovantesDir, entry.comprovanteArquivo);
+
+    // Prevenção estrita contra Path Traversal
+    if (!safePath.startsWith(comprovantesDir) || !fs.existsSync(safePath)) {
+      throw new Error('Arquivo de comprovante físico não foi encontrado no servidor.');
+    }
+
+    return {
+      filePath: safePath,
+      fileName: entry.comprovanteNome || path.basename(safePath),
+      mimeType: entry.comprovanteTipo || 'application/octet-stream',
+      tamanho: entry.comprovanteTamanho || fs.statSync(safePath).size
+    };
   }
 
   async markMultipleAsPaid(ids, paymentData = {}, currentUser = null) {

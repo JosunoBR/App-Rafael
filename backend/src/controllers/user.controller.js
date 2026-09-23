@@ -37,6 +37,15 @@ class UserController {
     }
   }
 
+  async updatePermissions(req, res, next) {
+    try {
+      const user = await userService.updatePermissions(req.params.id, req.body.permissions);
+      return res.json(user);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async delete(req, res, next) {
     try {
       const result = await userService.deleteUser(req.params.id);

@@ -256,28 +256,26 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   const availableDepositOrders = useMemo(() => {
     const isSeparacao = currentUser?.role === 'separacao';
     const list = orders.filter(o => {
-      const isTransf = o.header?.supplierId === 'cd_matriz' || 
-                       String(o.header?.numeroPedido || '').startsWith('CD-') || 
-                       String(o.header?.id || '').startsWith('order_transf_cd_') ||
-                       Boolean(o.header?.fornecedor && o.header.fornecedor.toLowerCase().includes('transferência'));
-
       if (isSeparacao) {
-        // Conferentes de doca (separação) só veem pedidos já recebidos fisicamente na Matriz (ou transferências internas)
-        if (!isTransf && !o.header.recebidoMatriz) return false;
-        return o.header.status === 'Em Separação' || o.header.status === 'Aprovado' || o.header.status === 'Em Distribuição';
+        // Conferentes de doca (separação) veem pedidos na Etapa 3 (Em Separação)
+        // para dar o recebimento físico e realizar a separação na doca
+        return o.header.status === 'Em Separação' || o.header.status === 'Em Distribuição';
       }
+      // Perfil Depósito, Comprador ou Diretoria:
+      // Vê pedidos Aprovados (Etapa 2 - para rateio) e pedidos em Separação/Distribuição
       return (
         !o.header.status ||
-        o.header.status === 'Em Cotação' ||
-        o.header.status === 'Rascunho' ||
         o.header.status === 'Aprovado' || 
-        o.header.status === 'Em Distribuição' || 
-        o.header.status === 'Em Separação'
+        o.header.status === 'Em Separação' || 
+        o.header.status === 'Em Distribuição' ||
+        o.header.status === 'Faturamento' ||
+        o.header.status === 'Em Cotação' ||
+        o.header.status === 'Rascunho'
       );
     });
     const currentId = order.header.id || order.header.numeroPedido;
     if (currentId && !list.some(o => (o.header.id || o.header.numeroPedido) === currentId)) {
-      if (!isSeparacao || (order.header.status === 'Em Separação' || order.header.status === 'Aprovado' || order.header.status === 'Em Distribuição' || order.header.status === 'Finalizado')) {
+      if (!isSeparacao || (order.header.status === 'Em Separação' || order.header.status === 'Em Distribuição' || order.header.status === 'Finalizado')) {
         return [order, ...list];
       }
     }
@@ -1456,47 +1454,61 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" /> Este pedido já foi finalizado e conferido.
               </span>
-            ) : (order.header.status === 'Aprovado' || order.header.status === 'Em Distribuição') ? (
+            ) : order.header.status === 'Faturamento' ? (
+              <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5">
+                <PackageCheck className="w-4 h-4" /> Conferência física e separação concluídas. Aguardando liberação de boletos no Faturamento.
+              </span>
+            ) : (!order.header.distribuicaoConcluida || order.header.status === 'Aprovado') ? (
               <span>
-                <b>Etapa 3 - Distribuição:</b> Ao confirmar, <b>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} unidades</b> darão entrada automática no <b>Estoque Central (Matriz)</b> e a lista das lojas será enviada para <b>Separação na Doca</b>.
+                <b>Etapa 2 - Distribuição CD:</b> Defina as quantidades de cada filial. Ao salvar, <b>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} unidades</b> darão entrada no <b>Estoque Central</b> e o pedido avançará para a <b>Etapa 3 (Separação na Doca)</b>.
               </span>
             ) : (
-              <span><b>Etapa 4 - Separação na Doca:</b> Ao clicar em finalizar, o status mudará para <b>Finalizado</b> e a conferência será arquivada.</span>
+              <span>
+                <b>Etapa 3 - Separação na Doca:</b> Informe o recebimento da carga e realize a contagem física. Ao concluir, o pedido será liberado para o <b>Faturamento (Etapa 4)</b>.
+              </span>
             )}
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            {/* Botão para Etapa 3: Confirmar Distribuição & Dar Entrada no Estoque */}
-            {(order.header.status === 'Aprovado' || order.header.status === 'Em Distribuição') && onReleaseToSeparation && (
+            {/* Botão Etapa 2 (Depósito): Salvar Distribuição & Enviar para Separação */}
+            {order.header.status !== 'Finalizado' && order.header.status !== 'Faturamento' && (!order.header.distribuicaoConcluida || order.header.status === 'Aprovado') && onReleaseToSeparation && (
               <button
                 type="button"
-                disabled={isReceiptPending}
-                onClick={() => {
-                  if (isReceiptPending) return;
-                  onReleaseToSeparation(order);
-                }}
-                className={`w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 ${
-                  isReceiptPending
-                    ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed shadow-none opacity-80'
-                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-indigo-600/30 cursor-pointer hover:scale-102'
-                }`}
-                title={isReceiptPending ? 'O fornecedor precisa entregar a mercadoria na Matriz antes de liberar a separação' : 'Confirmar Distribuição & Dar Entrada no Estoque'}
+                onClick={() => onReleaseToSeparation(order)}
+                className="w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-indigo-600/30 cursor-pointer hover:scale-102"
+                title="Concluir rateio entre as lojas e enviar pedido para a equipe de Separação na Doca"
               >
-                {isReceiptPending ? <Truck className="w-4 h-4" /> : <Boxes className="w-4 h-4" />}
-                <span>{isReceiptPending ? 'Aguardando Recebimento na Matriz' : 'Confirmar Distribuição & Dar Entrada no Estoque'}</span>
+                <Boxes className="w-4 h-4" />
+                <span>Salvar Distribuição & Enviar p/ Separação</span>
               </button>
             )}
 
-            {/* Botão para Etapa 4: Finalizar Separação na Doca */}
-            {order.header.status === 'Em Separação' && (
+            {/* Botão Etapa 3 (Separação): Confirmar Recebimento Físico se ainda pendente */}
+            {order.header.status === 'Em Separação' && isReceiptPending && onConfirmReceipt && (
+              <button
+                type="button"
+                onClick={() => onConfirmReceipt(order)}
+                className="w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 cursor-pointer hover:scale-102"
+                title="Registrar recebimento da carga entregue pelo fornecedor na Matriz"
+              >
+                <Truck className="w-4 h-4" />
+                <span>Confirmar Recebimento Físico</span>
+              </button>
+            )}
+
+            {/* Botão Etapa 3 (Separação): Concluir Separação e Liberar para Faturamento */}
+            {order.header.status === 'Em Separação' && !isReceiptPending && (
               <button
                 type="button"
                 onClick={() => {
-                  const finalized: PurchaseOrder = {
+                  const updated: PurchaseOrder = {
                     ...order,
                     header: {
                       ...order.header,
-                      status: 'Finalizado',
+                      status: 'Faturamento',
+                      separacaoConcluida: true,
+                      separadoPor: conferente || currentUser?.nome || 'Conferente de Doca',
+                      dataSeparacao: new Date().toISOString(),
                       updatedAt: new Date().toISOString()
                     },
                     inspection: {
@@ -1507,13 +1519,15 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       avarias: avariasList
                     }
                   };
-                  if (onChangeOrder) onChangeOrder(finalized);
-                  if (onFinalizeOrder) onFinalizeOrder(finalized);
+                  if (onChangeOrder) onChangeOrder(updated);
+                  if (onSendToFaturamento) onSendToFaturamento(updated);
+                  else if (onFinalizeOrder) onFinalizeOrder(updated);
                 }}
-                className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
+                title="Concluir conferência física na doca e encaminhar pedido para o Faturamento"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Salvar & Finalizar Separação</span>
+                <PackageCheck className="w-4 h-4" />
+                <span>Concluir Separação & Liberar p/ Faturamento</span>
               </button>
             )}
           </div>

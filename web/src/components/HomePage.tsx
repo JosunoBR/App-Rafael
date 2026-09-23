@@ -4,25 +4,18 @@ import {
   PackageCheck, 
   Warehouse, 
   Boxes, 
-  History, 
   ArrowRight, 
   Clock, 
   CheckCircle2, 
   Search,
   ShieldAlert,
-  Smartphone,
   Calendar,
-  Package,
   Layers,
   FileEdit,
-  ExternalLink,
-  Store,
-  Sparkles,
-  AlertCircle,
   Truck,
   CreditCard
 } from 'lucide-react';
-import { PurchaseOrder, User, Supplier, StoreConfig, CentralStockItem, Product } from '../shared/types';
+import { PurchaseOrder, User, CentralStockItem } from '../shared/types';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 import { ActiveNavTab, canAccessTab, canCreateOrEditOrders, canAuthorizeFinancialRelease, canConfirmReceipt } from '../shared/permissions';
 import { toBrDate } from '../utils/masks';
@@ -31,9 +24,6 @@ interface HomePageProps {
   currentUser: User;
   savedOrders: PurchaseOrder[];
   draftOrder: PurchaseOrder | null;
-  suppliers: Supplier[];
-  products?: Product[];
-  stores: StoreConfig[];
   centralStock?: CentralStockItem[];
   onNavigate: (tab: ActiveNavTab) => void;
   onNewOrder: () => void;
@@ -45,22 +35,19 @@ interface HomePageProps {
   onAuthorizeFinancial?: (order: PurchaseOrder) => void;
 }
 
-type TabFilter = 'todos' | 'Em Cotação' | 'Aprovado' | 'Em Distribuição' | 'Em Separação' | 'Finalizado';
+type TabFilter = 'todos' | 'Em Cotação' | 'Aprovado' | 'Em Separação' | 'Faturamento' | 'Finalizado';
 
 export const HomePage: React.FC<HomePageProps> = ({
   currentUser,
   savedOrders,
   draftOrder,
-  suppliers,
-  products = [],
-  stores,
   centralStock = [],
   onNavigate,
   onNewOrder,
   onContinueDraft,
   onDiscardDraft,
   onSelectOrder,
-  onSwitchViewMode,
+  onSwitchViewMode: _onSwitchViewMode,
   onConfirmReceipt,
   onAuthorizeFinancial
 }) => {
@@ -152,38 +139,31 @@ export const HomePage: React.FC<HomePageProps> = ({
     return centralStock.reduce((acc, it) => acc + (it.saldoUnidades || 0), 0);
   }, [centralStock]);
 
-  // Contagens por status da Esteira Operacional
-  const countByStatus = useMemo(() => {
+  // Contagens por status da Esteira Operacional (5 Etapas)
+  const countByStatus: Record<string, number> = useMemo(() => {
     return {
-      todos: savedOrders.length,
+      todos: savedOrders.filter(o => currentUser?.role !== 'faturamento' || (o.header.status !== 'Em Cotação' && o.header.status !== 'Rascunho')).length,
       'Em Cotação': savedOrders.filter(o => (o.header.status || 'Em Cotação') === 'Em Cotação' || o.header.status === 'Rascunho').length,
       'Aprovado': savedOrders.filter(o => o.header.status === 'Aprovado').length,
-      'Em Distribuição': savedOrders.filter(o => o.header.status === 'Em Distribuição').length,
-      'Em Separação': savedOrders.filter(o => o.header.status === 'Em Separação').length,
+      'Em Separação': savedOrders.filter(o => o.header.status === 'Em Separação' || o.header.status === 'Em Distribuição').length,
+      'Faturamento': savedOrders.filter(o => o.header.status === 'Faturamento').length,
       'Finalizado': savedOrders.filter(o => o.header.status === 'Finalizado').length,
     };
-  }, [savedOrders]);
-
-  // Pedidos recebidos fisicamente na matriz aguardando liberação de boletos pela Diretoria
-
-  // Pedidos aprovados aguardando recebimento físico na Matriz
-  const pedidosAguardandoEntrega = useMemo(() => {
-    return savedOrders.filter(o => 
-      (o.header.status === 'Aprovado' || o.header.status === 'Em Distribuição') && 
-      !o.header.recebidoMatriz &&
-      o.header.supplierId !== 'cd_matriz'
-    );
-  }, [savedOrders]);
+  }, [savedOrders, currentUser?.role]);
 
   // Filtragem da Fila de Pedidos
   const filteredOrders = useMemo(() => {
     let list = [...savedOrders];
 
-    if (!canAccessOrders) {
+    // Faturamento vê a partir de Aprovados (Etapas 2, 3, 4, 5)
+    if (currentUser?.role === 'faturamento') {
+      list = list.filter(o => o.header.status !== 'Em Cotação' && o.header.status !== 'Rascunho');
+    } else if (!canAccessOrders) {
       list = list.filter(o => 
-        o.header.status === 'Em Separação' || 
         o.header.status === 'Aprovado' || 
         o.header.status === 'Em Distribuição' || 
+        o.header.status === 'Em Separação' || 
+        o.header.status === 'Faturamento' ||
         o.header.status === 'Finalizado'
       );
     }
@@ -191,6 +171,8 @@ export const HomePage: React.FC<HomePageProps> = ({
     if (activeTab !== 'todos') {
       if (activeTab === 'Em Cotação') {
         list = list.filter(o => (o.header.status || 'Em Cotação') === 'Em Cotação' || o.header.status === 'Rascunho');
+      } else if (activeTab === 'Em Separação') {
+        list = list.filter(o => o.header.status === 'Em Separação' || o.header.status === 'Em Distribuição');
       } else {
         list = list.filter(o => o.header.status === activeTab);
       }
@@ -205,16 +187,18 @@ export const HomePage: React.FC<HomePageProps> = ({
     }
 
     return list;
-  }, [savedOrders, canAccessOrders, activeTab, searchTerm]);
+  }, [savedOrders, canAccessOrders, currentUser?.role, activeTab, searchTerm]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Finalizado':
         return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
+      case 'Faturamento':
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
       case 'Em Separação':
         return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30';
       case 'Em Distribuição':
-        return 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30';
+        return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30';
       case 'Aprovado':
         return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30';
       case 'Cancelado':
@@ -386,11 +370,55 @@ export const HomePage: React.FC<HomePageProps> = ({
       </div>
 
 
-      {/* 3. Área Principal do Cockpit: Fila de Trabalho (65%) + Central de Alertas (35%) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* COLUNA DA ESQUERDA (8 / 12): Fila de Trabalho & Pedidos Inteligente */}
-        <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xs overflow-hidden">
+      {/* 3. Alerta de Rascunho Pendente (se houver) */}
+      {hasValidDraft && canAccessOrders && (
+        <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border border-amber-300 dark:border-amber-700/60 shadow-xs relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0 shadow-xs">
+              <FileEdit className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  Rascunho Pendente
+                </span>
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
+                Você possui uma cotação em aberto não concluída.
+              </h3>
+              <div className="text-xs text-slate-600 dark:text-slate-400 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                {draftOrder?.header.fornecedor && (
+                  <div>Fornecedor: <b className="text-slate-800 dark:text-slate-200">{draftOrder.header.fornecedor}</b></div>
+                )}
+                <div>Total de Itens: <b className="text-slate-800 dark:text-slate-200">{draftItemCount}</b></div>
+                {draftTotalVal > 0 && (
+                  <div>Valor: <b className="text-emerald-600 dark:text-emerald-400 font-mono">R$ {draftTotalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</b></div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={onContinueDraft}
+              className="px-4 py-2 rounded-xl text-xs font-extrabold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Continuar Cotação</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={onDiscardDraft}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 transition cursor-pointer"
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Fila Operacional de Pedidos (Largura Total) */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xs overflow-hidden">
           
           {/* Cabeçalho da Fila de Trabalho com Abas */}
           <div className="p-5 border-b border-slate-200/90 dark:border-slate-800 space-y-4">
@@ -467,21 +495,6 @@ export const HomePage: React.FC<HomePageProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('Em Distribuição')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  activeTab === 'Em Distribuição'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
-                }`}
-              >
-                <span>🟣 3. Em Distribuição</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
-                  {countByStatus['Em Distribuição']}
-                </span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setActiveTab('Em Separação')}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'Em Separação'
@@ -489,9 +502,24 @@ export const HomePage: React.FC<HomePageProps> = ({
                     : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50 dark:hover:bg-purple-950/30'
                 }`}
               >
-                <span>📦 4. Em Separação</span>
+                <span>🟣 3. Separação</span>
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
-                  {countByStatus['Em Separação']}
+                  {countByStatus['Em Separação'] || 0}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('Faturamento')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  activeTab === 'Faturamento'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                }`}
+              >
+                <span>🟠 4. Faturamento</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                  {countByStatus['Faturamento'] || 0}
                 </span>
               </button>
 
@@ -506,7 +534,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               >
                 <span>🟢 5. Finalizados</span>
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
-                  {countByStatus['Finalizado']}
+                  {countByStatus['Finalizado'] || 0}
                 </span>
               </button>
             </div>
@@ -600,11 +628,11 @@ export const HomePage: React.FC<HomePageProps> = ({
                                 <span>Receber</span>
                               </button>
                             )}
-                            {ord.header.recebidoMatriz && !ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser?.role) && (
+                            {!ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser?.role, ord.header.status) && (
                               <button
                                 onClick={() => onAuthorizeFinancial(ord)}
                                 className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50/90 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
-                                title="Liberar boletos para o Contas a Pagar"
+                                title="Liberar os boletos no Contas a Pagar e finalizar o pedido"
                               >
                                 <CreditCard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                                 <span>Liberar Boletos</span>
@@ -640,139 +668,6 @@ export const HomePage: React.FC<HomePageProps> = ({
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
-
-        </div>
-
-        {/* COLUNA DA DIREITA (4 / 12): Central de Pendências, Auditoria & Atividade */}
-        <div className="lg:col-span-4 space-y-4">
-          
-          {/* Card 1: Rascunho Não Salvo (se houver) */}
-          {hasValidDraft && canAccessOrders && (
-            <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 dark:from-amber-950/40 dark:to-amber-900/10 border border-amber-300 dark:border-amber-700/60 shadow-xs relative overflow-hidden">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0 shadow-xs">
-                  <FileEdit className="w-4 h-4" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                      Rascunho Pendente
-                    </span>
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                  </div>
-                  <h3 className="text-xs font-bold text-slate-900 dark:text-white mt-1">
-                    Você possui uma cotação em aberto não concluída.
-                  </h3>
-                  <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 space-y-0.5">
-                    {draftOrder?.header.fornecedor && (
-                      <div>Fornecedor: <b>{draftOrder.header.fornecedor}</b></div>
-                    )}
-                    <div>Total de Itens: <b>{draftItemCount}</b></div>
-                    {draftTotalVal > 0 && (
-                      <div>Valor: <b className="text-emerald-600 dark:text-emerald-400">R$ {draftTotalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</b></div>
-                    )}
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      onClick={onContinueDraft}
-                      className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xs transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>Continuar</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={onDiscardDraft}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 transition cursor-pointer"
-                    >
-                      Descartar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Card 2: Alertas de Avarias de Doca (se houver) */}
-          {pedidosComAvarias.length > 0 ? (
-            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800/80 shadow-xs">
-              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2">
-                <ShieldAlert className="w-4 h-4" />
-                <h3 className="text-xs font-bold uppercase tracking-wider">
-                  Apontamentos de Doca ({pedidosComAvarias.length})
-                </h3>
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400">
-                Identificamos <b>{totalPecasAvariadas} peças avariadas</b> registradas durante a conferência que geraram desconto na separação.
-              </p>
-
-              <div className="mt-3 space-y-2 max-h-48 overflow-y-auto pr-1">
-                {pedidosComAvarias.slice(0, 3).map(ord => (
-                  <div 
-                    key={ord.header.id}
-                    onClick={() => onSelectOrder(ord)}
-                    className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700 text-xs flex items-center justify-between cursor-pointer hover:border-amber-400 transition"
-                  >
-                    <div>
-                      <div className="font-bold text-slate-800 dark:text-slate-200">{ord.header.numeroPedido}</div>
-                      <div className="text-[11px] text-slate-500 truncate max-w-[150px]">{ord.header.fornecedor}</div>
-                    </div>
-                    <span className="text-[11px] font-extrabold text-rose-600 dark:text-rose-400">
-                      {ord.inspection?.avarias?.length || 0} avaria(s)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 mb-2">
-                <CheckCircle2 className="w-4 h-4" />
-                <h3 className="text-xs font-bold uppercase tracking-wider">
-                  Operação Regular
-                </h3>
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Nenhuma anomalia ou avaria crítica pendente. Todos os romaneios em andamento estão conformes.
-              </p>
-            </div>
-          )}
-
-          {/* Card 3: Visão Geral da Rede & Dispositivos Móveis */}
-          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Store className="w-4 h-4 text-indigo-500" />
-                Rede de Lojas
-              </span>
-              <span className="font-mono font-bold text-slate-900 dark:text-white">
-                {stores.length} filiais ativas
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
-              <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Boxes className="w-4 h-4 text-teal-500" />
-                Fornecedores Homologados
-              </span>
-              <span className="font-mono font-bold text-slate-900 dark:text-white">
-                {suppliers.length} ativos
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
-              <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Package className="w-4 h-4 text-purple-500" />
-                Produtos Cadastrados
-              </span>
-              <span className="font-mono font-bold text-slate-900 dark:text-white">
-                {products.length} itens
-              </span>
-            </div>
-
-          </div>
-
-        </div>
 
       </div>
 

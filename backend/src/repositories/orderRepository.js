@@ -155,6 +155,10 @@ class OrderRepository {
           itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, inspectionJson = ?,
           recebidoMatriz = ?, dataRecebimentoMatriz = ?, recebidoPor = ?, numeroNotaFiscal = ?,
           boletosLiberados = ?, boletosLiberadosPor = ?, boletosLiberadosEm = ?,
+          distribuicaoConcluida = ?, distribuidoPor = ?, dataDistribuicao = ?, observacaoDistribuicao = ?,
+          separacaoConcluida = ?, separadoPor = ?, dataSeparacao = ?, observacaoSeparacao = ?,
+          finalizadoPor = ?, dataFinalizacao = ?,
+          aprovadoPor = ?, dataAprovacao = ?,
           updatedAt = ?
         WHERE id = ?
       `;
@@ -207,6 +211,18 @@ class OrderRepository {
         order.header.boletosLiberados ? 1 : 0,
         order.header.boletosLiberadosPor || null,
         order.header.boletosLiberadosEm || null,
+        order.header.distribuicaoConcluida ? 1 : 0,
+        order.header.distribuidoPor || null,
+        order.header.dataDistribuicao || null,
+        order.header.observacaoDistribuicao || null,
+        order.header.separacaoConcluida ? 1 : 0,
+        order.header.separadoPor || null,
+        order.header.dataSeparacao || null,
+        order.header.observacaoSeparacao || null,
+        order.header.finalizadoPor || null,
+        order.header.dataFinalizacao || null,
+        order.header.aprovadoPor || null,
+        order.header.dataAprovacao || null,
         now,
         targetId
       ]);
@@ -224,6 +240,10 @@ class OrderRepository {
           itemsJson, separationDistributionJson, paymentConfigJson, inspectionJson,
           recebidoMatriz, dataRecebimentoMatriz, recebidoPor, numeroNotaFiscal,
           boletosLiberados, boletosLiberadosPor, boletosLiberadosEm,
+          distribuicaoConcluida, distribuidoPor, dataDistribuicao, observacaoDistribuicao,
+          separacaoConcluida, separadoPor, dataSeparacao, observacaoSeparacao,
+          finalizadoPor, dataFinalizacao,
+          aprovadoPor, dataAprovacao,
           createdAt, updatedAt
         ) VALUES (
           ?, ?, ?, ?, ?,
@@ -237,6 +257,10 @@ class OrderRepository {
           ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?,
+          ?, ?,
           ?, ?
         )
       `;
@@ -290,6 +314,18 @@ class OrderRepository {
         order.header.boletosLiberados ? 1 : 0,
         order.header.boletosLiberadosPor || null,
         order.header.boletosLiberadosEm || null,
+        order.header.distribuicaoConcluida ? 1 : 0,
+        order.header.distribuidoPor || null,
+        order.header.dataDistribuicao || null,
+        order.header.observacaoDistribuicao || null,
+        order.header.separacaoConcluida ? 1 : 0,
+        order.header.separadoPor || null,
+        order.header.dataSeparacao || null,
+        order.header.observacaoSeparacao || null,
+        order.header.finalizadoPor || null,
+        order.header.dataFinalizacao || null,
+        order.header.aprovadoPor || null,
+        order.header.dataAprovacao || null,
         order.header.createdAt || now,
         now
       ]);
@@ -348,7 +384,7 @@ class OrderRepository {
       await execute("DELETE FROM order_installments WHERE orderId = ?", [targetId]);
       for (let instIdx = 0; instIdx < installments.length; instIdx++) {
         const inst = installments[instIdx];
-        const instId = `inst_${targetId}_${instIdx}_${Math.random().toString(36).substring(2, 7)}`;
+        const instId = inst.id || `inst_${targetId}_${instIdx}_${Math.random().toString(36).substring(2, 7)}`;
         await execute(`
           INSERT INTO order_installments (
             id, orderId, numeroParcela, totalParcelas, dataVencimento, valor,
@@ -730,8 +766,20 @@ class OrderRepository {
         percentualDescontoOff: r.percentualDescontoOff,
         percentualNota: r.percentualNota !== undefined ? r.percentualNota : 100,
         observacoes: r.observacoes,
-        status: r.status,
+        status: r.status || 'Em Cotação',
         separationStatus: r.separationStatus,
+        distribuicaoConcluida: r.distribuicaoConcluida === 1,
+        distribuidoPor: r.distribuidoPor || null,
+        dataDistribuicao: r.dataDistribuicao || null,
+        observacaoDistribuicao: r.observacaoDistribuicao || null,
+        separacaoConcluida: r.separacaoConcluida === 1,
+        separadoPor: r.separadoPor || null,
+        dataSeparacao: r.dataSeparacao || null,
+        observacaoSeparacao: r.observacaoSeparacao || null,
+        finalizadoPor: r.finalizadoPor || null,
+        dataFinalizacao: r.dataFinalizacao || null,
+        aprovadoPor: r.aprovadoPor || null,
+        dataAprovacao: r.dataAprovacao || null,
         recebidoMatriz: r.recebidoMatriz === 1,
         dataRecebimentoMatriz: r.dataRecebimentoMatriz || null,
         recebidoPor: r.recebidoPor || null,

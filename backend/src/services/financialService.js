@@ -1,8 +1,42 @@
 const financialRepo = require('../repositories/financialRepository');
 const financialAuditRepo = require('../repositories/financialAuditRepository');
 const orderRepo = require('../repositories/orderRepository');
+const { flushDatabaseToDisk } = require('../config/database');
 const path = require('path');
 const fs = require('fs');
+
+function toBrDate(val) {
+  if (!val) return '';
+  const str = String(val).trim();
+  const brMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (brMatch) {
+    const day = brMatch[1].padStart(2, '0');
+    const month = brMatch[2].padStart(2, '0');
+    const year = brMatch[3];
+    return `${day}/${month}/${year}`;
+  }
+  const isoMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (isoMatch) {
+    const year = isoMatch[1];
+    const month = isoMatch[2].padStart(2, '0');
+    const day = isoMatch[3].padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  }
+  return str;
+}
+
+function dateToTimestamp(val) {
+  if (!val) return 0;
+  const str = String(val).trim();
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+    const [d, m, y] = str.split('/');
+    return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`).getTime();
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return new Date(`${str.substring(0, 10)}T12:00:00Z`).getTime();
+  }
+  return new Date(str).getTime() || 0;
+}
 
 class FinancialService {
   constructor() {
@@ -12,19 +46,19 @@ class FinancialService {
   /**
    * Calcula o status dinâmico com base na data de vencimento e data atual
    */
-  _computeStatus(entry, todayIso) {
+  _computeStatus(entry, todayTimestamp) {
     if (entry.status === 'Pago' || entry.dataPagamento) {
       return 'Pago';
     }
     if (entry.status === 'Cancelado') {
       return 'Cancelado';
     }
-    const due = (entry.dataVencimento || '').substring(0, 10);
-    if (!due) return 'A Vencer';
+    const dueTimestamp = dateToTimestamp(entry.dataVencimento);
+    if (!dueTimestamp) return 'A Vencer';
 
-    if (due === todayIso) {
+    if (dueTimestamp === todayTimestamp) {
       return 'Vence Hoje';
-    } else if (due < todayIso) {
+    } else if (dueTimestamp < todayTimestamp) {
       return 'Em Atraso';
     } else {
       return 'A Vencer';
@@ -41,11 +75,14 @@ class FinancialService {
     }
 
     const entries = await financialRepo.findAll(filters);
-    const todayIso = new Date().toISOString().substring(0, 10);
+    const now = new Date();
+    const todayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).getTime();
 
     return entries.map(entry => ({
       ...entry,
-      status: this._computeStatus(entry, todayIso)
+      dataVencimento: toBrDate(entry.dataVencimento),
+      dataPagamento: entry.dataPagamento ? toBrDate(entry.dataPagamento) : null,
+      status: this._computeStatus(entry, todayTimestamp)
     }));
   }
 
@@ -111,12 +148,17 @@ class FinancialService {
       if (isPaid) byStore[loja].pago += val;
 
       // Agrupamento por Dia (Visão Diária do Fluxo de Caixa da Planilha)
-      const dueStr = (entry.dataVencimento || '').substring(0, 10);
-      const diaNum = dueStr ? parseInt(dueStr.split('-')[2], 10) : 1;
+      const dueStr = (entry.dataVencimento || '').trim();
+      let diaNum = 1;
+      if (dueStr.includes('/')) {
+        diaNum = parseInt(dueStr.split('/')[0], 10) || 1;
+      } else if (dueStr.includes('-')) {
+        diaNum = parseInt(dueStr.split('-')[2], 10) || 1;
+      }
       if (!byDay[diaNum]) {
         byDay[diaNum] = {
           dia: diaNum,
-          dataIso: dueStr,
+          dataIso: toBrDate(dueStr),
           total: 0,
           pago: 0,
           aPagar: 0,
@@ -157,10 +199,13 @@ class FinancialService {
   async getEntryById(id) {
     const entry = await financialRepo.findById(id);
     if (!entry) return null;
-    const todayIso = new Date().toISOString().substring(0, 10);
+    const now = new Date();
+    const todayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).getTime();
     return {
       ...entry,
-      status: this._computeStatus(entry, todayIso)
+      dataVencimento: toBrDate(entry.dataVencimento),
+      dataPagamento: entry.dataPagamento ? toBrDate(entry.dataPagamento) : null,
+      status: this._computeStatus(entry, todayTimestamp)
     };
   }
 
@@ -201,7 +246,8 @@ class FinancialService {
       throw new Error('O valor do lançamento deve ser maior que zero.');
     }
 
-    const dataBase = primeiroVencimento || dataVencimento || new Date().toISOString().substring(0, 10);
+    const rawDataBase = primeiroVencimento || dataVencimento || new Date().toISOString().substring(0, 10);
+    const dataBase = toBrDate(rawDataBase);
 
     // Se for Despesa Fixa Recorrente (Projeção Automática de 6 meses à frente)
     if (Boolean(recorrente)) {
@@ -210,10 +256,20 @@ class FinancialService {
       const createdList = [];
 
       // Extrai dia base do vencimento original (ex: dia 22)
-      const [anoStr, mesStr, diaStr] = dataBase.split('-');
-      const baseDay = parseInt(diaStr, 10) || 1;
-      const baseMonthIdx = parseInt(mesStr, 10) - 1;
-      const baseYear = parseInt(anoStr, 10);
+      let baseDay = 1;
+      let baseMonthIdx = 0;
+      let baseYear = new Date().getFullYear();
+      if (dataBase.includes('/')) {
+        const [d, m, y] = dataBase.split('/');
+        baseDay = parseInt(d, 10) || 1;
+        baseMonthIdx = (parseInt(m, 10) || 1) - 1;
+        baseYear = parseInt(y, 10) || baseYear;
+      } else if (dataBase.includes('-')) {
+        const [y, m, d] = dataBase.split('-');
+        baseDay = parseInt(d, 10) || 1;
+        baseMonthIdx = (parseInt(m, 10) || 1) - 1;
+        baseYear = parseInt(y, 10) || baseYear;
+      }
 
       const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -224,7 +280,7 @@ class FinancialService {
         const lastDayOfTargetMonth = new Date(y, m + 1, 0).getDate();
         const actualDay = Math.min(baseDay, lastDayOfTargetMonth);
 
-        const dueIso = `${y}-${String(m + 1).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`;
+        const dueBr = `${String(actualDay).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`;
         const mesAbrev = MESES_ABREV[m];
         const anoAbrev = String(y).slice(-2);
         const parcelaDesc = `Recorrente ${mesAbrev}/${anoAbrev}`;
@@ -243,7 +299,7 @@ class FinancialService {
           parcelaNumero: offset + 1,
           parcelaTotal: horizonMonths,
           parcelaDesc,
-          dataVencimento: dueIso,
+          dataVencimento: dueBr,
           valor: montanteTotal,
           status: 'A Vencer',
           observacao,
@@ -273,7 +329,7 @@ class FinancialService {
         parcelaNumero: 1,
         parcelaTotal: 1,
         parcelaDesc: 'Única',
-        dataVencimento: dataBase,
+        dataVencimento: toBrDate(dataBase),
         valor: montanteTotal,
         status: 'A Vencer',
         observacao,
@@ -288,19 +344,25 @@ class FinancialService {
     const diferencaCentavos = Math.round((montanteTotal - (valorParcelaBase * totalQtd)) * 100) / 100;
 
     const createdEntries = [];
-    const baseDateObj = new Date(dataBase + 'T12:00:00Z');
+    let baseDateObj;
+    if (dataBase.includes('/')) {
+      const [d, m, y] = dataBase.split('/');
+      baseDateObj = new Date(`${y}-${m}-${d}T12:00:00Z`);
+    } else {
+      baseDateObj = new Date(`${dataBase}T12:00:00Z`);
+    }
 
     for (let i = 1; i <= totalQtd; i++) {
       // Ajusta os centavos restantes na 1ª parcela
       const valorItem = (i === 1) ? (valorParcelaBase + diferencaCentavos) : valorParcelaBase;
       
-      let dueIso = '';
+      let dueBr = '';
       if (Array.isArray(datasCustomizadas) && datasCustomizadas[i - 1]) {
-        dueIso = datasCustomizadas[i - 1];
+        dueBr = toBrDate(datasCustomizadas[i - 1]);
       } else {
         const d = new Date(baseDateObj);
         d.setDate(d.getDate() + ((i - 1) * parseInt(intervaloDias, 10)));
-        dueIso = d.toISOString().substring(0, 10);
+        dueBr = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
       }
 
       const entry = await financialRepo.create({
@@ -317,7 +379,7 @@ class FinancialService {
         parcelaNumero: i,
         parcelaTotal: totalQtd,
         parcelaDesc: `${i}/${totalQtd}`,
-        dataVencimento: dueIso,
+        dataVencimento: dueBr,
         valor: valorItem,
         status: 'A Vencer',
         observacao,
@@ -366,20 +428,20 @@ class FinancialService {
       }
     }
 
-    const todayIso = new Date().toISOString().substring(0, 10);
+    flushDatabaseToDisk();
+
+    const now = new Date();
+    const todayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).getTime();
     return {
       ...updated,
-      status: this._computeStatus(updated, todayIso)
+      dataVencimento: toBrDate(updated.dataVencimento),
+      dataPagamento: updated.dataPagamento ? toBrDate(updated.dataPagamento) : null,
+      status: this._computeStatus(updated, todayTimestamp)
     };
   }
 
   async markAsPaid(id, paymentData = {}, currentUser = null) {
-    const before = await financialRepo.findById(id);
-    if (!before) {
-      throw new Error('Lançamento não encontrado para baixa.');
-    }
-
-    // 1. Validação estrita de comprovante obrigatório (Zero Trust)
+    // 1. Validação estrita de comprovante obrigatório (Zero Trust - Fail Fast)
     if (!paymentData.comprovante || !paymentData.comprovante.base64 || !paymentData.comprovante.nome) {
       throw new Error('É obrigatório anexar o comprovante de pagamento (imagem, PDF ou arquivo de texto) para liquidar o título.');
     }
@@ -404,9 +466,15 @@ class FinancialService {
       throw new Error('O arquivo de comprovante enviado está corrompido ou vazio.');
     }
 
-    const maxBytes = 10 * 1024 * 1024; // 10 MB
+    // Limite máximo de segurança no servidor (10 MB)
+    const maxBytes = 10 * 1024 * 1024;
     if (fileBuffer.length > maxBytes) {
-      throw new Error('O tamanho do comprovante excede o limite máximo permitido de 10 MB.');
+      throw new Error('O arquivo de comprovante excede o limite máximo permitido de 10 MB.');
+    }
+
+    const before = await financialRepo.findById(id);
+    if (!before) {
+      throw new Error('Lançamento não encontrado para baixa.');
     }
 
     // 3. Gravação em disco no diretório seguro backend/data/comprovantes
@@ -469,6 +537,7 @@ class FinancialService {
       }).catch(err => console.error('Erro ao registrar auditoria de baixa:', err));
     }
 
+    flushDatabaseToDisk();
     return updated;
   }
 
@@ -537,6 +606,10 @@ class FinancialService {
   /**
    * Sincroniza automaticamente as parcelas de um pedido específico com o Financeiro
    */
+  /**
+   * Sincroniza automaticamente as parcelas de um pedido específico com o Financeiro
+   * de forma NÃO DESTRUTIVA e idempotente (preserva comprovantes, baixas, dados bancários e auditoria).
+   */
   async syncSingleOrder(order) {
     if (!order) return;
     const orderId = order.id || order.header?.id;
@@ -551,6 +624,7 @@ class FinancialService {
 
     if (isTransf) {
       await financialRepo.deleteByOrderId(orderId);
+      flushDatabaseToDisk();
       return;
     }
 
@@ -563,19 +637,18 @@ class FinancialService {
     const isConfirmado = isRecebido && isAutorizado;
     const statusPrevisao = isConfirmado ? 'CONFIRMADO' : 'PREVISTO';
 
-    // Buscar lançamentos existentes para preservar status se alguma parcela já foi baixada como Paga
+    // Buscar lançamentos existentes para manter registros existentes e preservar status de baixas
     const existingEntries = await financialRepo.findByOrderId(orderId);
     const existingMap = new Map();
     for (const ent of existingEntries) {
       if (ent.installmentId) {
-        existingMap.set(ent.installmentId, ent);
-      } else if (ent.parcelaNumero) {
+        existingMap.set(String(ent.installmentId), ent);
+      }
+      if (ent.parcelaNumero !== undefined && ent.parcelaNumero !== null) {
         existingMap.set(String(ent.parcelaNumero), ent);
+        existingMap.set(Number(ent.parcelaNumero), ent);
       }
     }
-
-    // Remover lançamentos antigos deste pedido para recriar sincronizado
-    await financialRepo.deleteByOrderId(orderId);
 
     const installments = (order.installments && order.installments.length > 0)
       ? order.installments
@@ -586,14 +659,19 @@ class FinancialService {
     const formaPgto = order.header?.formaPagamento || 'BOLETO';
     const condicao = order.header?.condicaoPagamento || '';
 
+    const processedEntryIds = new Set();
+
     for (const inst of installments) {
-      const existing = existingMap.get(inst.id) || existingMap.get(String(inst.numeroParcela));
+      const existing = (inst.id && existingMap.get(String(inst.id))) ||
+                       existingMap.get(String(inst.numeroParcela)) ||
+                       existingMap.get(Number(inst.numeroParcela));
+
       const isPaid = inst.status === 'Pago' || existing?.status === 'Pago';
-      const dataPagamento = inst.dataPagamento || existing?.dataPagamento || null;
-      const valorPago = isPaid ? (inst.valorPago || existing?.valorPago || inst.valor) : 0;
+      const dataPagamento = existing?.dataPagamento || inst.dataPagamento || null;
+      const valorPago = isPaid ? (existing?.valorPago || inst.valorPago || inst.valor) : 0;
 
       // Limpar tags antigas de previsão/confirmação para evitar duplicação
-      const rawObs = inst.observacao || existing?.observacao || (condicao ? `Condição: ${condicao}` : '');
+      const rawObs = existing?.observacao || inst.observacao || (condicao ? `Condição: ${condicao}` : '');
       const cleanObs = rawObs.replace(/\[(PREVISÃO|CONFIRMADO)[^\]]*\]/gi, '').trim();
 
       const obsStatus = isConfirmado
@@ -601,31 +679,59 @@ class FinancialService {
         : '[PREVISÃO - Aguardando recebimento e autorização da Diretoria]';
       const finalObs = cleanObs ? `${obsStatus} ${cleanObs}` : obsStatus;
 
-      await financialRepo.create({
+      const vencimentoFinal = (isPaid && existing?.dataVencimento)
+        ? toBrDate(existing.dataVencimento)
+        : toBrDate(inst.dataVencimento || inst.vencimento || existing?.dataVencimento);
+
+      const entryPayload = {
         tipo: 'pedido_parcela',
         orderId: orderId,
-        installmentId: inst.id,
+        installmentId: inst.id || (existing ? existing.installmentId : null),
         descricao: `${fornecedor} - Pedido ${numPedido} (${inst.numeroParcela}/${inst.totalParcelas})`,
         categoria: 'PRODUTOS',
         fornecedor: fornecedor,
-        storeId: 'matriz',
-        lojaNome: 'Depósito Central / Matriz',
-        empresa: 'ALS',
-        formaPagamento: (inst.metodoPagamento || formaPgto).toUpperCase(),
-        bancoConta: '',
-        documentoRef: inst.documentoRef || numPedido,
+        storeId: existing?.storeId || 'matriz',
+        lojaNome: existing?.lojaNome || 'Depósito Central / Matriz',
+        empresa: existing?.empresa || 'ALS',
+        formaPagamento: (existing?.formaPagamento || inst.metodoPagamento || formaPgto).toUpperCase(),
+        bancoConta: existing?.bancoConta || '',
+        documentoRef: existing?.documentoRef || inst.documentoRef || numPedido,
         parcelaNumero: inst.numeroParcela,
         parcelaTotal: inst.totalParcelas,
         parcelaDesc: `${inst.numeroParcela}/${inst.totalParcelas}`,
-        dataVencimento: inst.dataVencimento,
-        valor: inst.valor,
+        dataVencimento: vencimentoFinal,
+        valor: (isPaid && existing?.valor) ? existing.valor : inst.valor,
         status: isPaid ? 'Pago' : 'A Vencer',
         dataPagamento: dataPagamento,
         valorPago: valorPago,
         observacao: finalObs,
-        statusPrevisao: statusPrevisao
-      });
+        statusPrevisao: statusPrevisao,
+        comprovanteNome: existing?.comprovanteNome || null,
+        comprovanteTipo: existing?.comprovanteTipo || null,
+        comprovanteTamanho: existing?.comprovanteTamanho || null,
+        comprovanteArquivo: existing?.comprovanteArquivo || null,
+        comprovanteUrl: existing?.comprovanteUrl || null
+      };
+
+      if (existing) {
+        processedEntryIds.add(existing.id);
+        await financialRepo.update(existing.id, entryPayload);
+      } else {
+        const created = await financialRepo.create(entryPayload);
+        processedEntryIds.add(created.id);
+      }
     }
+
+    // Apenas exclui lançamentos legados que não fazem mais parte do pedido SE não estiverem quitados
+    for (const oldEntry of existingEntries) {
+      if (!processedEntryIds.has(oldEntry.id)) {
+        if (oldEntry.status !== 'Pago' && !oldEntry.comprovanteArquivo && (!oldEntry.valorPago || oldEntry.valorPago <= 0)) {
+          await financialRepo.delete(oldEntry.id);
+        }
+      }
+    }
+
+    flushDatabaseToDisk();
   }
 
   /**
@@ -766,15 +872,21 @@ class FinancialService {
       const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
       for (const series of activeSeries) {
-        if (!series.maxVencimento) continue;
-
-        let seriesAddedCount = 0;
-        const [maxYStr, maxMStr, maxDStr] = series.maxVencimento.split('-');
-        const maxY = parseInt(maxYStr, 10);
-        const maxM = parseInt(maxMStr, 10) - 1;
-        const baseDay = parseInt(maxDStr, 10) || 1;
-
-        let lastYearMonth = maxY * 12 + maxM;
+        let baseDay = 1;
+        let lastYearMonth = 0;
+        if (series.maxVencimento.includes('/')) {
+          const [d, m, y] = series.maxVencimento.split('/');
+          baseDay = parseInt(d, 10) || 1;
+          const maxM = (parseInt(m, 10) || 1) - 1;
+          const maxY = parseInt(y, 10);
+          lastYearMonth = maxY * 12 + maxM;
+        } else if (series.maxVencimento.includes('-')) {
+          const [maxYStr, maxMStr, maxDStr] = series.maxVencimento.split('-');
+          baseDay = parseInt(maxDStr, 10) || 1;
+          const maxM = parseInt(maxMStr, 10) - 1;
+          const maxY = parseInt(maxYStr, 10);
+          lastYearMonth = maxY * 12 + maxM;
+        }
 
         // Se o último vencimento cadastrado estiver antes do final da janela de 6 meses
         while (lastYearMonth < targetYearMonth) {
@@ -784,7 +896,7 @@ class FinancialService {
 
           const lastDayOfTargetMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
           const actualDay = Math.min(baseDay, lastDayOfTargetMonth);
-          const dueIso = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`;
+          const dueBr = `${String(actualDay).padStart(2, '0')}/${String(nextMonth + 1).padStart(2, '0')}/${nextYear}`;
 
           const mesAbrev = MESES_ABREV[nextMonth];
           const anoAbrev = String(nextYear).slice(-2);
@@ -805,7 +917,7 @@ class FinancialService {
             parcelaNumero: (series.totalParcelas || 0) + seriesAddedCount + 1,
             parcelaTotal: (series.totalParcelas || 0) + seriesAddedCount + 1,
             parcelaDesc,
-            dataVencimento: dueIso,
+            dataVencimento: dueBr,
             valor: Number(series.valor) || 0,
             status: 'A Vencer',
             observacao: series.observacao || '',

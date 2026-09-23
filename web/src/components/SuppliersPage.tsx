@@ -184,8 +184,15 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
     }
 
     const textData = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
-    if (textData && (textData.startsWith('http://') || textData.startsWith('https://') || textData.startsWith('data:image/'))) {
-      setNewProductData(prev => ({ ...prev, fotoUrl: textData.trim() }));
+    if (textData) {
+      const trimmed = textData.trim();
+      if (trimmed.startsWith('data:image/')) {
+        optimizeImageFile(trimmed, 1200, 1200, 0.85)
+          .then(compressed => setNewProductData(prev => ({ ...prev, fotoUrl: compressed })))
+          .catch(() => setNewProductData(prev => ({ ...prev, fotoUrl: trimmed })));
+      } else if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        setNewProductData(prev => ({ ...prev, fotoUrl: trimmed }));
+      }
     }
   };
 
@@ -582,6 +589,21 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                       type="text"
                       value={newProductData.fotoUrl || ''}
                       onChange={(e) => setNewProductData(prev => ({ ...prev, fotoUrl: e.target.value }))}
+                      onPaste={async (e) => {
+                        const pasted = e.clipboardData.getData('text');
+                        if (pasted && pasted.startsWith('data:image/')) {
+                          e.preventDefault();
+                          try {
+                            setIsProcessingPhoto(true);
+                            const compressed = await optimizeImageFile(pasted, 1200, 1200, 0.85);
+                            setNewProductData(prev => ({ ...prev, fotoUrl: compressed }));
+                          } catch {
+                            setNewProductData(prev => ({ ...prev, fotoUrl: pasted }));
+                          } finally {
+                            setIsProcessingPhoto(false);
+                          }
+                        }
+                      }}
                       placeholder="Ou cole a URL da foto..."
                       className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                     />

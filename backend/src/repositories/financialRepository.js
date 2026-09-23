@@ -1,25 +1,49 @@
 const { queryAll, queryOne, execute } = require('../config/database');
 
+/**
+ * Converte qualquer data para formato brasileiro oficial DD/MM/YYYY
+ */
+function toBrDate(val) {
+  if (!val) return '';
+  const str = String(val).trim();
+  const brMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (brMatch) {
+    const day = brMatch[1].padStart(2, '0');
+    const month = brMatch[2].padStart(2, '0');
+    const year = brMatch[3];
+    return `${day}/${month}/${year}`;
+  }
+  const isoMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (isoMatch) {
+    const year = isoMatch[1];
+    const month = isoMatch[2].padStart(2, '0');
+    const day = isoMatch[3].padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  }
+  return str;
+}
+
 class FinancialRepository {
   /**
    * Busca registros com filtros múltiplos: mês, ano, loja, categoria, status, tipo, busca de texto.
+   * Suporta formato brasileiro DD/MM/YYYY e legado YYYY-MM-DD.
    */
   async findAll({ month, year, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = {}) {
     let sql = 'SELECT * FROM financial_entries WHERE 1=1';
     const params = [];
 
-    // Filtro por Ano/Mês no campo dataVencimento (formato YYYY-MM-DD)
+    // Filtro por Ano/Mês no formato brasileiro DD/MM/YYYY e compatibilidade legada YYYY-MM-DD
     if (year && year !== 'all' && month && month !== 'all') {
       const formattedMonth = String(month).padStart(2, '0');
-      sql += ' AND dataVencimento LIKE ?';
-      params.push(`${year}-${formattedMonth}-%`);
+      sql += ' AND (dataVencimento LIKE ? OR dataVencimento LIKE ?)';
+      params.push(`%/${formattedMonth}/${year}`, `${year}-${formattedMonth}-%`);
     } else if (year && year !== 'all') {
-      sql += ' AND dataVencimento LIKE ?';
-      params.push(`${year}-%`);
+      sql += ' AND (dataVencimento LIKE ? OR dataVencimento LIKE ?)';
+      params.push(`%/${year}`, `${year}-%`);
     } else if (month && month !== 'all') {
       const formattedMonth = String(month).padStart(2, '0');
-      sql += ' AND dataVencimento LIKE ?';
-      params.push(`%-${formattedMonth}-%`);
+      sql += ' AND (dataVencimento LIKE ? OR dataVencimento LIKE ?)';
+      params.push(`%/${formattedMonth}/%`, `%-${formattedMonth}-%`);
     }
 
     if (storeId) {
@@ -80,11 +104,16 @@ class FinancialRepository {
 
     if (search && search.trim()) {
       const term = `%${search.trim().toLowerCase()}%`;
-      sql += ' AND (LOWER(descricao) LIKE ? OR LOWER(fornecedor) LIKE ? OR LOWER(documentoRef) LIKE ? OR LOWER(observacao) LIKE ?)';
-      params.push(term, term, term, term);
+      sql += ' AND (LOWER(descricao) LIKE ? OR LOWER(fornecedor) LIKE ? OR LOWER(documentoRef) LIKE ? OR LOWER(observacao) LIKE ? OR LOWER(bancoConta) LIKE ?)';
+      params.push(term, term, term, term, term);
     }
 
-    sql += ' ORDER BY dataVencimento ASC, createdAt ASC';
+    sql += ` ORDER BY 
+      CASE 
+        WHEN dataVencimento LIKE '__/__/____' THEN 
+          SUBSTR(dataVencimento, 7, 4) || '-' || SUBSTR(dataVencimento, 4, 2) || '-' || SUBSTR(dataVencimento, 1, 2)
+        ELSE dataVencimento 
+      END ASC, createdAt ASC`;
 
     const rows = await queryAll(sql, params);
     return rows.map(r => this._hydrate(r));
@@ -101,16 +130,22 @@ class FinancialRepository {
   }
 
   async create(entry) {
-    const now = new Date().toISOString();
+    const nowIso = new Date().toISOString();
+    const now = new Date();
+    const todayBr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
     const id = entry.id || ('fin_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+    const normalizedVencimento = toBrDate(entry.dataVencimento) || todayBr;
+    const normalizedPagamento = entry.dataPagamento ? toBrDate(entry.dataPagamento) : null;
 
     await execute(`
       INSERT INTO financial_entries (
         id, tipo, orderId, installmentId, descricao, categoria, fornecedor,
         storeId, lojaNome, empresa, formaPagamento, bancoConta, documentoRef,
         parcelaNumero, parcelaTotal, parcelaDesc, dataVencimento, valor,
-        status, dataPagamento, valorPago, observacao, recorrente, recorrenciaId, statusPrevisao, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        status, dataPagamento, valorPago, observacao, recorrente, recorrenciaId, statusPrevisao,
+        comprovanteNome, comprovanteTipo, comprovanteTamanho, comprovanteArquivo, comprovanteUrl,
+        createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       entry.tipo || 'despesa',
@@ -128,17 +163,22 @@ class FinancialRepository {
       parseInt(entry.parcelaNumero, 10) || 1,
       parseInt(entry.parcelaTotal, 10) || 1,
       entry.parcelaDesc || 'Única',
-      entry.dataVencimento,
+      normalizedVencimento,
       parseFloat(entry.valor) || 0,
       entry.status || 'A Vencer',
-      entry.dataPagamento || null,
+      normalizedPagamento,
       entry.valorPago !== undefined ? parseFloat(entry.valorPago) : (entry.status === 'Pago' ? parseFloat(entry.valor) : 0),
       entry.observacao || '',
       entry.recorrente ? 1 : 0,
       entry.recorrenciaId || null,
       (entry.statusPrevisao || 'CONFIRMADO').toUpperCase(),
-      entry.createdAt || now,
-      now
+      entry.comprovanteNome || null,
+      entry.comprovanteTipo || null,
+      entry.comprovanteTamanho !== undefined && entry.comprovanteTamanho !== null ? Number(entry.comprovanteTamanho) : null,
+      entry.comprovanteArquivo || null,
+      entry.comprovanteUrl || null,
+      entry.createdAt || nowIso,
+      nowIso
     ]);
 
     return await this.findById(id);
@@ -158,6 +198,8 @@ class FinancialRepository {
     if (!existing) return null;
 
     const now = new Date().toISOString();
+    const normalizedVencimento = entry.dataVencimento !== undefined ? toBrDate(entry.dataVencimento) : toBrDate(existing.dataVencimento);
+    const normalizedPagamento = entry.dataPagamento !== undefined ? (entry.dataPagamento ? toBrDate(entry.dataPagamento) : null) : (existing.dataPagamento ? toBrDate(existing.dataPagamento) : null);
 
     await execute(`
       UPDATE financial_entries SET
@@ -185,6 +227,11 @@ class FinancialRepository {
         recorrente = ?,
         recorrenciaId = ?,
         statusPrevisao = ?,
+        comprovanteNome = ?,
+        comprovanteTipo = ?,
+        comprovanteTamanho = ?,
+        comprovanteArquivo = ?,
+        comprovanteUrl = ?,
         updatedAt = ?
       WHERE id = ?
     `, [
@@ -203,15 +250,20 @@ class FinancialRepository {
       entry.parcelaNumero !== undefined ? parseInt(entry.parcelaNumero, 10) : existing.parcelaNumero,
       entry.parcelaTotal !== undefined ? parseInt(entry.parcelaTotal, 10) : existing.parcelaTotal,
       entry.parcelaDesc !== undefined ? entry.parcelaDesc : existing.parcelaDesc,
-      entry.dataVencimento !== undefined ? entry.dataVencimento : existing.dataVencimento,
+      normalizedVencimento,
       entry.valor !== undefined ? parseFloat(entry.valor) : existing.valor,
       entry.status !== undefined ? entry.status : existing.status,
-      entry.dataPagamento !== undefined ? entry.dataPagamento : existing.dataPagamento,
+      normalizedPagamento,
       entry.valorPago !== undefined ? parseFloat(entry.valorPago) : existing.valorPago,
       entry.observacao !== undefined ? entry.observacao : existing.observacao,
       entry.recorrente !== undefined ? (entry.recorrente ? 1 : 0) : (existing.recorrente ? 1 : 0),
       entry.recorrenciaId !== undefined ? entry.recorrenciaId : existing.recorrenciaId,
       entry.statusPrevisao !== undefined ? entry.statusPrevisao.toUpperCase() : (existing.statusPrevisao || 'CONFIRMADO'),
+      entry.comprovanteNome !== undefined ? entry.comprovanteNome : existing.comprovanteNome,
+      entry.comprovanteTipo !== undefined ? entry.comprovanteTipo : existing.comprovanteTipo,
+      entry.comprovanteTamanho !== undefined ? entry.comprovanteTamanho : existing.comprovanteTamanho,
+      entry.comprovanteArquivo !== undefined ? entry.comprovanteArquivo : existing.comprovanteArquivo,
+      entry.comprovanteUrl !== undefined ? entry.comprovanteUrl : existing.comprovanteUrl,
       now,
       id
     ]);
@@ -375,11 +427,11 @@ class FinancialRepository {
       parcelaNumero: Number(row.parcelaNumero) || 1,
       parcelaTotal: Number(row.parcelaTotal) || 1,
       parcelaDesc: row.parcelaDesc || 'Única',
-      dataVencimento: row.dataVencimento,
+      dataVencimento: toBrDate(row.dataVencimento),
       valor: Number(row.valor) || 0,
       status: row.status || 'A Vencer',
       statusPrevisao: (row.statusPrevisao || 'CONFIRMADO').toUpperCase(),
-      dataPagamento: row.dataPagamento || null,
+      dataPagamento: row.dataPagamento ? toBrDate(row.dataPagamento) : null,
       valorPago: Number(row.valorPago) || 0,
       observacao: row.observacao || '',
       recorrente: Boolean(row.recorrente),

@@ -45,6 +45,7 @@ class ProductService {
       }
     }
 
+
     const payload = {
       ...productData,
       id: productData.id || ('prod_' + Date.now()),

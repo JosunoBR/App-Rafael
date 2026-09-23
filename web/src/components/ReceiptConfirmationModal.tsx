@@ -26,7 +26,7 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
   const [autorizarBoletos, setAutorizarBoletos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isDiretoria = canAuthorizeFinancialRelease(currentUser?.role);
+  const isDiretoria = currentUser?.role === 'diretoria';
   const totalPecas = order.items?.reduce((s, it) => s + (it.qtdTotalUnidades || 0), 0) || 0;
   const totalVolumes = order.items?.reduce((s, it) => s + (it.qtdPacotes || 0), 0) || 0;
   const isStatusBlocked = order.header.status === 'Em Cotação' || order.header.status === 'Rascunho' || order.header.status === 'Aprovado';

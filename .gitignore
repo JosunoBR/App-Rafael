@@ -42,3 +42,19 @@ App-Rafael/
 .artifacts/
 scratch/
 *.bak
+
+# Test files, test scripts & scratch tests
+tests/
+backend/tests/
+*.test.*
+*.spec.*
+test_*.js
+scripts/test*.js
+backend/scripts/verify_persistence.js
+scratch*.js
+
+# Uploads, attachments and temporary receipts
+backend/data/comprovantes/*
+!backend/data/comprovantes/.gitkeep
+backend/data/backups/*
+!backend/data/backups/.gitkeep

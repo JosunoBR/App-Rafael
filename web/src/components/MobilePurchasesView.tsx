@@ -446,10 +446,10 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
             {order.header.status === 'Aprovado' && (
               <button
                 type="button"
-                onClick={() => onUpdateOrder({ ...order, header: { ...order.header, status: 'Em Separação' } })}
-                className="px-2 py-0.5 rounded-full bg-purple-500 hover:bg-purple-400 text-white font-extrabold text-[10px] shadow-xs transition cursor-pointer"
+                onClick={() => onUpdateOrder({ ...order, header: { ...order.header, status: 'Em Distribuição' } })}
+                className="px-2 py-0.5 rounded-full bg-indigo-500 hover:bg-indigo-400 text-white font-extrabold text-[10px] shadow-xs transition cursor-pointer"
               >
-                Enviar p/ Separação
+                Enviar p/ Distribuição
               </button>
             )}
 

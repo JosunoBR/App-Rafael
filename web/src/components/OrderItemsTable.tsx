@@ -816,9 +816,23 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
     const textData = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
     if (textData && textData.trim().length > 0) {
       const trimmed = textData.trim();
-      setPhotoUrlInput(trimmed);
-      setPhotoPreview(trimmed);
-      setPhotoTab('url');
+      if (trimmed.startsWith('data:image/')) {
+        optimizeImageFile(trimmed, 1200, 1200, 0.85)
+          .then(compressed => {
+            setPhotoUrlInput(compressed);
+            setPhotoPreview(compressed);
+            setPhotoTab('url');
+          })
+          .catch(() => {
+            setPhotoUrlInput(trimmed);
+            setPhotoPreview(trimmed);
+            setPhotoTab('url');
+          });
+      } else {
+        setPhotoUrlInput(trimmed);
+        setPhotoPreview(trimmed);
+        setPhotoTab('url');
+      }
     }
   };
 
@@ -2694,6 +2708,23 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                       onChange={(e) => {
                         setPhotoUrlInput(e.target.value);
                         setPhotoPreview(e.target.value.trim() || null);
+                      }}
+                      onPaste={async (e) => {
+                        const pasted = e.clipboardData.getData('text');
+                        if (pasted && pasted.startsWith('data:image/')) {
+                          e.preventDefault();
+                          try {
+                            setIsProcessingPhoto(true);
+                            const compressed = await optimizeImageFile(pasted, 1200, 1200, 0.85);
+                            setPhotoUrlInput(compressed);
+                            setPhotoPreview(compressed);
+                          } catch {
+                            setPhotoUrlInput(pasted);
+                            setPhotoPreview(pasted);
+                          } finally {
+                            setIsProcessingPhoto(false);
+                          }
+                        }
                       }}
                       placeholder="https://exemplo.com/foto-produto.jpg"
                       className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500"

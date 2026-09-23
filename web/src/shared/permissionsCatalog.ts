@@ -15,7 +15,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     categoria: '1. Cotação & Compras',
     nome: 'Acessar tela de Cotação e Pedidos',
     obs: 'Menu principal de elaboração de compras',
-    roleDefaults: { diretoria: true, comprador: true, deposito: false, separacao: false, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: false, separacao: false, faturamento: true }
   },
   {
     codigo: 'orders:create',
@@ -29,7 +29,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     categoria: '1. Cotação & Compras',
     nome: 'Editar cotações em andamento / rascunhos',
     obs: 'Permite alterar quantidades e preços em cotação aberta',
-    roleDefaults: { diretoria: true, comprador: true, deposito: false, separacao: false, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: false, separacao: false, faturamento: true }
   },
   {
     codigo: 'orders:edit_closed',
@@ -135,8 +135,8 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     codigo: 'pipeline:confirm_receipt',
     categoria: '2. Esteira, CD & Separação',
     nome: 'Confirmar Recebimento Físico na Matriz (Entrega Fornecedor)',
-    obs: 'Disponível apenas a partir da fase de Distribuição',
-    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: false, faturamento: false }
+    obs: 'Disponível a partir da fase de Separação na doca',
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: false }
   },
   {
     codigo: 'separation:manage_presets',

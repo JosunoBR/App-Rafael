@@ -503,7 +503,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <button
                         onClick={onCloseOrder}
                         className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer hover:scale-102"
-                        title="Fechar pedido e enviar para a separação do depósito"
+                        title="Fechar pedido e registrar como aprovado na esteira"
                       >
                         <PackageCheck className="w-3.5 h-3.5" />
                         <span>Fechar pedido</span>

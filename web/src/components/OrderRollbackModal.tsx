@@ -37,35 +37,26 @@ const ALL_ROLLBACK_OPTIONS: RollbackOption[] = [
     label: '4. Faturamento',
     step: 'Etapa 4',
     icon: Receipt,
-    description: 'Reabre o pedido para conferência fiscal e manipulação de boletos.',
-    impactWarning: 'Remove a data de finalização e mantém o pedido aberto na etapa de conferência de boletos.',
-    colorClass: 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+    description: 'Devolve o pedido para conferência fiscal e reabertura de liberação de boletos.',
+    impactWarning: 'Revoga a finalização do pedido e reabre a liberação de boletos no Contas a Pagar.',
+    colorClass: 'text-amber-700 bg-amber-50 border-amber-200 dark:border-amber-800/60 dark:text-amber-300 dark:border-amber-800'
   },
   {
     status: 'Em Separação',
-    label: '3. Em Separação',
-    step: 'Etapa 3 - Fase 2',
+    label: '3. Separação',
+    step: 'Etapa 3',
     icon: PackageCheck,
-    description: 'Devolve o pedido para a conferência física e apontamento de avarias na doca.',
-    impactWarning: 'Desfaz a conclusão da separação para permitir que a equipe de conferência revise as peças e avarias.',
-    colorClass: 'text-purple-700 bg-purple-50 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800'
-  },
-  {
-    status: 'Em Distribuição',
-    label: '3. Em Distribuição',
-    step: 'Etapa 3 - Fase 1',
-    icon: Boxes,
-    description: 'Devolve o pedido para rateio de grade entre as lojas e estoque central do CD.',
-    impactWarning: 'Desfaz a liberação da separação (oculta do app mobile). Se houve reserva para o estoque central do CD, o saldo será estornado.',
-    colorClass: 'text-indigo-700 bg-indigo-50 border-indigo-200 dark:border-indigo-800/60 dark:text-indigo-300 dark:border-indigo-800'
+    description: 'Devolve o pedido para conferência física na doca e recebimento.',
+    impactWarning: 'Revoga a conclusão da separação e o envio ao faturamento.',
+    colorClass: 'text-purple-700 bg-purple-50 border-purple-200 dark:border-purple-800/60 dark:text-purple-300 dark:border-purple-800'
   },
   {
     status: 'Aprovado',
     label: '2. Aprovado',
     step: 'Etapa 2',
     icon: CheckCircle2,
-    description: 'Retorna o pedido para o fechamento comercial aprovado.',
-    impactWarning: 'Revoga a confirmação de recebimento físico na Matriz e a liberação de boletos no financeiro.',
+    description: 'Retorna o pedido para o fechamento comercial aprovado para rateio no Depósito.',
+    impactWarning: 'Revoga a confirmação de recebimento físico na Matriz, liberação de boletos e estorna o estoque central reservado.',
     colorClass: 'text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
   },
   {
@@ -98,8 +89,8 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
       'Em Cotação': 0,
       'Rascunho': 0,
       'Aprovado': 1,
+      'Em Separação': 2,
       'Em Distribuição': 2,
-      'Em Separação': 2.5,
       'Faturamento': 3,
       'Finalizado': 4
     };

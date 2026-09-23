@@ -83,8 +83,13 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
     }> = {};
 
     entries.forEach(entry => {
-      const due = (entry.dataVencimento || '').substring(0, 10);
-      const diaNum = due ? parseInt(due.split('-')[2], 10) : 1;
+      const due = (entry.dataVencimento || '').trim();
+      let diaNum = 1;
+      if (due.includes('/')) {
+        diaNum = parseInt(due.split('/')[0], 10) || 1;
+      } else if (due.includes('-')) {
+        diaNum = parseInt(due.split('-')[2], 10) || 1;
+      }
       const groupKey = selectedMonth === 'all' ? (due || 'sem_data') : String(diaNum);
 
       if (!groups[groupKey]) {
@@ -112,7 +117,14 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
 
     return Object.values(groups).sort((a, b) => {
       if (selectedMonth === 'all') {
-        return (a.dateIso || '').localeCompare(b.dateIso || '');
+        const toSortKey = (d: string) => {
+          if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
+            const [dia, mes, ano] = d.split('/');
+            return `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+          }
+          return d;
+        };
+        return toSortKey(a.dateIso || '').localeCompare(toSortKey(b.dateIso || ''));
       }
       return a.dia - b.dia;
     });

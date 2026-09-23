@@ -55,6 +55,7 @@ import {
 } from '../utils/api';
 import { toBrDate } from '../utils/masks';
 import { exportFinancialToExcel, exportFinancialToPdf } from '../utils/financialExporter';
+import { compressImage, isImageFile, formatFileSize } from '../utils/imageUtils';
 import { FinancialEntryModal } from './FinancialEntryModal';
 import { FinancialEditModal } from './FinancialEditModal';
 import { FinancialDailyView } from './FinancialDailyView';
@@ -135,6 +136,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   const [comprovanteBase64, setComprovanteBase64] = useState<string>('');
   const [uploadError, setUploadError] = useState<string>('');
   const [isSubmittingPay, setIsSubmittingPay] = useState<boolean>(false);
+  const [isCompressingComprovante, setIsCompressingComprovante] = useState<boolean>(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Estados para visualização / download de comprovante anexado
@@ -215,7 +217,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     if (selectedYear === 'all') setSelectedYear(String(curYear));
   };
 
-  const handleFileSelect = (file: File) => {
+  const handleFileSelect = async (file: File) => {
     setUploadError('');
     if (!file) return;
 
@@ -226,6 +228,29 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
       return;
     }
 
+    // Se for arquivo de imagem, comprime transparentemente com teto rígido de 1 MB e nitidez em 1600px
+    if (isImageFile(file)) {
+      try {
+        setIsCompressingComprovante(true);
+        const result = await compressImage(file, {
+          maxSizeBytes: 1024 * 1024, // 1 MB rígido
+          maxWidth: 1600,
+          maxHeight: 1600,
+          initialQuality: 0.85
+        });
+
+        setComprovanteFile(result.file);
+        setComprovanteBase64(result.dataUrl);
+      } catch (err: any) {
+        console.error('Erro na otimização de imagem do comprovante:', err);
+        setUploadError('Falha ao processar e comprimir imagem do comprovante. Tente outro arquivo.');
+      } finally {
+        setIsCompressingComprovante(false);
+      }
+      return;
+    }
+
+    // Para PDFs ou arquivos de texto (não-imagem)
     if (file.size > 10 * 1024 * 1024) {
       setUploadError('O arquivo selecionado é maior que o limite de 10 MB.');
       return;
@@ -1325,17 +1350,28 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                       }}
                     />
                     <div className="flex flex-col items-center gap-1.5">
-                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 flex items-center justify-center">
-                        <Upload className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                          Clique ou arraste o comprovante aqui
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          PDF, Imagem (PNG, JPG, WEBP) ou Texto (TXT, CSV) • máx. 10MB
-                        </p>
-                      </div>
+                      {isCompressingComprovante ? (
+                        <div className="py-2 flex flex-col items-center gap-1.5">
+                          <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
+                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            Processando comprovante...
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 flex items-center justify-center">
+                            <Upload className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                              Clique ou arraste o comprovante aqui
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              PDF, Imagem (PNG, JPG, WEBP) ou Texto (TXT, CSV) • máx. 10MB
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1355,7 +1391,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                           {comprovanteFile.name}
                         </p>
                         <p className="text-[10px] text-slate-500 font-mono">
-                          {(comprovanteFile.size / 1024).toFixed(1)} KB • Pronto para anexar
+                          {formatFileSize(comprovanteFile.size)} • Pronto para anexar
                         </p>
                       </div>
                     </div>

@@ -1368,9 +1368,9 @@ export function App() {
       order.header.status !== 'Rascunho'
     );
 
-    // 🛡️ Se o pedido já foi fechado, compradores não podem alterar pedidos em esteira sem liberação da Diretoria
-    if (isClosed && currentUser?.role !== 'diretoria') {
-      showToast('Este pedido já foi aprovado e está na esteira operacional. Para efetuar alterações comerciais ou de quantidades, solicite a liberação à Diretoria.', 'error');
+    // 🛡️ Se o pedido já foi fechado, compradores não podem alterar pedidos em esteira sem liberação da Diretoria ou Faturamento
+    if (isClosed && currentUser?.role !== 'diretoria' && currentUser?.role !== 'faturamento') {
+      showToast('Este pedido já foi aprovado e está na esteira operacional. Para efetuar alterações comerciais ou de quantidades, solicite a liberação à Diretoria ou ao Faturamento.', 'error');
       return;
     }
 
@@ -1406,7 +1406,8 @@ export function App() {
         items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
       });
       if (isClosed) {
-        showToast(`Pedido ${order.header.numeroPedido} atualizado com sucesso pela Diretoria!`, 'success');
+        const updaterRole = currentUser?.role === 'faturamento' ? 'pelo Faturamento' : 'pela Diretoria';
+        showToast(`Pedido ${order.header.numeroPedido} atualizado com sucesso ${updaterRole}!`, 'success');
       } else {
         showToast(`Pedido ${order.header.numeroPedido} salvo com sucesso em espera!`, 'success');
       }
@@ -1467,11 +1468,10 @@ export function App() {
         ...order.header,
         dataPedido: orderDate,
         dataEmissao: order.header.dataEmissao || orderDate,
-        status: 'Em Separação',
-        separationStatus: 'Pendente',
+        status: 'Aprovado',
+        aprovadoPor: currentUser?.nome || 'Comprador',
+        dataAprovacao: new Date().toISOString(),
         isDraft: false,
-        liberadoPorDeposito: currentUser?.nome || 'Comprador',
-        dataLiberacaoSeparacao: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
     };
@@ -1640,17 +1640,6 @@ export function App() {
 
   // Handler para Liberação da Distribuição para a Doca com Entrada Automática no Estoque Central
   const handleReleaseToSeparation = async (orderToRelease: PurchaseOrder) => {
-    // Governança: Para compras de fornecedores externos, a mercadoria precisa ter sido fisicamente recebida na Matriz
-    const isTransfer = orderToRelease.header?.supplierId === 'cd_matriz' || 
-                       String(orderToRelease.header?.numeroPedido || '').startsWith('CD-') || 
-                       String(orderToRelease.header?.id || '').startsWith('order_transf_cd_') ||
-                       Boolean(orderToRelease.header?.fornecedor && orderToRelease.header.fornecedor.toLowerCase().includes('transferência'));
-
-    if (!isTransfer && !orderToRelease.header?.recebidoMatriz) {
-      showToast('Atenção: O pedido precisa ser confirmado como recebido na Matriz antes de liberar a separação!', 'info');
-      return;
-    }
-
     // 1. Dar entrada automática no Estoque Central para itens com reserva no CD (qtdReservaEstoque > 0)
     let totalPecasEstoqueEntrada = 0;
     try {
@@ -1718,12 +1707,15 @@ export function App() {
       console.warn('Erro ao registrar entrada automática no estoque central:', stockErr);
     }
 
-    // 2. Atualizar o status do pedido para 'Em Separação'
+    // 2. Concluir distribuição definindo o status como 'Em Separação' e marcando distribuicaoConcluida = true
     const updated: PurchaseOrder = {
       ...orderToRelease,
       header: {
         ...orderToRelease.header,
         status: 'Em Separação',
+        distribuicaoConcluida: true,
+        distribuidoPor: currentUser?.nome || 'Depósito Central',
+        dataDistribuicao: new Date().toISOString(),
         liberadoPorDeposito: currentUser?.nome || 'Depósito Central',
         dataLiberacaoSeparacao: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -1758,6 +1750,7 @@ export function App() {
         header: {
           ...orderToSend.header,
           status: 'Em Distribuição',
+          distribuicaoConcluida: false,
           updatedAt: new Date().toISOString()
         }
       };
@@ -1772,6 +1765,7 @@ export function App() {
         header: {
           ...orderToSend.header,
           status: 'Em Distribuição' as any,
+          distribuicaoConcluida: false,
           updatedAt: new Date().toISOString()
         }
       };
@@ -2003,10 +1997,10 @@ export function App() {
     }
   };
 
-  // Handler para liberação de boletos pela Diretoria
+  // Handler para liberação de boletos pelo Faturamento / Diretoria
   const handleAuthorizeFinancial = async (targetOrder: PurchaseOrder) => {
-    if (currentUser?.role !== 'diretoria') {
-      showToast('Apenas a Diretoria pode autorizar a liberação de boletos para o Financeiro.', 'error');
+    if (currentUser?.role !== 'diretoria' && currentUser?.role !== 'faturamento') {
+      showToast('Apenas o Faturamento ou a Diretoria podem autorizar a liberação de boletos.', 'error');
       return;
     }
 
@@ -2023,8 +2017,11 @@ export function App() {
         header: {
           ...targetOrder.header,
           boletosLiberados: true,
-          boletosLiberadosPor: currentUser?.nome || 'Diretoria',
+          boletosLiberadosPor: currentUser?.nome || 'Faturamento',
           boletosLiberadosEm: new Date().toISOString(),
+          status: 'Finalizado',
+          finalizadoPor: currentUser?.nome || 'Faturamento',
+          dataFinalizacao: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }
       };
@@ -2039,7 +2036,7 @@ export function App() {
       }
 
       confetti({ particleCount: 50, spread: 50, origin: { y: 0.6 } });
-      showToast(res?.message || `Boletos do pedido ${targetOrder.header.numeroPedido} liberados com sucesso!`, 'success');
+      showToast(res?.message || `Boletos do pedido ${targetOrder.header.numeroPedido} liberados e pedido finalizado com sucesso!`, 'success');
     } catch (err: any) {
       showToast(`Erro ao liberar boletos: ${err.message || 'Falha de comunicação'}`, 'error');
     }
@@ -2806,9 +2803,6 @@ export function App() {
                   currentUser={currentUser}
                   savedOrders={savedOrders}
                   draftOrder={hasActiveDraft ? order : null}
-                  suppliers={suppliers}
-                  products={products}
-                  stores={storeConfigs}
                   centralStock={centralStock}
                   onNavigate={(tab) => {
                     if (canAccessTab(currentUser?.role, tab)) {
@@ -2861,14 +2855,16 @@ export function App() {
                       order.header.status && 
                       order.header.status !== 'Em Cotação' && 
                       order.header.status !== 'Rascunho' && 
-                      currentUser?.role !== 'diretoria'
+                      currentUser?.role !== 'diretoria' && 
+                      currentUser?.role !== 'faturamento'
                     )}
                     style={{ minWidth: 0 }}
                     className={Boolean(
                       order.header.status && 
                       order.header.status !== 'Em Cotação' && 
                       order.header.status !== 'Rascunho' && 
-                      currentUser?.role !== 'diretoria'
+                      currentUser?.role !== 'diretoria' && 
+                      currentUser?.role !== 'faturamento'
                     ) ? 'space-y-6 opacity-85 pointer-events-none select-none border-none p-0 m-0 w-full max-w-full min-w-0' : 'space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0'}
                   >
                     <OrderHeaderForm 

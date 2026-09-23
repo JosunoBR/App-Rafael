@@ -198,7 +198,14 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
 
     const textData = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
     if (textData && textData.trim().length > 0) {
-      setEditingProduct(prev => prev ? { ...prev, fotoUrl: textData.trim() } : null);
+      const trimmed = textData.trim();
+      if (trimmed.startsWith('data:image/')) {
+        optimizeImageFile(trimmed, 1200, 1200, 0.85)
+          .then(compressed => setEditingProduct(prev => prev ? { ...prev, fotoUrl: compressed } : null))
+          .catch(() => setEditingProduct(prev => prev ? { ...prev, fotoUrl: trimmed } : null));
+      } else {
+        setEditingProduct(prev => prev ? { ...prev, fotoUrl: trimmed } : null);
+      }
     }
   };
 
@@ -224,7 +231,7 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
       const file = e.dataTransfer.files[0];
       if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(file.name)) {
         try {
-          photoUrl = await optimizeImageFile(file, 1200, 1200, 0.88);
+          photoUrl = await optimizeImageFile(file, 1200, 1200, 0.85);
         } catch (err) {
           console.error('Erro ao otimizar foto para o card:', err);
         }
@@ -232,7 +239,16 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
     } else {
       const textData = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
       if (textData && textData.trim().length > 0) {
-        photoUrl = textData.trim();
+        const trimmed = textData.trim();
+        if (trimmed.startsWith('data:image/')) {
+          try {
+            photoUrl = await optimizeImageFile(trimmed, 1200, 1200, 0.85);
+          } catch {
+            photoUrl = trimmed;
+          }
+        } else {
+          photoUrl = trimmed;
+        }
       }
     }
 
@@ -834,6 +850,21 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                       type="text"
                       value={editingProduct.fotoUrl || ''}
                       onChange={(e) => setEditingProduct(prev => prev ? { ...prev, fotoUrl: e.target.value } : null)}
+                      onPaste={async (e) => {
+                        const pasted = e.clipboardData.getData('text');
+                        if (pasted && pasted.startsWith('data:image/')) {
+                          e.preventDefault();
+                          try {
+                            setIsProcessingPhoto(true);
+                            const compressed = await optimizeImageFile(pasted, 1200, 1200, 0.85);
+                            setEditingProduct(prev => prev ? { ...prev, fotoUrl: compressed } : null);
+                          } catch {
+                            setEditingProduct(prev => prev ? { ...prev, fotoUrl: pasted } : null);
+                          } finally {
+                            setIsProcessingPhoto(false);
+                          }
+                        }
+                      }}
                       placeholder="https://exemplo.com/foto-produto.jpg..."
                       className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden"
                     />

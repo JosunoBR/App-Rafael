@@ -95,9 +95,9 @@ class OrderService {
             throw err;
           }
           // Operadores de Depósito e Separação podem atualizar campos operacionais (separação/conferência)
-          // Demais perfis que não sejam diretoria nem operacionais são bloqueados
-          if (currentUser.role !== 'diretoria' && currentUser.role !== 'separacao' && currentUser.role !== 'deposito') {
-            const err = new Error(`Apenas a Diretoria possui autorização para editar pedidos que já foram fechados (Status atual: ${existingStatus}).`);
+          // Faturamento e Diretoria podem atualizar valores, itens e impostos com base na NF
+          if (currentUser.role !== 'diretoria' && currentUser.role !== 'faturamento' && currentUser.role !== 'separacao' && currentUser.role !== 'deposito') {
+            const err = new Error(`Apenas a Diretoria e o Faturamento possuem autorização para editar pedidos que já foram fechados (Status atual: ${existingStatus}).`);
             err.statusCode = 403;
             err.code = 'ORDER_LOCKED';
             throw err;
@@ -178,6 +178,19 @@ class OrderService {
     if (!existing) {
       const err = new Error('Pedido não encontrado.');
       err.statusCode = 404;
+      throw err;
+    }
+
+    // 🛡️ TRAVA DE SEGURANÇA FISCAL & AUDITORIA:
+    // Nunca permitir exclusão de pedido que possua qualquer movimentação financeira baixada/paga ou comprovante anexado
+    const financialRepo = require('../repositories/financialRepository');
+    const finEntries = await financialRepo.findByOrderId(id);
+    const hasPaidFinancial = finEntries.some(e => String(e.status).toLowerCase() === 'pago' || Number(e.valorPago) > 0 || Boolean(e.comprovanteArquivo));
+    const hasPaidInstallment = Array.isArray(existing.installments) && existing.installments.some(i => String(i.status).toLowerCase() === 'pago');
+
+    if (hasPaidFinancial || hasPaidInstallment) {
+      const err = new Error('Não é possível excluir o pedido: existem parcelas/boletos já quitados no financeiro (Contas a Pagar). É proibido por governança fiscal e auditoria excluir pedidos com movimentação financeira liquidada.');
+      err.statusCode = 400;
       throw err;
     }
 
@@ -342,9 +355,9 @@ class OrderService {
    * Permitido para: diretoria, comprador, deposito. Bloqueado para: separacao.
    */
   async confirmReceipt(orderId, { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos }, currentUser) {
-    const allowedRoles = ['diretoria', 'comprador', 'deposito'];
+    const allowedRoles = ['diretoria', 'comprador', 'deposito', 'separacao'];
     if (!currentUser || !allowedRoles.includes(currentUser.role)) {
-      const err = new Error('Apenas Diretoria, Comprador ou Depósito podem confirmar o recebimento na Matriz.');
+      const err = new Error('Apenas Separação, Depósito, Comprador ou Diretoria podem confirmar o recebimento na Matriz.');
       err.statusCode = 403;
       throw err;
     }
@@ -553,6 +566,16 @@ class OrderService {
       throw err;
     }
 
+    const isTransfer = order.header?.supplierId === 'cd_matriz' || 
+                       String(order.header?.numeroPedido || '').startsWith('CD-') || 
+                       (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+
+    if (!isTransfer && !order.header.recebidoMatriz) {
+      const err = new Error('É obrigatório confirmar o recebimento físico da mercadoria na Matriz antes de encaminhar para o Faturamento.');
+      err.statusCode = 400;
+      throw err;
+    }
+
     order.header.status = 'Faturamento';
     order.header.separacaoConcluida = true;
     order.header.separadoPor = currentUser.nome || 'Conferente Separação';
@@ -633,11 +656,12 @@ class OrderService {
 
   /**
    * Autoriza a liberação dos boletos de um pedido para o Contas a Pagar (Financeiro).
-   * Restrito estritamente à Diretoria (RBAC).
+   * Permitido: Faturamento ou Diretoria (RBAC). Ao liberar boletos na Etapa 4, o pedido é finalizado.
    */
   async authorizeFinancialRelease(orderId, currentUser) {
-    if (!currentUser || currentUser.role !== 'diretoria') {
-      const err = new Error('Apenas a Diretoria pode autorizar a liberação de boletos para o Financeiro.');
+    const allowedRoles = ['faturamento', 'diretoria'];
+    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
+      const err = new Error('Apenas o Faturamento ou a Diretoria podem autorizar a liberação de boletos.');
       err.statusCode = 403;
       throw err;
     }
@@ -655,10 +679,13 @@ class OrderService {
       throw err;
     }
 
-    // Marcar como autorizado
+    // Marcar como autorizado e transicionar para Finalizado
     order.header.boletosLiberados = true;
-    order.header.boletosLiberadosPor = currentUser.nome || 'Diretoria';
+    order.header.boletosLiberadosPor = currentUser.nome || 'Faturamento';
     order.header.boletosLiberadosEm = new Date().toISOString();
+    order.header.status = 'Finalizado';
+    order.header.finalizadoPor = currentUser.nome || 'Faturamento';
+    order.header.dataFinalizacao = new Date().toISOString();
     order.header.updatedAt = new Date().toISOString();
 
     const saved = await orderRepository.save(order);
@@ -671,9 +698,20 @@ class OrderService {
       console.error('Erro ao sincronizar boletos autorizados com o financeiro:', finErr);
     }
 
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || 'Faturamento',
+      usuarioRole: currentUser.role,
+      acao: 'LIBERACAO_BOLETO_FINALIZADO',
+      observacoes: 'Boletos liberados no Contas a Pagar e pedido finalizado com sucesso na esteira'
+    }).catch(e => console.error('Erro ao registrar log de auditoria:', e));
+
     return {
       success: true,
-      message: `Boletos do pedido ${saved.header.numeroPedido} liberados para o Contas a Pagar!`,
+      message: `Boletos do pedido ${saved.header.numeroPedido} liberados e pedido finalizado com sucesso!`,
       order: saved
     };
   }
@@ -714,8 +752,7 @@ class OrderService {
       'Em Cotação': 0,
       'Rascunho': 0,
       'Aprovado': 1,
-      'Em Distribuição': 2,
-      'Em Separação': 2.5,
+      'Em Separação': 2,
       'Faturamento': 3,
       'Finalizado': 4
     };
@@ -747,8 +784,8 @@ class OrderService {
       throw err;
     }
 
-    // Estorno de Estoque Central do CD se retroceder de Separação/Faturamento para Distribuição ou antes
-    if (currentRank >= 2.5 && targetRank <= 2 && Array.isArray(order.items)) {
+    // Estorno de Estoque Central do CD se retroceder de Distribuição/Separação para Aprovado/Cotação
+    if (order.header.distribuicaoConcluida && targetRank <= 1 && Array.isArray(order.items)) {
       try {
         const stockRepository = require('../repositories/stockRepository');
         const allStock = await stockRepository.findAll();
@@ -806,22 +843,19 @@ class OrderService {
       order.header.boletosLiberadosEm = null;
       order.header.finalizadoPor = null;
       order.header.dataFinalizacao = null;
-    } else if (targetStatus === 'Em Distribuição') {
-      order.header.distribuicaoConcluida = false;
-      order.header.distribuidoPor = null;
-      order.header.dataDistribuicao = null;
-      order.header.separacaoConcluida = false;
-      order.header.separadoPor = null;
-      order.header.dataSeparacao = null;
-      order.header.finalizadoPor = null;
-      order.header.dataFinalizacao = null;
     } else if (targetStatus === 'Em Separação') {
       order.header.separacaoConcluida = false;
       order.header.separadoPor = null;
       order.header.dataSeparacao = null;
+      order.header.boletosLiberados = false;
+      order.header.boletosLiberadosPor = null;
+      order.header.boletosLiberadosEm = null;
       order.header.finalizadoPor = null;
       order.header.dataFinalizacao = null;
     } else if (targetStatus === 'Faturamento') {
+      order.header.boletosLiberados = false;
+      order.header.boletosLiberadosPor = null;
+      order.header.boletosLiberadosEm = null;
       order.header.finalizadoPor = null;
       order.header.dataFinalizacao = null;
     }

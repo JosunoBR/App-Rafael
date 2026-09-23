@@ -462,7 +462,19 @@ async function getDatabase() {
         numeroNotaFiscal: "TEXT",
         boletosLiberados: "INTEGER DEFAULT 0",
         boletosLiberadosPor: "TEXT",
-        boletosLiberadosEm: "TEXT"
+        boletosLiberadosEm: "TEXT",
+        distribuicaoConcluida: "INTEGER DEFAULT 0",
+        distribuidoPor: "TEXT",
+        dataDistribuicao: "TEXT",
+        observacaoDistribuicao: "TEXT",
+        separacaoConcluida: "INTEGER DEFAULT 0",
+        separadoPor: "TEXT",
+        dataSeparacao: "TEXT",
+        observacaoSeparacao: "TEXT",
+        finalizadoPor: "TEXT",
+        dataFinalizacao: "TEXT",
+        aprovadoPor: "TEXT",
+        dataAprovacao: "TEXT"
       };
 
       Object.entries(requiredCols).forEach(([col, def]) => {
@@ -470,6 +482,20 @@ async function getDatabase() {
           try { dbInstance.run(`ALTER TABLE purchase_orders ADD COLUMN ${col} ${def}`); } catch (e) {}
         }
       });
+
+      // 🔄 Migração de compatibilidade da esteira (5 etapas): converte 'Em Distribuição' para 'Em Separação' ou 'Aprovado'
+      try {
+        dbInstance.run(`
+          UPDATE purchase_orders 
+          SET status = CASE 
+            WHEN distribuicaoConcluida = 1 THEN 'Em Separação' 
+            ELSE 'Aprovado' 
+          END 
+          WHERE status = 'Em Distribuição';
+        `);
+      } catch (sepMigErr) {
+        console.warn('Aviso ao migrar status Em Distribuição para 5 etapas:', sepMigErr.message);
+      }
 
       // 🛡️ Integridade de Dados: Garante unicidade estrita e case-insensitive do número do pedido
       try {
@@ -564,6 +590,29 @@ async function getDatabase() {
           try { dbInstance.run(`ALTER TABLE order_installments ADD COLUMN ${col} ${def}`); } catch (e) {}
         }
       });
+    }
+
+    // Migração de datas legadas para o formato brasileiro oficial (DD/MM/YYYY)
+    try {
+      dbInstance.run(`
+        UPDATE financial_entries 
+        SET dataVencimento = printf('%s/%s/%s', SUBSTR(dataVencimento, 9, 2), SUBSTR(dataVencimento, 6, 2), SUBSTR(dataVencimento, 1, 4))
+        WHERE dataVencimento LIKE '____-__-__';
+
+        UPDATE financial_entries 
+        SET dataPagamento = printf('%s/%s/%s', SUBSTR(dataPagamento, 9, 2), SUBSTR(dataPagamento, 6, 2), SUBSTR(dataPagamento, 1, 4))
+        WHERE dataPagamento LIKE '____-__-__';
+
+        UPDATE order_installments 
+        SET dataVencimento = printf('%s/%s/%s', SUBSTR(dataVencimento, 9, 2), SUBSTR(dataVencimento, 6, 2), SUBSTR(dataVencimento, 1, 4))
+        WHERE dataVencimento LIKE '____-__-__';
+
+        UPDATE order_installments 
+        SET dataPagamento = printf('%s/%s/%s', SUBSTR(dataPagamento, 9, 2), SUBSTR(dataPagamento, 6, 2), SUBSTR(dataPagamento, 1, 4))
+        WHERE dataPagamento LIKE '____-__-__';
+      `);
+    } catch (dateErr) {
+      console.warn('Aviso ao migrar datas para formato brasileiro:', dateErr.message);
     }
     // Migração de colunas da tabela stores (suporte a Nome Abreviado / Coluna)
     try {

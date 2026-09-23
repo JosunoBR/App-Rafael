@@ -94,7 +94,9 @@ export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): 
  * Permite criar ou editar pedidos de compra / cotação
  */
 export function canCreateOrEditOrders(userOrRole?: UserLike): boolean {
-  return hasPermission(userOrRole, 'orders:create') || hasPermission(userOrRole, 'orders:edit_draft');
+  return hasPermission(userOrRole, 'orders:create') || 
+         hasPermission(userOrRole, 'orders:edit_draft') || 
+         hasPermission(userOrRole, 'orders:edit_closed');
 }
 
 /**
@@ -183,15 +185,18 @@ export function getDefaultNavForRole(role?: UserRole | null): ActiveNavTab {
 export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | null): boolean {
   if (!hasPermission(userOrRole, 'pipeline:confirm_receipt')) return false;
   if (!orderStatus) return true;
-  const blockedStatuses = ['Em Cotação', 'Rascunho', 'Aprovado'];
+  const blockedStatuses = ['Em Cotação', 'Rascunho'];
   return !blockedStatuses.includes(orderStatus);
 }
 
 /**
  * Permite autorizar a liberação dos boletos de um pedido para o Contas a Pagar (Financeiro).
+ * Conforme regra de negócio, o botão é liberado na Etapa 4 (Faturamento).
  */
-export function canAuthorizeFinancialRelease(userOrRole?: UserLike): boolean {
-  return hasPermission(userOrRole, 'financial:authorize_release');
+export function canAuthorizeFinancialRelease(userOrRole?: UserLike, orderStatus?: string | null): boolean {
+  if (!hasPermission(userOrRole, 'financial:authorize_release')) return false;
+  if (!orderStatus) return true;
+  return orderStatus === 'Faturamento';
 }
 
 /**

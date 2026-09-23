@@ -160,6 +160,12 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     let result = orders.filter(o => {
 
 
+      // 1. Visibilidade por Perfil (ex: Faturamento vê a partir de Aprovados)
+      if (currentUser?.role === 'faturamento') {
+        const raw = o.header.status || 'Em Cotação';
+        if (raw === 'Em Cotação' || raw === 'Rascunho') return false;
+      }
+
       // 2. Busca Global
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
@@ -171,7 +177,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
       }
 
       // 3. Aba de Status
-      const currentStatus = o.header.status || 'Em Cotação';
+      const rawStatus = o.header.status || 'Em Cotação';
+      const currentStatus = (rawStatus === 'Em Distribuição') ? 'Em Separação' : (rawStatus === 'Rascunho' ? 'Em Cotação' : rawStatus);
       if (selectedStatusTab !== 'todos' && currentStatus !== selectedStatusTab) {
         return false;
       }
@@ -277,12 +284,12 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
 
   const totalPedidos = orders.length;
 
-  const countByStatus = {
-    todos: orders.length,
-    'Em Cotação': orders.filter(o => (o.header.status || 'Em Cotação') === 'Em Cotação').length,
+  const countByStatus: Record<string, number> = {
+    todos: orders.filter(o => currentUser?.role !== 'faturamento' || (o.header.status !== 'Em Cotação' && o.header.status !== 'Rascunho')).length,
+    'Em Cotação': orders.filter(o => (o.header.status || 'Em Cotação') === 'Em Cotação' || o.header.status === 'Rascunho').length,
     'Aprovado': orders.filter(o => o.header.status === 'Aprovado').length,
-    'Em Distribuição': orders.filter(o => o.header.status === 'Em Distribuição').length,
-    'Em Separação': orders.filter(o => o.header.status === 'Em Separação').length,
+    'Em Separação': orders.filter(o => o.header.status === 'Em Separação' || o.header.status === 'Em Distribuição').length,
+    'Faturamento': orders.filter(o => o.header.status === 'Faturamento').length,
     'Finalizado': orders.filter(o => o.header.status === 'Finalizado').length
   };
 
@@ -290,10 +297,11 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     switch (status) {
       case 'Finalizado':
         return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
+      case 'Faturamento':
+        return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300 dark:border-amber-800';
       case 'Em Separação':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-800';
       case 'Em Distribuição':
-        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800';
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-800';
       case 'Aprovado':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300 dark:border-blue-800';
       case 'Em Cotação':
@@ -357,7 +365,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         onSelectOrder={onSelectOrder}
       />
 
-      {/* 3. Abas de Status da Esteira Operacional Oficial */}
+      {/* 3. Abas de Status da Esteira Operacional Oficial (5 Etapas) */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <button
           onClick={() => setSelectedStatusTab('todos')}
@@ -373,19 +381,21 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
           </span>
         </button>
 
-        <button
-          onClick={() => setSelectedStatusTab('Em Cotação')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-            selectedStatusTab === 'Em Cotação'
-              ? 'bg-amber-500 text-white shadow-xs'
-              : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50'
-          }`}
-        >
-          <span>🟡 1. Em Cotação</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
-            {countByStatus['Em Cotação']}
-          </span>
-        </button>
+        {currentUser?.role !== 'faturamento' && (
+          <button
+            onClick={() => setSelectedStatusTab('Em Cotação')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+              selectedStatusTab === 'Em Cotação'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50'
+            }`}
+          >
+            <span>🟡 1. Em Cotação</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+              {countByStatus['Em Cotação']}
+            </span>
+          </button>
+        )}
 
         <button
           onClick={() => setSelectedStatusTab('Aprovado')}
@@ -402,20 +412,6 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         </button>
 
         <button
-          onClick={() => setSelectedStatusTab('Em Distribuição')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-            selectedStatusTab === 'Em Distribuição'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-50'
-          }`}
-        >
-          <span>🟣 3. Em Distribuição</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
-            {countByStatus['Em Distribuição']}
-          </span>
-        </button>
-
-        <button
           onClick={() => setSelectedStatusTab('Em Separação')}
           className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
             selectedStatusTab === 'Em Separação'
@@ -423,9 +419,23 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50'
           }`}
         >
-          <span>📦 4. Em Separação</span>
+          <span>🟣 3. Separação</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
-            {countByStatus['Em Separação']}
+            {countByStatus['Em Separação'] || 0}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSelectedStatusTab('Faturamento')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
+            selectedStatusTab === 'Faturamento'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50'
+          }`}
+        >
+          <span>🟠 4. Faturamento</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+            {countByStatus['Faturamento'] || 0}
           </span>
         </button>
 
@@ -439,7 +449,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         >
           <span>🟢 5. Finalizados</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
-            {countByStatus['Finalizado']}
+            {countByStatus['Finalizado'] || 0}
           </span>
         </button>
       </div>
@@ -937,7 +947,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                           <span>Todos</span>
                           <span className="font-mono text-[10px] text-slate-400">{orders.length}</span>
                         </button>
-                        {(['Em Cotação', 'Aprovado', 'Em Distribuição', 'Em Separação', 'Finalizado'] as const).map(st => (
+                        {(['Em Cotação', 'Aprovado', 'Em Distribuição', 'Finalizado'] as const).map(st => (
                           <button
                             key={st}
                             onClick={() => { setColumnFilters(p => ({ ...p, status: st })); setActiveFilterDropdown(null); }}
@@ -1098,25 +1108,30 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                                 <ArrowRight className="w-3 h-3 text-blue-500 dark:text-blue-400" />
                               </button>
                             )}
-                            {(statusAtual === 'Aprovado' || statusAtual === 'Em Distribuição') && (
+                            {statusAtual === 'Aprovado' && (
                               <button
                                 onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
-                                className="w-full h-7 px-2 bg-indigo-50/90 hover:bg-indigo-100/90 text-indigo-700 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs active:scale-98"
-                                title="Abrir a matriz de distribuição do Depósito para ratear nas lojas e dar entrada no estoque"
+                                className="w-full h-7 px-2 bg-blue-50/90 hover:bg-blue-100/90 text-blue-700 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs active:scale-98"
+                                title="Abrir matriz de rateio por loja no Depósito"
                               >
-                                <Boxes className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+                                <Boxes className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
                                 <span>Distribuir CD</span>
                               </button>
                             )}
-                            {statusAtual === 'Em Separação' && (
+                            {(statusAtual === 'Em Separação' || statusAtual === 'Em Distribuição') && (
                               <button
                                 onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
                                 className="w-full h-7 px-2 bg-purple-50/90 hover:bg-purple-100/90 text-purple-700 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/60 rounded-lg text-[11px] font-semibold transition shadow-2xs cursor-pointer flex items-center justify-center gap-1 active:scale-98"
-                                title="Conferir separação física na Doca"
+                                title="Conferir separação física na Doca e liberar p/ Faturamento"
                               >
                                 <PackageCheck className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" />
                                 <span>Separar Doca</span>
                               </button>
+                            )}
+                            {statusAtual === 'Faturamento' && (
+                              <span className="w-full h-7 text-amber-700 dark:text-amber-300 text-[10.5px] font-medium inline-flex items-center justify-center gap-1 border border-amber-200/60 dark:border-amber-800/40 rounded-lg bg-amber-50/40 dark:bg-amber-950/20">
+                                <CreditCard className="w-3 h-3 text-amber-600 dark:text-amber-400" /> Faturamento
+                              </span>
                             )}
                             {statusAtual === 'Finalizado' && (
                               <span className="w-full h-7 text-slate-500 dark:text-slate-400 text-[11px] font-medium inline-flex items-center justify-center gap-1 bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 rounded-lg">
@@ -1136,15 +1151,19 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                                 <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                 <span>Confirmar Recebimento</span>
                               </button>
-                            ) : ord.header.recebidoMatriz && !ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser?.role) ? (
+                            ) : !ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser?.role, ord.header.status) ? (
                               <button
                                 onClick={() => onAuthorizeFinancial(ord)}
                                 className="w-full h-7 px-2 bg-amber-50/90 hover:bg-amber-100/90 text-amber-800 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 rounded-lg text-[10.5px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs active:scale-98"
-                                title="Autorizar o envio dos boletos deste pedido para o Contas a Pagar"
+                                title="Liberar os boletos no Contas a Pagar e finalizar o pedido"
                               >
                                 <CreditCard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                                 <span>Liberar Boletos</span>
                               </button>
+                            ) : ord.header.boletosLiberados ? (
+                              <span className="w-full h-7 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-medium inline-flex items-center justify-center gap-1 border border-emerald-200/60 dark:border-emerald-800/40 rounded-lg bg-emerald-50/40 dark:bg-emerald-950/20">
+                                <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Boletos Liberados ✓
+                              </span>
                             ) : ord.header.recebidoMatriz ? (
                               <span className="w-full h-7 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-medium inline-flex items-center justify-center gap-1 border border-emerald-200/60 dark:border-emerald-800/40 rounded-lg bg-emerald-50/40 dark:bg-emerald-950/20">
                                 <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Recebido Matriz ✓

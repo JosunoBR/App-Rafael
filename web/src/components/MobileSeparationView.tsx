@@ -41,21 +41,18 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
   onUpdateOrder,
   onFinalizeOrder
 }) => {
-  // Lista de pedidos aguardando separação física (status 'Em Separação' e já recebidos fisicamente na Matriz, ou transferência de CD)
+  // Lista de pedidos aguardando separação física (status 'Em Separação' ou 'Em Distribuição')
   const pendingSeparationOrders = useMemo(() => {
     return orders.filter(o => {
-      const isTransf = o.header?.supplierId === 'cd_matriz' || 
-                       String(o.header?.numeroPedido || '').startsWith('CD-') || 
-                       String(o.header?.id || '').startsWith('order_transf_cd_') ||
-                       Boolean(o.header?.fornecedor && o.header.fornecedor.toLowerCase().includes('transferência'));
-      return o.header.status === 'Em Separação' && (isTransf || o.header.recebidoMatriz);
+      const isInPipeline = o.header.status === 'Em Separação' || o.header.status === 'Em Distribuição';
+      return isInPipeline;
     });
   }, [orders]);
 
   // Pedido ativo para separação
-  const activeOrder = (order.header.status === 'Em Separação' && (order.header.recebidoMatriz || order.header.supplierId === 'cd_matriz'))
-    ? order 
-    : (pendingSeparationOrders[0] || order);
+  const isActiveEligible = (order.header.status === 'Em Distribuição' || order.header.status === 'Em Separação');
+
+  const activeOrder = isActiveEligible ? order : (pendingSeparationOrders[0] || order);
 
   const isTransfer = activeOrder.header?.supplierId === 'cd_matriz' || 
                      String(activeOrder.header?.numeroPedido || '').startsWith('CD-') || 
@@ -360,9 +357,10 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
       ...activeOrder,
       header: {
         ...activeOrder.header,
-        status: 'Finalizado',
-        finalizadoPor: currentUser?.nome || 'Time de Separação',
-        dataFinalizacao: now,
+        status: 'Faturamento',
+        separacaoConcluida: true,
+        separadoPor: currentUser?.nome || 'Time de Separação',
+        dataSeparacao: now,
         updatedAt: now
       },
       inspection: {
@@ -865,7 +863,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
           {globalStats.isFullyChecked ? (
             <>
               <CheckCircle2 className="w-5 h-5 text-white" />
-              <span>Salvar & Finalizar Separação (100% Conferido)</span>
+              <span>Salvar & Liberar para Faturamento (100% Conferido)</span>
             </>
           ) : (
             <>
@@ -894,10 +892,10 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
 
             <div className="text-center space-y-1">
               <h4 className="text-base font-black text-slate-900 dark:text-white uppercase">
-                Finalizar Separação do Pedido?
+                Concluir Separação do Pedido?
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Todas as lojas foram 100% conferidas na doca. O pedido <b>{activeOrder.header.numeroPedido}</b> será marcado como <b>Finalizado</b> no SQLite.
+                Todas as lojas foram 100% conferidas na doca. O pedido <b>{activeOrder.header.numeroPedido}</b> será encaminhado para o <b>Faturamento</b>.
               </p>
             </div>
 

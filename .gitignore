@@ -56,5 +56,8 @@ scratch*.js
 # Uploads, attachments and temporary receipts
 backend/data/comprovantes/*
 !backend/data/comprovantes/.gitkeep
+backend/data/produtos/*
+!backend/data/produtos/.gitkeep
 backend/data/backups/*
 !backend/data/backups/.gitkeep
+

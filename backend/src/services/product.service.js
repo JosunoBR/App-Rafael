@@ -1,5 +1,54 @@
+const fs = require('fs');
+const path = require('path');
 const productRepository = require('../repositories/productRepository');
 const supplierRepository = require('../repositories/supplierRepository');
+
+const productImagesDir = path.resolve(__dirname, '../../data/produtos');
+
+function ensureProductImagesDir() {
+  if (!fs.existsSync(productImagesDir)) {
+    fs.mkdirSync(productImagesDir, { recursive: true });
+  }
+}
+
+function saveBase64ImageToDisk(base64Str, productId) {
+  if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith('data:image/')) {
+    return base64Str;
+  }
+  const match = base64Str.match(/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,(.*)$/i);
+  if (!match) return base64Str;
+
+  ensureProductImagesDir();
+  let ext = match[1].toLowerCase();
+  if (ext === 'jpeg') ext = 'jpg';
+  if (ext === 'svg+xml') ext = 'svg';
+
+  const buffer = Buffer.from(match[2], 'base64');
+  const safeId = String(productId || 'prod').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const filename = `prod_${safeId}_${Date.now()}.${ext}`;
+  const targetPath = path.join(productImagesDir, filename);
+
+  fs.writeFileSync(targetPath, buffer);
+  return `/api/products/images/${filename}`;
+}
+
+function removeDiskImageIfLocal(fotoUrl) {
+  if (!fotoUrl || typeof fotoUrl !== 'string' || !fotoUrl.startsWith('/api/products/images/')) {
+    return;
+  }
+  const filename = path.basename(fotoUrl);
+  if (!filename || !/^[a-zA-Z0-9_\-\.]+\.(webp|png|jpe?g|gif|svg)$/i.test(filename)) {
+    return;
+  }
+  const targetPath = path.join(productImagesDir, filename);
+  if (fs.existsSync(targetPath)) {
+    try {
+      fs.unlinkSync(targetPath);
+    } catch (e) {
+      console.warn(`[ProductService] Não foi possível remover foto antiga ${filename}:`, e.message);
+    }
+  }
+}
 
 class ProductService {
   async listProducts() {
@@ -45,6 +94,21 @@ class ProductService {
       }
     }
 
+    const existing = productData.id ? await productRepository.findById(productData.id).catch(() => null) : null;
+    let finalFotoUrl = productData.fotoUrl !== undefined ? productData.fotoUrl : (existing?.fotoUrl || '');
+
+    // Se a foto recebida for Base64, salva fisicamente no disco e persiste apenas a URL
+    if (finalFotoUrl && finalFotoUrl.startsWith('data:image/')) {
+      const targetId = productData.id || cleanCod;
+      const newUrl = saveBase64ImageToDisk(finalFotoUrl, targetId);
+      if (existing?.fotoUrl && existing.fotoUrl !== newUrl) {
+        removeDiskImageIfLocal(existing.fotoUrl);
+      }
+      finalFotoUrl = newUrl;
+    } else if (existing?.fotoUrl && !finalFotoUrl) {
+      // Se a foto foi removida pelo usuário, limpa o arquivo do disco
+      removeDiskImageIfLocal(existing.fotoUrl);
+    }
 
     const payload = {
       ...productData,
@@ -52,7 +116,7 @@ class ProductService {
       codigo: cleanCod,
       codigoInterno: cleanCod,
       descricao: productData.descricao.trim(),
-      fotoUrl: productData.fotoUrl !== undefined ? productData.fotoUrl : '',
+      fotoUrl: finalFotoUrl,
       supplierId,
       nomeFornecedor
     };
@@ -66,7 +130,10 @@ class ProductService {
   }
 
   async deleteProduct(id) {
-    await this.getProduct(id);
+    const existing = await this.getProduct(id);
+    if (existing?.fotoUrl) {
+      removeDiskImageIfLocal(existing.fotoUrl);
+    }
     await productRepository.delete(id);
     return { success: true, message: 'Produto removido com sucesso.' };
   }
@@ -99,12 +166,18 @@ class ProductService {
         }
       }
 
+      let prodFotoUrl = prod.fotoUrl !== undefined ? prod.fotoUrl : '';
+      if (prodFotoUrl && typeof prodFotoUrl === 'string' && prodFotoUrl.startsWith('data:image/')) {
+        prodFotoUrl = saveBase64ImageToDisk(prodFotoUrl, cod);
+      }
+
       const payload = {
         ...prod,
         id: prod.id || ('prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
         codigo: cod,
         codigoInterno: cod,
         descricao: prod.descricao.trim(),
+        fotoUrl: prodFotoUrl,
         supplierId,
         nomeFornecedor
       };

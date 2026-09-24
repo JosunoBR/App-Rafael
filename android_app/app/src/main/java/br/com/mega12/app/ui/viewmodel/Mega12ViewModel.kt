@@ -46,6 +46,10 @@ class Mega12ViewModel : ViewModel() {
     private val _orders = MutableStateFlow<List<PurchaseOrder>>(emptyList())
     val orders: StateFlow<List<PurchaseOrder>> = _orders.asStateFlow()
 
+    // Lançamentos Financeiros (Boletos - Somente Leitura)
+    private val _installments = MutableStateFlow<List<PaymentInstallment>>(emptyList())
+    val installments: StateFlow<List<PaymentInstallment>> = _installments.asStateFlow()
+
     // Configuração Fiscal
     private val _fiscalConfig = MutableStateFlow(FiscalEngine.DEFAULT_CONFIG)
     val fiscalConfig: StateFlow<FiscalConfig> = _fiscalConfig.asStateFlow()
@@ -66,9 +70,6 @@ class Mega12ViewModel : ViewModel() {
     // Resultados de Cálculo Dinâmico
     private val _fiscalResult = MutableStateFlow<FiscalCalculationResult?>(null)
     val fiscalResult: StateFlow<FiscalCalculationResult?> = _fiscalResult.asStateFlow()
-
-    private val _separationResult = MutableStateFlow<SeparationResult?>(null)
-    val separationResult: StateFlow<SeparationResult?> = _separationResult.asStateFlow()
 
     // Novo Pedido em Construção
     private val _currentDraftOrder = MutableStateFlow(PurchaseOrder())
@@ -125,7 +126,29 @@ class Mega12ViewModel : ViewModel() {
             val orderRes = repository.getOrders()
             orderRes.onSuccess { _orders.value = it }
 
+            // Carregar Lançamentos Financeiros (Boletos)
+            val finRes = repository.getFinancialEntries()
+            finRes.onSuccess { _installments.value = it }
+
             _isLoading.value = false
+        }
+    }
+
+    fun updateOrderInspection(updatedOrder: PurchaseOrder, onComplete: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch {
+            val currentList = _orders.value.toMutableList()
+            val index = currentList.indexOfFirst { it.id == updatedOrder.id }
+            if (index != -1) {
+                currentList[index] = updatedOrder
+                _orders.value = currentList
+            }
+            val result = repository.saveOrder(updatedOrder)
+            result.onSuccess {
+                onComplete?.invoke(true)
+            }.onFailure {
+                _errorMessage.value = "Erro ao salvar conferência no servidor"
+                onComplete?.invoke(false)
+            }
         }
     }
 
@@ -154,15 +177,6 @@ class Mega12ViewModel : ViewModel() {
         } else {
             _fiscalResult.value = null
         }
-
-        if (caixas > 0) {
-            _separationResult.value = SeparationEngine.calculateBoxesSeparation(
-                totalBoxes = caixas,
-                packSize = qtdPorCaixa
-            )
-        } else {
-            _separationResult.value = null
-        }
     }
 
     fun addItemToDraftOrder(
@@ -173,12 +187,20 @@ class Mega12ViewModel : ViewModel() {
         totalUnidades: Int = 100,
         precoCompra: Double,
         pdvAlvo: Double = 12.00,
+        ipiAliquota: Double = 0.0,
+        percentualDesconto: Double = 0.0,
+        qtdPorCaixa: Int = 12,
         photoUrl: String? = null
     ) {
         val finalCodInterno = codigoInterno.ifEmpty { codigo.ifEmpty { "PRD-${System.currentTimeMillis() % 10000}" } }
-        val subtotal = totalUnidades * precoCompra
-        val fiscal = FiscalEngine.calculateItemFiscal(precoCompra, pdvAlvo, _fiscalConfig.value)
-        val sep = SeparationEngine.calculateBoxesSeparation(totalUnidades, 1)
+        val valorBruto = totalUnidades * precoCompra
+        val valorDesc = valorBruto * (percentualDesconto / 100.0)
+        val valorIpi = (valorBruto - valorDesc) * (ipiAliquota / 100.0)
+        val subtotalLiquido = valorBruto - valorDesc + valorIpi
+        val custoEfetivo = if (totalUnidades > 0) subtotalLiquido / totalUnidades else precoCompra
+
+        val fiscal = FiscalEngine.calculateItemFiscal(custoEfetivo, pdvAlvo, _fiscalConfig.value)
+        val sep = SeparationEngine.calculateBoxesSeparation(totalUnidades, qtdPorCaixa)
 
         val newItem = OrderItem(
             id = UUID.randomUUID().toString(),
@@ -189,12 +211,15 @@ class Mega12ViewModel : ViewModel() {
             totalPecas = totalUnidades,
             precoCompraUnitario = precoCompra,
             pdvAlvo = pdvAlvo,
-            subtotal = subtotal,
+            subtotal = subtotalLiquido,
+            ipiAliquota = ipiAliquota,
+            percentualDesconto = percentualDesconto,
+            custoRealEfetivo = custoEfetivo,
             margemCalculada = fiscal.margemPercentual,
             statusMargem = fiscal.statusMargem.name.lowercase(),
             photoUrl = photoUrl,
             storeDistribution = sep.allocations,
-            qtdPorCaixa = 1
+            qtdPorCaixa = qtdPorCaixa
         )
 
         val updatedItems = _currentDraftOrder.value.items + newItem

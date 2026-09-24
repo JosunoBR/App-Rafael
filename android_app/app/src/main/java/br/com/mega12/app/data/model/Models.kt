@@ -93,6 +93,9 @@ data class OrderItem(
     val pdvAlvo: Double = 12.0,
     @SerializedName("valorTotalBruto", alternate = ["subtotal"])
     val subtotal: Double = 0.0,
+    val ipiAliquota: Double = 0.0,
+    val percentualDesconto: Double = 0.0,
+    val custoRealEfetivo: Double = 0.0,
     @SerializedName("margemPercentual", alternate = ["margemCalculada"])
     val margemCalculada: Double = 0.0,
     val statusMargem: String = "boa",
@@ -100,7 +103,40 @@ data class OrderItem(
     val photoUrl: String? = null,
     @SerializedName("separacaoLojas", alternate = ["storeDistribution"])
     val storeDistribution: Map<String, Int> = emptyMap(),
-    val qtdPorCaixa: Int = 1
+    val qtdPorCaixa: Int = 1,
+    val qtdPorPacote: Int = 1
+)
+
+// Estruturas de Doca e Conferência
+data class StoreItemCheck(
+    val conferido: Boolean = false,
+    val conferenteId: String? = null,
+    val conferenteNome: String? = null,
+    val dataHora: String? = null
+)
+
+data class AvariaRecord(
+    val id: String = "",
+    val itemId: String = "",
+    val codigoProduto: String = "",
+    val descricaoProduto: String = "",
+    val storeId: String = "",
+    val nomeLoja: String = "",
+    val quantidade: Int = 1,
+    val unidadeMedida: String = "UN", // "UN", "CX", "PCT"
+    val custoUnitario: Double = 0.0,
+    val valorPrejuizoTotal: Double = 0.0,
+    val motivo: String = "",
+    val conferente: String = "",
+    val dataRegistro: String = ""
+)
+
+data class OrderInspection(
+    val conferente: String? = null,
+    val dataConferencia: String? = null,
+    val possuiAvarias: Boolean = false,
+    val avarias: List<AvariaRecord> = emptyList(),
+    val conferenciaLojas: Map<String, StoreItemCheck> = emptyMap()
 )
 
 // Parcela e Boleto
@@ -132,7 +168,8 @@ data class OrderHeader(
     val percentualDescontoOff: Double = 0.0,
     val percentualNota: Double = 100.0,
     val aliquotaSt: Double = 0.0,
-    val observacoes: String? = null
+    val observacoes: String? = null,
+    val recebidoMatriz: Boolean = false
 )
 
 // Pedido Completo
@@ -141,6 +178,7 @@ data class PurchaseOrder(
     val header: OrderHeader = OrderHeader(),
     val items: List<OrderItem> = emptyList(),
     val installments: List<PaymentInstallment> = emptyList(),
+    val inspection: OrderInspection? = null,
     val status: String = "Em Cotação",
     val separationStatus: String = "Pendente",
     val totalLiquido: Double = 0.0,

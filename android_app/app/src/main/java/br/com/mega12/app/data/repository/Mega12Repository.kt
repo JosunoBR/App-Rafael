@@ -177,25 +177,33 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
         }
     }
 
-    suspend fun getStock(): Result<List<CentralStockItem>> = withContext(Dispatchers.IO) {
+    suspend fun getFinancialEntries(): Result<List<PaymentInstallment>> = withContext(Dispatchers.IO) {
         try {
-            val response = api.getStock()
+            val response = api.getFinancialEntries()
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+                val body = response.body()!!
+                val dataList = body["data"] as? List<Map<String, Any>> ?: emptyList()
+                val installments = dataList.map { item ->
+                    PaymentInstallment(
+                        id = item["id"]?.toString() ?: "",
+                        orderId = item["orderId"]?.toString(),
+                        numeroPedido = item["numeroPedido"]?.toString() ?: item["numeroDocumento"]?.toString() ?: "",
+                        fornecedor = item["fornecedor"]?.toString() ?: item["favorecido"]?.toString() ?: "Fornecedor",
+                        numeroParcela = (item["numeroParcela"] as? Number)?.toInt() ?: 1,
+                        totalParcelas = (item["totalParcelas"] as? Number)?.toInt() ?: 1,
+                        dataVencimento = item["dataVencimento"]?.toString() ?: "",
+                        valor = (item["valor"] as? Number)?.toDouble() ?: 0.0,
+                        status = item["status"]?.toString() ?: "A Vencer",
+                        dataPagamento = item["dataPagamento"]?.toString(),
+                        observacao = item["observacao"]?.toString()
+                    )
+                }
+                Result.success(installments)
             } else {
                 Result.success(emptyList())
             }
         } catch (e: Exception) {
             Result.success(emptyList())
-        }
-    }
-
-    suspend fun saveStockItem(item: CentralStockItem): Result<Boolean> = withContext(Dispatchers.IO) {
-        try {
-            val response = api.saveStockItem(item)
-            if (response.isSuccessful) Result.success(true) else Result.failure(Exception("Erro ao atualizar estoque"))
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 

@@ -56,10 +56,7 @@ interface Mega12ApiService {
     @POST("config/fiscal")
     suspend fun saveFiscalConfig(@Body config: FiscalConfig): Response<Map<String, Any>>
 
-    // Estoque Central
-    @GET("stock")
-    suspend fun getStock(): Response<List<CentralStockItem>>
-
-    @POST("stock")
-    suspend fun saveStockItem(@Body item: CentralStockItem): Response<Map<String, Any>>
+    // Financeiro (Consulta de Lançamentos & Boletos)
+    @GET("financial/entries")
+    suspend fun getFinancialEntries(): Response<Map<String, Any>>
 }

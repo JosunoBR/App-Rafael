@@ -13,24 +13,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import br.com.mega12.app.data.model.PaymentInstallment
 import br.com.mega12.app.ui.components.Mega12AppShell
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun FinancialBoletosScreen(
     navController: NavHostController,
     viewModel: Mega12ViewModel
 ) {
-    val installmentsList = remember {
-        listOf(
-            PaymentInstallment(id = "1", numeroPedido = "PED-0012", fornecedor = "Alumínios Brasil", numeroParcela = 1, totalParcelas = 3, dataVencimento = "2026-09-30", valor = 4500.00, status = "A Vencer"),
-            PaymentInstallment(id = "2", numeroPedido = "PED-0012", fornecedor = "Alumínios Brasil", numeroParcela = 2, totalParcelas = 3, dataVencimento = "2026-10-30", valor = 4500.00, status = "A Vencer"),
-            PaymentInstallment(id = "3", numeroPedido = "PED-0010", fornecedor = "Plásticos Parana", numeroParcela = 1, totalParcelas = 1, dataVencimento = "2026-09-16", valor = 2800.00, status = "Vence Hoje")
-        )
+    val installments by viewModel.installments.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    var selectedFilter by remember { mutableStateOf("TODOS") }
+
+    val todayStr = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     }
+
+    val filteredInstallments = remember(installments, selectedFilter, todayStr) {
+        when (selectedFilter) {
+            "HOJE" -> installments.filter { it.dataVencimento.startsWith(todayStr) && it.status != "Pago" }
+            "VENCIDOS" -> installments.filter { 
+                it.status == "Em Atraso" || (it.dataVencimento < todayStr && it.status != "Pago") 
+            }
+            "A VENCER" -> installments.filter { it.status == "A Vencer" || it.status == "Pendente" }
+            "PAGOS" -> installments.filter { it.status == "Pago" }
+            else -> installments
+        }
+    }
+
+    val totalValorFiltrado = filteredInstallments.sumOf { it.valor }
 
     Mega12AppShell(
         navController = navController,
@@ -43,44 +60,166 @@ fun FinancialBoletosScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            Text("Vencimentos de Boletos & Faturas", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White))
+            // Card de Resumo de Vencimentos (Somente Leitura)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Slate800),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "TOTAL NESTA VISÃO",
+                            style = MaterialTheme.typography.labelSmall.copy(color = Slate400, fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "R$ %.2f".format(totalValorFiltrado),
+                            style = MaterialTheme.typography.titleLarge.copy(color = Emerald400, fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "${filteredInstallments.size} títulos listados (Somente Consulta)",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Slate400, fontSize = 11.sp)
+                        )
+                    }
+
+                    Surface(
+                        color = Slate700,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Proteção de Baixa",
+                            tint = Slate400,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Filtros Rápidos de Status
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                listOf("TODOS", "HOJE", "A VENCER", "VENCIDOS").forEach { filter ->
+                    val isSelected = selectedFilter == filter
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedFilter = filter },
+                        label = {
+                            Text(
+                                text = filter,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 11.sp
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = if (filter == "HOJE") Amber500 else Emerald500,
+                            selectedLabelColor = Slate900,
+                            containerColor = Slate800,
+                            labelColor = Color.White
+                        )
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(installmentsList) { inst ->
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Slate800),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(inst.fornecedor ?: "Fornecedor", fontWeight = FontWeight.Bold, color = Color.White)
-                                Text("Pedido: ${inst.numeroPedido} (${inst.numeroParcela}/${inst.totalParcelas})", style = MaterialTheme.typography.bodySmall, color = Slate400)
-                                Text("Vencimento: ${inst.dataVencimento}", style = MaterialTheme.typography.bodySmall, color = Slate400)
-                            }
+            // Lista de Títulos
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Emerald400)
+                }
+            } else if (filteredInstallments.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Nenhum boleto encontrado para este filtro.", color = Slate400)
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(filteredInstallments) { inst ->
+                        val isHoje = inst.dataVencimento.startsWith(todayStr)
+                        val isVencido = inst.dataVencimento < todayStr && inst.status != "Pago"
 
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("R$ %.2f".format(inst.valor), fontWeight = FontWeight.Bold, color = Emerald400)
-                                Surface(
-                                    color = if (inst.status == "Vence Hoje") Amber500.copy(alpha = 0.2f) else Emerald500.copy(alpha = 0.2f),
-                                    shape = RoundedCornerShape(6.dp)
-                                ) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Slate800),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = inst.status,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = if (inst.status == "Vence Hoje") Amber500 else Emerald400,
-                                            fontWeight = FontWeight.Bold
+                                        text = inst.fornecedor ?: "Fornecedor Matriz",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = "Pedido: ${inst.numeroPedido} (${inst.numeroParcela}/${inst.totalParcelas})",
+                                        style = MaterialTheme.typography.bodySmall.copy(color = Slate400, fontSize = 11.sp)
+                                    )
+                                    Text(
+                                        text = "Vencimento: ${inst.dataVencimento}",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = if (isVencido) Rose400 else if (isHoje) Amber400 else Slate400,
+                                            fontWeight = if (isHoje || isVencido) FontWeight.Bold else FontWeight.Normal,
+                                            fontSize = 11.sp
                                         )
                                     )
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "R$ %.2f".format(inst.valor),
+                                        fontWeight = FontWeight.Bold,
+                                        color = Emerald400,
+                                        fontSize = 15.sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Surface(
+                                        color = when {
+                                            inst.status == "Pago" -> Emerald500.copy(alpha = 0.2f)
+                                            isHoje -> Amber500.copy(alpha = 0.2f)
+                                            isVencido -> Rose500.copy(alpha = 0.2f)
+                                            else -> Slate700
+                                        },
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = when {
+                                                inst.status == "Pago" -> "PAGO"
+                                                isHoje -> "VENCE HOJE"
+                                                isVencido -> "VENCIDO"
+                                                else -> inst.status.uppercase()
+                                            },
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = when {
+                                                    inst.status == "Pago" -> Emerald400
+                                                    isHoje -> Amber500
+                                                    isVencido -> Rose400
+                                                    else -> Slate300
+                                                },
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp
+                                            )
+                                        )
+                                    }
                                 }
                             }
                         }

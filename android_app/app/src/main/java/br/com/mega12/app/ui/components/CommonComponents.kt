@@ -127,6 +127,20 @@ fun MetricCard(
 
 @Composable
 fun MarginBadge(
+    margin: Double,
+    modifier: Modifier = Modifier
+) {
+    val status = when {
+        margin >= 30.0 -> MarginStatus.EXCELENTE
+        margin >= 20.0 -> MarginStatus.BOA
+        margin >= 10.0 -> MarginStatus.APERTADA
+        else -> MarginStatus.PREJUIZO
+    }
+    MarginBadge(marginPercent = margin, status = status, modifier = modifier)
+}
+
+@Composable
+fun MarginBadge(
     marginPercent: Double,
     status: MarginStatus,
     modifier: Modifier = Modifier

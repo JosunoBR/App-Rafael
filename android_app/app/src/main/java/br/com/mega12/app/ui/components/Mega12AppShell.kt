@@ -31,23 +31,17 @@ data class NavigationItem(
 )
 
 val ALL_NAVIGATION_ITEMS = listOf(
-    // 1. OPERAÇÃO CENTRAL
-    NavigationItem("Início", Screen.BuyerHome.route, Icons.Default.Home, "OPERAÇÃO CENTRAL", listOf("diretoria", "comprador", "deposito")),
-    NavigationItem("Cotação & Pedidos", Screen.OrderCreation.route, Icons.Default.ShoppingCart, "OPERAÇÃO CENTRAL", listOf("diretoria", "comprador")),
-    NavigationItem("Calculadora Rápida", Screen.QuickCalculator.route, Icons.Default.Calculate, "OPERAÇÃO CENTRAL", listOf("diretoria", "comprador")),
-    NavigationItem("Separação & Doca", Screen.SeparationList.route, Icons.Default.PrecisionManufacturing, "OPERAÇÃO CENTRAL", listOf("diretoria", "comprador", "deposito", "separacao", "conferente")),
-    NavigationItem("Estoque CD", Screen.CentralStock.route, Icons.Default.Warehouse, "OPERAÇÃO CENTRAL", listOf("diretoria", "deposito")),
+    // 1. OPERAÇÃO
+    NavigationItem("Início", Screen.BuyerHome.route, Icons.Default.Home, "OPERAÇÃO", listOf("diretoria", "comprador")),
+    NavigationItem("Novo Pedido", Screen.OrderCreation.route, Icons.Default.ShoppingCart, "OPERAÇÃO", listOf("diretoria", "comprador")),
+    NavigationItem("Meus Pedidos", Screen.OrderHistory.route, Icons.Default.FolderOpen, "OPERAÇÃO", listOf("diretoria", "comprador")),
 
-    // 2. GESTÃO & INTELIGÊNCIA
-    NavigationItem("Histórico Pedidos", Screen.OrderHistory.route, Icons.Default.FolderOpen, "GESTÃO & INTELIGÊNCIA", listOf("diretoria", "comprador")),
-    NavigationItem("Financeiro / Boletos", Screen.FinancialBoletos.route, Icons.Default.CreditCard, "GESTÃO & INTELIGÊNCIA", listOf("diretoria")),
-    NavigationItem("Dashboard BI Barganha", Screen.SupplierDashboard.route, Icons.Default.BarChart, "GESTÃO & INTELIGÊNCIA", listOf("diretoria")),
+    // 2. FINANCEIRO
+    NavigationItem("Boletos (Consulta)", Screen.FinancialBoletos.route, Icons.Default.CreditCard, "FINANCEIRO", listOf("diretoria", "comprador")),
 
-    // 3. CADASTROS & SISTEMA
-    NavigationItem("Fornecedores", Screen.Suppliers.route, Icons.Default.Business, "CADASTROS & SISTEMA", listOf("diretoria", "comprador")),
-    NavigationItem("Catálogo Produtos", Screen.ProductsCatalog.route, Icons.Default.ShoppingBag, "CADASTROS & SISTEMA", listOf("diretoria", "comprador", "deposito")),
-    NavigationItem("Gestão Usuários", Screen.UsersManagement.route, Icons.Default.People, "CADASTROS & SISTEMA", listOf("diretoria")),
-    NavigationItem("Configurações Fiscais", Screen.FiscalSettings.route, Icons.Default.Settings, "CADASTROS & SISTEMA", listOf("diretoria"))
+    // 3. CONSULTAS RÁPIDAS
+    NavigationItem("Catálogo de Produtos", Screen.ProductsCatalog.route, Icons.Default.ShoppingBag, "CONSULTAS RÁPIDAS", listOf("diretoria", "comprador")),
+    NavigationItem("Fornecedores", Screen.Suppliers.route, Icons.Default.Business, "CONSULTAS RÁPIDAS", listOf("diretoria", "comprador"))
 )
 
 @OptIn(ExperimentalMaterial3Api::class)

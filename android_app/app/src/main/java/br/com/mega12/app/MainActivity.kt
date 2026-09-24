@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
                 val currentUser = viewModel.currentUser.value
                 val startDestination = if (currentUser != null) {
                     val isSeparacao = currentUser.role == "conferente" || currentUser.role == "separacao"
-                    if (isSeparacao) Screen.SeparationList.route else Screen.BuyerHome.route
+                    if (isSeparacao) Screen.DocaSeparation.route else Screen.BuyerHome.route
                 } else {
                     Screen.Login.route
                 }

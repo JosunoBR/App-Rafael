@@ -39,6 +39,10 @@ interface FinancialDailyViewProps {
   metaDiaria?: number;
   selectedIds?: string[];
   onToggleSelect?: (id: string) => void;
+  onToggleSelectGroup?: (ids: string[]) => void;
+  isAllScreenSelected?: boolean;
+  isSomeScreenSelected?: boolean;
+  onToggleSelectAllScreen?: () => void;
 }
 
 const CATEGORIA_BADGES: Record<FinancialCategory | string, { label: string; bg: string; text: string }> = {
@@ -63,8 +67,12 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
   onEditEntry,
   onViewAudit,
   metaDiaria,
-  selectedIds,
-  onToggleSelect
+  selectedIds = [],
+  onToggleSelect,
+  onToggleSelectGroup,
+  isAllScreenSelected,
+  isSomeScreenSelected,
+  onToggleSelectAllScreen
 }) => {
   const [collapsedDays, setCollapsedDays] = useState<Record<string, boolean>>({});
 
@@ -195,9 +203,25 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Barra de Ações Rápidas da Visão Diária */}
-      <div className="flex items-center justify-between px-1">
-        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-          Mostrando <span className="font-bold text-slate-800 dark:text-slate-200">{dailyGroups.length} dias</span> com compromissos ({entries.length} lançamentos totais)
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div className="flex flex-wrap items-center gap-3">
+          {onToggleSelectAllScreen && (
+            <label className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors">
+              <input
+                type="checkbox"
+                checked={Boolean(isAllScreenSelected)}
+                ref={el => { if (el) el.indeterminate = Boolean(isSomeScreenSelected); }}
+                onChange={onToggleSelectAllScreen}
+                className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 cursor-pointer"
+              />
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 select-none">
+                Selecionar Todos da Tela ({entries.length})
+              </span>
+            </label>
+          )}
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Mostrando <span className="font-bold text-slate-800 dark:text-slate-200">{dailyGroups.length} dias</span> com compromissos ({entries.length} lançamentos totais)
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -225,6 +249,12 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
           const percentPago = group.totalDia > 0 ? Math.round((group.pagoDia / group.totalDia) * 100) : 0;
           const isTotalmentePago = group.abertoDia === 0 && group.totalDia > 0;
 
+          // Controle de seleção por dia
+          const dayEntryIds = group.entries.map(e => e.id);
+          const daySelectedCount = dayEntryIds.filter(id => selectedIds?.includes(id)).length;
+          const isDayAllSelected = dayEntryIds.length > 0 && daySelectedCount === dayEntryIds.length;
+          const isDaySomeSelected = daySelectedCount > 0 && daySelectedCount < dayEntryIds.length;
+
           return (
             <div
               key={group.key}
@@ -240,6 +270,26 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                 className="p-3.5 sm:p-4 cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none"
               >
                 <div className="flex items-center gap-3">
+                  {/* Checkbox do Dia */}
+                  {onToggleSelectGroup && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center p-1 rounded-md hover:bg-slate-200/50 dark:hover:bg-slate-600/50 cursor-pointer"
+                      title={isDayAllSelected ? "Desmarcar todos os boletos deste dia" : "Selecionar todos os boletos deste dia"}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isDayAllSelected}
+                        ref={el => { if (el) el.indeterminate = isDaySomeSelected; }}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          onToggleSelectGroup(dayEntryIds);
+                        }}
+                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 cursor-pointer"
+                      />
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -287,6 +337,11 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {group.entries.length} {group.entries.length === 1 ? 'conta / parcela' : 'contas / parcelas'}
+                      {daySelectedCount > 0 && (
+                        <span className="text-amber-600 dark:text-amber-400 font-bold ml-1.5">
+                          ({daySelectedCount} selecionada{daySelectedCount > 1 ? 's' : ''})
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -341,7 +396,23 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="bg-slate-50/60 dark:bg-slate-800/60 text-slate-400 uppercase font-semibold text-[10px] border-b border-slate-100 dark:border-slate-700/60">
-                        {onToggleSelect && <th className="py-2.5 px-3 w-8"></th>}
+                        {onToggleSelect && (
+                          <th className="py-2.5 px-3 w-8">
+                            {onToggleSelectGroup ? (
+                              <input
+                                type="checkbox"
+                                checked={isDayAllSelected}
+                                ref={el => { if (el) el.indeterminate = isDaySomeSelected; }}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  onToggleSelectGroup(dayEntryIds);
+                                }}
+                                className="w-3.5 h-3.5 rounded text-amber-500 focus:ring-amber-400 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 cursor-pointer"
+                                title={isDayAllSelected ? "Desmarcar todos os boletos deste dia" : "Selecionar todos os boletos deste dia"}
+                              />
+                            ) : null}
+                          </th>
+                        )}
                         <th className="py-2.5 px-4">Fornecedor / Despesa</th>
                         <th className="py-2.5 px-3">Situação</th>
                         <th className="py-2.5 px-3">Categoria</th>
@@ -379,17 +450,14 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                             } ${isPaid ? 'opacity-60 bg-slate-50/30 dark:bg-slate-800/30' : ''}`}
                           >
                             {onToggleSelect && (
-                              <td className="py-2.5 px-3">
-                                {!isPaid ? (
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedIds?.includes(item.id) || false}
-                                    onChange={() => onToggleSelect(item.id)}
-                                    className="w-3.5 h-3.5 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
-                                  />
-                                ) : (
-                                  <span className="text-slate-300 dark:text-slate-600 text-xs">✓</span>
-                                )}
+                              <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds?.includes(item.id) || false}
+                                  onChange={() => onToggleSelect(item.id)}
+                                  className="w-3.5 h-3.5 rounded text-amber-500 focus:ring-amber-400 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 cursor-pointer"
+                                  title="Selecionar boleto"
+                                />
                               </td>
                             )}
                             {/* Descrição / Favorecido */}

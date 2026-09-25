@@ -138,8 +138,21 @@ class OrderRepository {
     const headerDesc = Number(order.header.descontoComercialTotal || 0);
     const totalDesconto = totalDescontoItens > 0 ? totalDescontoItens : headerDesc;
     const totalLiquido = Number(Math.max(0, totalBruto - totalDesconto).toFixed(2));
-    // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Geral
-    const totalGeral = Number((totalBruto + totalIpi - totalDesconto).toFixed(2));
+    // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Comercial Base
+    const totalBase = Number((totalBruto + totalIpi - totalDesconto).toFixed(2));
+
+    // Ajuste Fiscal da Entrega (NF): Acréscimo ou desconto direto no valor final do pedido
+    const rawNf = Number(order.header.valorNotaFiscalEntregue);
+    const rawDiff = order.header.ajusteFiscalDiferenca !== undefined && order.header.ajusteFiscalDiferenca !== null
+      ? Number(order.header.ajusteFiscalDiferenca)
+      : undefined;
+
+    let totalGeral = totalBase;
+    if (rawNf > 0) {
+      totalGeral = Number(rawNf.toFixed(2));
+    } else if (rawDiff !== undefined && Math.abs(rawDiff) > 0.005) {
+      totalGeral = Number((totalBase + rawDiff).toFixed(2));
+    }
 
     const today = new Date().toISOString().split('T')[0];
     const dataPedido = order.header.dataPedido || order.header.dataEmissao || today;
@@ -157,6 +170,7 @@ class OrderRepository {
           fiscalConfigJson = ?, aliquotaIpi = ?, aliquotaFrete = ?, aliquotaIcmsEntrada = ?,
           aliquotaCustoFixo = ?, aliquotaIcmsSaida = ?, aliquotaPisCofinsIr = ?,
           itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, inspectionJson = ?,
+          valorNotaFiscalEntregue = ?, ajusteFiscalDiferenca = ?, ajusteFiscalData = ?, ajusteFiscalUsuario = ?,
           recebidoMatriz = ?, dataRecebimentoMatriz = ?, recebidoPor = ?, numeroNotaFiscal = ?,
           boletosLiberados = ?, boletosLiberadosPor = ?, boletosLiberadosEm = ?,
           distribuicaoConcluida = ?, distribuidoPor = ?, dataDistribuicao = ?, observacaoDistribuicao = ?,
@@ -208,6 +222,10 @@ class OrderRepository {
         separationJson,
         paymentConfigJson,
         order.inspection ? JSON.stringify(order.inspection) : null,
+        Number(order.header.valorNotaFiscalEntregue) || 0,
+        Number(order.header.ajusteFiscalDiferenca) || 0,
+        order.header.ajusteFiscalData || null,
+        order.header.ajusteFiscalUsuario || null,
         order.header.recebidoMatriz ? 1 : 0,
         order.header.dataRecebimentoMatriz || null,
         order.header.recebidoPor || null,
@@ -242,6 +260,7 @@ class OrderRepository {
           fiscalConfigJson, aliquotaIpi, aliquotaFrete, aliquotaIcmsEntrada,
           aliquotaCustoFixo, aliquotaIcmsSaida, aliquotaPisCofinsIr,
           itemsJson, separationDistributionJson, paymentConfigJson, inspectionJson,
+          valorNotaFiscalEntregue, ajusteFiscalDiferenca, ajusteFiscalData, ajusteFiscalUsuario,
           recebidoMatriz, dataRecebimentoMatriz, recebidoPor, numeroNotaFiscal,
           boletosLiberados, boletosLiberadosPor, boletosLiberadosEm,
           distribuicaoConcluida, distribuidoPor, dataDistribuicao, observacaoDistribuicao,
@@ -258,6 +277,7 @@ class OrderRepository {
           ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
+          ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
@@ -311,6 +331,10 @@ class OrderRepository {
         separationJson,
         paymentConfigJson,
         order.inspection ? JSON.stringify(order.inspection) : null,
+        Number(order.header.valorNotaFiscalEntregue) || 0,
+        Number(order.header.ajusteFiscalDiferenca) || 0,
+        order.header.ajusteFiscalData || null,
+        order.header.ajusteFiscalUsuario || null,
         order.header.recebidoMatriz ? 1 : 0,
         order.header.dataRecebimentoMatriz || null,
         order.header.recebidoPor || null,
@@ -743,8 +767,19 @@ class OrderRepository {
       totalVolumes = calcVolumes;
       totalDesconto = Number(finalDesc.toFixed(2));
       totalIpi = Number(calcIpi.toFixed(2));
-      totalLiquido = Number(Math.max(0, calcBruto - totalDesconto).toFixed(2));
-      totalGeral = Number(Math.max(0, calcBruto + totalIpi - totalDesconto).toFixed(2));
+      const baseCalc = Number(Math.max(0, calcBruto + totalIpi - totalDesconto).toFixed(2));
+      const rawFallbackNf = Number(paymentConfig.valorNotaFiscalEntregue);
+      const rawFallbackDiff = paymentConfig.ajusteFiscalDiferenca !== undefined && paymentConfig.ajusteFiscalDiferenca !== null
+        ? Number(paymentConfig.ajusteFiscalDiferenca)
+        : undefined;
+
+      if (rawFallbackNf > 0) {
+        totalGeral = Number(rawFallbackNf.toFixed(2));
+      } else if (rawFallbackDiff !== undefined && Math.abs(rawFallbackDiff) > 0.005) {
+        totalGeral = Number((baseCalc + rawFallbackDiff).toFixed(2));
+      } else {
+        totalGeral = baseCalc;
+      }
     }
 
     return {
@@ -799,6 +834,10 @@ class OrderRepository {
         totalVolumes,
         totalPecas,
         ...paymentConfig,
+        valorNotaFiscalEntregue: r.valorNotaFiscalEntregue !== undefined && r.valorNotaFiscalEntregue !== null && Number(r.valorNotaFiscalEntregue) > 0 ? Number(r.valorNotaFiscalEntregue) : paymentConfig.valorNotaFiscalEntregue,
+        ajusteFiscalDiferenca: r.ajusteFiscalDiferenca !== undefined && r.ajusteFiscalDiferenca !== null && Math.abs(Number(r.ajusteFiscalDiferenca)) > 0.005 ? Number(r.ajusteFiscalDiferenca) : paymentConfig.ajusteFiscalDiferenca,
+        ajusteFiscalData: r.ajusteFiscalData || paymentConfig.ajusteFiscalData,
+        ajusteFiscalUsuario: r.ajusteFiscalUsuario || paymentConfig.ajusteFiscalUsuario,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt
       },

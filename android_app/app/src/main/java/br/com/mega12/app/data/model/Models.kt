@@ -202,6 +202,10 @@ data class OrderHeader(
     val totalDesconto: Double = 0.0,
     val totalLiquido: Double = 0.0,
     val totalGeral: Double = 0.0,
+    val valorNotaFiscalEntregue: Double = 0.0,
+    val ajusteFiscalDiferenca: Double = 0.0,
+    val ajusteFiscalData: String? = null,
+    val ajusteFiscalUsuario: String? = null,
     val totalPecas: Int = 0,
     val totalVolumes: Int = 0,
     val createdAt: String? = null

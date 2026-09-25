@@ -515,11 +515,16 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
     }
   }
 
-  // Linha de Detalhamento Financeiro (Total + IPI - Desconto Comercial)
+  // Linha de Detalhamento Financeiro (Total + IPI - Desconto Comercial +/- Ajuste Fiscal)
   const detRow = valRow + 2;
   ws.mergeCells(`G${detRow}:I${detRow}`);
   const detCell = ws.getCell(`G${detRow}`);
-  detCell.value = `(${formatCurrency(orderTotals.valorBruto)} - Total | ${formatCurrency(orderTotals.totalIpi)} - IPI | ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto Comercial)`;
+  const adjText = orderTotals.ajusteFiscalValor !== 0
+    ? (orderTotals.ajusteFiscalValor > 0 
+        ? ` | +${formatCurrency(orderTotals.ajusteFiscalValor)} - Acréscimo NF` 
+        : ` | -${formatCurrency(Math.abs(orderTotals.ajusteFiscalValor))} - Desconto NF`)
+    : '';
+  detCell.value = `(${formatCurrency(orderTotals.valorBruto)} - Total | ${formatCurrency(orderTotals.totalIpi)} - IPI | ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto Comercial${adjText})`;
   detCell.font = { name: 'Segoe UI', size: 8, color: { argb: 'FF475569' } };
   detCell.alignment = { vertical: 'middle', horizontal: 'center' };
   ws.getRow(detRow).height = 16;

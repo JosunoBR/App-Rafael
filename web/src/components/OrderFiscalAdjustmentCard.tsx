@@ -13,9 +13,11 @@ import {
   Sparkles,
   Layers,
   HelpCircle,
-  FileCheck
+  FileCheck,
+  ShieldCheck,
+  Calculator
 } from 'lucide-react';
-import { PurchaseOrder, User, OrderItem } from '../shared/types';
+import { PurchaseOrder, User } from '../shared/types';
 import { OrderTotalsResult, isBlankItem } from '../shared/orderCalculationEngine';
 import { formatCurrency } from '../utils/masks';
 
@@ -36,7 +38,9 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
   onRestoreOriginals,
   disabled = false
 }) => {
-  const currentTotal = orderTotals.totalGeral;
+  // Total base comercial sem ajuste fiscal (Produtos + IPI - Desconto Comercial)
+  const baseTotal = orderTotals.totalComercialSemAjuste;
+  const currentFinalTotal = orderTotals.totalGeral;
 
   // Valor da NF informado pelo usuário
   const initialNfValue = order.header.valorNotaFiscalEntregue && order.header.valorNotaFiscalEntregue > 0
@@ -66,63 +70,22 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
     return isNaN(num) ? 0 : Math.max(0, num);
   }, [rawInput]);
 
-  const diferenca = Number((parsedNfValue - currentTotal).toFixed(2));
-  const percentualDiferenca = currentTotal > 0 ? Number(((diferenca / currentTotal) * 100).toFixed(2)) : 0;
+  // Diferença apurada entre a NF digitada e o total base do pedido
+  const diferenca = Number((parsedNfValue - baseTotal).toFixed(2));
+  const percentualDiferenca = baseTotal > 0 ? Number(((diferenca / baseTotal) * 100).toFixed(2)) : 0;
   const isModified = parsedNfValue > 0 && Math.abs(diferenca) >= 0.01;
 
-  // Itens que possuem preço original salvo (permitindo restauração)
-  const hasOriginals = useMemo(() => {
-    return (order.items || []).some(it => it.precoUnitarioOriginal !== undefined && it.precoUnitarioOriginal > 0) ||
-           Boolean(order.header.ajusteFiscalDiferenca && Math.abs(order.header.ajusteFiscalDiferenca) > 0.005);
-  }, [order.items, order.header.ajusteFiscalDiferenca]);
+  // Verifica se há ajuste aplicado ou modificações para reversão
+  const hasAdjustmentApplied = Boolean(order.header.valorNotaFiscalEntregue && order.header.valorNotaFiscalEntregue > 0) ||
+                               Boolean(order.header.ajusteFiscalDiferenca && Math.abs(order.header.ajusteFiscalDiferenca) > 0.005) ||
+                               (order.items || []).some(it => it.precoUnitarioOriginal !== undefined);
 
-  // Itens elegíveis para prévia
+  // Produtos ativos do pedido
   const activeItems = useMemo(() => {
     return (order.items || []).filter(it => !isBlankItem(it) && !it.ruptura && Number(it.qtdTotalUnidades || 0) > 0);
   }, [order.items]);
 
-  // Simulação de prévia do rateio com preços unitários estritamente em 2 casas decimais
-  const previewCalculation = useMemo(() => {
-    if (!isModified || currentTotal <= 0) {
-      return { previewItems: [], novoTotalProdutos: currentTotal, diferencaResidual: 0 };
-    }
-    const ratio = parsedNfValue / currentTotal;
-    let novoTotalProdutos = 0;
-
-    const allMapped = activeItems.map(it => {
-      const pecas = Number(it.qtdTotalUnidades) || 1;
-      // Preço unitário sempre arredondado a 2 casas decimais (centavos normais)
-      const novoPreco = Number((it.precoUnitario * ratio).toFixed(2));
-      const novoTotal = Number((pecas * novoPreco).toFixed(2));
-      const diffUnit = Number((novoPreco - it.precoUnitario).toFixed(2));
-      novoTotalProdutos += novoTotal;
-      return {
-        id: it.id,
-        codigo: it.codigoInterno || it.codigo || it.codigoFornecedor || '-',
-        descricao: it.descricao,
-        pecas,
-        precoAtual: it.precoUnitario,
-        novoPreco,
-        diffUnit,
-        totalAtual: it.valorTotalLiquido || it.valorTotalBruto,
-        novoTotal
-      };
-    });
-
-    novoTotalProdutos = Number(novoTotalProdutos.toFixed(2));
-    const diferencaResidual = Number((parsedNfValue - novoTotalProdutos).toFixed(2));
-
-    return {
-      previewItems: allMapped.slice(0, 8),
-      novoTotalProdutos,
-      diferencaResidual
-    };
-  }, [isModified, parsedNfValue, currentTotal, activeItems]);
-
-  const { previewItems, novoTotalProdutos, diferencaResidual } = previewCalculation;
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Permite apenas dígitos
     const digits = e.target.value.replace(/\D/g, '');
     if (!digits) {
       setRawInput('');
@@ -132,8 +95,8 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
     setRawInput(val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   };
 
-  const handleCopyCurrentTotal = () => {
-    setRawInput(currentTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const handleCopyBaseTotal = () => {
+    setRawInput(baseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   };
 
   const handleClear = () => {
@@ -161,7 +124,7 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
               {order.header.valorNotaFiscalEntregue ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                   <FileCheck className="h-3.5 w-3.5" />
-                  Ajustado em {order.header.ajusteFiscalData ? new Date(order.header.ajusteFiscalData).toLocaleDateString('pt-BR') : 'Data N/D'}
+                  NF Conciliada: {formatCurrency(order.header.valorNotaFiscalEntregue)}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
@@ -170,7 +133,7 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
               )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Ajuste do valor unitário dos produtos decorrente de alterações de preço na entrega para igualar ao valor exato da NF e liberar os boletos.
+              Acréscimo ou desconto aplicado diretamente no <strong>valor final do pedido</strong> para igualar ao valor exato da NF e liberar os boletos, <strong>sem alterar os produtos</strong>.
             </p>
           </div>
         </div>
@@ -186,15 +149,16 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
             <span>Como funciona?</span>
           </button>
 
-          {hasOriginals && (
+          {hasAdjustmentApplied && (
             <button
               type="button"
               disabled={disabled}
               onClick={onRestoreOriginals}
               className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 active:scale-95 disabled:opacity-50 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300"
+              title="Remove o ajuste da NF e restaura o total original do pedido"
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              Restaurar Preços Originais
+              Restaurar Valor Original
             </button>
           )}
         </div>
@@ -205,19 +169,16 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
         <div className="my-3 rounded-xl border border-sky-200 bg-sky-50/80 p-3.5 text-xs text-sky-900 dark:border-sky-800/60 dark:bg-sky-950/40 dark:text-sky-200">
           <div className="flex items-start gap-2.5">
             <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-600 dark:text-sky-400" />
-            <div className="space-y-1">
-              <p className="font-semibold">Como o sistema distribui a diferença da NF?</p>
+            <div className="space-y-1.5">
+              <p className="font-semibold text-sm">Diretriz Oficial: Ajuste Direto no Total do Pedido</p>
               <p>
-                1. Digite o <strong>Valor Total da Nota Fiscal</strong> entregue pelo fornecedor.
+                1. <strong>Produtos 100% Inalterados:</strong> O sistema <strong>não desconta nem acrescenta nos produtos</strong>. Os preços unitários, quantidades e margens cadastrados permanecem rigorosamente intactos.
               </p>
               <p>
-                2. Se a NF for <strong>maior</strong> que o pedido, o acréscimo é distribuído proporcionalmente no valor de cada item ativo, aumentando os preços unitários.
+                2. <strong>Ajuste no Total Final:</strong> Se o valor faturado da NF for diferente do pedido, a diferença é lançada diretamente como um <strong>Acréscimo Fiscal (+)</strong> ou <strong>Desconto Fiscal (-)</strong> no fechamento financeiro do pedido.
               </p>
               <p>
-                3. Se a NF for <strong>menor</strong>, a diferença é descontada proporcionalmente dos produtos.
-              </p>
-              <p>
-                4. Ao concluir, o pedido atinge rigorosamente o total da NF e as <strong>parcelas/boletos do faturamento são atualizados automaticamente</strong> com os novos valores, permitindo a liberação sem nenhuma divergência financeira.
+                3. <strong>Atualização Automática dos Boletos:</strong> O total final a pagar e as parcelas/boletos são recalculados automaticamente para bater exatamente com a NF (ao centavo, sem sobras residuais), liberando os títulos com 100% de segurança no Contas a Pagar.
               </p>
             </div>
           </div>
@@ -226,19 +187,24 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
 
       {/* GRID DE COMPARAÇÃO */}
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-        {/* CARD 1: VALOR ATUAL DO PEDIDO */}
+        {/* CARD 1: VALOR BASE DO PEDIDO */}
         <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
           <div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              1. Total Atual do Pedido
-            </span>
-            <div className="mt-1 text-2xl font-black text-slate-800 dark:text-slate-100">
-              {formatCurrency(currentTotal)}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                1. Total Base do Pedido
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                Sem Ajuste
+              </span>
+            </div>
+            <div className="mt-1 text-2xl font-black text-slate-800 dark:text-slate-100 font-mono">
+              {formatCurrency(baseTotal)}
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>{orderTotals.totalPecas} peças totais</span>
-            <span>{activeItems.length} produtos ativos</span>
+            <span>{orderTotals.totalPecas} peças</span>
+            <span>{activeItems.length} produtos (preços fixos)</span>
           </div>
         </div>
 
@@ -252,11 +218,11 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={handleCopyCurrentTotal}
+                  onClick={handleCopyBaseTotal}
                   className="text-[11px] font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                  title="Preencher com o total atual do pedido"
+                  title="Preencher com o total base do pedido"
                 >
-                  Copiar Total
+                  Copiar Base
                 </button>
                 {rawInput && (
                   <button
@@ -281,17 +247,17 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
                 placeholder="0,00"
                 value={rawInput}
                 onChange={handleInputChange}
-                className="w-full rounded-lg border border-slate-300 bg-slate-50/50 py-2 pl-10 pr-3 text-lg font-black text-indigo-950 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-indigo-100 dark:focus:bg-slate-900"
+                className="w-full rounded-lg border border-slate-300 bg-slate-50/50 py-2 pl-10 pr-3 text-lg font-black font-mono text-indigo-950 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-indigo-100 dark:focus:bg-slate-900"
               />
             </div>
           </div>
 
           <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-            Informe o valor faturado impresso na NF do fornecedor.
+            Digite o valor faturado impresso na NF do fornecedor.
           </div>
         </div>
 
-        {/* CARD 3: DIFERENÇA APURADA */}
+        {/* CARD 3: AJUSTE DIRETO NO VALOR FINAL */}
         <div className={`flex flex-col justify-between rounded-xl border p-4 shadow-sm transition-all ${
           !parsedNfValue || Math.abs(diferenca) < 0.005
             ? 'border-emerald-200 bg-emerald-50/50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200'
@@ -302,7 +268,7 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider">
-                3. Diferença Apurada
+                3. Ajuste Direto no Total
               </span>
               {parsedNfValue > 0 && Math.abs(diferenca) >= 0.005 && (
                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
@@ -316,7 +282,7 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
               )}
             </div>
 
-            <div className="mt-1 text-2xl font-black">
+            <div className="mt-1 text-2xl font-black font-mono">
               {parsedNfValue <= 0 ? (
                 <span className="text-slate-400">R$ 0,00</span>
               ) : Math.abs(diferenca) < 0.005 ? (
@@ -331,40 +297,43 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
 
           <div className="mt-2 text-xs font-medium">
             {parsedNfValue <= 0 ? (
-              <span className="text-slate-500">Digite o valor da NF para calcular o rateio.</span>
+              <span className="text-slate-500">Informe a NF para apurar o acréscimo ou desconto.</span>
             ) : Math.abs(diferenca) < 0.005 ? (
               <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Valores 100% conciliados! Nenhuma diferença.
               </span>
             ) : diferenca > 0 ? (
-              <span>Acréscimo: os produtos sofreram aumento no fornecedor.</span>
+              <span>Acréscimo fiscal direto no total final do pedido.</span>
             ) : (
-              <span>Desconto: os produtos sofreram redução no fornecedor.</span>
+              <span>Desconto fiscal direto no total final do pedido.</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* AÇÕES E PRÉVIA */}
+      {/* AÇÕES E DEMONSTRATIVO */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-indigo-100/60 pt-4 dark:border-indigo-900/40">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {isModified && (
             <button
               type="button"
               onClick={() => setShowPreview(!showPreview)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
             >
-              <Layers className="h-3.5 w-3.5 text-slate-500" />
-              <span>{showPreview ? 'Ocultar Prévia por Produto' : `Ver Prévia do Rateio (${activeItems.length} produtos)`}</span>
+              <Calculator className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>{showPreview ? 'Ocultar Demonstrativo Financeiro' : 'Ver Demonstrativo do Fechamento'}</span>
               {showPreview ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
           )}
 
           {order.header.ajusteFiscalDiferenca !== undefined && Math.abs(order.header.ajusteFiscalDiferenca) > 0.005 && (
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              Último ajuste: {order.header.ajusteFiscalDiferenca > 0 ? '+' : ''}{formatCurrency(order.header.ajusteFiscalDiferenca)} 
-              {order.header.ajusteFiscalUsuario ? ` por ${order.header.ajusteFiscalUsuario}` : ''}
+            <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              <span>
+                Ajuste ativo: <strong>{order.header.ajusteFiscalDiferenca > 0 ? '+' : ''}{formatCurrency(order.header.ajusteFiscalDiferenca)}</strong> 
+                {order.header.ajusteFiscalUsuario ? ` por ${order.header.ajusteFiscalUsuario}` : ''}
+              </span>
             </div>
           )}
         </div>
@@ -381,59 +350,64 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
             }`}
           >
             <Scale className="h-4 w-4" />
-            <span>Distribuir Ajuste nos Produtos</span>
+            <span>Aplicar Ajuste no Total do Pedido</span>
             <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      {/* TABELA DE PRÉVIA DO RATEIO (SE ABERTO) */}
+      {/* DEMONSTRATIVO FINANCEIRO DETALHADO DO FECHAMENTO */}
       {showPreview && isModified && (
-        <div className="mt-4 overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm dark:border-indigo-900/50 dark:bg-slate-900">
-          <div className="border-b border-indigo-50 bg-indigo-50/50 px-4 py-2.5 dark:border-indigo-950 dark:bg-slate-800/60 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
-              Amostra do Rateio nos Itens de Maior Valor ({previewItems.length} de {activeItems.length} produtos):
+        <div className="mt-4 overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm dark:border-indigo-900/50 dark:bg-slate-900 p-4">
+          <div className="border-b border-slate-100 pb-3 dark:border-slate-800 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              Demonstrativo de Fechamento da Conciliação da NF:
             </span>
-            <div className="text-[11px] text-slate-600 dark:text-slate-300">
-              <span>Novo Total dos Produtos: <strong className="text-indigo-700 dark:text-indigo-300">{formatCurrency(novoTotalProdutos)}</strong></span>
-              {Math.abs(diferencaResidual) >= 0.01 && (
-                <span className="ml-2 font-medium text-amber-700 dark:text-amber-400">
-                  (Diferença de {formatCurrency(Math.abs(diferencaResidual))} decorrente de centavos exatos a 2 casas)
-                </span>
-              )}
-            </div>
+            <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+              Produtos 100% Inalterados ({activeItems.length} itens)
+            </span>
           </div>
-          <div className="max-h-60 overflow-x-auto overflow-y-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">
-                <tr>
-                  <th className="px-3 py-2">Código</th>
-                  <th className="px-3 py-2">Descrição</th>
-                  <th className="px-3 py-2 text-center">Peças</th>
-                  <th className="px-3 py-2 text-right">Preço Atual</th>
-                  <th className="px-3 py-2 text-right">Novo Preço</th>
-                  <th className="px-3 py-2 text-right">Variação Unit.</th>
-                  <th className="px-3 py-2 text-right">Novo Subtotal</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {previewItems.map(p => (
-                  <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                    <td className="whitespace-nowrap px-3 py-1.5 font-mono text-slate-600 dark:text-slate-400">{p.codigo}</td>
-                    <td className="max-w-xs truncate px-3 py-1.5 font-medium text-slate-800 dark:text-slate-200" title={p.descricao}>{p.descricao}</td>
-                    <td className="px-3 py-1.5 text-center text-slate-600 dark:text-slate-400">{p.pecas}</td>
-                    <td className="px-3 py-1.5 text-right font-medium text-slate-600 dark:text-slate-400">{formatCurrency(p.precoAtual)}</td>
-                    <td className="px-3 py-1.5 text-right font-bold text-indigo-700 dark:text-indigo-300">
-                      {formatCurrency(p.novoPreco)}
-                    </td>
-                    <td className={`px-3 py-1.5 text-right font-semibold ${p.diffUnit > 0 ? 'text-amber-600' : 'text-sky-600'}`}>
-                      {p.diffUnit > 0 ? '+' : ''}{formatCurrency(p.diffUnit)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-bold text-slate-800 dark:text-slate-100">{formatCurrency(p.novoTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                <span>Total Bruto das Mercadorias:</span>
+                <span className="font-mono font-medium">{formatCurrency(orderTotals.valorBruto)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                <span>(+) IPI dos Produtos:</span>
+                <span className="font-mono font-medium">+{formatCurrency(orderTotals.totalIpi)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                <span>(-) Descontos Comerciais:</span>
+                <span className="font-mono font-medium">-{formatCurrency(orderTotals.valorDescontoTotal)}</span>
+              </div>
+              <div className="flex justify-between text-slate-800 dark:text-slate-200 font-bold border-t border-slate-200 dark:border-slate-700 pt-1.5">
+                <span>Total Comercial Base:</span>
+                <span className="font-mono text-indigo-700 dark:text-indigo-300">{formatCurrency(baseTotal)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 bg-indigo-50/50 dark:bg-indigo-950/30 p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
+              <div className="flex justify-between text-slate-700 dark:text-slate-300">
+                <span>Total Base do Pedido:</span>
+                <span className="font-mono font-medium">{formatCurrency(baseTotal)}</span>
+              </div>
+              <div className="flex justify-between font-semibold">
+                <span>{diferenca >= 0 ? '(+) Acréscimo Fiscal no Total:' : '(-) Desconto Fiscal no Total:'}</span>
+                <span className={`font-mono ${diferenca >= 0 ? 'text-amber-700 dark:text-amber-400' : 'text-sky-700 dark:text-sky-400'}`}>
+                  {diferenca >= 0 ? '+' : '-'}{formatCurrency(Math.abs(diferenca))}
+                </span>
+              </div>
+              <div className="flex justify-between text-indigo-950 dark:text-white font-extrabold border-t border-indigo-200 dark:border-indigo-800 pt-1.5 text-sm">
+                <span>Novo Total do Pedido (NF):</span>
+                <span className="font-mono text-emerald-700 dark:text-emerald-400">{formatCurrency(parsedNfValue)}</span>
+              </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
+                * As parcelas e boletos serão gerados exatamente sobre R$ {parsedNfValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.
+              </p>
+            </div>
           </div>
         </div>
       )}

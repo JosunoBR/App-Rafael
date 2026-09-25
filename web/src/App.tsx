@@ -1307,12 +1307,10 @@ export function App() {
       console.warn('Aviso ao sincronizar ajuste fiscal no SQLite:', e);
     }
 
-    const sinal = adjResult.diferencaTotal >= 0 ? '+' : '';
-    const residualMsg = adjResult.diferencaResidualNf && Math.abs(adjResult.diferencaResidualNf) >= 0.01
-      ? ` (Diferença de R$ ${Math.abs(adjResult.diferencaResidualNf).toFixed(2).replace('.', ',')} decorrente de centavos exatos)`
-      : '';
+    const tipoAjuste = adjResult.diferencaTotal >= 0 ? 'Acréscimo' : 'Desconto';
+    const sinal = adjResult.diferencaTotal >= 0 ? '+' : '-';
     showToast(
-      `Ajuste Fiscal aplicado: ${sinal}R$ ${adjResult.diferencaTotal.toFixed(2).replace('.', ',')} nos produtos com preços unitários em centavos (2 casas). Total dos produtos: R$ ${adjResult.novoTotal.toFixed(2).replace('.', ',')}${residualMsg}.`,
+      `Ajuste Fiscal aplicado: ${tipoAjuste} de ${sinal}R$ ${Math.abs(adjResult.diferencaTotal).toFixed(2).replace('.', ',')} direto no valor final do pedido. Total da NF: R$ ${targetNfValue.toFixed(2).replace('.', ',')}. Produtos 100% inalterados.`,
       'success'
     );
   };
@@ -1377,7 +1375,8 @@ export function App() {
       console.warn('Aviso ao sincronizar restauração fiscal no SQLite:', e);
     }
 
-    showToast('Preços originais dos produtos restaurados com sucesso!', 'info');
+    const totalOriginal = calculateOrderTotals(restResult.updatedItems, updatedHeader, order.fiscalConfig || fiscalConfig).totalGeral;
+    showToast(`Ajuste Fiscal removido. Total do pedido restabelecido para R$ ${totalOriginal.toFixed(2).replace('.', ',')}.`, 'info');
   };
 
   // Carrega com segurança e resposta instantânea (0ms) o pedido selecionado

@@ -7,7 +7,8 @@ import {
   ArrowRight, 
   Calendar, 
   Building2, 
-  Package 
+  Package,
+  Scale
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { loadSavedOrdersList } from '../utils/storage';
@@ -83,13 +84,22 @@ export const SavedOrdersModal: React.FC<SavedOrdersModalProps> = ({
                   className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-white dark:hover:bg-slate-800 cursor-pointer transition flex items-center justify-between group"
                 >
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-xs font-mono font-bold text-slate-900 dark:text-white">
                         {order.header.numeroPedido}
                       </span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
                         {order.header.status}
                       </span>
+                      {Boolean((order.header.valorNotaFiscalEntregue && order.header.valorNotaFiscalEntregue > 0) || Math.abs(order.header.ajusteFiscalDiferenca || 0) > 0.001) && (
+                        <span 
+                          className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1"
+                          title={`Ajuste Fiscal NF: ${order.header.ajusteFiscalDiferenca && order.header.ajusteFiscalDiferenca > 0 ? '+' : ''}R$ ${(order.header.ajusteFiscalDiferenca || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                        >
+                          <Scale className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                          Ajuste NF {order.header.ajusteFiscalDiferenca && order.header.ajusteFiscalDiferenca > 0 ? '+' : ''}R$ {Math.abs(order.header.ajusteFiscalDiferenca || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
                       {order.header.fornecedor}

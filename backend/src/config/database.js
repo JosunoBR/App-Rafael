@@ -144,6 +144,10 @@ async function getDatabase() {
       itemsJson TEXT NOT NULL DEFAULT '[]',
       separationDistributionJson TEXT,
       paymentConfigJson TEXT,
+      valorNotaFiscalEntregue REAL DEFAULT 0,
+      ajusteFiscalDiferenca REAL DEFAULT 0,
+      ajusteFiscalData TEXT,
+      ajusteFiscalUsuario TEXT,
       inspectionJson TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
@@ -475,7 +479,11 @@ async function getDatabase() {
         finalizadoPor: "TEXT",
         dataFinalizacao: "TEXT",
         aprovadoPor: "TEXT",
-        dataAprovacao: "TEXT"
+        dataAprovacao: "TEXT",
+        valorNotaFiscalEntregue: "REAL DEFAULT 0",
+        ajusteFiscalDiferenca: "REAL DEFAULT 0",
+        ajusteFiscalData: "TEXT",
+        ajusteFiscalUsuario: "TEXT"
       };
 
       Object.entries(requiredCols).forEach(([col, def]) => {

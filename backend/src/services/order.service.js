@@ -87,17 +87,101 @@ class OrderService {
         const existingStatus = existing.header.status || 'Em Cotação';
         const isClosed = existingStatus !== 'Em Cotação' && existingStatus !== 'Rascunho';
         if (isClosed && currentUser) {
-          // Comprador: bloqueia alteração em pedido fechado com aviso amigável
-          if (currentUser.role === 'comprador') {
-            const err = new Error(`Este pedido já foi aprovado e está na esteira operacional (${existingStatus}). Para efetuar alterações comerciais ou de quantidades, solicite a liberação à Diretoria.`);
+          const isDiretoriaOrRoot = currentUser.role === 'diretoria' || 
+                                    currentUser.role === 'root' || 
+                                    currentUser.id === 'usr_root' || 
+                                    currentUser.email?.toLowerCase() === 'root' ||
+                                    currentUser.nome?.toLowerCase() === 'root';
+
+          // Boletos já liberados no Financeiro: Apenas Diretoria e Faturamento podem alterar
+          if (existing.header.boletosLiberados && !isDiretoriaOrRoot && currentUser.role !== 'faturamento') {
+            const err = new Error('Os boletos deste pedido já foram liberados para o Financeiro. Alterações são restritas à Diretoria e Faturamento.');
             err.statusCode = 403;
             err.code = 'ORDER_LOCKED';
             throw err;
           }
-          // Operadores de Depósito e Separação podem atualizar campos operacionais (separação/conferência)
-          // Faturamento e Diretoria podem atualizar valores, itens e impostos com base na NF
-          if (currentUser.role !== 'diretoria' && currentUser.role !== 'faturamento' && currentUser.role !== 'separacao' && currentUser.role !== 'deposito') {
-            const err = new Error(`Apenas a Diretoria e o Faturamento possuem autorização para editar pedidos que já foram fechados (Status atual: ${existingStatus}).`);
+
+          // Se for Comprador: Permite operações de esteira e distribuição por lojas, mas protege os termos comerciais aprovados
+          if (currentUser.role === 'comprador') {
+            // 1. Não permite alterar fornecedor
+            const oldForn = String(existing.header.fornecedor || '').trim().toLowerCase();
+            const newForn = String(orderData.header.fornecedor || '').trim().toLowerCase();
+            if (oldForn && newForn && oldForn !== newForn) {
+              const err = new Error(`Este pedido já foi aprovado comercialmente com o fornecedor "${existing.header.fornecedor}". Não é permitido alterar o fornecedor. Solicite liberação à Diretoria.`);
+              err.statusCode = 403;
+              err.code = 'COMMERCIAL_TERMS_LOCKED';
+              throw err;
+            }
+
+            // 2. Não permite alterar CNPJ
+            const oldCnpj = String(existing.header.cnpj || '').replace(/\D/g, '');
+            const newCnpj = String(orderData.header.cnpj || '').replace(/\D/g, '');
+            if (oldCnpj && newCnpj && oldCnpj !== newCnpj) {
+              const err = new Error('Este pedido já foi aprovado comercialmente. Não é permitido alterar o CNPJ do fornecedor. Solicite liberação à Diretoria.');
+              err.statusCode = 403;
+              err.code = 'COMMERCIAL_TERMS_LOCKED';
+              throw err;
+            }
+
+            // 3. Não permite alterar preços unitários de custo dos itens aprovados
+            if (Array.isArray(orderData.items) && Array.isArray(existing.items)) {
+              for (const newItem of orderData.items) {
+                const oldItem = existing.items.find(i => 
+                  (newItem.id && i.id && String(i.id) === String(newItem.id)) ||
+                  (newItem.codigo && i.codigo && String(i.codigo).trim() === String(newItem.codigo).trim())
+                );
+                if (oldItem) {
+                  const oldPrice = Number(oldItem.precoUnitario !== undefined ? oldItem.precoUnitario : (oldItem.precoCusto || 0));
+                  const newPrice = Number(newItem.precoUnitario !== undefined ? newItem.precoUnitario : (newItem.precoCusto || 0));
+                  if (oldPrice > 0 && Math.abs(newPrice - oldPrice) > 0.02) {
+                    const desc = newItem.descricao || newItem.codigo || 'Item';
+                    const err = new Error(`Este pedido já foi aprovado comercialmente. O preço unitário do item "${desc}" (R$ ${oldPrice.toFixed(2)}) não pode ser alterado pelo comprador. Solicite liberação à Diretoria.`);
+                    err.statusCode = 403;
+                    err.code = 'COMMERCIAL_TERMS_LOCKED';
+                    throw err;
+                  }
+                }
+              }
+
+              // Não permite inclusão ou remoção de produtos arbitrários após aprovação
+              if (existing.items.length > 0 && orderData.items.length !== existing.items.length) {
+                const err = new Error(`Este pedido já foi aprovado comercialmente com ${existing.items.length} itens. Inclusão ou exclusão de produtos requer autorização da Diretoria.`);
+                err.statusCode = 403;
+                err.code = 'COMMERCIAL_TERMS_LOCKED';
+                throw err;
+              }
+            }
+
+            // 4. Não permite alteração brusca do valor total comercial aprovado (> R$ 1,00)
+            const getOrderTotal = (ord) => {
+              if (!ord) return 0;
+              const h = ord.header || {};
+              const directTotal = Number(h.totalFinal || h.valorTotal || h.totalGeral || 0);
+              if (directTotal > 0) return directTotal;
+              if (Array.isArray(ord.items) && ord.items.length > 0) {
+                return ord.items.reduce((acc, it) => {
+                  if (it.ruptura) return acc;
+                  const pecas = Number(it.qtdTotalUnidades || 0);
+                  const preco = Number(it.precoUnitario || 0);
+                  const bruto = Number(it.valorTotalBruto !== undefined ? it.valorTotalBruto : (pecas * preco));
+                  const ipi = Number(it.valorIpi || 0);
+                  const desc = Number(it.valorDescontoItem || 0);
+                  return acc + (bruto + ipi - desc);
+                }, 0);
+              }
+              return 0;
+            };
+
+            const oldTotal = getOrderTotal(existing);
+            const newTotal = getOrderTotal(orderData);
+            if (oldTotal > 1 && newTotal > 1 && Math.abs(newTotal - oldTotal) > 1.0) {
+              const err = new Error(`Este pedido já foi aprovado comercialmente no valor total de R$ ${oldTotal.toFixed(2)}. Alterações no valor comercial total requerem autorização da Diretoria.`);
+              err.statusCode = 403;
+              err.code = 'COMMERCIAL_TERMS_LOCKED';
+              throw err;
+            }
+          } else if (!isDiretoriaOrRoot && currentUser.role !== 'faturamento' && currentUser.role !== 'separacao' && currentUser.role !== 'deposito') {
+            const err = new Error(`Apenas a Diretoria, Faturamento, Compras e Depósito possuem autorização para atualizar pedidos na esteira (Status atual: ${existingStatus}).`);
             err.statusCode = 403;
             err.code = 'ORDER_LOCKED';
             throw err;
@@ -482,12 +566,12 @@ class OrderService {
 
   /**
    * Conclui a distribuição física entre as 20 lojas e libera o pedido para o perfil Separação.
-   * Permitido: deposito, diretoria
+   * Permitido: comprador, deposito, diretoria
    */
   async releaseToSeparation(orderId, payload = {}, currentUser) {
-    const allowedRoles = ['deposito', 'diretoria'];
+    const allowedRoles = ['deposito', 'diretoria', 'comprador'];
     if (!currentUser || !allowedRoles.includes(currentUser.role)) {
-      const err = new Error('Apenas o Depósito ou a Diretoria podem concluir a distribuição e liberar para a Separação.');
+      const err = new Error('Apenas o Comprador, Depósito ou a Diretoria podem concluir a distribuição e liberar para a Separação.');
       err.statusCode = 403;
       throw err;
     }

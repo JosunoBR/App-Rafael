@@ -267,14 +267,25 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
       }
 
       // % NOTA (Faturado em NF)
-      if (
-        upper === '% NOTA' || upper === '% NOTA:' || upper === '% NOTA FISCAL' || 
-        upper === '% NF' || upper === 'NOTA FISCAL %' || upper === '% FATURADO' ||
-        upper.startsWith('% NOTA') || upper.startsWith('NOTA FISCAL')
-      ) {
+      const isNotaHeader = (
+        upper === '% NOTA' || upper === '% NOTA:' || upper === '% NOTA FISCAL' || upper === '% NOTA FISCAL:' || 
+        upper === '% NF' || upper === '% NF:' || upper === 'NOTA FISCAL %' || upper === 'NOTA %' ||
+        upper === 'NF %' || upper === '% FATURADO' || upper === '% FATURADO:' || upper === 'FATURADO (%)' ||
+        upper === 'FATURAMENTO (%)' || upper === 'FATURAMENTO NOTA' || upper === 'PORCENTAGEM DA NOTA' ||
+        upper === 'PORCENTAGEM DE NOTA' || upper === 'PORCENTAGEM NOTA' || upper === 'PERCENTUAL DA NOTA' ||
+        upper === 'PERCENTUAL DE NOTA' || upper === 'PERCENTUAL NOTA' || upper === 'PERC. NOTA' ||
+        upper === 'PERC NOTA' || upper === '% DA NOTA' || upper === '% DE NOTA' ||
+        upper.startsWith('% NOTA') || upper.startsWith('NOTA FISCAL') ||
+        upper.includes('PORCENTAGEM DA NOTA') || upper.includes('PORCENTAGEM NOTA') ||
+        upper.includes('PERCENTUAL DA NOTA') || upper.includes('PERCENTUAL NOTA') ||
+        upper.includes('% DA NOTA') || upper.includes('% DE NOTA') ||
+        ((upper.includes('NOTA') || upper.includes(' NF')) && (upper.includes('%') || upper.includes('PORCENT') || upper.includes('PERCENT') || upper.includes('FATUR')))
+      );
+
+      if (isNotaHeader) {
         let notaRaw: any = null;
-        // Verifica se o valor veio na mesma célula (ex: "% NOTA: 100%")
-        const inlineMatch = cellVal.match(/(?:%\s*NOTA|NOTA\s*FISCAL)\s*:?\s*(\d+(?:[.,]\d+)?\s*%?)/i);
+        // Verifica se o valor veio na mesma célula (ex: "% NOTA: 100%" ou "Porcentagem da Nota: 70%")
+        const inlineMatch = cellVal.match(/(?:%\s*(?:DA\s*)?NOTA|NOTA\s*(?:FISCAL)?|NF|FATURADO|PORCENTAGEM\s*(?:DA\s*)?NOTA|PERCENTUAL\s*(?:DA\s*)?NOTA)\s*:?\s*(\d+(?:[.,]\d+)?\s*%?)/i);
         if (inlineMatch && inlineMatch[1]) {
           notaRaw = inlineMatch[1];
         } else {
@@ -289,7 +300,8 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
       }
 
       // % OFF / DESCONTO COMERCIAL (Desconto Direto Comercial Negociado)
-      const isOffOrDiscountHeader = (
+      // REGRA CRÍTICA: Nunca pode capturar linhas de Nota Fiscal ou Faturamento!
+      const isOffOrDiscountHeader = !isNotaHeader && !upper.includes('NOTA') && !upper.includes(' NF') && !upper.includes('FATUR') && (
         upper === '% OFF' || upper === '% OFF:' || upper === 'OFF %' || upper === 'OFF %:' || 
         upper === 'OFF%' || upper === '%OFF' || upper === 'DESCONTO OFF' || upper === 'DESCONTO OFF:' ||
         upper === 'DESCONTO COMERCIAL' || upper === 'DESCONTO COMERCIAL:' || 
@@ -373,16 +385,17 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
         telefoneEmpresa = phoneMatch[0].trim();
       }
 
-      // Textos operacionais e observações na área do pedido
-      if (upper.startsWith('OBSERVAÇÕES') || upper.startsWith('OBSERVACOES') || upper.startsWith('OBSERVAÇÃO') || upper.startsWith('OBSERVACAO')) {
-        let obsText = cellVal.replace(/^OBSERVA[ÇC][ÕO0]ES?:?\s*/i, '').trim();
+      // Textos operacionais e observações na área do pedido (apenas se explicitamente rotulado)
+      if (
+        upper.startsWith('OBSERVAÇÕES') || upper.startsWith('OBSERVACOES') || 
+        upper.startsWith('OBSERVAÇÃO') || upper.startsWith('OBSERVACAO') ||
+        upper.startsWith('OBS:') || upper.startsWith('OBS.') ||
+        upper.startsWith('DESCRIÇÃO DO PEDIDO') || upper.startsWith('DESCRICAO DO PEDIDO')
+      ) {
+        let obsText = cellVal.replace(/^(?:OBSERVA[ÇC][ÕO0]ES?|OBS\.?|DESCRI[ÇC][ÃA0]O DO PEDIDO)\s*:?\s*/i, '').trim();
         if (!obsText && nextCellVal) obsText = nextCellVal;
         if (obsText && !isBuyerCompanyData(obsText) && !observacoesList.includes(obsText)) {
           observacoesList.push(obsText);
-        }
-      } else if (upper.includes('DESCARREGAMENTO') || upper.includes('DESCARGA') || upper.includes('PALETE') || upper.includes('BOLETOS E PEDIDOS')) {
-        if (!isBuyerCompanyData(cellVal) && !observacoesList.includes(cellVal)) {
-          observacoesList.push(cellVal);
         }
       }
     }
@@ -680,7 +693,8 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
     if (!valorTotalBruto) {
       valorTotalBruto = (colMap['total'] !== undefined ? parseNumber(row[colMap['total']]) : 0) || (qtdTotalUnidades * precoUnitario);
     }
-    const pdvSugerido = colMap['pdv'] !== undefined ? parseNumber(row[colMap['pdv']]) : 0;
+    const rawPdv = colMap['pdv'] !== undefined ? parseNumber(row[colMap['pdv']]) : 0;
+    const pdvSugerido = rawPdv > 0 ? rawPdv : 12.0;
     const ncm = colMap['ncm'] !== undefined ? String(row[colMap['ncm']] || '').trim() : '';
     const eanBarcode = colMap['ean'] !== undefined ? String(row[colMap['ean']] || '').trim() : '';
     const unidadeMedida = colMap['unidade'] !== undefined ? String(row[colMap['unidade']] || '').trim() : undefined;

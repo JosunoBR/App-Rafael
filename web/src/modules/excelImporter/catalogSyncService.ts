@@ -102,7 +102,9 @@ export function analyzeCatalogProducts(
         codigoBarras: rawItem.eanBarcode || matchedProduct.codigoBarras || matchedProduct.eanBarcode,
         eanBarcode: rawItem.eanBarcode || matchedProduct.eanBarcode || matchedProduct.codigoBarras,
         precoUnitarioPadrao: rawItem.precoUnitario > 0 ? rawItem.precoUnitario : matchedProduct.precoUnitarioPadrao,
-        pdvSugerido: rawItem.pdvSugerido || matchedProduct.pdvSugerido || 0,
+        pdvSugerido: (rawItem.pdvSugerido && rawItem.pdvSugerido > 0)
+          ? rawItem.pdvSugerido
+          : (matchedProduct.pdvSugerido && matchedProduct.pdvSugerido > 0 ? matchedProduct.pdvSugerido : 12.0),
         qtdPorPacote: (rawItem.qtdNoPacote && rawItem.qtdNoPacote > 0) ? rawItem.qtdNoPacote : (matchedProduct.qtdPorPacote || 1),
         ncm: rawItem.ncm || matchedProduct.ncm,
         updatedAt: new Date().toISOString()
@@ -138,7 +140,7 @@ export function analyzeCatalogProducts(
         supplierId: supplier.id,
         nomeFornecedor: supplierName,
         precoUnitarioPadrao: rawItem.precoUnitario,
-        pdvSugerido: rawItem.pdvSugerido || 0,
+        pdvSugerido: (rawItem.pdvSugerido && rawItem.pdvSugerido > 0) ? rawItem.pdvSugerido : 12.0,
         qtdPorPacote: rawItem.qtdNoPacote || 1,
         ncm: rawItem.ncm || undefined,
         eanBarcode: rawItem.eanBarcode || undefined,

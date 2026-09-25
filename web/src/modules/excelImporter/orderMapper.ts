@@ -129,7 +129,10 @@ export function mapParsedExcelToOrder(
       ? rawItem.valorDescontoItem 
       : (percentualDesconto > 0 ? Number((valorTotalBruto * (percentualDesconto / 100)).toFixed(2)) : 0);
     const valorTotalLiquido = Math.max(0, valorTotalBruto - valorDescontoItem);
-    const pdvAlvo = rawItem.pdvSugerido || 0;
+    const matchedCatalogProd = statusObj?.existingProduct;
+    const pdvAlvo = (rawItem.pdvSugerido && rawItem.pdvSugerido > 0)
+      ? rawItem.pdvSugerido
+      : (matchedCatalogProd?.pdvSugerido && matchedCatalogProd.pdvSugerido > 0 ? matchedCatalogProd.pdvSugerido : 12.0);
 
     // Cálculo fiscal do item
     const fiscalRes = calculateItemFiscal(precoUnitario, pdvAlvo, currentFiscalConfig);
@@ -239,9 +242,7 @@ export function mapParsedExcelToOrder(
     })(),
     dataPedido: parsed.header.dataPedido,
     dataEntregaPrevista: parsed.header.dataEntregaPrevista,
-    percentualDescontoOff: (parsed.header.percentualDescontoOff !== undefined && parsed.header.percentualDescontoOff > 0)
-      ? parsed.header.percentualDescontoOff 
-      : (supplier.descontoOffPadrao || 0),
+    percentualDescontoOff: parsed.header.percentualDescontoOff || 0,
     percentualNota: parsed.header.percentualNota !== undefined 
       ? parsed.header.percentualNota 
       : (supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : 100),

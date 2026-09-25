@@ -20,7 +20,8 @@ import {
   Mail,
   Phone,
   User,
-  Download
+  Download,
+  FileText
 } from 'lucide-react';
 import { 
   Supplier, 
@@ -79,9 +80,11 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isImporting, onClose]);
 
-  // Estados pós-leitura
   const [parsedData, setParsedData] = useState<ParsedExcelOrder | null>(null);
   const [orderNumberInput, setOrderNumberInput] = useState<string>('');
+  const [percentualNotaInput, setPercentualNotaInput] = useState<number>(100);
+  const [percentualDescontoOffInput, setPercentualDescontoOffInput] = useState<number>(0);
+  const [observacoesInput, setObservacoesInput] = useState<string>('');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [isNewSupplier, setIsNewSupplier] = useState(false);
   const [catalogAnalysis, setCatalogAnalysis] = useState<ReturnType<typeof analyzeCatalogProducts> | null>(null);
@@ -162,7 +165,8 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
           condicaoPagamentoPadrao: parsed.header.condicaoPagamento || '30/60/90 Dias',
           aliquotaStPadrao: parsed.fiscalParams?.aliquotaSt ? parsed.fiscalParams.aliquotaSt * 100 : 0,
           aliquotaIpiPadrao: parsed.fiscalParams?.ipiAliquota ? parsed.fiscalParams.ipiAliquota * 100 : 0,
-          descontoOffPadrao: parsed.header.percentualDescontoOff || 0,
+          descontoOffPadrao: (parsed.header.percentualDescontoOff && parsed.header.percentualDescontoOff > 0) ? parsed.header.percentualDescontoOff : 0,
+          percentualNotaPadrao: parsed.header.percentualNota !== undefined ? parsed.header.percentualNota : 100,
           observacoesDescarga: '',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -177,7 +181,8 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
           vendedorPadrao: matchedSupplier.vendedorPadrao || parsed.header.vendedor || undefined,
           contatoVendedor: matchedSupplier.contatoVendedor || parsed.header.contatoVendedor || parsed.header.telefoneVendedor || undefined,
           condicaoPagamentoPadrao: matchedSupplier.condicaoPagamentoPadrao || parsed.header.condicaoPagamento || undefined,
-          descontoOffPadrao: matchedSupplier.descontoOffPadrao || parsed.header.percentualDescontoOff || undefined
+          descontoOffPadrao: (parsed.header.percentualDescontoOff && parsed.header.percentualDescontoOff > 0) ? parsed.header.percentualDescontoOff : (matchedSupplier.descontoOffPadrao || undefined),
+          percentualNotaPadrao: parsed.header.percentualNota !== undefined ? parsed.header.percentualNota : (matchedSupplier.percentualNotaPadrao ?? 100)
         };
       }
 
@@ -202,6 +207,9 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
       }
       parsed.header.numeroPedido = cleanNumero;
       setOrderNumberInput(cleanNumero);
+      setPercentualNotaInput(parsed.header.percentualNota !== undefined ? parsed.header.percentualNota : 100);
+      setPercentualDescontoOffInput(parsed.header.percentualDescontoOff || 0);
+      setObservacoesInput(parsed.header.observacoes || '');
 
       setParsedData(parsed);
       setSelectedSupplier(matchedSupplier);
@@ -218,6 +226,9 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
   const handleReset = () => {
     setParsedData(null);
     setOrderNumberInput('');
+    setPercentualNotaInput(100);
+    setPercentualDescontoOffInput(0);
+    setObservacoesInput('');
     setSelectedSupplier(null);
     setIsNewSupplier(false);
     setCatalogAnalysis(null);
@@ -295,13 +306,18 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
       }
 
       // 3. Mapear o pedido completo (com status 'Em Cotação' e isDraft: true)
+      parsedData.header.numeroPedido = finalNum;
+      parsedData.header.percentualNota = percentualNotaInput;
+      parsedData.header.percentualDescontoOff = percentualDescontoOffInput;
+      parsedData.header.observacoes = observacoesInput.trim();
+
       const order = mapParsedExcelToOrder(
         parsedData,
         currentSupplier,
         catalogAnalysis.statusList,
         stores,
         fiscalConfig,
-        orderNumberInput.trim() || undefined
+        finalNum
       );
 
       // 4. Concluir importação
@@ -698,26 +714,75 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                     )}
                   </div>
 
-                  {/* Condição de Pagamento e Desconto Comercial */}
+                  {/* Condição de Pagamento e Frete */}
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Pagamento & Desconto</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Pagamento & Frete</span>
                     <span className="text-slate-900 dark:text-white font-medium block truncate mt-0.5" title={parsedData.header.condicaoPagamento}>
                       {parsedData.header.condicaoPagamento}
                     </span>
-                    <div className="flex items-center justify-between text-[10px] mt-0.5">
-                      <span className="text-slate-500">Frete: {parsedData.header.tipoFrete || 'Retira'}</span>
-                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                        {parsedData.header.percentualDescontoOff > 0 ? `${parsedData.header.percentualDescontoOff}% OFF` : 'Sem Desc. OFF'}
-                      </span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5">Frete: {parsedData.header.tipoFrete || 'Retira'}</span>
+                  </div>
+
+                  {/* % Nota Fiscal (Faturamento em NF) */}
+                  <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">% Nota (Faturamento)</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={percentualNotaInput}
+                        onChange={(e) => setPercentualNotaInput(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                        className="w-16 font-mono font-bold text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-center"
+                      />
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-400">%</span>
                     </div>
+                    <span className="block text-[10px] text-slate-400 mt-0.5">Faturado em NF</span>
+                  </div>
+
+                  {/* Desconto Comercial (% OFF) */}
+                  <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Desc. Comercial (% OFF)</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={percentualDescontoOffInput}
+                        onChange={(e) => setPercentualDescontoOffInput(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                        className="w-16 font-mono font-bold text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-center"
+                      />
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-400">%</span>
+                    </div>
+                    <span className="block text-[10px] text-slate-400 mt-0.5">{percentualDescontoOffInput > 0 ? 'Abatimento direto' : 'Sem desc. OFF'}</span>
                   </div>
                 </div>
 
-                {parsedData.header.observacoes && (
-                  <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <strong className="text-slate-800 dark:text-slate-200">Observações extraídas da planilha:</strong> {parsedData.header.observacoes}
+                {/* Descrição / Observação do Pedido */}
+                <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-slate-400" />
+                      Descrição / Observação do Pedido
+                    </label>
+                    {observacoesInput && (
+                      <button
+                        type="button"
+                        onClick={() => setObservacoesInput('')}
+                        className="text-[11px] text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 font-medium hover:underline"
+                      >
+                        Limpar observação
+                      </button>
+                    )}
                   </div>
-                )}
+                  <input
+                    type="text"
+                    value={observacoesInput}
+                    onChange={(e) => setObservacoesInput(e.target.value)}
+                    placeholder="Descrição ou observações específicas deste pedido (deixe em branco se não desejar)..."
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
               </div>
 
               {/* Tabela e Filtros de Itens */}
@@ -777,6 +842,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                         <th className="py-2.5 px-3 text-center">Pacotes</th>
                         <th className="py-2.5 px-3 text-right">Unidades</th>
                         <th className="py-2.5 px-3 text-right">R$ Unit.</th>
+                        <th className="py-2.5 px-3 text-right">PDV Sugerido</th>
                         <th className="py-2.5 px-3 text-right">Valor Total</th>
                       </tr>
                     </thead>
@@ -815,6 +881,9 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                           </td>
                           <td className="py-2 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
                             R$ {item.rawItem.precoUnitario.toFixed(2)}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">
+                            R$ {(item.rawItem.pdvSugerido || 12.0).toFixed(2)}
                           </td>
                           <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                             R$ {item.rawItem.valorTotalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

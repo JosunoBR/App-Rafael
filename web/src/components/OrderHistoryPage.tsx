@@ -16,7 +16,8 @@ import {
   Truck,
   X,
   RotateCcw,
-  CreditCard
+  CreditCard,
+  Scale
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { calculateOrderTotals } from '../shared/orderCalculationEngine';
@@ -1001,6 +1002,11 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                   const statusAtual = ord.header.status || 'Em Cotação';
                   const modalidadeFrete = getOrderFreteModalidade(ord);
                   const rawFreteVal = Number(ord.header?.valorFrete ?? ord.header?.valorFreteGlobal ?? 0);
+                  const temAjusteFiscal = Boolean(
+                    (ord.header.valorNotaFiscalEntregue && ord.header.valorNotaFiscalEntregue > 0) ||
+                    Math.abs(ord.header.ajusteFiscalDiferenca || 0) > 0.001
+                  );
+                  const ajusteDiff = ord.header.ajusteFiscalDiferenca || 0;
 
                   return (
                     <tr key={ord.header.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition group">
@@ -1012,6 +1018,17 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         title={canEditSpecificOrder(currentUser?.role, ord.header.status) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
                       >
                         <span className="underline decoration-dotted underline-offset-4">{ord.header.numeroPedido}</span>
+                        {temAjusteFiscal && (
+                          <div className="mt-1">
+                            <span 
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 shadow-2xs"
+                              title={`Ajuste Fiscal NF aplicado: ${ajusteDiff > 0 ? '+' : ''}R$ ${ajusteDiff.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${ord.header.valorNotaFiscalEntregue ? ` (NF: R$ ${ord.header.valorNotaFiscalEntregue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : ''}`}
+                            >
+                              <Scale className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                              <span>Ajuste NF {ajusteDiff > 0 ? '+' : ''}R$ {Math.abs(ajusteDiff).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Fornecedor */}

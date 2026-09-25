@@ -21,8 +21,13 @@ export interface OrderTotalsResult {
   valorFrete: number;              // Frete destacado do pedido
   valorOutrasDespesas: number;     // Despesas acessórias adicionais
 
+  // Ajuste Fiscal da NF (Conciliação da Nota Fiscal no Total)
+  totalComercialSemAjuste: number; // Total antes do ajuste fiscal: Bruto + IPI - Desconto
+  ajusteFiscalValor: number;       // Diferença aplicada direto no valor final (+ acréscimo ou - desconto)
+  valorNotaFiscalEntregue?: number; // Valor da NF informada
+
   // Faturamento e Médias
-  totalGeral: number;              // Total final faturado (Líquido + IPI + ST + Frete + Despesas)
+  totalGeral: number;              // Total final faturado (totalComercialSemAjuste + ajusteFiscalValor)
   precoMedio: number;              // Preço médio líquido por peça (Líquido ÷ Peças)
   precoMedioComImpostos: number;   // Preço médio por peça com encargos de entrada (IPI + ST)
 
@@ -180,9 +185,29 @@ export function calculateOrderTotals(
   const valorFrete = isCif ? 0 : rawValorFrete;
   const valorOutrasDespesas = Number(header?.valorOutrasDespesasGlobal) || 0;
 
-  // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Geral
-  // Frete não é considerado no Total Geral comercial do pedido.
-  const totalGeral = Number((valorBruto + totalIpi - valorDescontoTotal).toFixed(2));
+  // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Comercial Base
+  // Frete não é considerado no Total Comercial das mercadorias.
+  const totalComercialSemAjuste = Number((valorBruto + totalIpi - valorDescontoTotal).toFixed(2));
+
+  // 🛡️ Ajuste Fiscal da Entrega (Conciliação da Nota Fiscal no Total):
+  // O acréscimo ou desconto é lançado DIRETAMENTE no valor final do pedido, sem alterar os produtos.
+  let ajusteFiscalValor = 0;
+  let finalTotalGeral = totalComercialSemAjuste;
+
+  const rawNf = Number(header?.valorNotaFiscalEntregue);
+  const rawDiff = header?.ajusteFiscalDiferenca !== undefined && header?.ajusteFiscalDiferenca !== null
+    ? Number(header.ajusteFiscalDiferenca)
+    : undefined;
+
+  if (rawNf > 0) {
+    finalTotalGeral = Number(rawNf.toFixed(2));
+    ajusteFiscalValor = Number((finalTotalGeral - totalComercialSemAjuste).toFixed(2));
+  } else if (rawDiff !== undefined && Math.abs(rawDiff) > 0.005) {
+    ajusteFiscalValor = Number(rawDiff.toFixed(2));
+    finalTotalGeral = Number((totalComercialSemAjuste + ajusteFiscalValor).toFixed(2));
+  }
+
+  const totalGeral = finalTotalGeral;
   const precoMedio = totalPecas > 0
     ? Number((valorLiquido / totalPecas).toFixed(2))
     : 0;
@@ -211,6 +236,9 @@ export function calculateOrderTotals(
     totalSt,
     valorFrete: Number(valorFrete.toFixed(2)),
     valorOutrasDespesas: Number(valorOutrasDespesas.toFixed(2)),
+    totalComercialSemAjuste,
+    ajusteFiscalValor,
+    valorNotaFiscalEntregue: rawNf > 0 ? rawNf : undefined,
     totalGeral,
     precoMedio,
     precoMedioComImpostos,
@@ -274,9 +302,9 @@ export interface FiscalAdjustmentResult {
 }
 
 /**
- * Distribui proporcionalmente a diferença entre o Valor da NF entregue e o Total do Pedido
- * entre os produtos ativos (não rupturas), atualizando os preços unitários e valores brutos/líquidos
- * com compensação de centavos residuais para garantir fechamento rigoroso ao centavo (R$ 0,01).
+ * 🛡️ Aplica a conciliação do Ajuste Fiscal da NF DIRETAMENTE no valor final do pedido.
+ * REGRA MANDATÓRIA: Os produtos NÃO sofrem acréscimo nem desconto em seus preços unitários.
+ * A diferença é lançada estritamente no total final do pedido (recalculando as parcelas/boletos).
  */
 export function distributeFiscalAdjustmentToItems(
   items: OrderItem[],
@@ -284,97 +312,44 @@ export function distributeFiscalAdjustmentToItems(
   header?: Partial<OrderHeader>,
   fiscal?: FiscalConfig
 ): FiscalAdjustmentResult {
-  const currentTotals = calculateOrderTotals(items, header, fiscal);
-  const totalAnterior = currentTotals.totalGeral;
-  const targetVal = Number(Math.max(0, targetNfValue).toFixed(2));
-
-  if (totalAnterior <= 0 || targetVal <= 0 || items.length === 0) {
-    return {
-      updatedItems: items,
-      diferencaTotal: 0,
-      percentualVariacao: 0,
-      totalAnterior,
-      novoTotal: totalAnterior
-    };
-  }
-
-  const diferencaTotal = Number((targetVal - totalAnterior).toFixed(2));
-  const percentualVariacao = Number(((diferencaTotal / totalAnterior) * 100).toFixed(2));
-
-  // Se a diferença for zero, nada a alterar
-  if (Math.abs(diferencaTotal) < 0.005) {
-    return {
-      updatedItems: items,
-      diferencaTotal: 0,
-      percentualVariacao: 0,
-      totalAnterior,
-      novoTotal: totalAnterior
-    };
-  }
-
-  const ratio = targetVal / totalAnterior;
-
-  // 1ª Passada: Atualiza cada item ativo proporcionalmente
-  const candidateItems: OrderItem[] = items.map(it => {
-    if (isBlankItem(it) || it.ruptura) {
-      return { ...it };
+  // Limpa qualquer alteração prévia de preços de itens caso venham de versões anteriores
+  const pristineItems: OrderItem[] = items.map(it => {
+    if (it.precoUnitarioOriginal !== undefined || it.valorTotalBrutoOriginal !== undefined) {
+      const origPrice = it.precoUnitarioOriginal !== undefined ? it.precoUnitarioOriginal : it.precoUnitario;
+      const clone = { ...it, precoUnitario: origPrice };
+      delete clone.precoUnitarioOriginal;
+      delete clone.valorTotalBrutoOriginal;
+      return clone;
     }
-
-    const pack = Number(it.qtdNoPacote) || Number(it.qtdPorPacote) || 1;
-    const pacotes = Number(it.qtdPacotes) || 0;
-    const pecas = Number(it.qtdTotalUnidades) || (pacotes * pack);
-
-    if (pecas <= 0) {
-      return { ...it };
-    }
-
-    // Salva o preço original para permitir reversão futura
-    const precoOrig = it.precoUnitarioOriginal !== undefined ? it.precoUnitarioOriginal : it.precoUnitario;
-    const brutoOrig = it.valorTotalBrutoOriginal !== undefined ? it.valorTotalBrutoOriginal : it.valorTotalBruto;
-
-    // Preço unitário estritamente em 2 casas decimais (R$ X,XX)
-    const rawNovoPreco = Number((it.precoUnitario * ratio).toFixed(2));
-
-    const novoBruto = Number((pecas * rawNovoPreco).toFixed(2));
-
-    // Recalcula desconto proporcional se houver
-    const descPct = Math.max(0, Math.min(100, Number(it.percentualDesconto) || 0));
-    const novoValorDesc = descPct > 0 
-      ? Number((novoBruto * (descPct / 100)).toFixed(2)) 
-      : (it.valorDescontoItem ? Number((Number(it.valorDescontoItem) * ratio).toFixed(2)) : 0);
-
-    const novoLiquido = Math.max(0, Number((novoBruto - novoValorDesc).toFixed(2)));
-
-    // Recalcula IPI se houver
-    let novoValorIpi = it.valorIpi;
-    if (it.valorIpi !== undefined && it.valorIpi !== null && Number(it.valorIpi) > 0) {
-      novoValorIpi = Number((Number(it.valorIpi) * ratio).toFixed(2));
-    }
-
-    return {
-      ...it,
-      precoUnitarioOriginal: precoOrig,
-      valorTotalBrutoOriginal: brutoOrig,
-      precoUnitario: rawNovoPreco,
-      valorTotalBruto: novoBruto,
-      valorDescontoItem: novoValorDesc,
-      valorTotalLiquido: novoLiquido,
-      valorIpi: novoValorIpi
-    };
+    return { ...it };
   });
 
-  const finalTotals = calculateOrderTotals(candidateItems, header, fiscal);
-  const novoTotal = finalTotals.totalGeral;
-  const diferencaEfetiva = Number((novoTotal - totalAnterior).toFixed(2));
-  const diferencaResidualNf = Number((targetVal - novoTotal).toFixed(2));
+  const baseHeader = { ...header, valorNotaFiscalEntregue: undefined, ajusteFiscalDiferenca: undefined };
+  const currentTotals = calculateOrderTotals(pristineItems, baseHeader, fiscal);
+  const totalBase = currentTotals.totalComercialSemAjuste;
+  const targetVal = Number(Math.max(0, targetNfValue).toFixed(2));
+
+  if (totalBase <= 0 || targetVal <= 0) {
+    return {
+      updatedItems: pristineItems,
+      diferencaTotal: 0,
+      percentualVariacao: 0,
+      totalAnterior: totalBase,
+      novoTotal: totalBase,
+      diferencaResidualNf: 0
+    };
+  }
+
+  const diferencaTotal = Number((targetVal - totalBase).toFixed(2));
+  const percentualVariacao = totalBase > 0 ? Number(((diferencaTotal / totalBase) * 100).toFixed(2)) : 0;
 
   return {
-    updatedItems: candidateItems,
-    diferencaTotal: diferencaEfetiva,
+    updatedItems: pristineItems, // Produtos permanecem 100% inalterados!
+    diferencaTotal,
     percentualVariacao,
-    totalAnterior,
-    novoTotal,
-    diferencaResidualNf
+    totalAnterior: totalBase,
+    novoTotal: targetVal,
+    diferencaResidualNf: 0
   };
 }
 

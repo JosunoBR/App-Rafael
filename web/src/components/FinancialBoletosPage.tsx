@@ -32,7 +32,8 @@ import {
   Upload,
   UploadCloud,
   FileCheck,
-  Loader2
+  Loader2,
+  Scale
 } from 'lucide-react';
 import { 
   PurchaseOrder, 
@@ -54,7 +55,7 @@ import {
   cancelRecurringSeriesInDb,
   batchPayFinancialEntriesInDb
 } from '../utils/api';
-import { toBrDate } from '../utils/masks';
+import { toBrDate, formatCurrency } from '../utils/masks';
 import { exportFinancialToExcel, exportFinancialToPdf } from '../utils/financialExporter';
 import { compressImage, isImageFile, formatFileSize } from '../utils/imageUtils';
 import { FinancialEntryModal } from './FinancialEntryModal';
@@ -89,6 +90,37 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
 }) => {
   // Aba ativa: 'daily' (Visão Diária da Planilha) ou 'list' (Contas a Pagar Analítico)
   const [activeTab, setActiveTab] = useState<'daily' | 'list'>('daily');
+
+  // Mapeamento otimizado de pedidos para lookup instantâneo e detecção de ajuste fiscal
+  const ordersMap = useMemo(() => {
+    const byId = new Map<string, PurchaseOrder>();
+    const byNum = new Map<string, PurchaseOrder>();
+    orders.forEach(o => {
+      if (o.header?.id) byId.set(o.header.id, o);
+      if (o.header?.numeroPedido) {
+        const cleanNum = o.header.numeroPedido.trim().toUpperCase();
+        byNum.set(cleanNum, o);
+        const digits = cleanNum.replace(/\D/g, '');
+        if (digits) byNum.set(digits, o);
+      }
+    });
+    return { byId, byNum };
+  }, [orders]);
+
+  const getLinkedOrder = useCallback((item: FinancialEntry): PurchaseOrder | undefined => {
+    if (item.orderId && ordersMap.byId.has(item.orderId)) {
+      return ordersMap.byId.get(item.orderId);
+    }
+    if (item.documentoRef && ordersMap.byNum.has(item.documentoRef.trim().toUpperCase())) {
+      return ordersMap.byNum.get(item.documentoRef.trim().toUpperCase());
+    }
+    const match = item.descricao.match(/PED-(\d+)/i) || item.descricao.match(/Pedido\s*(\d+)/i);
+    if (match) {
+      const padNum = `PED-${match[1].padStart(4, '0')}`;
+      return ordersMap.byNum.get(padNum) || ordersMap.byNum.get(match[1]);
+    }
+    return undefined;
+  }, [ordersMap]);
 
   // Filtros de Período (inicializados dinamicamente no mês/ano atual)
   const [selectedYear, setSelectedYear] = useState<string>(() => String(new Date().getFullYear()));
@@ -1034,6 +1066,8 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
       {activeTab === 'daily' && (
         <FinancialDailyView
           entries={entries}
+          orders={orders}
+          onSelectOrder={onSelectOrder}
           selectedYear={selectedYear}
           selectedMonth={selectedMonth}
           onPayEntry={(id) => {
@@ -1096,6 +1130,15 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                   entries.map(item => {
                     const isPaid = item.status === 'Pago';
                     const isPrevisto = (item.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO';
+                    const linkedOrder = getLinkedOrder(item);
+                    const hasFiscalAdjustment = Boolean(
+                      linkedOrder && (
+                        (linkedOrder.header.valorNotaFiscalEntregue && linkedOrder.header.valorNotaFiscalEntregue > 0) ||
+                        (linkedOrder.header.ajusteFiscalDiferenca && Math.abs(linkedOrder.header.ajusteFiscalDiferenca) > 0.005)
+                      )
+                    );
+                    const adjDiff = linkedOrder?.header.ajusteFiscalDiferenca || 0;
+                    const adjNf = linkedOrder?.header.valorNotaFiscalEntregue || 0;
 
                     return (
                       <tr
@@ -1150,6 +1193,17 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                             <span className={isPaid ? 'line-through text-slate-400' : ''}>
                               {item.descricao}
                             </span>
+                            {hasFiscalAdjustment && (
+                              <button
+                                type="button"
+                                onClick={() => linkedOrder && onSelectOrder(linkedOrder)}
+                                className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 border border-indigo-400/40 inline-flex items-center gap-1 shadow-xs transition active:scale-95 cursor-pointer"
+                                title={`Pedido ${linkedOrder?.header.numeroPedido} com Ajuste Fiscal da NF aplicado: ${adjDiff >= 0 ? '+' : '-'}R$ ${Math.abs(adjDiff).toFixed(2).replace('.', ',')} no total final (NF: R$ ${adjNf.toFixed(2).replace('.', ',')}). Clique para abrir o pedido.`}
+                              >
+                                <Scale className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                                <span>Ajuste NF {adjDiff >= 0 ? '+' : '-'}{formatCurrency(Math.abs(adjDiff))}</span>
+                              </button>
+                            )}
                             {item.recorrente && (
                               <span 
                                 className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 inline-flex items-center gap-0.5" 
@@ -1177,7 +1231,17 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                           {item.formaPagamento}
                         </td>
                         <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-400">
-                          {item.documentoRef || '—'}
+                          <div className="flex items-center gap-1.5">
+                            <span>{item.documentoRef || '—'}</span>
+                            {hasFiscalAdjustment && (
+                              <span 
+                                title={`Pedido com conciliação fiscal (${adjDiff >= 0 ? '+' : '-'}R$ ${Math.abs(adjDiff).toFixed(2).replace('.', ',')})`}
+                                className="text-indigo-600 dark:text-indigo-400 inline-flex items-center"
+                              >
+                                <Scale className="w-3.5 h-3.5" />
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-3 font-mono font-bold text-amber-600 dark:text-amber-400">
                           {item.parcelaDesc}

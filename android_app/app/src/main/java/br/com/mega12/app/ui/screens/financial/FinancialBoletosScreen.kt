@@ -29,8 +29,19 @@ fun FinancialBoletosScreen(
     viewModel: Mega12ViewModel
 ) {
     val installments by viewModel.installments.collectAsState()
+    val orders by viewModel.orders.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     var selectedFilter by remember { mutableStateOf("TODOS") }
+
+    val ordersMap = remember(orders) {
+        val map = mutableMapOf<String, br.com.mega12.app.data.model.PurchaseOrder>()
+        orders.forEach { o ->
+            if (o.header.id.isNotBlank()) map[o.header.id] = o
+            if (o.id.isNotBlank()) map[o.id] = o
+            if (o.header.numeroPedido.isNotBlank()) map[o.header.numeroPedido] = o
+        }
+        map
+    }
 
     val todayStr = remember {
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -177,6 +188,50 @@ fun FinancialBoletosScreen(
                                         text = "$docLabel: ${inst.displayDocumento} (${inst.numeroParcela}/${inst.totalParcelas})",
                                         style = MaterialTheme.typography.bodySmall.copy(color = Slate400, fontSize = 11.sp)
                                     )
+
+                                    val linkedOrder = remember(inst, ordersMap) {
+                                        val oId = inst.orderId
+                                        if (!oId.isNullOrBlank() && ordersMap.containsKey(oId)) {
+                                            ordersMap[oId]
+                                        } else {
+                                            val numPed = inst.numeroPedido ?: ""
+                                            if (numPed.isNotBlank() && ordersMap.containsKey(numPed)) {
+                                                ordersMap[numPed]
+                                            } else null
+                                        }
+                                    }
+                                    val ajusteDiff = linkedOrder?.header?.ajusteFiscalDiferenca ?: 0.0
+                                    val temAjuste = (linkedOrder?.header?.valorNotaFiscalEntregue ?: 0.0) > 0.0 || Math.abs(ajusteDiff) > 0.001
+
+                                    if (temAjuste) {
+                                        Surface(
+                                            color = Amber500.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(4.dp),
+                                            modifier = Modifier.padding(vertical = 2.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ReceiptLong,
+                                                    contentDescription = "Ajuste Fiscal NF",
+                                                    tint = Amber400,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                val sinal = if (ajusteDiff > 0) "+" else ""
+                                                Text(
+                                                    text = "Ajuste NF: $sinal${currencyFormat.format(ajusteDiff)}",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        color = Amber400,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 10.sp
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
                                     val vencBr = if (inst.dataVencimento.length == 10 && inst.dataVencimento.contains('-')) {
                                         val p = inst.dataVencimento.split('-')
                                         if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else inst.dataVencimento

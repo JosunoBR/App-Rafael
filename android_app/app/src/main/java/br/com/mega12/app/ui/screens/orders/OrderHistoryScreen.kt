@@ -169,12 +169,44 @@ fun OrderHistoryScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = order.header.numeroPedido.ifEmpty { "PED-RASCUNHO" },
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
-                                        color = Color.White
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = order.header.numeroPedido.ifEmpty { "PED-RASCUNHO" },
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = Color.White
+                                        )
+                                        val temAjusteFiscal = (order.header.valorNotaFiscalEntregue > 0.0) || Math.abs(order.header.ajusteFiscalDiferenca) > 0.001
+                                        if (temAjusteFiscal) {
+                                            Surface(
+                                                color = Amber500.copy(alpha = 0.2f),
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
+                                                        contentDescription = "Ajuste Fiscal NF",
+                                                        tint = Amber400,
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    val sinal = if (order.header.ajusteFiscalDiferenca > 0) "+" else ""
+                                                    Text(
+                                                        text = "Ajuste NF $sinal${currencyFormat.format(order.header.ajusteFiscalDiferenca)}",
+                                                        color = Amber400,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                     Surface(
                                         color = statusBg,
                                         shape = RoundedCornerShape(6.dp)
@@ -410,6 +442,18 @@ private fun OrderDetailsDialog(
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Total Líquido:", color = Slate400, fontSize = 12.sp)
                                 Text(currencyFormat.format(order.totalLiquido), color = Emerald400, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
+                            if ((order.header.valorNotaFiscalEntregue > 0.0) || Math.abs(order.header.ajusteFiscalDiferenca) > 0.001) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Ajuste Fiscal NF:", color = Amber400, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    val sinal = if (order.header.ajusteFiscalDiferenca > 0) "+" else ""
+                                    Text("$sinal${currencyFormat.format(order.header.ajusteFiscalDiferenca)}", color = Amber400, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Total Final NF:", color = Amber300, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    val nfVal = if (order.header.valorNotaFiscalEntregue > 0.0) order.header.valorNotaFiscalEntregue else (order.totalLiquido + order.header.ajusteFiscalDiferenca)
+                                    Text(currencyFormat.format(nfVal), color = Amber300, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                }
                             }
                         }
                     }

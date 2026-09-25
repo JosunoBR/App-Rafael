@@ -65,6 +65,11 @@ export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) =
               -R$ {valorDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {offGlobal > 0 ? `(${offGlobal}% OFF)` : '(Itens)'}
             </span>
           )}
+          {totals.ajusteFiscalValor !== 0 && (
+            <span className={totals.ajusteFiscalValor > 0 ? "text-amber-600 dark:text-amber-400 font-bold" : "text-sky-600 dark:text-sky-400 font-bold"}>
+              {totals.ajusteFiscalValor > 0 ? '+' : '-'}R$ {Math.abs(totals.ajusteFiscalValor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Ajuste NF)
+            </span>
+          )}
           {aliquotaSt > 0 && (
             <span className="text-amber-600 dark:text-amber-400 font-bold">
               +ST {aliquotaSt}% (+R$ {valorSt.toFixed(2)})

@@ -111,5 +111,13 @@ fun NavGraph(
                 viewModel = viewModel
             )
         }
+
+        // Configurações do Sistema
+        composable(Screen.Settings.route) {
+            br.com.mega12.app.ui.screens.settings.SettingsScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
     }
 }

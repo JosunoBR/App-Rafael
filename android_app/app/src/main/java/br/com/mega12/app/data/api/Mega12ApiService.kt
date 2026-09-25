@@ -59,4 +59,9 @@ interface Mega12ApiService {
     // Financeiro (Consulta de Lançamentos & Boletos)
     @GET("financial/entries")
     suspend fun getFinancialEntries(): Response<Map<String, Any>>
+
+    // Condições de Pagamento
+    @GET("payment-conditions")
+    suspend fun getPaymentConditions(@Query("active") active: Boolean = true): Response<List<PaymentCondition>>
 }
+

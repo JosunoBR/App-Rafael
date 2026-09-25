@@ -1,5 +1,6 @@
 package br.com.mega12.app.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,11 +13,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import br.com.mega12.app.R
 import br.com.mega12.app.ui.navigation.Screen
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
@@ -41,7 +44,10 @@ val ALL_NAVIGATION_ITEMS = listOf(
 
     // 3. CONSULTAS RÁPIDAS
     NavigationItem("Catálogo de Produtos", Screen.ProductsCatalog.route, Icons.Default.ShoppingBag, "CONSULTAS RÁPIDAS", listOf("diretoria", "comprador")),
-    NavigationItem("Fornecedores", Screen.Suppliers.route, Icons.Default.Business, "CONSULTAS RÁPIDAS", listOf("diretoria", "comprador"))
+    NavigationItem("Fornecedores", Screen.Suppliers.route, Icons.Default.Business, "CONSULTAS RÁPIDAS", listOf("diretoria", "comprador")),
+
+    // 4. SISTEMA
+    NavigationItem("Configurações", Screen.Settings.route, Icons.Default.Settings, "SISTEMA", listOf("diretoria", "comprador", "separacao", "conferente"))
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,16 +94,17 @@ fun Mega12AppShell(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Surface(
-                                color = Emerald500,
+                                color = Slate900,
                                 shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(40.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.ShoppingBag,
-                                    contentDescription = null,
-                                    tint = Slate900,
-                                    modifier = Modifier.padding(8.dp)
-                                )
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(3.dp)) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.logomega12),
+                                        contentDescription = "Logo Mega 12",
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
                             }
                             Column {
                                 Text(
@@ -213,6 +220,7 @@ fun Mega12AppShell(
         }
     ) {
         Scaffold(
+            contentWindowInsets = WindowInsets.systemBars,
             topBar = {
                 TopAppBar(
                     title = {
@@ -231,15 +239,6 @@ fun Mega12AppShell(
                             )
                         }
                     },
-                    actions = {
-                        IconButton(onClick = { navController.navigate(Screen.ServerConfig.route) }) {
-                            Icon(
-                                imageVector = Icons.Default.Dns,
-                                contentDescription = "Configurar IP Servidor",
-                                tint = Emerald400
-                            )
-                        }
-                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Slate900
                     )
@@ -251,7 +250,8 @@ fun Mega12AppShell(
                 if (bottomBarItems.isNotEmpty()) {
                     NavigationBar(
                         containerColor = Slate900,
-                        contentColor = Color.White
+                        contentColor = Color.White,
+                        windowInsets = WindowInsets.navigationBars
                     ) {
                         bottomBarItems.forEach { item ->
                             val isSelected = currentRoute == item.route

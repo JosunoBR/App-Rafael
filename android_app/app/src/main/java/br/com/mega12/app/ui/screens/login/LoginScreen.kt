@@ -1,5 +1,6 @@
 package br.com.mega12.app.ui.screens.login
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,11 +15,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import br.com.mega12.app.R
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
 
@@ -42,6 +45,7 @@ fun LoginScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.systemBars,
         containerColor = Slate900
     ) { padding ->
         Box(
@@ -127,19 +131,13 @@ fun LoginScreen(
                         email = it
                         viewModel.clearMessages()
                     },
-                    label = { Text("E-mail corporativo", color = Slate400) },
+                    label = { Text("E-mail corporativo") },
                     leadingIcon = {
-                        Icon(Icons.Default.Email, contentDescription = null, tint = Slate400)
+                        Icon(Icons.Default.Email, contentDescription = null, tint = Emerald400)
                     },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Emerald500,
-                        unfocusedBorderColor = Slate700,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = Emerald500
-                    ),
+                    colors = mega12TextFieldColors(containerColor = Slate800),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -153,20 +151,14 @@ fun LoginScreen(
                         password = it
                         viewModel.clearMessages()
                     },
-                    label = { Text("Senha", color = Slate400) },
+                    label = { Text("Senha") },
                     leadingIcon = {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = Slate400)
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = Emerald400)
                     },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Emerald500,
-                        unfocusedBorderColor = Slate700,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = Emerald500
-                    ),
+                    colors = mega12TextFieldColors(containerColor = Slate800),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )

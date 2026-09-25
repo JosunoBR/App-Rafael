@@ -18,4 +18,7 @@ sealed class Screen(val route: String) {
     // Consultas Rápidas
     object ProductsCatalog : Screen("products_catalog")
     object Suppliers : Screen("suppliers")
+
+    // Configurações do Sistema
+    object Settings : Screen("settings")
 }

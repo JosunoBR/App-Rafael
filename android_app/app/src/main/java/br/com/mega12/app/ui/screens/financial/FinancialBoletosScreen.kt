@@ -19,6 +19,7 @@ import br.com.mega12.app.data.model.PaymentInstallment
 import br.com.mega12.app.ui.components.Mega12AppShell
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -33,6 +34,10 @@ fun FinancialBoletosScreen(
 
     val todayStr = remember {
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    }
+
+    val currencyFormat = remember {
+        NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
     }
 
     val filteredInstallments = remember(installments, selectedFilter, todayStr) {
@@ -79,7 +84,7 @@ fun FinancialBoletosScreen(
                             style = MaterialTheme.typography.labelSmall.copy(color = Slate400, fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = "R$ %.2f".format(totalValorFiltrado),
+                            text = currencyFormat.format(totalValorFiltrado),
                             style = MaterialTheme.typography.titleLarge.copy(color = Emerald400, fontWeight = FontWeight.Bold)
                         )
                         Text(
@@ -162,17 +167,22 @@ fun FinancialBoletosScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = inst.fornecedor ?: "Fornecedor Matriz",
+                                        text = inst.displayFornecedor,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
                                         fontSize = 14.sp
                                     )
+                                    val docLabel = if (inst.numeroPedido?.startsWith("PED-") == true) "Pedido" else "Doc"
                                     Text(
-                                        text = "Pedido: ${inst.numeroPedido} (${inst.numeroParcela}/${inst.totalParcelas})",
+                                        text = "$docLabel: ${inst.displayDocumento} (${inst.numeroParcela}/${inst.totalParcelas})",
                                         style = MaterialTheme.typography.bodySmall.copy(color = Slate400, fontSize = 11.sp)
                                     )
+                                    val vencBr = if (inst.dataVencimento.length == 10 && inst.dataVencimento.contains('-')) {
+                                        val p = inst.dataVencimento.split('-')
+                                        if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else inst.dataVencimento
+                                    } else inst.dataVencimento
                                     Text(
-                                        text = "Vencimento: ${inst.dataVencimento}",
+                                        text = "Vencimento: $vencBr",
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = if (isVencido) Rose400 else if (isHoje) Amber400 else Slate400,
                                             fontWeight = if (isHoje || isVencido) FontWeight.Bold else FontWeight.Normal,
@@ -183,7 +193,7 @@ fun FinancialBoletosScreen(
 
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = "R$ %.2f".format(inst.valor),
+                                        text = currencyFormat.format(inst.valor),
                                         fontWeight = FontWeight.Bold,
                                         color = Emerald400,
                                         fontSize = 15.sp

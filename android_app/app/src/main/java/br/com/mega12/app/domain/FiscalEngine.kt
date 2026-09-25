@@ -5,8 +5,16 @@ import kotlin.math.max
 import kotlin.math.roundToLong
 
 data class FiscalCalculationResult(
+    val precoCompra: Double = 0.0,
+    val pdvAlvo: Double = 0.0,
     val percentualDespesasPdv: Double,
     val percentualCreditoEntrada: Double,
+    val custosFixosAliquota: Double = 0.26,
+    val icmsSaidaAliquota: Double = 0.11,
+    val pisCofinsAliquota: Double = 0.03,
+    val custoFixoUnit: Double = 0.0,
+    val icmsSaidaUnit: Double = 0.0,
+    val pisCofinsUnit: Double = 0.0,
     val despesasPdvUnit: Double,
     val creditoIcmsUnit: Double,
     val custoRealEfetivo: Double,
@@ -55,6 +63,9 @@ object FiscalEngine {
         val percentualDespesasPdv = icms + ipi + pisCofins + custosFixos
         val percentualCreditoEntrada = creditoEntrada
 
+        val custoFixoUnit = round4(pdvAlvo * custosFixos)
+        val icmsSaidaUnit = round4(pdvAlvo * icms)
+        val pisCofinsUnit = round4(pdvAlvo * pisCofins)
         val despesasPdvUnit = round4(pdvAlvo * percentualDespesasPdv)
         val creditoIcmsUnit = round4(precoCompra * percentualCreditoEntrada)
         val custoRealEfetivo = round4(precoCompra + despesasPdvUnit - creditoIcmsUnit)
@@ -62,15 +73,23 @@ object FiscalEngine {
         val margemPercentual = if (pdvAlvo > 0) round2((margemRealUnit / pdvAlvo) * 100) else 0.0
 
         val statusMargem = when {
-            margemPercentual >= 25.0 -> MarginStatus.EXCELENTE
-            margemPercentual >= 15.0 -> MarginStatus.BOA
+            margemPercentual >= 20.0 -> MarginStatus.EXCELENTE
+            margemPercentual >= 10.0 -> MarginStatus.BOA
             margemPercentual > 0.0 -> MarginStatus.APERTADA
             else -> MarginStatus.PREJUIZO
         }
 
         return FiscalCalculationResult(
+            precoCompra = precoCompra,
+            pdvAlvo = pdvAlvo,
             percentualDespesasPdv = percentualDespesasPdv,
             percentualCreditoEntrada = percentualCreditoEntrada,
+            custosFixosAliquota = custosFixos,
+            icmsSaidaAliquota = icms,
+            pisCofinsAliquota = pisCofins,
+            custoFixoUnit = custoFixoUnit,
+            icmsSaidaUnit = icmsSaidaUnit,
+            pisCofinsUnit = pisCofinsUnit,
             despesasPdvUnit = despesasPdvUnit,
             creditoIcmsUnit = creditoIcmsUnit,
             custoRealEfetivo = custoRealEfetivo,

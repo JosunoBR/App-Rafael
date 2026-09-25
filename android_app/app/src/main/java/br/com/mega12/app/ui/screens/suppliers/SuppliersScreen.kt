@@ -57,22 +57,17 @@ fun SuppliersScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Buscar fornecedor, vendedor ou CNPJ...", color = Slate400, fontSize = 13.sp) },
+                placeholder = { Text("Buscar fornecedor, vendedor ou CNPJ...", color = Slate300, fontSize = 13.sp) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Emerald400) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Limpar", tint = Slate400)
+                            Icon(Icons.Default.Clear, contentDescription = "Limpar", tint = Slate300)
                         }
                     }
                 },
                 singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Emerald500,
-                    unfocusedBorderColor = Slate700,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                ),
+                colors = mega12TextFieldColors(containerColor = Slate800),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )

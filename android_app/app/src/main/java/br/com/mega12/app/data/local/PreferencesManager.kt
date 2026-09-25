@@ -15,9 +15,19 @@ class PreferencesManager(context: Context) {
         private const val KEY_SERVER_URL = "key_server_url"
         private const val KEY_AUTH_TOKEN = "key_auth_token"
         private const val KEY_SAVED_USER = "key_saved_user"
+        private const val KEY_THEME_MODE = "key_theme_mode"
+
+        const val THEME_SYSTEM = "system"
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
+
         // IP padrão para desenvolvimento no emulador Android (10.0.2.2 aponta para o localhost da máquina host)
         const val DEFAULT_SERVER_URL = "http://10.0.2.2:3001/api/"
     }
+
+    var themeMode: String
+        get() = prefs.getString(KEY_THEME_MODE, THEME_SYSTEM) ?: THEME_SYSTEM
+        set(value) = prefs.edit().putString(KEY_THEME_MODE, value).apply()
 
     var serverUrl: String
         get() = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL

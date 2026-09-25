@@ -3,8 +3,9 @@ package br.com.mega12.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -15,6 +16,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import br.com.mega12.app.Mega12Application
 import br.com.mega12.app.domain.MarginStatus
 import br.com.mega12.app.ui.theme.*
 
@@ -131,9 +133,9 @@ fun MarginBadge(
     modifier: Modifier = Modifier
 ) {
     val status = when {
-        margin >= 30.0 -> MarginStatus.EXCELENTE
-        margin >= 20.0 -> MarginStatus.BOA
-        margin >= 10.0 -> MarginStatus.APERTADA
+        margin >= 20.0 -> MarginStatus.EXCELENTE
+        margin >= 10.0 -> MarginStatus.BOA
+        margin > 0.0 -> MarginStatus.APERTADA
         else -> MarginStatus.PREJUIZO
     }
     MarginBadge(marginPercent = margin, status = status, modifier = modifier)
@@ -166,5 +168,187 @@ fun MarginBadge(
                 color = textColor
             )
         )
+    }
+}
+
+/**
+ * Resolve URL relativa de imagem para a URL completa do servidor backend
+ */
+fun resolveProductImageUrl(fotoUrl: String?, serverBaseUrl: String? = null): String? {
+    if (fotoUrl.isNullOrBlank()) return null
+    val trimmed = fotoUrl.trim()
+    if (trimmed.startsWith("http://", ignoreCase = true) ||
+        trimmed.startsWith("https://", ignoreCase = true) ||
+        trimmed.startsWith("data:image", ignoreCase = true) ||
+        trimmed.startsWith("file://", ignoreCase = true) ||
+        trimmed.startsWith("content://", ignoreCase = true)
+    ) {
+        return trimmed
+    }
+
+    val base = serverBaseUrl ?: try {
+        Mega12Application.instance.preferencesManager.serverUrl
+    } catch (e: Exception) {
+        "http://10.0.2.2:3001/api/"
+    }
+
+    val serverHost = base.trimEnd('/')
+        .removeSuffix("/api")
+        .removeSuffix("/")
+
+    val cleanPath = if (trimmed.startsWith("/")) trimmed else "/$trimmed"
+    return "$serverHost$cleanPath"
+}
+
+/**
+ * Thumbnail para fotos de produtos no Catálogo e Itens do Pedido
+ */
+@Composable
+fun ProductThumbnail(
+    imageUrl: String?,
+    contentDescription: String? = null,
+    modifier: Modifier = Modifier.size(56.dp),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(8.dp),
+    serverBaseUrl: String? = null,
+    onClick: (() -> Unit)? = null
+) {
+    val resolvedUrl = resolveProductImageUrl(imageUrl, serverBaseUrl)
+
+    val clickModifier = if (onClick != null) {
+        Modifier.clickable { onClick() }
+    } else Modifier
+
+    Surface(
+        modifier = modifier
+            .clip(shape)
+            .then(clickModifier),
+        shape = shape,
+        color = Slate800
+    ) {
+        if (resolvedUrl.isNullOrBlank()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ShoppingBag,
+                    contentDescription = contentDescription,
+                    tint = Slate500,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        } else {
+            coil.compose.SubcomposeAsyncImage(
+                model = resolvedUrl,
+                contentDescription = contentDescription,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                loading = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = Emerald400
+                        )
+                    }
+                },
+                error = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = contentDescription,
+                            tint = Slate500,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Diálogo de Zoom e Visualização em Alta Resolução da Foto do Produto
+ */
+@Composable
+fun ZoomableImageDialog(
+    imageUrl: String?,
+    title: String? = null,
+    onDismiss: () -> Unit
+) {
+    val resolvedUrl = resolveProductImageUrl(imageUrl) ?: return
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Slate900),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title ?: "Foto do Produto",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Fechar", tint = Slate400)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                coil.compose.SubcomposeAsyncImage(
+                    model = resolvedUrl,
+                    contentDescription = title,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 350.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = Emerald400)
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.BrokenImage, contentDescription = null, tint = Slate500, modifier = Modifier.size(40.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Imagem não pôde ser carregada", color = Slate400, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                )
+            }
+        }
     }
 }

@@ -30,6 +30,7 @@ fun ServerConfigScreen(
                 onBackClick = onNavigateBack
             )
         },
+        contentWindowInsets = WindowInsets.systemBars,
         containerColor = Slate900
     ) { padding ->
         Column(
@@ -61,14 +62,9 @@ fun ServerConfigScreen(
                     serverUrl = it
                     savedMessage = null
                 },
-                label = { Text("URL Base da API", color = Slate400) },
+                label = { Text("URL Base da API") },
                 singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Emerald500,
-                    unfocusedBorderColor = Slate700,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                ),
+                colors = mega12TextFieldColors(containerColor = Slate800),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )

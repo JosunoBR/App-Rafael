@@ -38,9 +38,16 @@ fun BuyerHomeScreen(
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     }
 
-    val emCotacaoCount = orders.count { it.status == "Em Cotação" || it.status == "Rascunho" }
+    val emCotacaoCount = orders.count { 
+        it.status.equals("Em Cotação", ignoreCase = true) || 
+        it.status.equals("Em Cotacao", ignoreCase = true) || 
+        it.status.equals("Rascunho", ignoreCase = true)
+    }
     val boletosHojeCount = installments.count { 
         it.dataVencimento.startsWith(todayStr) && it.status != "Pago" 
+    }
+    val boletosVencidosCount = installments.count { 
+        (it.status == "Em Atraso" || (it.dataVencimento.isNotBlank() && it.dataVencimento < todayStr)) && it.status != "Pago" 
     }
     val boletosPendentesCount = installments.count { it.status != "Pago" }
 
@@ -177,11 +184,21 @@ fun BuyerHomeScreen(
                     )
 
                     // Card Financeiro / Boletos
+                    val boletoBadge = when {
+                        boletosHojeCount > 0 -> "$boletosHojeCount VENCE HOJE"
+                        boletosVencidosCount > 0 -> "$boletosVencidosCount vencidos"
+                        else -> null
+                    }
+                    val boletoBadgeColor = when {
+                        boletosHojeCount > 0 -> Rose500
+                        boletosVencidosCount > 0 -> Amber500
+                        else -> Emerald500
+                    }
                     HomeQuickActionCard(
                         title = "Boletos a Pagar",
-                        subtitle = "$boletosPendentesCount a vencer",
-                        badge = if (boletosHojeCount > 0) "$boletosHojeCount VENCE HOJE" else null,
-                        badgeColor = if (boletosHojeCount > 0) Rose500 else Emerald500,
+                        subtitle = "$boletosPendentesCount a pagar",
+                        badge = boletoBadge,
+                        badgeColor = boletoBadgeColor,
                         icon = Icons.Default.CreditCard,
                         iconColor = Emerald400,
                         modifier = Modifier.weight(1f),

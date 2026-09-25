@@ -50,9 +50,14 @@ class Mega12ViewModel : ViewModel() {
     private val _installments = MutableStateFlow<List<PaymentInstallment>>(emptyList())
     val installments: StateFlow<List<PaymentInstallment>> = _installments.asStateFlow()
 
+    // Condições de Pagamento Salvas
+    private val _paymentConditions = MutableStateFlow<List<PaymentCondition>>(DEFAULT_PAYMENT_CONDITIONS)
+    val paymentConditions: StateFlow<List<PaymentCondition>> = _paymentConditions.asStateFlow()
+
     // Configuração Fiscal
     private val _fiscalConfig = MutableStateFlow(FiscalEngine.DEFAULT_CONFIG)
     val fiscalConfig: StateFlow<FiscalConfig> = _fiscalConfig.asStateFlow()
+
 
     // Estado da Calculadora Rápida do Comprador
     private val _calcPrecoCompra = MutableStateFlow("")
@@ -74,6 +79,15 @@ class Mega12ViewModel : ViewModel() {
     // Novo Pedido em Construção
     private val _currentDraftOrder = MutableStateFlow(PurchaseOrder())
     val currentDraftOrder: StateFlow<PurchaseOrder> = _currentDraftOrder.asStateFlow()
+
+    // Tema do Aplicativo (Claro, Escuro ou Sistema)
+    private val _themeMode = MutableStateFlow(preferencesManager.themeMode)
+    val themeMode: StateFlow<String> = _themeMode.asStateFlow()
+
+    fun setThemeMode(mode: String) {
+        preferencesManager.themeMode = mode
+        _themeMode.value = mode
+    }
 
     init {
         if (_currentUser.value != null) {
@@ -129,6 +143,14 @@ class Mega12ViewModel : ViewModel() {
             // Carregar Lançamentos Financeiros (Boletos)
             val finRes = repository.getFinancialEntries()
             finRes.onSuccess { _installments.value = it }
+
+            // Carregar Condições de Pagamento Salvas
+            val condRes = repository.getPaymentConditions()
+            condRes.onSuccess { 
+                if (it.isNotEmpty()) {
+                    _paymentConditions.value = it
+                }
+            }
 
             _isLoading.value = false
         }
@@ -245,6 +267,91 @@ class Mega12ViewModel : ViewModel() {
         )
     }
 
+    fun updateDraftOrderItem(
+        itemId: String,
+        totalUnidades: Int,
+        precoCompra: Double,
+        pdvAlvo: Double = 12.00,
+        ipiAliquota: Double = 0.0,
+        percentualDesconto: Double = 0.0,
+        qtdPorCaixa: Int = 12
+    ) {
+        val existing = _currentDraftOrder.value.items.find { it.id == itemId } ?: return
+        val valorBruto = totalUnidades * precoCompra
+        val valorDesc = valorBruto * (percentualDesconto / 100.0)
+        val valorIpi = (valorBruto - valorDesc) * (ipiAliquota / 100.0)
+        val subtotalLiquido = valorBruto - valorDesc + valorIpi
+        val custoEfetivo = if (totalUnidades > 0) subtotalLiquido / totalUnidades else precoCompra
+
+        val fiscal = FiscalEngine.calculateItemFiscal(custoEfetivo, pdvAlvo, _fiscalConfig.value)
+        val sep = SeparationEngine.calculateBoxesSeparation(totalUnidades, qtdPorCaixa)
+
+        val updatedItem = existing.copy(
+            totalPecas = totalUnidades,
+            precoCompraUnitario = precoCompra,
+            pdvAlvo = pdvAlvo,
+            subtotal = subtotalLiquido,
+            ipiAliquota = ipiAliquota,
+            percentualDesconto = percentualDesconto,
+            custoRealEfetivo = custoEfetivo,
+            margemCalculada = fiscal.margemPercentual,
+            statusMargem = fiscal.statusMargem.name.lowercase(),
+            storeDistribution = sep.allocations,
+            qtdPorCaixa = qtdPorCaixa
+        )
+
+        val updatedItems = _currentDraftOrder.value.items.map {
+            if (it.id == itemId) updatedItem else it
+        }
+        val totalLiq = updatedItems.sumOf { it.subtotal }
+        val totalPcs = updatedItems.sumOf { it.totalPecas }
+
+        _currentDraftOrder.value = _currentDraftOrder.value.copy(
+            items = updatedItems,
+            totalLiquido = totalLiq,
+            totalPecas = totalPcs
+        )
+    }
+
+    fun adjustItemBoxesInDraftOrder(itemId: String, deltaBoxes: Int) {
+        val item = _currentDraftOrder.value.items.find { it.id == itemId } ?: return
+        val pcsPerBox = if (item.qtdPorCaixa > 0) item.qtdPorCaixa else 12
+        val currentBoxes = (item.totalPecas / pcsPerBox).coerceAtLeast(1)
+        val newBoxes = (currentBoxes + deltaBoxes).coerceAtLeast(1)
+        val newTotalPcs = newBoxes * pcsPerBox
+
+        updateDraftOrderItem(
+            itemId = itemId,
+            totalUnidades = newTotalPcs,
+            precoCompra = item.precoCompraUnitario,
+            pdvAlvo = item.pdvAlvo,
+            ipiAliquota = item.ipiAliquota,
+            percentualDesconto = item.percentualDesconto,
+            qtdPorCaixa = pcsPerBox
+        )
+    }
+
+    fun setFiscalConfig(newConfig: FiscalConfig) {
+        _fiscalConfig.value = newConfig
+        recalculateDraftOrderFiscal()
+    }
+
+    fun recalculateDraftOrderFiscal() {
+        val currentItems = _currentDraftOrder.value.items
+        val updatedItems = currentItems.map { item ->
+            val custoEfetivo = if (item.totalPecas > 0) item.subtotal / item.totalPecas else item.precoCompraUnitario
+            val fiscal = FiscalEngine.calculateItemFiscal(custoEfetivo, item.pdvAlvo, _fiscalConfig.value)
+            item.copy(
+                custoRealEfetivo = custoEfetivo,
+                margemCalculada = fiscal.margemPercentual,
+                statusMargem = fiscal.statusMargem.name.lowercase()
+            )
+        }
+        _currentDraftOrder.value = _currentDraftOrder.value.copy(
+            items = updatedItems
+        )
+    }
+
     fun addCurrentCalcToDraftOrder(descricao: String = "Item Calculado em Viagem", codigo: String = ""): Boolean {
         val compra = _calcPrecoCompra.value.toDoubleOrNull() ?: 0.0
         val pdv = _calcPdvAlvo.value.toDoubleOrNull() ?: 0.0
@@ -269,6 +376,14 @@ class Mega12ViewModel : ViewModel() {
         return true
     }
 
+    fun loadOrderForEdit(order: PurchaseOrder) {
+        _currentDraftOrder.value = order
+    }
+
+    fun startNewDraftOrder() {
+        _currentDraftOrder.value = PurchaseOrder()
+    }
+
     fun saveDraftOrder(fornecedor: String, condicao: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
             if (_currentDraftOrder.value.items.isEmpty()) {
@@ -278,26 +393,36 @@ class Mega12ViewModel : ViewModel() {
 
             _isLoading.value = true
             val now = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            val orderNum = "PED-${String.format("%04d", (_orders.value.size + 1))}"
+            val existing = _currentDraftOrder.value
+            val isEditing = existing.id.isNotBlank() && existing.header.numeroPedido.isNotBlank()
 
-            val finalOrder = _currentDraftOrder.value.copy(
-                id = UUID.randomUUID().toString(),
-                header = OrderHeader(
+            val finalId = if (isEditing) existing.id else UUID.randomUUID().toString()
+            val orderNum = if (isEditing) existing.header.numeroPedido else "PED-${String.format("%04d", (_orders.value.size + 1))}"
+            val existingStatus = if (isEditing && existing.status.isNotBlank()) existing.status else "Confirmado"
+            val existingSepStatus = if (isEditing && existing.separationStatus.isNotBlank()) existing.separationStatus else "Pendente"
+
+            val finalOrder = existing.copy(
+                id = finalId,
+                header = existing.header.copy(
+                    id = finalId,
                     numeroPedido = orderNum,
                     fornecedor = fornecedor,
                     condicaoPagamento = condicao,
-                    dataEmissao = now
+                    dataEmissao = existing.header.dataEmissao ?: now,
+                    status = existingStatus,
+                    totalLiquido = existing.totalLiquido,
+                    totalPecas = existing.totalPecas
                 ),
-                status = "Confirmado",
-                separationStatus = "Pendente",
-                createdAt = now
+                status = existingStatus,
+                separationStatus = existingSepStatus,
+                createdAt = existing.createdAt ?: now
             )
 
             val res = repository.saveOrder(finalOrder)
             _isLoading.value = false
 
             res.onSuccess {
-                _successMessage.value = "Pedido $orderNum salvo com sucesso!"
+                _successMessage.value = if (isEditing) "Pedido $orderNum atualizado com sucesso!" else "Pedido $orderNum salvo com sucesso!"
                 _currentDraftOrder.value = PurchaseOrder() // Limpar rascunho
                 refreshData()
                 onSuccess()

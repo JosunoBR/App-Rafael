@@ -51,7 +51,7 @@ data class Product(
     val codigoBarras: String? = null,
     val codigo: String = "", // retrocompatibilidade
     val descricao: String = "",
-    val categoria: String = "",
+    val categoria: String? = null,
     val subcategoria: String? = null,
     val fornecedorPadraoId: String? = null,
     val fornecedorPadraoNome: String? = null,
@@ -88,10 +88,10 @@ data class OrderItem(
     val descricao: String = "",
     @SerializedName("qtdTotalUnidades", alternate = ["totalPecas", "caixas"])
     val totalPecas: Int = 0,
-    @SerializedName("precoUnitario", alternate = ["precoCompraUnitario"])
+    @SerializedName("precoUnitario", alternate = ["precoCompraUnitario", "custoUnitario"])
     val precoCompraUnitario: Double = 0.0,
     val pdvAlvo: Double = 12.0,
-    @SerializedName("valorTotalBruto", alternate = ["subtotal"])
+    @SerializedName("valorTotalLiquido", alternate = ["valorTotalBruto", "subtotal"])
     val subtotal: Double = 0.0,
     val ipiAliquota: Double = 0.0,
     val percentualDesconto: Double = 0.0,
@@ -105,7 +105,13 @@ data class OrderItem(
     val storeDistribution: Map<String, Int> = emptyMap(),
     val qtdPorCaixa: Int = 1,
     val qtdPorPacote: Int = 1
-)
+) {
+    val fotoUrl: String?
+        get() = photoUrl
+
+    val subtotalEfetivo: Double
+        get() = if (subtotal > 0) subtotal else (totalPecas * precoCompraUnitario)
+}
 
 // Estruturas de Doca e Conferência
 data class StoreItemCheck(
@@ -145,6 +151,8 @@ data class PaymentInstallment(
     val orderId: String? = null,
     val numeroPedido: String? = null,
     val fornecedor: String? = null,
+    val descricao: String? = null,
+    val lojaNome: String? = null,
     val numeroParcela: Int = 1,
     val totalParcelas: Int = 1,
     val dataVencimento: String = "",
@@ -153,10 +161,27 @@ data class PaymentInstallment(
     val dataPagamento: String? = null,
     val observacao: String? = null,
     val documentoRef: String? = null
-)
+) {
+    val displayFornecedor: String
+        get() = when {
+            !fornecedor.isNullOrBlank() -> fornecedor
+            !descricao.isNullOrBlank() -> descricao
+            !lojaNome.isNullOrBlank() -> "Loja $lojaNome"
+            else -> "Fornecedor Geral"
+        }
+
+    val displayDocumento: String
+        get() = when {
+            !numeroPedido.isNullOrBlank() -> numeroPedido
+            !documentoRef.isNullOrBlank() -> documentoRef
+            !descricao.isNullOrBlank() -> descricao
+            else -> "DOC-FIN"
+        }
+}
 
 // Cabeçalho do Pedido
 data class OrderHeader(
+    val id: String = "",
     val numeroPedido: String = "",
     val fornecedor: String = "",
     val supplierId: String? = null,
@@ -164,12 +189,22 @@ data class OrderHeader(
     val contatoVendedor: String? = null,
     val condicaoPagamento: String? = null,
     val dataEmissao: String? = null,
+    val dataPedido: String? = null,
     val dataEntregaPrevista: String? = null,
     val percentualDescontoOff: Double = 0.0,
     val percentualNota: Double = 100.0,
     val aliquotaSt: Double = 0.0,
     val observacoes: String? = null,
-    val recebidoMatriz: Boolean = false
+    val recebidoMatriz: Boolean = false,
+    val status: String = "Em Cotação",
+    val totalBruto: Double = 0.0,
+    val totalIpi: Double = 0.0,
+    val totalDesconto: Double = 0.0,
+    val totalLiquido: Double = 0.0,
+    val totalGeral: Double = 0.0,
+    val totalPecas: Int = 0,
+    val totalVolumes: Int = 0,
+    val createdAt: String? = null
 )
 
 // Pedido Completo
@@ -179,12 +214,45 @@ data class PurchaseOrder(
     val items: List<OrderItem> = emptyList(),
     val installments: List<PaymentInstallment> = emptyList(),
     val inspection: OrderInspection? = null,
+    @SerializedName("status")
     val status: String = "Em Cotação",
+    @SerializedName("separationStatus")
     val separationStatus: String = "Pendente",
+    @SerializedName("totalLiquido")
     val totalLiquido: Double = 0.0,
+    @SerializedName("totalPecas")
     val totalPecas: Int = 0,
     val createdAt: String? = null
-)
+) {
+    val finalId: String
+        get() = id.ifBlank { header.id }
+
+    val statusEfetivo: String
+        get() = when {
+            status.isNotBlank() && status != "Em Cotação" -> status
+            header.status.isNotBlank() -> header.status
+            else -> status
+        }
+
+    val totalLiquidoEfetivo: Double
+        get() = when {
+            totalLiquido > 0 -> totalLiquido
+            header.totalLiquido > 0 -> header.totalLiquido
+            header.totalGeral > 0 -> header.totalGeral
+            items.isNotEmpty() -> items.sumOf { if (it.subtotal > 0) it.subtotal else (it.totalPecas * it.precoCompraUnitario) }
+            header.totalBruto > 0 -> header.totalBruto
+            else -> 0.0
+        }
+
+    val totalPecasEfetivo: Int
+        get() = when {
+            totalPecas > 0 -> totalPecas
+            header.totalPecas > 0 -> header.totalPecas
+            items.isNotEmpty() -> items.sumOf { it.totalPecas }
+            header.totalVolumes > 0 -> header.totalVolumes
+            else -> 0
+        }
+}
 
 // Item do Estoque Central (CD)
 data class CentralStockItem(
@@ -228,3 +296,37 @@ data class FinancialEntry(
     val status: String = "A Vencer",
     val dataPagamento: String? = null
 )
+
+// Condição de Pagamento Salva
+data class PaymentCondition(
+    val id: String = "",
+    val descricao: String = "",
+    val qtdParcelas: Int = 1,
+    val parcelasDias: List<Int> = emptyList(),
+    val especie: String? = "Boleto",
+    val banco: String? = null,
+    val ativo: Boolean = true,
+    val padrao: Boolean = false,
+    val observacao: String? = null
+)
+
+val DEFAULT_PAYMENT_CONDITIONS = listOf(
+    PaymentCondition(id = "cond_30_60_90", descricao = "30/60/90 Dias", qtdParcelas = 3, parcelasDias = listOf(30, 60, 90), especie = "Boleto", padrao = true),
+    PaymentCondition(id = "cond_7_14_21_28", descricao = "7/14/21/28 Dias", qtdParcelas = 4, parcelasDias = listOf(7, 14, 21, 28), especie = "Boleto"),
+    PaymentCondition(id = "cond_14_21_28_35_42_49_56", descricao = "14/21/28/35/42/49/56 Dias", qtdParcelas = 7, parcelasDias = listOf(14, 21, 28, 35, 42, 49, 56), especie = "Boleto"),
+    PaymentCondition(id = "cond_28_35_42", descricao = "28/35/42 Dias", qtdParcelas = 3, parcelasDias = listOf(28, 35, 42), especie = "Boleto"),
+    PaymentCondition(id = "cond_28_35_42_49_56", descricao = "28/35/42/49/56 Dias", qtdParcelas = 5, parcelasDias = listOf(28, 35, 42, 49, 56), especie = "Boleto"),
+    PaymentCondition(id = "cond_30_60", descricao = "30/60 Dias", qtdParcelas = 2, parcelasDias = listOf(30, 60), especie = "Boleto"),
+    PaymentCondition(id = "cond_30_45_60", descricao = "30/45/60 Dias", qtdParcelas = 3, parcelasDias = listOf(30, 45, 60), especie = "Boleto"),
+    PaymentCondition(id = "cond_30_40_50_60", descricao = "30/40/50/60 Dias", qtdParcelas = 4, parcelasDias = listOf(30, 40, 50, 60), especie = "Boleto"),
+    PaymentCondition(id = "cond_30_45_60_75_90", descricao = "30/45/60/75/90 Dias", qtdParcelas = 5, parcelasDias = listOf(30, 45, 60, 75, 90), especie = "Boleto"),
+    PaymentCondition(id = "cond_30_40_50_60_70_80_90", descricao = "30/40/50/60/70/80/90 Dias", qtdParcelas = 7, parcelasDias = listOf(30, 40, 50, 60, 70, 80, 90), especie = "Boleto"),
+    PaymentCondition(id = "cond_30_60_90_120", descricao = "30/60/90/120 Dias", qtdParcelas = 4, parcelasDias = listOf(30, 60, 90, 120), especie = "Boleto"),
+    PaymentCondition(id = "cond_30_45_60_75_90_105_120", descricao = "30/45/60/75/90/105/120 Dias", qtdParcelas = 7, parcelasDias = listOf(30, 45, 60, 75, 90, 105, 120), especie = "Boleto"),
+    PaymentCondition(id = "cond_30_60_90_120_150", descricao = "30/60/90/120/150 Dias", qtdParcelas = 5, parcelasDias = listOf(30, 60, 90, 120, 150), especie = "Boleto"),
+    PaymentCondition(id = "cond_45_60_75_90", descricao = "45/60/75/90 Dias", qtdParcelas = 4, parcelasDias = listOf(45, 60, 75, 90), especie = "Boleto"),
+    PaymentCondition(id = "cond_45_60_75_90_105_120", descricao = "45/60/75/90/105/120 Dias", qtdParcelas = 6, parcelasDias = listOf(45, 60, 75, 90, 105, 120), especie = "Boleto"),
+    PaymentCondition(id = "cond_30", descricao = "30 Dias (1x)", qtdParcelas = 1, parcelasDias = listOf(30), especie = "Boleto"),
+    PaymentCondition(id = "cond_vista", descricao = "100% À Vista (TED/PIX)", qtdParcelas = 1, parcelasDias = listOf(0), especie = "Depósito")
+)
+

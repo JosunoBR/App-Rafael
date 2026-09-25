@@ -124,7 +124,25 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
         try {
             val response = api.getOrders()
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+                val normalizedList = response.body()!!.map { order ->
+                    val totalLiq = order.totalLiquidoEfetivo
+                    val totalPcs = order.totalPecasEfetivo
+                    val st = order.statusEfetivo
+                    val finalId = order.id.ifBlank { order.header.id }
+                    val fixedItems = order.items.map { itm ->
+                        if (itm.subtotal <= 0 && itm.totalPecas > 0 && itm.precoCompraUnitario > 0) {
+                            itm.copy(subtotal = itm.totalPecas * itm.precoCompraUnitario)
+                        } else itm
+                    }
+                    order.copy(
+                        id = finalId,
+                        status = st,
+                        totalLiquido = totalLiq,
+                        totalPecas = totalPcs,
+                        items = fixedItems
+                    )
+                }
+                Result.success(normalizedList)
             } else {
                 Result.failure(Exception("Erro ao buscar pedidos da API"))
             }
@@ -184,18 +202,51 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
                 val body = response.body()!!
                 val dataList = body["data"] as? List<Map<String, Any>> ?: emptyList()
                 val installments = dataList.map { item ->
+                    val rawVenc = item["dataVencimento"]?.toString()?.trim() ?: ""
+                    val normalizedVenc = if (rawVenc.length == 10 && rawVenc[2] == '/' && rawVenc[5] == '/') {
+                        val parts = rawVenc.split('/')
+                        if (parts.size == 3) "${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}" else rawVenc
+                    } else if (rawVenc.length >= 10 && rawVenc.contains('-')) {
+                        rawVenc.substring(0, 10)
+                    } else {
+                        rawVenc
+                    }
+
+                    val forn = (item["fornecedor"]?.toString())?.takeIf { it.isNotBlank() }
+                        ?: (item["descricao"]?.toString())?.takeIf { it.isNotBlank() }
+                        ?: (item["favorecido"]?.toString())?.takeIf { it.isNotBlank() }
+                        ?: (item["lojaNome"]?.toString())?.takeIf { it.isNotBlank() }
+                        ?: "Fornecedor Geral"
+
+                    val docRef = (item["numeroPedido"]?.toString())?.takeIf { it.isNotBlank() }
+                        ?: (item["documentoRef"]?.toString())?.takeIf { it.isNotBlank() }
+                        ?: (item["numeroDocumento"]?.toString())?.takeIf { it.isNotBlank() }
+                        ?: (item["descricao"]?.toString())?.takeIf { it.isNotBlank() }
+                        ?: "DOC-${item["id"]?.toString()?.takeLast(5) ?: "FIN"}"
+
+                    val numParc = (item["parcelaNumero"] as? Number)?.toInt()
+                        ?: (item["numeroParcela"] as? Number)?.toInt()
+                        ?: 1
+
+                    val totParc = (item["parcelaTotal"] as? Number)?.toInt()
+                        ?: (item["totalParcelas"] as? Number)?.toInt()
+                        ?: 1
+
                     PaymentInstallment(
                         id = item["id"]?.toString() ?: "",
                         orderId = item["orderId"]?.toString(),
-                        numeroPedido = item["numeroPedido"]?.toString() ?: item["numeroDocumento"]?.toString() ?: "",
-                        fornecedor = item["fornecedor"]?.toString() ?: item["favorecido"]?.toString() ?: "Fornecedor",
-                        numeroParcela = (item["numeroParcela"] as? Number)?.toInt() ?: 1,
-                        totalParcelas = (item["totalParcelas"] as? Number)?.toInt() ?: 1,
-                        dataVencimento = item["dataVencimento"]?.toString() ?: "",
+                        numeroPedido = docRef,
+                        fornecedor = forn,
+                        descricao = item["descricao"]?.toString(),
+                        lojaNome = item["lojaNome"]?.toString(),
+                        numeroParcela = numParc,
+                        totalParcelas = totParc,
+                        dataVencimento = normalizedVenc,
                         valor = (item["valor"] as? Number)?.toDouble() ?: 0.0,
                         status = item["status"]?.toString() ?: "A Vencer",
                         dataPagamento = item["dataPagamento"]?.toString(),
-                        observacao = item["observacao"]?.toString()
+                        observacao = item["observacao"]?.toString(),
+                        documentoRef = item["documentoRef"]?.toString()
                     )
                 }
                 Result.success(installments)
@@ -204,6 +255,24 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             }
         } catch (e: Exception) {
             Result.success(emptyList())
+        }
+    }
+
+    suspend fun getPaymentConditions(): Result<List<PaymentCondition>> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getPaymentConditions()
+            if (response.isSuccessful && response.body() != null) {
+                val list = response.body()!!
+                if (list.isNotEmpty()) {
+                    Result.success(list)
+                } else {
+                    Result.success(DEFAULT_PAYMENT_CONDITIONS)
+                }
+            } else {
+                Result.success(DEFAULT_PAYMENT_CONDITIONS)
+            }
+        } catch (e: Exception) {
+            Result.success(DEFAULT_PAYMENT_CONDITIONS)
         }
     }
 

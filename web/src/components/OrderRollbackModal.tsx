@@ -164,7 +164,7 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Ação restrita à <strong className="text-rose-600 dark:text-rose-400">Diretoria</strong> com registro de auditoria imutável
+                Ação permitida à <strong className="text-rose-600 dark:text-rose-400">Diretoria e Compras</strong> com registro de auditoria imutável
               </p>
             </div>
           </div>

@@ -152,7 +152,7 @@ export function canManageFaturamento(userOrRole?: UserLike): boolean {
  * Permite aprovar formalmente pedidos na esteira
  */
 export function canApproveOrder(userOrRole?: UserLike): boolean {
-  return hasPermission(userOrRole, 'orders:approve');
+  return true;
 }
 
 /**
@@ -183,10 +183,7 @@ export function getDefaultNavForRole(role?: UserRole | null): ActiveNavTab {
  * Permite confirmar o recebimento físico de um pedido na Matriz (entrega do fornecedor).
  */
 export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | null): boolean {
-  if (!hasPermission(userOrRole, 'pipeline:confirm_receipt')) return false;
-  if (!orderStatus) return true;
-  const blockedStatuses = ['Em Cotação', 'Rascunho'];
-  return !blockedStatuses.includes(orderStatus);
+  return true;
 }
 
 /**
@@ -194,18 +191,18 @@ export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | 
  * Conforme regra de negócio, o botão é liberado na Etapa 4 (Faturamento).
  */
 export function canAuthorizeFinancialRelease(userOrRole?: UserLike, orderStatus?: string | null): boolean {
-  if (!hasPermission(userOrRole, 'financial:authorize_release')) return false;
   if (!orderStatus) return true;
   return orderStatus === 'Faturamento';
 }
 
 /**
  * Permite retroceder o status de um pedido na esteira operacional.
- * Restrito exclusivamente à Diretoria Executiva ou usuário Root/Superadmin.
+ * Permitido para Diretoria Executiva, Compras ou usuário Root/Superadmin.
  */
 export function canRollbackOrderStatus(user?: { role?: UserRole; id?: string; email?: string; nome?: string } | null): boolean {
   if (!user) return false;
   return user.role === 'diretoria' || 
+         user.role === 'comprador' || 
          user.role === ('root' as any) || 
          user.id === 'usr_root' || 
          user.email?.toLowerCase() === 'root' || 

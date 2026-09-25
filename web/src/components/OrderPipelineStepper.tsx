@@ -161,13 +161,13 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             <span className="hidden sm:inline">Auditoria</span>
           </button>
 
-          {/* Botão de Retrocesso de Etapa (Exclusivo Diretoria para pedidos além de Cotação) */}
+          {/* Botão de Retrocesso de Etapa (Diretoria e Compras para pedidos além de Cotação) */}
           {canRollbackOrderStatus(currentUser) && currentIndex > 0 && (
             <button
               type="button"
               onClick={() => setShowRollbackModal(true)}
               className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/80 transition flex items-center gap-1 cursor-pointer active:scale-98"
-              title="Retroceder o status deste pedido na esteira (Ação restrita à Diretoria)"
+              title="Retroceder o status deste pedido na esteira (Diretoria e Compras)"
             >
               <RotateCcw className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
               <span className="hidden sm:inline">Retroceder</span>
@@ -175,8 +175,8 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
           )}
 
           {/* Confirmar Recebimento Físico na Matriz:
-              Disponível na Etapa 3 (Separação) ou além para quem tiver permissão */}
-          {!order.header.recebidoMatriz && order.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser?.role, order.header.status) && (
+              Disponível na Etapa 3 (Separação) ou além */}
+          {!order.header.recebidoMatriz && order.header.status !== 'Finalizado' && onConfirmReceipt && (
             <button
               onClick={() => onConfirmReceipt(order)}
               className="px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"
@@ -196,7 +196,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
           )}
 
           {/* AÇÃO ETAPA 1 -> 2: Aprovar Pedido */}
-          {currentIndex === 0 && onApproveOrder && canApproveOrder(currentUser?.role) && (
+          {currentIndex === 0 && onApproveOrder && (
             <button
               onClick={() => onApproveOrder(order)}
               className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
@@ -206,8 +206,8 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </button>
           )}
 
-          {/* AÇÃO ETAPA 2 (Aprovados): Depósito acessa para fazer a Distribuição / Enviar p/ Separação */}
-          {currentIndex === 1 && (onOpenDistribution || onSendToDistribution || onReleaseToSeparation) && (role === 'deposito' || role === 'diretoria' || role === 'comprador') && (
+          {/* AÇÃO ETAPA 2 (Aprovados): Fazer a Distribuição / Enviar p/ Separação */}
+          {currentIndex === 1 && (onOpenDistribution || onSendToDistribution || onReleaseToSeparation) && (
             <button
               onClick={() => {
                 if (onOpenDistribution) onOpenDistribution(order);
@@ -222,8 +222,8 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </button>
           )}
 
-          {/* AÇÃO ETAPA 3 (Separação): Separação efetua a conferência física e libera para Faturamento */}
-          {currentIndex === 2 && (onOpenSeparation || onSendToFaturamento || onFinalizeSeparation) && (role === 'separacao' || role === 'deposito' || role === 'diretoria') && (
+          {/* AÇÃO ETAPA 3 (Separação): Efetua a conferência física e libera para Faturamento */}
+          {currentIndex === 2 && (onOpenSeparation || onSendToFaturamento || onFinalizeSeparation) && (
             <button
               onClick={() => {
                 if (onOpenSeparation) onOpenSeparation(order);
@@ -238,10 +238,10 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </button>
           )}
 
-          {/* AÇÃO ETAPA 4 (Faturamento): Faturamento confere e libera os boletos */}
+          {/* AÇÃO ETAPA 4 (Faturamento): Confere e libera os boletos */}
           {currentIndex === 3 && (
             <div className="flex items-center gap-1.5">
-              {!order.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser?.role, order.header.status) && (
+              {!order.header.boletosLiberados && onAuthorizeFinancial && (
                 <button
                   onClick={() => onAuthorizeFinancial(order)}
                   className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"

@@ -463,32 +463,56 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   };
 
   // Seleção Múltipla de Contas
+  const allVisibleIds = useMemo(() => entries.map(e => e.id), [entries]);
+  const isAllScreenSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selectedIds.includes(id));
+  const isSomeScreenSelected = allVisibleIds.some(id => selectedIds.includes(id)) && !isAllScreenSelected;
+
   const handleToggleSelect = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  const handleToggleSelectAll = () => {
-    const selectable = entries.filter(e => e.status !== 'Pago');
-    if (selectable.length === 0) return;
-    if (selectedIds.length === selectable.length) {
-      setSelectedIds([]);
+  const handleToggleSelectGroup = (ids: string[]) => {
+    setSelectedIds(prev => {
+      const allIn = ids.every(id => prev.includes(id));
+      if (allIn) {
+        return prev.filter(id => !ids.includes(id));
+      } else {
+        return Array.from(new Set([...prev, ...ids]));
+      }
+    });
+  };
+
+  const handleToggleSelectAllScreen = () => {
+    if (isAllScreenSelected) {
+      setSelectedIds(prev => prev.filter(id => !allVisibleIds.includes(id)));
     } else {
-      setSelectedIds(selectable.map(e => e.id));
+      setSelectedIds(prev => Array.from(new Set([...prev, ...allVisibleIds])));
     }
+  };
+
+  const handleToggleSelectAll = () => {
+    handleToggleSelectAllScreen();
   };
 
   // Baixa em Lote de Pagamentos
   const handleBatchPayConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedIds.length === 0) return;
+    const pendingSelectedIds = selectedIds.filter(id => {
+      const entry = entries.find(e => e.id === id);
+      return entry && entry.status !== 'Pago';
+    });
+    if (pendingSelectedIds.length === 0) {
+      showToast('Nenhum dos boletos selecionados está pendente para pagamento.', 'info');
+      return;
+    }
     setIsBatchPaying(true);
     try {
-      const res = await batchPayFinancialEntriesInDb(selectedIds, {
+      const res = await batchPayFinancialEntriesInDb(pendingSelectedIds, {
         dataPagamento: batchPayDate,
         observacao: batchPayObs
       });
-      showToast(res.message || `${selectedIds.length} pagamentos liquidados com sucesso!`, 'success');
-      setSelectedIds([]);
+      showToast(res.message || `${pendingSelectedIds.length} pagamentos liquidados com sucesso!`, 'success');
+      setSelectedIds(prev => prev.filter(id => !pendingSelectedIds.includes(id)));
       setIsBatchPayModalOpen(false);
       setBatchPayObs('');
       await loadFinancialData();
@@ -535,25 +559,25 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     return parts.join(' | ') || 'Geral (Todos os Lançamentos)';
   }, [selectedMonth, selectedYear, selectedFormaPagamento, selectedStore, selectedCategory, selectedStatus, viewMode, searchQuery]);
 
-  // Exportação Excel
+  // Exportação Excel - Requer seleção prévia via checkbox conforme especificação
   const handleExportExcel = () => {
-    const toExport = selectedIds.length > 0
-      ? entries.filter(e => selectedIds.includes(e.id))
-      : entries;
-    const label = selectedIds.length > 0
-      ? `${selectedIds.length} Itens Selecionados (${filtersDescription})`
-      : filtersDescription;
+    if (selectedIds.length === 0) {
+      showToast('Selecione ao menos um boleto utilizando as caixas de seleção (checkbox) para exportar.', 'info');
+      return;
+    }
+    const toExport = entries.filter(e => selectedIds.includes(e.id));
+    const label = `${selectedIds.length} Itens Selecionados (${filtersDescription})`;
     exportFinancialToExcel(toExport, label);
   };
 
-  // Exportação PDF
+  // Exportação PDF - Requer seleção prévia via checkbox conforme especificação
   const handleExportPdf = () => {
-    const toExport = selectedIds.length > 0
-      ? entries.filter(e => selectedIds.includes(e.id))
-      : entries;
-    const label = selectedIds.length > 0
-      ? `${selectedIds.length} Itens Selecionados (${filtersDescription})`
-      : filtersDescription;
+    if (selectedIds.length === 0) {
+      showToast('Selecione ao menos um boleto utilizando as caixas de seleção (checkbox) para exportar.', 'info');
+      return;
+    }
+    const toExport = entries.filter(e => selectedIds.includes(e.id));
+    const label = `${selectedIds.length} Itens Selecionados (${filtersDescription})`;
     exportFinancialToPdf(toExport, label, metaDiaria);
   };
 
@@ -977,26 +1001,62 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
             ))}
           </div>
 
-          {/* Botões de Exportação para Planilha Excel (.csv) e PDF */}
-          <div className="flex items-center gap-2">
+          {/* Botões de Seleção Geral e Exportação */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Master Checkbox: Selecionar Toda a Tela */}
+            <label className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition-colors cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isAllScreenSelected}
+                ref={el => { if (el) el.indeterminate = Boolean(isSomeScreenSelected); }}
+                onChange={handleToggleSelectAllScreen}
+                className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 cursor-pointer"
+              />
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 select-none">
+                Selecionar Toda a Tela ({entries.length})
+              </span>
+            </label>
+
+            {/* Botão Exportar Excel */}
             <button
               type="button"
               onClick={handleExportExcel}
-              className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              title={selectedIds.length > 0 ? `Exportar ${selectedIds.length} selecionados para Excel` : 'Exportar visão atual para Excel'}
+              className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer ${
+                selectedIds.length > 0
+                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/60'
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+              title={selectedIds.length > 0 ? `Exportar ${selectedIds.length} selecionados para Excel` : 'Marque ao menos um boleto via checkbox para exportar'}
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{selectedIds.length > 0 ? `Excel (${selectedIds.length})` : 'Exportar Planilha (Excel)'}</span>
+              <FileSpreadsheet className={`w-3.5 h-3.5 ${selectedIds.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`} />
+              <span>Exportar Excel {selectedIds.length > 0 ? `(${selectedIds.length})` : '(0)'}</span>
             </button>
+
+            {/* Botão Exportar PDF */}
             <button
               type="button"
               onClick={handleExportPdf}
-              className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              title={selectedIds.length > 0 ? `Exportar ${selectedIds.length} selecionados para PDF` : 'Exportar relatório PDF da visão atual'}
+              className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer ${
+                selectedIds.length > 0
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-950/60'
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+              title={selectedIds.length > 0 ? `Exportar ${selectedIds.length} selecionados para PDF` : 'Marque ao menos um boleto via checkbox para exportar'}
             >
-              <FileText className="w-3.5 h-3.5 text-blue-600" />
-              <span>{selectedIds.length > 0 ? `PDF (${selectedIds.length})` : 'Exportar Relatório PDF'}</span>
+              <FileText className={`w-3.5 h-3.5 ${selectedIds.length > 0 ? 'text-blue-600' : 'text-slate-400'}`} />
+              <span>Exportar PDF {selectedIds.length > 0 ? `(${selectedIds.length})` : '(0)'}</span>
             </button>
+
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                title="Desmarcar todos"
+              >
+                Limpar ({selectedIds.length})
+              </button>
+            )}
           </div>
 
         </div>
@@ -1095,6 +1155,10 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
           metaDiaria={metaDiaria}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
+          onToggleSelectGroup={handleToggleSelectGroup}
+          isAllScreenSelected={isAllScreenSelected}
+          isSomeScreenSelected={isSomeScreenSelected}
+          onToggleSelectAllScreen={handleToggleSelectAllScreen}
         />
       )}
 
@@ -1114,10 +1178,11 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                   <th className="py-3 px-3 w-8">
                     <input
                       type="checkbox"
-                      checked={entries.length > 0 && selectedIds.length === entries.filter(e => e.status !== 'Pago').length}
-                      onChange={handleToggleSelectAll}
-                      className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
-                      title="Selecionar / Desmarcar todos os pendentes"
+                      checked={isAllScreenSelected}
+                      ref={el => { if (el) el.indeterminate = Boolean(isSomeScreenSelected); }}
+                      onChange={handleToggleSelectAllScreen}
+                      className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 cursor-pointer"
+                      title={isAllScreenSelected ? "Desmarcar todos" : "Selecionar toda a tela"}
                     />
                   </th>
                   <th className="py-3 px-4">Vencimento</th>
@@ -1163,17 +1228,14 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                             : 'border-l-emerald-500 hover:bg-slate-50/80 dark:hover:bg-slate-700/30'
                         } ${isPaid ? 'opacity-65 bg-slate-50/30 dark:bg-slate-800/30' : ''}`}
                       >
-                        <td className="py-3 px-3">
-                          {!isPaid ? (
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.includes(item.id)}
-                              onChange={() => handleToggleSelect(item.id)}
-                              className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
-                            />
-                          ) : (
-                            <span className="text-slate-300 dark:text-slate-600 text-xs font-bold">✓</span>
-                          )}
+                        <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(item.id)}
+                            onChange={() => handleToggleSelect(item.id)}
+                            className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 cursor-pointer"
+                            title="Selecionar boleto"
+                          />
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-slate-800 dark:text-slate-200">
                           <div>{toBrDate(item.dataVencimento)}</div>

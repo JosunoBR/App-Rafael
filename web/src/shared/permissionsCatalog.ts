@@ -43,7 +43,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     categoria: '1. Cotação & Compras',
     nome: 'Aprovar pedidos comercialmente na esteira',
     obs: 'Avança o pedido da Cotação para Aprovado',
-    roleDefaults: { diretoria: true, comprador: true, deposito: false, separacao: false, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'orders:duplicate',
@@ -101,42 +101,42 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     categoria: '2. Esteira, CD & Separação',
     nome: 'Enviar pedido aprovado para Distribuição',
     obs: 'Transição da Etapa 2 para Etapa 3',
-    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: false, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'pipeline:distribute',
     categoria: '2. Esteira, CD & Separação',
     nome: 'Distribuir e ratear produtos entre as 20 lojas',
     obs: 'Definição das quantidades de cada filial',
-    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: false, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'pipeline:release_separation',
     categoria: '2. Esteira, CD & Separação',
     nome: 'Concluir distribuição e liberar para Separação na Doca',
     obs: 'Dá entrada no estoque do CD e libera visão aos conferentes',
-    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: false, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'pipeline:separate_dock',
     categoria: '2. Esteira, CD & Separação',
     nome: 'Fazer conferência física na doca e apontar avarias',
     obs: 'Contagem de caixas e registro de faltas/avarias',
-    roleDefaults: { diretoria: true, comprador: false, deposito: true, separacao: true, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'pipeline:send_faturamento',
     categoria: '2. Esteira, CD & Separação',
     nome: 'Concluir conferência física e enviar para Faturamento',
     obs: 'Transição da Etapa 3 para Etapa 4',
-    roleDefaults: { diretoria: true, comprador: false, deposito: true, separacao: true, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'pipeline:confirm_receipt',
     categoria: '2. Esteira, CD & Separação',
     nome: 'Confirmar Recebimento Físico na Matriz (Entrega Fornecedor)',
     obs: 'Disponível a partir da fase de Separação na doca',
-    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'separation:manage_presets',
@@ -201,7 +201,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     categoria: '3. Financeiro & Boletos',
     nome: 'Autorizar Liberação de Boletos para o Contas a Pagar',
     obs: 'Liberação de boletos gerados na esteira operacional',
-    roleDefaults: { diretoria: true, comprador: false, deposito: false, separacao: false, faturamento: true }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: true }
   },
   {
     codigo: 'financial:export',

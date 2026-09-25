@@ -100,92 +100,6 @@ class OrderService {
             err.code = 'ORDER_LOCKED';
             throw err;
           }
-
-          // Se for Comprador: Permite operações de esteira e distribuição por lojas, mas protege os termos comerciais aprovados
-          if (currentUser.role === 'comprador') {
-            // 1. Não permite alterar fornecedor
-            const oldForn = String(existing.header.fornecedor || '').trim().toLowerCase();
-            const newForn = String(orderData.header.fornecedor || '').trim().toLowerCase();
-            if (oldForn && newForn && oldForn !== newForn) {
-              const err = new Error(`Este pedido já foi aprovado comercialmente com o fornecedor "${existing.header.fornecedor}". Não é permitido alterar o fornecedor. Solicite liberação à Diretoria.`);
-              err.statusCode = 403;
-              err.code = 'COMMERCIAL_TERMS_LOCKED';
-              throw err;
-            }
-
-            // 2. Não permite alterar CNPJ
-            const oldCnpj = String(existing.header.cnpj || '').replace(/\D/g, '');
-            const newCnpj = String(orderData.header.cnpj || '').replace(/\D/g, '');
-            if (oldCnpj && newCnpj && oldCnpj !== newCnpj) {
-              const err = new Error('Este pedido já foi aprovado comercialmente. Não é permitido alterar o CNPJ do fornecedor. Solicite liberação à Diretoria.');
-              err.statusCode = 403;
-              err.code = 'COMMERCIAL_TERMS_LOCKED';
-              throw err;
-            }
-
-            // 3. Não permite alterar preços unitários de custo dos itens aprovados
-            if (Array.isArray(orderData.items) && Array.isArray(existing.items)) {
-              for (const newItem of orderData.items) {
-                const oldItem = existing.items.find(i => 
-                  (newItem.id && i.id && String(i.id) === String(newItem.id)) ||
-                  (newItem.codigo && i.codigo && String(i.codigo).trim() === String(newItem.codigo).trim())
-                );
-                if (oldItem) {
-                  const oldPrice = Number(oldItem.precoUnitario !== undefined ? oldItem.precoUnitario : (oldItem.precoCusto || 0));
-                  const newPrice = Number(newItem.precoUnitario !== undefined ? newItem.precoUnitario : (newItem.precoCusto || 0));
-                  if (oldPrice > 0 && Math.abs(newPrice - oldPrice) > 0.02) {
-                    const desc = newItem.descricao || newItem.codigo || 'Item';
-                    const err = new Error(`Este pedido já foi aprovado comercialmente. O preço unitário do item "${desc}" (R$ ${oldPrice.toFixed(2)}) não pode ser alterado pelo comprador. Solicite liberação à Diretoria.`);
-                    err.statusCode = 403;
-                    err.code = 'COMMERCIAL_TERMS_LOCKED';
-                    throw err;
-                  }
-                }
-              }
-
-              // Não permite inclusão ou remoção de produtos arbitrários após aprovação
-              if (existing.items.length > 0 && orderData.items.length !== existing.items.length) {
-                const err = new Error(`Este pedido já foi aprovado comercialmente com ${existing.items.length} itens. Inclusão ou exclusão de produtos requer autorização da Diretoria.`);
-                err.statusCode = 403;
-                err.code = 'COMMERCIAL_TERMS_LOCKED';
-                throw err;
-              }
-            }
-
-            // 4. Não permite alteração brusca do valor total comercial aprovado (> R$ 1,00)
-            const getOrderTotal = (ord) => {
-              if (!ord) return 0;
-              const h = ord.header || {};
-              const directTotal = Number(h.totalFinal || h.valorTotal || h.totalGeral || 0);
-              if (directTotal > 0) return directTotal;
-              if (Array.isArray(ord.items) && ord.items.length > 0) {
-                return ord.items.reduce((acc, it) => {
-                  if (it.ruptura) return acc;
-                  const pecas = Number(it.qtdTotalUnidades || 0);
-                  const preco = Number(it.precoUnitario || 0);
-                  const bruto = Number(it.valorTotalBruto !== undefined ? it.valorTotalBruto : (pecas * preco));
-                  const ipi = Number(it.valorIpi || 0);
-                  const desc = Number(it.valorDescontoItem || 0);
-                  return acc + (bruto + ipi - desc);
-                }, 0);
-              }
-              return 0;
-            };
-
-            const oldTotal = getOrderTotal(existing);
-            const newTotal = getOrderTotal(orderData);
-            if (oldTotal > 1 && newTotal > 1 && Math.abs(newTotal - oldTotal) > 1.0) {
-              const err = new Error(`Este pedido já foi aprovado comercialmente no valor total de R$ ${oldTotal.toFixed(2)}. Alterações no valor comercial total requerem autorização da Diretoria.`);
-              err.statusCode = 403;
-              err.code = 'COMMERCIAL_TERMS_LOCKED';
-              throw err;
-            }
-          } else if (!isDiretoriaOrRoot && currentUser.role !== 'faturamento' && currentUser.role !== 'separacao' && currentUser.role !== 'deposito') {
-            const err = new Error(`Apenas a Diretoria, Faturamento, Compras e Depósito possuem autorização para atualizar pedidos na esteira (Status atual: ${existingStatus}).`);
-            err.statusCode = 403;
-            err.code = 'ORDER_LOCKED';
-            throw err;
-          }
         }
       }
     }
@@ -439,10 +353,9 @@ class OrderService {
    * Permitido para: diretoria, comprador, deposito. Bloqueado para: separacao.
    */
   async confirmReceipt(orderId, { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos }, currentUser) {
-    const allowedRoles = ['diretoria', 'comprador', 'deposito', 'separacao'];
-    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
-      const err = new Error('Apenas Separação, Depósito, Comprador ou Diretoria podem confirmar o recebimento na Matriz.');
-      err.statusCode = 403;
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
       throw err;
     }
 
@@ -527,10 +440,9 @@ class OrderService {
    * Permitido: diretoria, comprador, deposito
    */
   async sendToDistribution(orderId, currentUser) {
-    const allowedRoles = ['diretoria', 'comprador', 'deposito'];
-    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
-      const err = new Error('Apenas Diretoria, Comprador ou Depósito podem enviar o pedido para Distribuição.');
-      err.statusCode = 403;
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
       throw err;
     }
 
@@ -569,10 +481,9 @@ class OrderService {
    * Permitido: comprador, deposito, diretoria
    */
   async releaseToSeparation(orderId, payload = {}, currentUser) {
-    const allowedRoles = ['deposito', 'diretoria', 'comprador'];
-    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
-      const err = new Error('Apenas o Comprador, Depósito ou a Diretoria podem concluir a distribuição e liberar para a Separação.');
-      err.statusCode = 403;
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
       throw err;
     }
 
@@ -636,10 +547,9 @@ class OrderService {
    * Permitido: separacao, deposito, diretoria
    */
   async sendToFaturamento(orderId, payload = {}, currentUser) {
-    const allowedRoles = ['separacao', 'deposito', 'diretoria'];
-    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
-      const err = new Error('Apenas Separação, Depósito ou Diretoria podem encaminhar o pedido para Faturamento.');
-      err.statusCode = 403;
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
       throw err;
     }
 
@@ -655,8 +565,9 @@ class OrderService {
                        (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
 
     if (!isTransfer && !order.header.recebidoMatriz) {
-      const err = new Error('É obrigatório confirmar o recebimento físico da mercadoria na Matriz antes de encaminhar para o Faturamento.');
+      const err = new Error('É obrigatório confirmar o recebimento físico da mercadoria na Matriz antes de encaminhar para o Faturamento. A confirmação deve ser solicitada e registrada.');
       err.statusCode = 400;
+      err.code = 'RECEIPT_REQUIRED';
       throw err;
     }
 
@@ -699,10 +610,9 @@ class OrderService {
    * Permitido: faturamento, diretoria
    */
   async finalizeOrder(orderId, currentUser) {
-    const allowedRoles = ['faturamento', 'diretoria'];
-    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
-      const err = new Error('Apenas Faturamento ou Diretoria podem finalizar o pedido.');
-      err.statusCode = 403;
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
       throw err;
     }
 
@@ -740,13 +650,12 @@ class OrderService {
 
   /**
    * Autoriza a liberação dos boletos de um pedido para o Contas a Pagar (Financeiro).
-   * Permitido: Faturamento ou Diretoria (RBAC). Ao liberar boletos na Etapa 4, o pedido é finalizado.
+   * Ao liberar boletos na Etapa 4, o pedido é finalizado.
    */
   async authorizeFinancialRelease(orderId, currentUser) {
-    const allowedRoles = ['faturamento', 'diretoria'];
-    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
-      const err = new Error('Apenas o Faturamento ou a Diretoria podem autorizar a liberação de boletos.');
-      err.statusCode = 403;
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
       throw err;
     }
 
@@ -760,6 +669,7 @@ class OrderService {
     if (!order.header.recebidoMatriz) {
       const err = new Error('O pedido precisa estar fisicamente recebido na Matriz antes de liberar os boletos.');
       err.statusCode = 400;
+      err.code = 'RECEIPT_REQUIRED';
       throw err;
     }
 
@@ -802,18 +712,19 @@ class OrderService {
 
   /**
    * Retrocede o status de um pedido na esteira operacional.
-   * Restrito estritamente à Diretoria (RBAC), com justificativa obrigatória e validações financeiras/estoque.
+   * Permitido para Diretoria e Compras (RBAC), com justificativa obrigatória e validações financeiras/estoque.
    */
   async rollbackOrderStatus(orderId, { targetStatus, reason } = {}, currentUser) {
-    const isDiretoriaOrRoot = currentUser && (
+    const isAuthorized = currentUser && (
       currentUser.role === 'diretoria' || 
+      currentUser.role === 'comprador' || 
       currentUser.role === 'root' || 
       currentUser.id === 'usr_root' || 
       currentUser.email?.toLowerCase() === 'root' ||
       currentUser.nome?.toLowerCase() === 'root'
     );
-    if (!isDiretoriaOrRoot) {
-      const err = new Error('Apenas a Diretoria possui autorização para retroceder o status de um pedido na esteira.');
+    if (!isAuthorized) {
+      const err = new Error('Apenas a Diretoria e o setor de Compras possuem autorização para retroceder o status de um pedido na esteira.');
       err.statusCode = 403;
       throw err;
     }

@@ -252,17 +252,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
   const isReceiptPending = !isTransfer && !order.header.recebidoMatriz;
 
-  // Inclui pedidos fechados ou em andamento na esteira conforme o perfil do usuário
+  // Inclui pedidos em andamento na esteira
   const availableDepositOrders = useMemo(() => {
-    const isSeparacao = currentUser?.role === 'separacao';
-    const list = orders.filter(o => {
-      if (isSeparacao) {
-        // Conferentes de doca (separação) veem pedidos na Etapa 3 (Em Separação)
-        // para dar o recebimento físico e realizar a separação na doca
-        return o.header.status === 'Em Separação' || o.header.status === 'Em Distribuição';
-      }
-      // Perfil Depósito, Comprador ou Diretoria:
-      // Vê pedidos Aprovados (Etapa 2 - para rateio) e pedidos em Separação/Distribuição
+    return orders.filter(o => {
       return (
         !o.header.status ||
         o.header.status === 'Aprovado' || 
@@ -270,17 +262,11 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         o.header.status === 'Em Distribuição' ||
         o.header.status === 'Faturamento' ||
         o.header.status === 'Em Cotação' ||
-        o.header.status === 'Rascunho'
+        o.header.status === 'Rascunho' ||
+        o.header.status === 'Finalizado'
       );
     });
-    const currentId = order.header.id || order.header.numeroPedido;
-    if (currentId && !list.some(o => (o.header.id || o.header.numeroPedido) === currentId)) {
-      if (!isSeparacao || (order.header.status === 'Em Separação' || order.header.status === 'Em Distribuição' || order.header.status === 'Finalizado')) {
-        return [order, ...list];
-      }
-    }
-    return list;
-  }, [orders, order, currentUser?.role]);
+  }, [orders]);
   const pendingSeparationOrders = availableDepositOrders;
 
   const isCurrentFinalized = order.header.status === 'Finalizado';
@@ -1497,10 +1483,17 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             )}
 
             {/* Botão Etapa 3 (Separação): Concluir Separação e Liberar para Faturamento */}
-            {order.header.status === 'Em Separação' && !isReceiptPending && (
+            {order.header.status === 'Em Separação' && (
               <button
                 type="button"
                 onClick={() => {
+                  if (isReceiptPending) {
+                    if (onConfirmReceipt) {
+                      onConfirmReceipt(order);
+                    }
+                    return;
+                  }
+
                   const updated: PurchaseOrder = {
                     ...order,
                     header: {
@@ -1524,7 +1517,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                   else if (onFinalizeOrder) onFinalizeOrder(updated);
                 }}
                 className="w-full sm:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
-                title="Concluir conferência física na doca e encaminhar pedido para o Faturamento"
+                title={isReceiptPending ? "A confirmação de recebimento físico na Matriz será solicitada antes do envio para Faturamento" : "Concluir conferência física na doca e encaminhar pedido para o Faturamento"}
               >
                 <PackageCheck className="w-4 h-4" />
                 <span>Concluir Separação & Liberar p/ Faturamento</span>

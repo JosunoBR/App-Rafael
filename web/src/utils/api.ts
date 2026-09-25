@@ -87,16 +87,17 @@ async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Re
     const res = await fetch(url, { ...options, headers });
     if (!res.ok) {
       let errorMessage = `Erro HTTP ${res.status}`;
+      let errorData: any = null;
       try {
-        const errorData = await res.json();
+        errorData = await res.json();
         if (errorData?.error) errorMessage = errorData.error;
         else if (errorData?.message) errorMessage = errorData.message;
       } catch {}
 
       if (res.status === 401) {
-        errorMessage = 'Sessão expirada ou não autenticada no servidor. Faça login novamente.';
+        errorMessage = errorData?.error || errorData?.message || 'Sessão expirada ou não autenticada no servidor. Faça login novamente.';
       } else if (res.status === 403) {
-        errorMessage = 'Acesso negado: seu usuário não tem permissão para esta operação.';
+        errorMessage = errorData?.error || errorData?.message || 'Acesso negado: seu usuário não tem permissão para esta operação.';
       }
 
       throw new ApiError(errorMessage, res.status, false);
@@ -585,9 +586,11 @@ export async function importFinancialSpreadsheetInDb(payload: {
   return json.data;
 }
 
-export async function deleteFinancialEntryFromDb(id: string): Promise<void> {
+export async function deleteFinancialEntryFromDb(id: string, password?: string): Promise<void> {
   await apiFetch(`/financial/entries/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
   });
 }
 

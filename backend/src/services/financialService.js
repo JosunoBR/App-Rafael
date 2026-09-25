@@ -657,7 +657,45 @@ class FinancialService {
     }));
   }
 
-  async deleteEntry(id) {
+  async deleteEntry(id, password, currentUser) {
+    const entry = await financialRepo.findById(id);
+    if (!entry) {
+      const err = new Error('Lançamento não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (!password || String(password).trim().length === 0) {
+      const err = new Error('A confirmação com sua senha de usuário é obrigatória para excluir este boleto.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (currentUser) {
+      const userRepository = require('../repositories/userRepository');
+      const bcrypt = require('bcryptjs');
+      const user = await userRepository.findById(currentUser.id) || await userRepository.findByEmailOrAlias(currentUser.email);
+      if (!user) {
+        const err = new Error('Usuário autenticado não encontrado.');
+        err.statusCode = 401;
+        throw err;
+      }
+
+      let isPasswordValid = false;
+      const isBcrypt = user.senha && user.senha.startsWith('$2');
+      if (isBcrypt) {
+        isPasswordValid = await bcrypt.compare(password, user.senha);
+      } else {
+        isPasswordValid = (user.senha === password);
+      }
+
+      if (!isPasswordValid) {
+        const err = new Error('Senha incorreta. Não autorizado.');
+        err.statusCode = 401;
+        throw err;
+      }
+    }
+
     return await financialRepo.delete(id);
   }
 

@@ -19,7 +19,8 @@ import {
   Filter,
   Edit3,
   History,
-  Scale
+  Scale,
+  Trash2
 } from 'lucide-react';
 import { FinancialEntry, FinancialStatus, FinancialCategory, PurchaseOrder } from '../shared/types';
 import { toBrDate, formatCurrency } from '../utils/masks';
@@ -540,6 +541,16 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                                     className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-400 hover:text-amber-600 transition-all cursor-pointer"
                                   >
                                     <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {onDeleteEntry && (
+                                  <button
+                                    type="button"
+                                    title="Excluir este boleto"
+                                    onClick={() => onDeleteEntry(item.id)}
+                                    className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-600 hover:text-white transition-all cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 )}
                                 {onViewAudit && (

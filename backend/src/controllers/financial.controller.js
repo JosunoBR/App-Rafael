@@ -147,11 +147,12 @@ class FinancialController {
   async deleteEntry(req, res) {
     try {
       const { id } = req.params;
-      await financialService.deleteEntry(id);
+      const { password } = req.body || {};
+      await financialService.deleteEntry(id, password, req.user);
       return res.status(200).json({ success: true, message: 'Lançamento financeiro removido com sucesso.' });
     } catch (error) {
       console.error('Erro ao excluir lançamento:', error);
-      return res.status(500).json({ success: false, error: 'Erro ao excluir lançamento financeiro.' });
+      return res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Erro ao excluir lançamento financeiro.' });
     }
   }
 

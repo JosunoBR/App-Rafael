@@ -3203,6 +3203,7 @@ export function App() {
                   orders={effectiveOrders}
                   suppliers={suppliers}
                   stores={storeConfigs}
+                  currentUser={currentUser}
                   onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
                   onUpdateInstallment={handleUpdateInstallment}
                   onSaveOrder={handleSaveOrderDirect}

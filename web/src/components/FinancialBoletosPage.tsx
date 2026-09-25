@@ -63,11 +63,14 @@ import { FinancialEditModal } from './FinancialEditModal';
 import { FinancialDailyView } from './FinancialDailyView';
 import { FinancialAuditModal } from './FinancialAuditModal';
 import { FinancialSheetImportModal } from './FinancialSheetImportModal';
+import { DeleteBoletoConfirmModal } from './DeleteBoletoConfirmModal';
+import { User } from '../shared/types';
 
 interface FinancialBoletosPageProps {
   orders: PurchaseOrder[];
   suppliers: Supplier[];
   stores?: StoreConfig[];
+  currentUser?: User;
   onSelectOrder: (order: PurchaseOrder) => void;
   onUpdateInstallment: (orderId: string, updatedInstallment: PaymentInstallment) => void;
   onSaveOrder: (updatedOrder: PurchaseOrder) => void;
@@ -83,6 +86,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   orders,
   suppliers,
   stores = [],
+  currentUser,
   onSelectOrder,
   onUpdateInstallment: _onUpdateInstallment,
   onSaveOrder: _onSaveOrder,
@@ -150,6 +154,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   // Modal de Edição de Lançamento
   const [editingEntry, setEditingEntry] = useState<FinancialEntry | null>(null);
   const [auditingEntry, setAuditingEntry] = useState<FinancialEntry | null>(null);
+  const [entryToDelete, setEntryToDelete] = useState<FinancialEntry | null>(null);
 
   // Estados de Dados do Backend
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
@@ -420,16 +425,25 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     document.body.removeChild(a);
   };
 
-  // Exclusão de Lançamento
-  const handleDeleteEntry = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este lançamento financeiro?')) return;
-    try {
-      await deleteFinancialEntryFromDb(id);
-      showToast('Lançamento excluído com sucesso.', 'info');
-      await loadFinancialData();
-    } catch (err: any) {
-      showToast(err.message || 'Erro ao excluir lançamento.', 'error');
+  // Solicitação de Exclusão de Boleto / Lançamento (Abre modal com confirmação de senha)
+  const handleRequestDelete = (idOrEntry: string | FinancialEntry) => {
+    let entry: FinancialEntry | undefined;
+    if (typeof idOrEntry === 'string') {
+      entry = entries.find(e => e.id === idOrEntry);
+    } else {
+      entry = idOrEntry;
     }
+    if (entry) {
+      setEntryToDelete(entry);
+    }
+  };
+
+  // Confirmação Segura da Exclusão com Validação de Senha
+  const handleConfirmDeleteEntry = async (password: string) => {
+    if (!entryToDelete) return;
+    await deleteFinancialEntryFromDb(entryToDelete.id, password);
+    showToast('Boleto / Lançamento financeiro excluído com sucesso.', 'info');
+    await loadFinancialData();
   };
 
   // Encerramento de Recorrência Futura
@@ -1075,7 +1089,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
             if (entry) handleOpenPayModal(entry);
           }}
           onSelectEntry={(entry) => console.log('Selecionou:', entry)}
-          onDeleteEntry={handleDeleteEntry}
+          onDeleteEntry={handleRequestDelete}
           onEditEntry={(entry) => setEditingEntry(entry)}
           onViewAudit={(entry) => setAuditingEntry(entry)}
           metaDiaria={metaDiaria}
@@ -1318,6 +1332,14 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                             </button>
                             <button
                               type="button"
+                              onClick={() => handleRequestDelete(item)}
+                              title="Excluir este boleto"
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-600 hover:text-white transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => setAuditingEntry(item)}
                               title="Ver Trilha de Auditoria deste Lançamento"
                               className="p-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-400 hover:text-purple-600 transition-colors cursor-pointer"
@@ -1334,14 +1356,6 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                                 <RotateCcw className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteEntry(item.id)}
-                              title="Excluir este lançamento"
-                              className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1899,6 +1913,15 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
           onClose={() => setAuditingEntry(null)}
         />
       )}
+
+      {/* Modal de Confirmação de Exclusão de Boleto com Senha */}
+      <DeleteBoletoConfirmModal
+        isOpen={Boolean(entryToDelete)}
+        onClose={() => setEntryToDelete(null)}
+        entry={entryToDelete}
+        currentUser={currentUser}
+        onConfirm={handleConfirmDeleteEntry}
+      />
 
     </div>
   );

@@ -21,6 +21,7 @@ interface DeliveryAlertBannerProps {
   onNavigateToHistory?: () => void;
   onApplyFilter?: (filterType: 'all' | 'late' | 'today' | 'upcoming') => void;
   activeFilter?: string;
+  defaultExpanded?: boolean;
   className?: string;
 }
 
@@ -30,9 +31,10 @@ export const DeliveryAlertBanner: React.FC<DeliveryAlertBannerProps> = ({
   onNavigateToHistory,
   onApplyFilter,
   activeFilter,
+  defaultExpanded = false,
   className = ''
 }) => {
-  const [isExpanded, setIsExpanded] = useState<boolean>(true);
+  const [isExpanded, setIsExpanded] = useState<boolean>(defaultExpanded);
 
   const summary = useMemo(() => {
     return getDeliveryAlertsSummary(orders);
@@ -152,9 +154,10 @@ export const DeliveryAlertBanner: React.FC<DeliveryAlertBannerProps> = ({
           <button
             type="button"
             onClick={() => setIsExpanded(prev => !prev)}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
+            className="px-2.5 py-1.5 rounded-xl text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
             title={isExpanded ? 'Recolher lista de pedidos' : 'Expandir lista de pedidos'}
           >
+            <span>{isExpanded ? 'Recolher' : 'Ver detalhes'}</span>
             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         </div>

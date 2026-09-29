@@ -945,7 +945,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               onClick={handleDirectSavePreset}
               disabled={!presetInputValue.trim() || isSavingPreset}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer disabled:opacity-50"
-              title="Salvar modelo no banco de dados SQLite com as proporções da 1ª linha de produtos"
+              title="Salvar modelo no sistema com as proporções da 1ª linha de produtos"
             >
               {isSavingPreset ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1001,7 +1001,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 <th rowSpan={2} className="py-2.5 px-3 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 sticky left-0 z-20 min-w-[220px] uppercase">
                   DADOS DO PRODUTO
                 </th>
-                <th colSpan={3} className="py-2 px-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                <th colSpan={4} className="py-2 px-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
                   BALANÇO GERAL
                 </th>
                 <th colSpan={activeStores.length} className="py-2 px-2 bg-emerald-50/70 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
@@ -1011,6 +1011,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
               {/* Linha 2 de Cabeçalho: Subcolunas e Nomes das Lojas */}
               <tr className="bg-slate-50/60 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 min-w-[70px]" title="Quantidade de unidades por pacote/caixa (Embalagem)">
+                  Qtd do Pac
+                </th>
                 <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 min-w-[75px]">
                   Comprado
                 </th>
@@ -1085,6 +1088,13 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                           </div>
                         </div>
                       </div>
+                    </td>
+
+                    {/* Qtd do Pacote */}
+                    <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs">
+                      <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/60 font-bold text-slate-700 dark:text-slate-300 text-[11px]" title={`Embalagem com ${Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1} peças`}>
+                        {Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1}
+                      </span>
                     </td>
 
                     {/* 2. Total Comprado */}
@@ -1178,6 +1188,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               <tr className="bg-slate-50 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-700 font-extrabold text-xs text-slate-700 dark:text-slate-300">
                 <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 uppercase text-xs">
                   TOTAL GERAL
+                </td>
+                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-400">
+                  -
                 </td>
                 <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
                   {totalPecasGeralBruto.toLocaleString('pt-BR')}

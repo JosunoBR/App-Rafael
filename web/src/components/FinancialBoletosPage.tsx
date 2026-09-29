@@ -247,7 +247,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
       y -= 1;
     }
     setSelectedMonth(String(m).padStart(2, '0'));
-    if (selectedYear === 'all') setSelectedYear(String(curYear));
+    setSelectedYear(String(y));
   };
 
   const handleNextMonth = () => {
@@ -259,8 +259,54 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
       y += 1;
     }
     setSelectedMonth(String(m).padStart(2, '0'));
-    if (selectedYear === 'all') setSelectedYear(String(curYear));
+    setSelectedYear(String(y));
   };
+
+  // Lista Dinâmica de Anos Disponíveis (Ano anterior, atual, próximo + qualquer ano com lançamentos/compras no sistema)
+  const availableYears = useMemo(() => {
+    const curYear = new Date().getFullYear();
+    const yearsSet = new Set<number>([curYear - 1, curYear, curYear + 1]);
+
+    const addYearIfValid = (rawDate?: string | null) => {
+      if (!rawDate) return;
+      const matchIso = String(rawDate).match(/^(\d{4})/);
+      if (matchIso) {
+        const yr = parseInt(matchIso[1], 10);
+        if (yr >= 2000 && yr <= 2100) yearsSet.add(yr);
+        return;
+      }
+      const matchBr = String(rawDate).match(/(\d{4})$/);
+      if (matchBr) {
+        const yr = parseInt(matchBr[1], 10);
+        if (yr >= 2000 && yr <= 2100) yearsSet.add(yr);
+      }
+    };
+
+    // Extrair anos dos lançamentos financeiros
+    entries.forEach(entry => {
+      addYearIfValid(entry.dataVencimento);
+      addYearIfValid(entry.dataPagamento);
+      addYearIfValid(entry.createdAt);
+    });
+
+    // Extrair anos dos pedidos carregados
+    orders.forEach(order => {
+      addYearIfValid(order.header?.dataEmissao);
+      addYearIfValid(order.header?.dataPedido);
+      addYearIfValid(order.header?.dataEntregaPrevista);
+      addYearIfValid(order.header?.dataPrimeiroVencimento);
+    });
+
+    // Garantir que o ano atualmente selecionado esteja presente na lista
+    if (selectedYear !== 'all') {
+      const parsed = parseInt(selectedYear, 10);
+      if (!isNaN(parsed) && parsed >= 2000 && parsed <= 2100) {
+        yearsSet.add(parsed);
+      }
+    }
+
+    return Array.from(yearsSet).sort((a, b) => a - b);
+  }, [entries, orders, selectedYear]);
 
   const handleFilesSelect = async (files: FileList | File[]) => {
     setUploadError('');
@@ -916,15 +962,17 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
               </select>
             </div>
 
-            {/* Dropdown Ano */}
+            {/* Dropdown Ano Dinâmico */}
             <select
               value={selectedYear}
               onChange={e => setSelectedYear(e.target.value)}
               className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-xs text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-xs cursor-pointer"
             >
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
-              <option value="2027">2027</option>
+              {availableYears.map(year => (
+                <option key={year} value={String(year)}>
+                  {year}
+                </option>
+              ))}
               <option value="all">Todos os Anos</option>
             </select>
 
@@ -1816,6 +1864,8 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
           onClose={() => setIsImportModalOpen(false)}
           onSuccess={() => loadFinancialData()}
           showToast={showToast}
+          initialYear={selectedYear}
+          initialMonth={selectedMonth}
         />
       )}
 

@@ -26,6 +26,8 @@ interface FinancialSheetImportModalProps {
   onClose: () => void;
   onSuccess: (message?: string) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  initialYear?: string;
+  initialMonth?: string;
 }
 
 interface ParsedPaymentRow {
@@ -53,7 +55,9 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
   isOpen,
   onClose,
   onSuccess,
-  showToast
+  showToast,
+  initialYear,
+  initialMonth
 }) => {
   const currentYearNum = new Date().getFullYear();
 
@@ -65,9 +69,15 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
   const [isParsing, setIsParsing] = useState<boolean>(false);
   const [parseError, setParseError] = useState<string>('');
 
-  // Parâmetros de competência e importação
-  const [targetMonth, setTargetMonth] = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'));
-  const [targetYear, setTargetYear] = useState<string>(String(currentYearNum));
+  // Parâmetros de competência e importação (preserva mês e ano atualmente filtrados na tela)
+  const [targetMonth, setTargetMonth] = useState<string>(() => {
+    if (initialMonth && initialMonth !== 'all') return initialMonth.padStart(2, '0');
+    return String(new Date().getMonth() + 1).padStart(2, '0');
+  });
+  const [targetYear, setTargetYear] = useState<string>(() => {
+    if (initialYear && initialYear !== 'all') return initialYear;
+    return String(currentYearNum);
+  });
   const [defaultStore, setDefaultStore] = useState<string>('ALS');
   const [importMode, setImportMode] = useState<'append' | 'replace_month'>('append');
 
@@ -141,14 +151,17 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
   const inferCompetency = (sheetName: string, fileName: string) => {
     const combined = `${sheetName} ${fileName}`.toUpperCase();
 
-    // 1. Procurar Ano (4 dígitos de 2020 a 2035 ou 2 dígitos /25, /26, /27)
+    // 1. Procurar Ano (4 dígitos de 2020 a 2035 ou 2 dígitos /25, /26, /27, etc)
     const year4Match = combined.match(/\b(202[4-9]|203[0-5])\b/);
     if (year4Match) {
       setTargetYear(year4Match[1]);
     } else {
-      const year2Match = combined.match(/[\/_\s\-](2[4-9]|3[0-5])\b/);
+      const year2Match = combined.match(/(?:[\/_\s\-]|^)(2[4-9]|3[0-5])\b/);
       if (year2Match) {
         setTargetYear(`20${year2Match[1]}`);
+      } else if (initialYear && initialYear !== 'all') {
+        // Preserva o ano que o usuário estava filtrando na tela principal
+        setTargetYear(initialYear);
       } else {
         setTargetYear(String(currentYearNum));
       }
@@ -170,11 +183,17 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
       'DEZEMBRO': '12', 'DEZ': '12'
     };
 
+    let foundMonth = false;
     for (const [key, mNum] of Object.entries(monthsMap)) {
       if (combined.includes(key)) {
         setTargetMonth(mNum);
+        foundMonth = true;
         break;
       }
+    }
+
+    if (!foundMonth && initialMonth && initialMonth !== 'all') {
+      setTargetMonth(initialMonth.padStart(2, '0'));
     }
   };
 
@@ -557,11 +576,19 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
                     onChange={(e) => setTargetYear(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-bold text-blue-600 dark:text-blue-400"
                   >
-                    {[currentYearNum - 1, currentYearNum, currentYearNum + 1, currentYearNum + 2].map((yr) => (
-                      <option key={yr} value={String(yr)}>
-                        {yr}
-                      </option>
-                    ))}
+                    {Array.from(new Set([
+                      currentYearNum - 1, 
+                      currentYearNum, 
+                      currentYearNum + 1, 
+                      currentYearNum + 2, 
+                      parseInt(targetYear, 10)
+                    ].filter(y => !isNaN(y) && y >= 2000 && y <= 2100)))
+                      .sort((a, b) => a - b)
+                      .map((yr) => (
+                        <option key={yr} value={String(yr)}>
+                          {yr}
+                        </option>
+                      ))}
                   </select>
                 </div>
 

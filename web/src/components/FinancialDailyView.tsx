@@ -425,7 +425,7 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                         <th className="py-2.5 px-3">Parcela</th>
                         <th className="py-2.5 px-3">Status</th>
                         <th className="py-2.5 px-4 text-right">Valor</th>
-                        <th className="py-2.5 px-4 text-center">Ações</th>
+                        <th className="py-2.5 px-4 text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
@@ -587,8 +587,8 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                             </td>
 
                             {/* Ações */}
-                            <td className="py-2.5 px-4 text-center">
-                              <div className="flex items-center justify-center gap-1">
+                            <td className="py-2.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
                                 {(() => {
                                   let compCount = 0;
                                   if (Array.isArray(item.comprovantes) && item.comprovantes.length > 0) {

@@ -1284,7 +1284,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                   <th className="py-3 px-3">Parcela</th>
                   <th className="py-3 px-3">Status</th>
                   <th className="py-3 px-4 text-right">Valor</th>
-                  <th className="py-3 px-4 text-center">Ações</th>
+                  <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
@@ -1440,8 +1440,8 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
                             {!isPaid && (
                               <button
                                 type="button"

@@ -249,6 +249,26 @@ class FinancialService {
     const rawDataBase = primeiroVencimento || dataVencimento || new Date().toISOString().substring(0, 10);
     const dataBase = toBrDate(rawDataBase);
 
+    // 🛡️ Trava Anti-Duplicidade de Boletos e Lançamentos Manuais
+    const duplicate = await financialRepo.findDuplicate({
+      descricao,
+      valor: montanteTotal,
+      dataVencimento: dataBase,
+      lojaNome: lojaNome || storeId || 'ALS',
+      documentoRef
+    });
+
+    if (duplicate) {
+      const valorFmt = Number(duplicate.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      const docInfo = duplicate.documentoRef ? ` (Doc: ${duplicate.documentoRef})` : '';
+      const err = new Error(
+        `Trava de Segurança: Já existe um boleto/lançamento registrado no sistema para "${duplicate.descricao}" no valor de R$ ${valorFmt} com vencimento em ${duplicate.dataVencimento}${docInfo} (Loja: ${duplicate.lojaNome || 'Geral'}). Operação bloqueada para evitar pagamento duplicado.`
+      );
+      err.code = 'DUPLICATE_ENTRY';
+      err.conflictEntry = duplicate;
+      throw err;
+    }
+
     // Se for Despesa Fixa Recorrente (Projeção Automática de 6 meses à frente)
     if (Boolean(recorrente)) {
       const recId = data.recorrenciaId || ('rec_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
@@ -397,6 +417,29 @@ class FinancialService {
     const before = await financialRepo.findById(id);
     if (!before) {
       throw new Error('Lançamento não encontrado.');
+    }
+
+    // 🛡️ Se estiver alterando dados chave (valor, vencimento, documentoRef, descricao), valida duplicidade contra outros registros
+    if (data.descricao || data.valor !== undefined || data.dataVencimento || data.documentoRef) {
+      const duplicate = await financialRepo.findDuplicate({
+        descricao: data.descricao || before.descricao,
+        valor: data.valor !== undefined ? data.valor : before.valor,
+        dataVencimento: data.dataVencimento || before.dataVencimento,
+        lojaNome: data.lojaNome || before.lojaNome,
+        documentoRef: data.documentoRef !== undefined ? data.documentoRef : before.documentoRef,
+        excludeId: id
+      });
+
+      if (duplicate) {
+        const valorFmt = Number(duplicate.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const docInfo = duplicate.documentoRef ? ` (Doc: ${duplicate.documentoRef})` : '';
+        const err = new Error(
+          `Trava de Segurança: Já existe outro boleto/lançamento registrado no sistema para "${duplicate.descricao}" no valor de R$ ${valorFmt} com vencimento em ${duplicate.dataVencimento}${docInfo} (Loja: ${duplicate.lojaNome || 'Geral'}). Alteração cancelada para evitar duplicidade.`
+        );
+        err.code = 'DUPLICATE_ENTRY';
+        err.conflictEntry = duplicate;
+        throw err;
+      }
     }
 
     const updated = await financialRepo.update(id, data);

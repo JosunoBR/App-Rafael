@@ -20,6 +20,8 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { importFinancialSpreadsheetInDb } from '../utils/api';
+import { FinancialEntry } from '../shared/types';
+import { toBrDate } from '../utils/masks';
 
 interface FinancialSheetImportModalProps {
   isOpen: boolean;
@@ -28,6 +30,7 @@ interface FinancialSheetImportModalProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   initialYear?: string;
   initialMonth?: string;
+  existingEntries?: FinancialEntry[];
 }
 
 interface ParsedPaymentRow {
@@ -57,7 +60,8 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
   onSuccess,
   showToast,
   initialYear,
-  initialMonth
+  initialMonth,
+  existingEntries = []
 }) => {
   const currentYearNum = new Date().getFullYear();
 
@@ -321,6 +325,49 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
       byForma
     };
   }, [parsedEntries]);
+
+  // 🛡️ Detecção de Duplicidades em Tempo Real contra lançamentos já existentes no sistema
+  const duplicateStats = useMemo(() => {
+    if (!existingEntries || existingEntries.length === 0 || parsedEntries.length === 0) {
+      return { duplicateCount: 0, duplicateIds: new Set<string>(), isTotalDuplicate: false };
+    }
+
+    const normalizeStr = (s?: string) => String(s || '').trim().toUpperCase();
+    const existingKeys = new Set<string>();
+
+    existingEntries.forEach(ex => {
+      const d = normalizeStr(ex.descricao);
+      const v = (Number(ex.valor) || 0).toFixed(2);
+      const dt = toBrDate(ex.dataVencimento);
+      const l = normalizeStr(ex.lojaNome);
+      existingKeys.add(`${d}|${v}|${dt}|${l}`);
+      if (ex.documentoRef && ex.documentoRef.length >= 3 && !['S/N', 'SEM NOTA', 'BOLETO', 'DEPOSITO', 'PIX', 'DINHEIRO'].includes(normalizeStr(ex.documentoRef))) {
+        existingKeys.add(`DOC:${normalizeStr(ex.documentoRef)}|${v}`);
+      }
+    });
+
+    const duplicateIds = new Set<string>();
+    parsedEntries.forEach(p => {
+      const d = normalizeStr(p.descricao);
+      const v = (Number(p.valor) || 0).toFixed(2);
+      const dt = toBrDate(p.dataVencimento);
+      const l = normalizeStr(p.lojaNome);
+      const key = `${d}|${v}|${dt}|${l}`;
+      const docKey = p.documentoRef && p.documentoRef.length >= 3 && !['S/N', 'SEM NOTA', 'BOLETO', 'DEPOSITO', 'PIX', 'DINHEIRO'].includes(normalizeStr(p.documentoRef))
+        ? `DOC:${normalizeStr(p.documentoRef)}|${v}`
+        : null;
+
+      if (existingKeys.has(key) || (docKey && existingKeys.has(docKey))) {
+        duplicateIds.add(p.id);
+      }
+    });
+
+    return {
+      duplicateCount: duplicateIds.size,
+      duplicateIds,
+      isTotalDuplicate: duplicateIds.size > 0 && duplicateIds.size === parsedEntries.length
+    };
+  }, [existingEntries, parsedEntries]);
 
   // Lançamentos filtrados para a tabela prévia
   const filteredPreview = useMemo(() => {
@@ -663,6 +710,35 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
             </div>
           )}
 
+          {/* 🛡️ Aviso da Trava Anti-Duplicidade */}
+          {selectedFile && parsedEntries.length > 0 && duplicateStats.duplicateCount > 0 && importMode === 'append' && (
+            <div className={`p-3.5 rounded-xl border flex items-start gap-3 animate-in fade-in duration-200 ${
+              duplicateStats.isTotalDuplicate
+                ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-900/60 text-rose-900 dark:text-rose-200'
+                : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-900/60 text-amber-900 dark:text-amber-200'
+            }`}>
+              <AlertTriangle className={`w-5 h-5 shrink-0 mt-0.5 ${duplicateStats.isTotalDuplicate ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} />
+              <div className="text-xs space-y-1">
+                <p className="font-bold text-sm">
+                  {duplicateStats.isTotalDuplicate 
+                    ? '🛡️ Trava Ativada: Planilha já importada anteriormente' 
+                    : `🛡️ Trava Ativa: ${duplicateStats.duplicateCount} lançamentos já existem no sistema`}
+                </p>
+                <p className="opacity-90">
+                  {duplicateStats.isTotalDuplicate ? (
+                    <>
+                      Todos os <strong>{parsedEntries.length} lançamentos</strong> desta planilha já estão cadastrados no sistema para a competência <strong>{targetMonth}/{targetYear}</strong>. A importação em modo &quot;Adicionar&quot; foi bloqueada para proteger o financeiro contra duplicidade. Se desejar reimportar do zero substituindo os dados anteriores, altere o Modo de Importação para <strong>&quot;Substituir mês {targetMonth}/{targetYear}&quot;</strong>.
+                    </>
+                  ) : (
+                    <>
+                      Detectamos que <strong>{duplicateStats.duplicateCount} de {parsedEntries.length} contas</strong> desta planilha já constam no sistema. O sistema irá <strong>ignorar os duplicados</strong> e importar com segurança apenas os lançamentos inéditos.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* 4. Tabela de Pré-visualização Interativa */}
           {selectedFile && parsedEntries.length > 0 && (
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900">
@@ -705,42 +781,52 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {currentRows.map((row) => (
-                      <tr key={row.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
-                        <td className="py-2 px-3 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                          {row.dataVencimento}
-                        </td>
-                        <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">
-                          {row.descricao}
-                        </td>
-                        <td className="py-2 px-3">
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                            row.categoria === 'PRODUTOS' 
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300' 
-                              : row.categoria === 'FIXO'
-                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
-                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                          }`}>
-                            {row.categoria}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                          {row.formaPagamento}
-                        </td>
-                        <td className="py-2 px-3 font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                          {row.lojaNome}
-                        </td>
-                        <td className="py-2 px-3 font-mono text-[11px] text-slate-500">
-                          {row.documentoRef || '-'}
-                        </td>
-                        <td className="py-2 px-3 text-[11px] text-slate-500">
-                          {row.parcelaDesc}
-                        </td>
-                        <td className="py-2 px-3 font-mono font-bold text-slate-900 dark:text-white text-right whitespace-nowrap">
-                          R$ {row.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
+                    {currentRows.map((row) => {
+                      const isDup = duplicateStats.duplicateIds.has(row.id) && importMode === 'append';
+                      return (
+                        <tr key={row.id} className={isDup ? 'bg-amber-50/50 dark:bg-amber-950/20' : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/50'}>
+                          <td className="py-2 px-3 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                            {row.dataVencimento}
+                          </td>
+                          <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{row.descricao}</span>
+                              {isDup && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 border border-amber-300 dark:border-amber-700 whitespace-nowrap">
+                                  ⚠️ Já no sistema
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                              row.categoria === 'PRODUTOS' 
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300' 
+                                : row.categoria === 'FIXO'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            }`}>
+                              {row.categoria}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                            {row.formaPagamento}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            {row.lojaNome}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-[11px] text-slate-500">
+                            {row.documentoRef || '-'}
+                          </td>
+                          <td className="py-2 px-3 text-[11px] text-slate-500">
+                            {row.parcelaDesc}
+                          </td>
+                          <td className="py-2 px-3 font-mono font-bold text-slate-900 dark:text-white text-right whitespace-nowrap">
+                            R$ {row.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -783,7 +869,14 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
           <div className="text-xs text-slate-500">
             {parsedEntries.length > 0 && (
               <span>
-                Pronto para importar <strong className="text-slate-800 dark:text-slate-200">{parsedEntries.length} contas</strong> para <strong>{MONTH_NAMES[parseInt(targetMonth, 10) - 1]}/{targetYear}</strong>
+                Pronto para importar <strong className="text-slate-800 dark:text-slate-200">
+                  {importMode === 'append' ? parsedEntries.length - duplicateStats.duplicateCount : parsedEntries.length} contas
+                </strong> para <strong>{MONTH_NAMES[parseInt(targetMonth, 10) - 1]}/{targetYear}</strong>
+                {importMode === 'append' && duplicateStats.duplicateCount > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400 font-semibold ml-1.5">
+                    ({duplicateStats.duplicateCount} duplicadas ignoradas)
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -797,16 +890,30 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
             </button>
             <button
               type="button"
-              disabled={parsedEntries.length === 0 || isParsing || isSubmitting}
+              disabled={parsedEntries.length === 0 || isParsing || isSubmitting || (duplicateStats.isTotalDuplicate && importMode === 'append')}
               onClick={() => setIsConfirmDialogOpen(true)}
               className={`px-5 py-2 rounded-xl font-bold text-xs shadow-md flex items-center gap-1.5 transition-all ${
-                parsedEntries.length === 0
+                parsedEntries.length === 0 || (duplicateStats.isTotalDuplicate && importMode === 'append')
                   ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed shadow-none'
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 cursor-pointer'
               }`}
+              title={duplicateStats.isTotalDuplicate && importMode === 'append' ? 'Planilha já cadastrada no sistema nesta competência.' : undefined}
             >
-              <Check className="w-4 h-4" />
-              Importar Lançamentos ({parsedEntries.length})
+              {duplicateStats.isTotalDuplicate && importMode === 'append' ? (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-slate-500" />
+                  <span>Trava: Planilha Já Importada</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>
+                    Importar {importMode === 'append' && duplicateStats.duplicateCount > 0 
+                      ? `${parsedEntries.length - duplicateStats.duplicateCount} Novas Contas` 
+                      : `Lançamentos (${parsedEntries.length})`}
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -826,7 +933,7 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
                   Confirmar Importação de Pagamentos
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Revise o resumo executivo antes de gravar no banco de dados SQLite oficial
+                  Revise o resumo executivo antes de gravar no sistema
                 </p>
               </div>
             </div>
@@ -839,9 +946,23 @@ export const FinancialSheetImportModal: React.FC<FinancialSheetImportModalProps>
                 </span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-700">
-                <span className="text-slate-500">Total de Contas / Boletos:</span>
+                <span className="text-slate-500">Total de Contas na Planilha:</span>
                 <span className="font-bold font-mono text-slate-900 dark:text-white">
                   {metrics.totalCount} lançamentos
+                </span>
+              </div>
+              {importMode === 'append' && duplicateStats.duplicateCount > 0 && (
+                <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-700 bg-amber-500/10 px-2 rounded-lg text-amber-700 dark:text-amber-300 font-semibold">
+                  <span>🛡️ Duplicadas (serão ignoradas):</span>
+                  <span className="font-bold">
+                    {duplicateStats.duplicateCount} contas
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-700">
+                <span className="text-slate-500">Novas Contas a Inserir:</span>
+                <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                  {importMode === 'append' ? metrics.totalCount - duplicateStats.duplicateCount : metrics.totalCount} lançamentos
                 </span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-700">

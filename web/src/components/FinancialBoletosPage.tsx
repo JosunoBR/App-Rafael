@@ -1866,6 +1866,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
           showToast={showToast}
           initialYear={selectedYear}
           initialMonth={selectedMonth}
+          existingEntries={entries}
         />
       )}
 

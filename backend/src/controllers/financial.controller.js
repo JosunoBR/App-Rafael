@@ -72,7 +72,12 @@ class FinancialController {
       });
     } catch (error) {
       console.error('Erro ao criar lançamento financeiro:', error);
-      return res.status(400).json({ success: false, error: error.message || 'Erro ao registrar lançamento.' });
+      return res.status(400).json({
+        success: false,
+        code: error.code || 'VALIDATION_ERROR',
+        conflictEntry: error.conflictEntry || null,
+        error: error.message || 'Erro ao registrar lançamento.'
+      });
     }
   }
 
@@ -87,7 +92,12 @@ class FinancialController {
       });
     } catch (error) {
       console.error('Erro ao atualizar lançamento:', error);
-      return res.status(400).json({ success: false, error: error.message || 'Erro ao atualizar lançamento.' });
+      return res.status(400).json({
+        success: false,
+        code: error.code || 'VALIDATION_ERROR',
+        conflictEntry: error.conflictEntry || null,
+        error: error.message || 'Erro ao atualizar lançamento.'
+      });
     }
   }
 
@@ -198,7 +208,12 @@ class FinancialController {
       });
     } catch (error) {
       console.error('Erro ao importar lançamentos de planilha:', error);
-      return res.status(400).json({ success: false, error: error.message || 'Erro ao importar lote de lançamentos.' });
+      return res.status(400).json({
+        success: false,
+        code: error.code || 'IMPORT_ERROR',
+        skippedCount: error.skippedCount || 0,
+        error: error.message || 'Erro ao importar lote de lançamentos.'
+      });
     }
   }
 

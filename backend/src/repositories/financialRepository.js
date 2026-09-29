@@ -194,11 +194,99 @@ class FinancialRepository {
     return results;
   }
 
+  /**
+   * Verifica se já existe um boleto/lançamento idêntico no sistema para evitar boletos duplicados
+   */
+  async findDuplicate({ descricao, valor, dataVencimento, lojaNome, documentoRef, excludeId = null }) {
+    const val = parseFloat(valor) || 0;
+    const normalizedVenc = toBrDate(dataVencimento);
+    const cleanDesc = String(descricao || '').trim().toUpperCase();
+    const cleanLoja = String(lojaNome || '').trim().toUpperCase();
+    const cleanDoc = String(documentoRef || '').trim().toUpperCase();
+
+    // 1. Verificação por número de documento (NF, Boleto, Linha digitável) se informado
+    if (cleanDoc && cleanDoc.length >= 3 && !['S/N', 'SEM NOTA', 'BOLETO', 'DEPOSITO', 'PIX', 'DINHEIRO', 'ÚNICA', 'UNICA'].includes(cleanDoc)) {
+      let docSql = `
+        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, status
+        FROM financial_entries
+        WHERE UPPER(TRIM(documentoRef)) = ?
+          AND ROUND(valor, 2) = ROUND(?, 2)
+      `;
+      const docParams = [cleanDoc, val];
+      if (excludeId) {
+        docSql += ' AND id != ?';
+        docParams.push(excludeId);
+      }
+      const matchDoc = await queryOne(docSql, docParams);
+      if (matchDoc) return matchDoc;
+    }
+
+    // 2. Verificação por Descrição + Valor + Vencimento (+ Loja)
+    if (cleanDesc && val > 0 && normalizedVenc) {
+      let sql = `
+        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, status
+        FROM financial_entries
+        WHERE UPPER(TRIM(descricao)) = ?
+          AND (dataVencimento = ? OR dataVencimento LIKE ?)
+          AND ROUND(valor, 2) = ROUND(?, 2)
+      `;
+      const params = [cleanDesc, normalizedVenc, `%${normalizedVenc}%`, val];
+      if (cleanLoja) {
+        sql += ' AND (UPPER(TRIM(lojaNome)) = ? OR UPPER(TRIM(storeId)) = ?)';
+        params.push(cleanLoja, cleanLoja.toLowerCase());
+      }
+      if (excludeId) {
+        sql += ' AND id != ?';
+        params.push(excludeId);
+      }
+      const matchEntry = await queryOne(sql, params);
+      if (matchEntry) return matchEntry;
+    }
+
+    return null;
+  }
+
   async importBatch({ entries, targetYear, targetMonth, mode = 'append' }) {
     const db = await getDatabase();
     const nowIso = new Date().toISOString();
     const now = new Date();
     const todayBr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+
+    // 🛡️ Trava Anti-Duplicidade de Importações
+    // Carrega registros existentes para detectar se a planilha já foi importada ou se contém linhas duplicadas
+    let existingEntries = [];
+    if (mode !== 'replace_month') {
+      if (targetYear && targetMonth) {
+        const formattedMonth = String(targetMonth).padStart(2, '0');
+        existingEntries = await this.findAll({ year: targetYear, month: formattedMonth });
+      } else {
+        existingEntries = await queryAll('SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef FROM financial_entries');
+      }
+    }
+
+    const existingKeys = new Set();
+    const normalizeStr = (s) => String(s || '').trim().toUpperCase();
+
+    const makeEntryKey = (desc, valor, venc, loja) => {
+      const d = normalizeStr(desc);
+      const v = (parseFloat(valor) || 0).toFixed(2);
+      const dt = toBrDate(venc);
+      const l = normalizeStr(loja);
+      return `${d}|${v}|${dt}|${l}`;
+    };
+
+    const makeDocKey = (doc, valor) => {
+      const d = normalizeStr(doc);
+      if (!d || d.length < 3 || ['S/N', 'SEM NOTA', 'BOLETO', 'DEPOSITO', 'PIX', 'DINHEIRO', 'ÚNICA', 'UNICA'].includes(d)) return null;
+      const v = (parseFloat(valor) || 0).toFixed(2);
+      return `DOC:${d}|${v}`;
+    };
+
+    for (const ex of existingEntries) {
+      existingKeys.add(makeEntryKey(ex.descricao, ex.valor, ex.dataVencimento, ex.lojaNome));
+      const docK = makeDocKey(ex.documentoRef, ex.valor);
+      if (docK) existingKeys.add(docK);
+    }
 
     // Transação SQLite atômica
     db.run("BEGIN TRANSACTION;");
@@ -226,6 +314,7 @@ class FinancialRepository {
       `;
 
       let insertedCount = 0;
+      let skippedCount = 0;
       let totalValor = 0;
 
       for (let i = 0; i < entries.length; i++) {
@@ -237,6 +326,22 @@ class FinancialRepository {
         const normalizedVencimento = toBrDate(entry.dataVencimento) || todayBr;
         const normalizedPagamento = entry.dataPagamento ? toBrDate(entry.dataPagamento) : null;
         const status = entry.status || (entry.valorPago && entry.valorPago >= val ? 'Pago' : 'A Vencer');
+        const lojaNome = String(entry.lojaNome || entry.empresa || 'ALS').trim();
+
+        // 🛡️ Validação da Trava Anti-Duplicidade no Modo Append
+        if (mode !== 'replace_month') {
+          const entryKey = makeEntryKey(entry.descricao, val, normalizedVencimento, lojaNome);
+          const docKey = makeDocKey(entry.documentoRef, val);
+
+          if (existingKeys.has(entryKey) || (docKey && existingKeys.has(docKey))) {
+            skippedCount++;
+            continue; // Pula para não duplicar no sistema!
+          }
+
+          // Registra chave para não duplicar itens idênticos dentro da mesma planilha
+          existingKeys.add(entryKey);
+          if (docKey) existingKeys.add(docKey);
+        }
 
         db.run(insertSql, [
           id,
@@ -247,7 +352,7 @@ class FinancialRepository {
           String(entry.categoria || 'OPERACIONAL').trim().toUpperCase(),
           String(entry.fornecedor || '').trim(),
           String(entry.storeId || '').trim(),
-          String(entry.lojaNome || 'ALS').trim(),
+          lojaNome,
           String(entry.empresa || 'ALS').trim(),
           String(entry.formaPagamento || 'BOLETO').trim().toUpperCase(),
           String(entry.bancoConta || '').trim(),
@@ -278,14 +383,32 @@ class FinancialRepository {
         totalValor += val;
       }
 
+      // Se 100% dos lançamentos forem duplicados no modo append:
+      if (mode !== 'replace_month' && insertedCount === 0 && skippedCount > 0) {
+        db.run("ROLLBACK;");
+        const monthRef = targetMonth && targetYear ? `${targetMonth}/${targetYear}` : 'esta competência';
+        const err = new Error(
+          `Trava de Segurança: Todos os ${skippedCount} lançamentos desta planilha já estão cadastrados no sistema para ${monthRef}. A importação foi bloqueada para evitar duplicidade de contas e boletos.`
+        );
+        err.code = 'ALL_ENTRIES_DUPLICATE';
+        err.skippedCount = skippedCount;
+        throw err;
+      }
+
       db.run("COMMIT;");
       flushDatabaseToDisk();
+
+      let successMessage = `${insertedCount} lançamentos importados com sucesso! (Total: R$ ${totalValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
+      if (skippedCount > 0) {
+        successMessage += ` ⚠️ ${skippedCount} lançamentos já cadastrados foram ignorados automaticamente para evitar duplicidade.`;
+      }
 
       return {
         success: true,
         count: insertedCount,
+        skippedCount,
         totalValor,
-        message: `${insertedCount} lançamentos importados com sucesso! (Total: R$ ${totalValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
+        message: successMessage
       };
     } catch (err) {
       try { db.run("ROLLBACK;"); } catch (_) {}

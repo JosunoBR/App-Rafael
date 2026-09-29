@@ -55,10 +55,10 @@ export const DeliveryAlertBanner: React.FC<DeliveryAlertBannerProps> = ({
       } ${className}`}
     >
       {/* Barra Principal do Banner */}
-      <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start sm:items-center gap-3.5">
+      <div className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3.5">
           <div 
-            className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
               hasLate 
                 ? 'bg-rose-500 text-white shadow-rose-500/30 animate-pulse' 
                 : 'bg-amber-500 text-white shadow-amber-500/30'
@@ -68,45 +68,11 @@ export const DeliveryAlertBanner: React.FC<DeliveryAlertBannerProps> = ({
           </div>
 
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                <BellRing className="w-3.5 h-3.5" />
-                Alerta da Central de Compras
-              </span>
-
-              {/* Badges de Contagem */}
-              {summary.lateCount > 0 && (
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-600 text-white shadow-xs">
-                  {summary.lateCount} {summary.lateCount === 1 ? 'Atrasado' : 'Atrasados'}
-                </span>
-              )}
-              {summary.todayCount > 0 && (
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-500 text-white shadow-xs">
-                  {summary.todayCount} Previsto{summary.todayCount > 1 ? 's' : ''} Hoje
-                </span>
-              )}
-              {summary.upcomingCount > 0 && (
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500 text-white shadow-xs">
-                  {summary.upcomingCount} nos Próximos 2 Dias
-                </span>
-              )}
-            </div>
-
-            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white mt-1">
+            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
               {hasLate
                 ? `Atenção: ${summary.lateCount} ${summary.lateCount === 1 ? 'pedido com entrega em atraso' : 'pedidos com entrega em atraso'} pelo fornecedor`
                 : `Acompanhamento de Entregas: ${summary.totalAlerts} ${summary.totalAlerts === 1 ? 'pedido com entrega programada' : 'pedidos com entrega programada'}`}
             </h3>
-            
-            <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-              {hasLate && summary.totalLateValue > 0 ? (
-                <>
-                  Total em atraso: <strong className="font-mono text-slate-900 dark:text-white font-bold">R$ {summary.totalLateValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> • Fique atento para acionar os representantes e fornecedores.
-                </>
-              ) : (
-                'Mercadorias com previsão iminente de recebimento na doca do CD.'
-              )}
-            </p>
           </div>
         </div>
 

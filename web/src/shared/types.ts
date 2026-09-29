@@ -423,6 +423,7 @@ export interface FinancialEntry {
   comprovanteNome?: string;
   comprovanteTipo?: string;
   comprovanteTamanho?: number;
+  comprovanteArquivo?: string;
   comprovanteUrl?: string;
   comprovantesJson?: string;
   comprovantes?: ComprovanteAnexo[];

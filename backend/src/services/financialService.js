@@ -484,16 +484,12 @@ class FinancialService {
   }
 
   async markAsPaid(id, paymentData = {}, currentUser = null) {
-    // 1. Suporte a múltiplos comprovantes ou comprovante único (Zero Trust - Fail Fast)
+    // 1. Suporte a múltiplos comprovantes ou comprovante único (Zero Trust - Opcional)
     let attachments = [];
     if (Array.isArray(paymentData.comprovantes) && paymentData.comprovantes.length > 0) {
       attachments = paymentData.comprovantes.filter(a => a && a.base64 && a.nome);
     } else if (paymentData.comprovante && paymentData.comprovante.base64 && paymentData.comprovante.nome) {
       attachments = [paymentData.comprovante];
-    }
-
-    if (attachments.length === 0) {
-      throw new Error('É obrigatório anexar pelo menos um comprovante de pagamento (imagem, PDF ou arquivo de texto) para liquidar o título.');
     }
 
     const before = await financialRepo.findById(id);
@@ -510,7 +506,7 @@ class FinancialService {
     const processedComprovantes = [];
     const maxBytesPerFile = 10 * 1024 * 1024; // 10 MB
 
-    // 2. Decodificação segura, validação e gravação em disco de cada anexo
+    // 2. Decodificação segura, validação e gravação em disco de cada anexo (se houver)
     for (let i = 0; i < attachments.length; i++) {
       const att = attachments[i];
       const originalName = String(att.nome).trim();
@@ -550,20 +546,19 @@ class FinancialService {
       });
     }
 
-    if (processedComprovantes.length === 0) {
-      throw new Error('Nenhum comprovante válido foi processado.');
+    // 3. Metadados para persistência: salva comprovantes se foram fornecidos
+    let comprovanteMeta = {};
+    if (processedComprovantes.length > 0) {
+      const primary = processedComprovantes[0];
+      comprovanteMeta = {
+        comprovanteNome: primary.nome,
+        comprovanteTipo: primary.tipo,
+        comprovanteTamanho: primary.tamanho,
+        comprovanteArquivo: primary.arquivo,
+        comprovanteUrl: primary.url,
+        comprovantesJson: JSON.stringify(processedComprovantes)
+      };
     }
-
-    // 3. Metadados para persistência: o primeiro arquivo mantém retrocompatibilidade total
-    const primary = processedComprovantes[0];
-    const comprovanteMeta = {
-      comprovanteNome: primary.nome,
-      comprovanteTipo: primary.tipo,
-      comprovanteTamanho: primary.tamanho,
-      comprovanteArquivo: primary.arquivo,
-      comprovanteUrl: primary.url,
-      comprovantesJson: JSON.stringify(processedComprovantes)
-    };
 
     const updated = await financialRepo.markAsPaid(id, {
       ...paymentData,
@@ -576,6 +571,10 @@ class FinancialService {
 
     // 4. Auditoria de Segurança
     if (currentUser) {
+      const observacaoAudit = processedComprovantes.length > 0
+        ? `Baixa realizada com ${processedComprovantes.length} comprovante(s) anexado(s) (${processedComprovantes.map(c => c.nome).join(', ')}): R$ ${paymentData.valorPago || updated.valorPago || updated.valor} em ${paymentData.dataPagamento || new Date().toISOString().substring(0, 10)}`
+        : `Baixa realizada sem comprovante anexado: R$ ${paymentData.valorPago || updated.valorPago || updated.valor} em ${paymentData.dataPagamento || new Date().toISOString().substring(0, 10)}`;
+
       await financialAuditRepo.create({
         entryId: id,
         orderId: updated.orderId || null,
@@ -602,7 +601,7 @@ class FinancialService {
           }, 
           updated 
         },
-        observacao: `Baixa realizada com ${processedComprovantes.length} comprovante(s) anexado(s) (${processedComprovantes.map(c => c.nome).join(', ')}): R$ ${paymentData.valorPago || updated.valorPago || updated.valor} em ${paymentData.dataPagamento || new Date().toISOString().substring(0, 10)}`
+        observacao: observacaoAudit
       }).catch(err => console.error('Erro ao registrar auditoria de baixa:', err));
     }
 

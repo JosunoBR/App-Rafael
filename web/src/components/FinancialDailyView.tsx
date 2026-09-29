@@ -20,7 +20,8 @@ import {
   Edit3,
   History,
   Scale,
-  Trash2
+  Trash2,
+  Paperclip
 } from 'lucide-react';
 import { FinancialEntry, FinancialStatus, FinancialCategory, PurchaseOrder } from '../shared/types';
 import { toBrDate, formatCurrency } from '../utils/masks';
@@ -36,6 +37,7 @@ interface FinancialDailyViewProps {
   onDeleteEntry: (id: string) => void;
   onEditEntry?: (entry: FinancialEntry) => void;
   onViewAudit?: (entry: FinancialEntry) => void;
+  onViewComprovante?: (entry: FinancialEntry) => void;
   metaDiaria?: number;
   selectedIds?: string[];
   onToggleSelect?: (id: string) => void;
@@ -66,6 +68,7 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
   onDeleteEntry,
   onEditEntry,
   onViewAudit,
+  onViewComprovante,
   metaDiaria,
   selectedIds = [],
   onToggleSelect,
@@ -586,6 +589,37 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                             {/* Ações */}
                             <td className="py-2.5 px-4 text-center">
                               <div className="flex items-center justify-center gap-1">
+                                {(() => {
+                                  let compCount = 0;
+                                  if (Array.isArray(item.comprovantes) && item.comprovantes.length > 0) {
+                                    compCount = item.comprovantes.length;
+                                  } else if (item.comprovantesJson) {
+                                    try {
+                                      const parsed = JSON.parse(item.comprovantesJson);
+                                      if (Array.isArray(parsed)) compCount = parsed.length;
+                                    } catch (e) {}
+                                  } else if (item.comprovanteNome || item.comprovanteArquivo || item.comprovanteUrl) {
+                                    compCount = 1;
+                                  }
+
+                                  if (compCount === 0 || !onViewComprovante) return null;
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      title={`Ver e Baixar Comprovante${compCount > 1 ? `s (${compCount} anexos)` : `: ${item.comprovanteNome || 'comprovante'}`}`}
+                                      onClick={() => onViewComprovante(item)}
+                                      className="relative p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500 text-blue-600 hover:text-white transition-all cursor-pointer shadow-2xs"
+                                    >
+                                      <Paperclip className="w-3.5 h-3.5" />
+                                      {compCount > 1 && (
+                                        <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-[14px] rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+                                          {compCount}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })()}
                                 {!isPaid && (
                                   <button
                                     type="button"

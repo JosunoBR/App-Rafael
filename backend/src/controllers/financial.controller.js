@@ -120,11 +120,12 @@ class FinancialController {
   async downloadComprovante(req, res) {
     try {
       const { id } = req.params;
-      const { index, file } = req.query;
+      const { index, file, download } = req.query;
       const fileInfo = await financialService.getComprovante(id, { index, file });
       
+      const disposition = download === '1' || download === 'true' ? 'attachment' : 'inline';
       res.setHeader('Content-Type', fileInfo.mimeType);
-      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileInfo.fileName)}"`);
+      res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(fileInfo.fileName)}"`);
       res.setHeader('Content-Length', fileInfo.tamanho);
       
       const fileStream = fs.createReadStream(fileInfo.filePath);

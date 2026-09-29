@@ -55,6 +55,10 @@ class ProductService {
     return await productRepository.findAll();
   }
 
+  async getNextAvailableCode() {
+    return await productRepository.findNextAvailableCodigo();
+  }
+
   async getProduct(id) {
     const product = await productRepository.findById(id);
     if (!product) {

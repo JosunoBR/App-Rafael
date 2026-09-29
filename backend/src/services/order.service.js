@@ -119,8 +119,13 @@ class OrderService {
 
     return {
       success: true,
-      message: `Pedido ${orderData.header.numeroPedido} salvo com sucesso no SQLite!`,
-      order: saved
+      message: saved._numberReassigned 
+        ? `Concorrência prevenida: O número ${saved._originalNumber} já havia sido ocupado. Pedido salvo com sucesso como ${saved.header.numeroPedido}!`
+        : `Pedido ${saved.header.numeroPedido} salvo com sucesso no sistema!`,
+      order: saved,
+      numberReassigned: Boolean(saved._numberReassigned),
+      originalNumber: saved._originalNumber,
+      newNumber: saved.header.numeroPedido
     };
   }
 

@@ -5,12 +5,33 @@ import { getNextOrderNumber } from './storage';
 export class ApiError extends Error {
   status: number;
   isNetworkError: boolean;
+  code?: string;
+  suggestedNextNumber?: string;
+  conflictDetails?: any;
+  suggestedNextCode?: string;
+  conflictProduct?: any;
 
-  constructor(message: string, status: number = 0, isNetworkError: boolean = false) {
+  constructor(
+    message: string, 
+    status: number = 0, 
+    isNetworkError: boolean = false, 
+    extra?: { 
+      code?: string; 
+      suggestedNextNumber?: string; 
+      conflictDetails?: any;
+      suggestedNextCode?: string;
+      conflictProduct?: any;
+    }
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.isNetworkError = isNetworkError;
+    if (extra?.code) this.code = extra.code;
+    if (extra?.suggestedNextNumber) this.suggestedNextNumber = extra.suggestedNextNumber;
+    if (extra?.conflictDetails) this.conflictDetails = extra.conflictDetails;
+    if (extra?.suggestedNextCode) this.suggestedNextCode = extra.suggestedNextCode;
+    if (extra?.conflictProduct) this.conflictProduct = extra.conflictProduct;
   }
 }
 
@@ -100,7 +121,13 @@ async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Re
         errorMessage = errorData?.error || errorData?.message || 'Acesso negado: seu usuário não tem permissão para esta operação.';
       }
 
-      throw new ApiError(errorMessage, res.status, false);
+      throw new ApiError(errorMessage, res.status, false, {
+        code: errorData?.code,
+        suggestedNextNumber: errorData?.suggestedNextNumber,
+        conflictDetails: errorData?.conflictDetails,
+        suggestedNextCode: errorData?.suggestedNextCode,
+        conflictProduct: errorData?.conflictProduct
+      });
     }
     return res;
   } catch (err: any) {
@@ -130,12 +157,26 @@ export async function fetchProductsFromDb(): Promise<Product[]> {
   return res.json();
 }
 
-export async function saveProductToDb(product: Product): Promise<void> {
-  await apiFetch('/products', {
+export async function fetchNextProductCodeFromDb(): Promise<string> {
+  const res = await apiFetch('/products/next-code');
+  const data = await res.json();
+  return data.nextCode || 'PRD-001';
+}
+
+export async function saveProductToDb(
+  product: Product,
+  options: { autoAssignNextOnConflict?: boolean } = {}
+): Promise<{ product?: Product; message?: string }> {
+  const payload = {
+    ...product,
+    autoAssignNextOnConflict: Boolean(options.autoAssignNextOnConflict)
+  };
+  const res = await apiFetch('/products', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(product)
+    body: JSON.stringify(payload)
   });
+  return res.json().catch(() => ({ product }));
 }
 
 export async function saveProductsBatchToDb(products: Product[]): Promise<void> {
@@ -178,12 +219,70 @@ export async function fetchOrdersFromDb(): Promise<PurchaseOrder[]> {
   return res.json();
 }
 
-export async function saveOrderToDb(order: PurchaseOrder): Promise<void> {
-  await apiFetch('/orders', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(order)
-  });
+export interface SaveOrderResult {
+  success: boolean;
+  message?: string;
+  order: PurchaseOrder;
+  numberReassigned?: boolean;
+  originalNumber?: string;
+  newNumber?: string;
+}
+
+export async function saveOrderToDb(
+  order: PurchaseOrder, 
+  options: { autoAssignNextOnConflict?: boolean } = { autoAssignNextOnConflict: true }
+): Promise<SaveOrderResult> {
+  const payload = {
+    ...order,
+    autoAssignNextOnConflict: options.autoAssignNextOnConflict !== false
+  };
+
+  try {
+    const res = await apiFetch('/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({ success: true, order }));
+    return {
+      success: data.success !== false,
+      message: data.message,
+      order: data.order || order,
+      numberReassigned: Boolean(data.numberReassigned),
+      originalNumber: data.originalNumber,
+      newNumber: data.newNumber
+    };
+  } catch (err: any) {
+    if (err instanceof ApiError && err.status === 409 && (options.autoAssignNextOnConflict !== false)) {
+      // Recuperação resiliente em caso de concorrência com o número do pedido
+      const nextNum = err.suggestedNextNumber || await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
+      if (nextNum && nextNum !== order.header.numeroPedido) {
+        console.warn(`[Auto-Recovery] Conflito de pedido detectado para ${order.header.numeroPedido}. Tentando salvar automaticamente com ${nextNum}...`);
+        const recoveredOrder: PurchaseOrder = {
+          ...order,
+          header: {
+            ...order.header,
+            numeroPedido: nextNum
+          }
+        };
+        const retryRes = await apiFetch('/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(recoveredOrder)
+        });
+        const retryData = await retryRes.json().catch(() => ({ success: true, order: recoveredOrder }));
+        return {
+          success: true,
+          message: `Concorrência resolvida: Pedido salvo como ${nextNum} (o número original ${order.header.numeroPedido} já estava em uso).`,
+          order: retryData.order || recoveredOrder,
+          numberReassigned: true,
+          originalNumber: order.header.numeroPedido,
+          newNumber: nextNum
+        };
+      }
+    }
+    throw err;
+  }
 }
 
 export async function deleteOrderFromDb(
@@ -680,8 +779,14 @@ export async function rollbackOrderStatusApi(orderId: string, payload: { targetS
   return res.json();
 }
 
-export async function fetchDistributionAuditLogs(orderId?: string): Promise<DistributionAuditLog[]> {
-  const url = orderId ? `/audit/distribution/${orderId}` : '/audit/distribution';
+export async function fetchDistributionAuditLogs(orderId?: string, numeroPedido?: string): Promise<DistributionAuditLog[]> {
+  let url = '/audit/distribution';
+  if (orderId) {
+    url += `/${encodeURIComponent(orderId)}`;
+  }
+  if (numeroPedido) {
+    url += `${orderId ? '?' : '/?'}numeroPedido=${encodeURIComponent(numeroPedido)}`;
+  }
   const res = await apiFetch(url);
   return res.json();
 }

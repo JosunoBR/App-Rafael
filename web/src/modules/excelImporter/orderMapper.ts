@@ -246,7 +246,7 @@ export function mapParsedExcelToOrder(
     percentualNota: parsed.header.percentualNota !== undefined 
       ? parsed.header.percentualNota 
       : (supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : 100),
-    tipoFrete: parsed.header.tipoFrete || 'Retira',
+    tipoFrete: parsed.header.tipoFrete || 'CIF',
     valorFrete: 0,
     valorFreteGlobal: 0,
     valorOutrasDespesasGlobal: 0,

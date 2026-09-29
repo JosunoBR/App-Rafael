@@ -33,10 +33,30 @@ class OrderRepository {
       [rawNum, currentId]
     );
 
+    let numberReassigned = false;
+    let originalNumber = rawNum;
+
     if (conflict) {
-      const err = new Error(`Não é permitido duplicar números de pedido! O número "${rawNum}" já pertence ao pedido do fornecedor "${conflict.fornecedor || 'N/A'}" (ID: ${conflict.id}). Números de pedido devem ser únicos.`);
-      err.statusCode = 409;
-      throw err;
+      const nextAvailable = await this.getNextNumeroPedido();
+      const allowAutoIncrement = Boolean(order.autoAssignNextOnConflict || order.header?.autoAssignNextOnConflict);
+
+      if (allowAutoIncrement) {
+        console.warn(`[Auto-Conflito de Pedido] Número "${rawNum}" colidiu com pedido do fornecedor "${conflict.fornecedor}". Reatribuindo automaticamente para "${nextAvailable}".`);
+        order.header.numeroPedido = nextAvailable;
+        numberReassigned = true;
+      } else {
+        const err = new Error(`Não é permitido duplicar números de pedido! O número "${rawNum}" já pertence ao pedido do fornecedor "${conflict.fornecedor || 'N/A'}" (ID: ${conflict.id}). Números de pedido devem ser únicos.`);
+        err.statusCode = 409;
+        err.code = 'ORDER_NUMBER_CONFLICT';
+        err.suggestedNextNumber = nextAvailable;
+        err.conflictDetails = {
+          conflictId: conflict.id,
+          conflictFornecedor: conflict.fornecedor,
+          originalNumber: rawNum,
+          suggestedNextNumber: nextAvailable
+        };
+        throw err;
+      }
     }
 
     const existing = currentId ? await queryOne("SELECT id, numeroPedido FROM purchase_orders WHERE id = ?", [currentId]) : null;
@@ -473,7 +493,12 @@ class OrderRepository {
       console.warn('Aviso na persistência relacional normalizada de itens/avarias:', e.message);
     }
 
-    return await this.findById(targetId);
+    const saved = await this.findById(targetId);
+    if (saved) {
+      saved._numberReassigned = numberReassigned;
+      saved._originalNumber = originalNumber;
+    }
+    return saved;
   }
 
   async updateInstallments(orderId, installments) {

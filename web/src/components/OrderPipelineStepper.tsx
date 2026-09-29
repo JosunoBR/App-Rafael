@@ -174,18 +174,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </button>
           )}
 
-          {/* Confirmar Recebimento Físico na Matriz:
-              Disponível na Etapa 3 (Separação) ou além */}
-          {!order.header.recebidoMatriz && order.header.status !== 'Finalizado' && onConfirmReceipt && (
-            <button
-              onClick={() => onConfirmReceipt(order)}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"
-              title="Registrar a entrega física do fornecedor na Matriz"
-            >
-              <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Confirmar Recebimento</span>
-            </button>
-          )}
+
 
           {/* Tag informativa de recebido na Matriz */}
           {order.header.recebidoMatriz && (

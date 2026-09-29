@@ -22,11 +22,13 @@ import {
   Building2,
   Package,
   Loader2,
-  UploadCloud
+  UploadCloud,
+  Zap
 } from 'lucide-react';
 import { optimizeImageFile } from '../utils/imageUtils';
 import { Product, Supplier } from '../shared/types';
 import { handleCurrencyInput, formatCurrency } from '../utils/masks';
+import { generateNextProductCode } from '../utils/orderItemUtils';
 
 interface ProductsCatalogPageProps {
   products: Product[];
@@ -883,9 +885,20 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Código Interno */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Código Interno (SKU Rede) *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                        Código Interno (SKU Rede) *
+                      </label>
+                      {(() => {
+                        const curCode = (editingProduct.codigoInterno || editingProduct.codigo || '').trim().toUpperCase();
+                        const conflict = curCode ? products.find(p => p.id !== editingProduct.id && ((p.codigoInterno || '').trim().toUpperCase() === curCode || (p.codigo || '').trim().toUpperCase() === curCode)) : null;
+                        return conflict ? (
+                          <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 animate-pulse">
+                            ⚠️ Duplicado
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
                     <input
                       type="text"
                       required
@@ -894,7 +907,31 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                       placeholder="Ex: PRD-001"
                       className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 outline-hidden focus:ring-2 focus:ring-indigo-500"
                     />
-                    <span className="text-[9px] text-slate-400 block mt-0.5">Visível em todas as telas</span>
+                    {(() => {
+                      const curCode = (editingProduct.codigoInterno || editingProduct.codigo || '').trim().toUpperCase();
+                      const conflict = curCode ? products.find(p => p.id !== editingProduct.id && ((p.codigoInterno || '').trim().toUpperCase() === curCode || (p.codigo || '').trim().toUpperCase() === curCode)) : null;
+                      if (!conflict) {
+                        return <span className="text-[9px] text-slate-400 block mt-0.5">Visível em todas as telas</span>;
+                      }
+                      return (
+                        <div className="mt-1 space-y-0.5">
+                          <span className="text-[9px] font-semibold text-rose-500 block truncate" title={conflict.descricao}>
+                            Pertence a: {conflict.descricao}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextCode = generateNextProductCode(products);
+                              setEditingProduct(prev => prev ? { ...prev, codigoInterno: nextCode, codigo: nextCode } : null);
+                            }}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800 transition cursor-pointer"
+                          >
+                            <Zap className="w-2.5 h-2.5 text-indigo-500 fill-indigo-500" />
+                            Usar Próximo Livre
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Código Fornecedor */}

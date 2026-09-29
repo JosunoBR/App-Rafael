@@ -38,8 +38,9 @@ class AuditController {
   async listDistributionLogs(req, res, next) {
     try {
       const { orderId } = req.params;
-      const logs = orderId 
-        ? await distributionAuditRepo.findByOrderId(orderId)
+      const numeroPedido = req.query.numeroPedido || req.query.numero;
+      const logs = (orderId || numeroPedido)
+        ? await distributionAuditRepo.findByOrderId(orderId, numeroPedido)
         : await distributionAuditRepo.findAll(100);
       return res.json(logs);
     } catch (err) {

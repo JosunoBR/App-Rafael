@@ -23,11 +23,13 @@ import {
   Search,
   Check,
   RotateCcw,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Zap
 } from 'lucide-react';
 import { OrderHeader, Supplier, PaymentCondition, PurchaseOrder } from '../shared/types';
 import { handleCurrencyInput, formatCurrency, maskPhone, maskDate, toBrDate, toIsoDate } from '../utils/masks';
-import { LEGACY_DEFAULT_OBSERVACOES } from '../utils/storage';
+import { LEGACY_DEFAULT_OBSERVACOES, getNextOrderNumber } from '../utils/storage';
+import { fetchNextOrderNumberFromDb } from '../utils/api';
 import { PaymentConditionsModal } from './PaymentConditionsModal';
 import { loadPaymentConditions } from '../utils/paymentConditionStorage';
 import { 
@@ -106,6 +108,21 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       o.header.numeroPedido.trim().toUpperCase() === currentNum
     ) || null;
   }, [header.numeroPedido, header.id, existingOrders]);
+
+  const handleApplyNextOrderNumber = async () => {
+    try {
+      const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(existingOrders));
+      if (nextNum) {
+        handleFieldChange('numeroPedido', nextNum);
+        if (showToast) {
+          showToast(`Número atualizado para o próximo sequencial livre: ${nextNum}`, 'info');
+        }
+      }
+    } catch {
+      const fallback = getNextOrderNumber(existingOrders);
+      handleFieldChange('numeroPedido', fallback);
+    }
+  };
 
   // Box de Condições de Pagamento
   const [isPaymentCondModalOpen, setIsPaymentCondModalOpen] = useState(false);
@@ -240,6 +257,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     }
     if (field === 'tipoFrete') {
       const isCif = String(value || 'CIF').toUpperCase().includes('CIF');
+      setEditingValorFrete(null);
       onChange({
         ...header,
         tipoFrete: value,
@@ -1564,10 +1582,21 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 placeholder="Ex: PED-0001"
               />
               {duplicateOrderConflict && (
-                <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-start gap-1 leading-tight">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
-                  <span>Já existe no pedido de <b>{duplicateOrderConflict.header.fornecedor || 'outro fornecedor'}</b>. Números devem ser únicos!</span>
-                </p>
+                <div className="mt-1 space-y-1">
+                  <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-start gap-1 leading-tight">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                    <span>Já existe no pedido de <b>{duplicateOrderConflict.header.fornecedor || 'outro fornecedor'}</b>. Números devem ser únicos!</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleApplyNextOrderNumber}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 px-2 py-1 rounded-md border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                    title="Preencher com o próximo número sequencial livre disponível no banco"
+                  >
+                    <Zap className="w-3 h-3 text-emerald-600 dark:text-emerald-400 fill-emerald-500" />
+                    Usar Próximo Livre
+                  </button>
+                </div>
               )}
             </div>
 
@@ -2313,7 +2342,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       Modalidade Frete
                     </label>
                     <select
-                      value={valorFreteNum > 0 && String(header.tipoFrete || 'CIF').toUpperCase().includes('CIF') ? 'FOB' : (header.tipoFrete || 'CIF')}
+                      value={header.tipoFrete || (valorFreteNum > 0 ? 'FOB' : 'CIF')}
                       onChange={(e) => handleFieldChange('tipoFrete', e.target.value)}
                       className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
                     >
@@ -2351,6 +2380,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                             disabled={isCifModalidade}
                             value={isCifModalidade ? '0,00' : (editingValorFrete !== null ? editingValorFrete : (valorFreteNum > 0 ? formatCurrency(valorFreteNum, false) : (header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : '')))}
                             onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.currentTarget.blur();
+                                return;
+                              }
                               if (e.key === '.') {
                                 e.preventDefault();
                                 const target = e.currentTarget;
@@ -2359,9 +2392,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                                   const selStart = target.selectionStart ?? currentVal.length;
                                   const selEnd = target.selectionEnd ?? currentVal.length;
                                   const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
-                                  const { formatted, value } = handleCurrencyInput(newVal, true);
+                                  const { formatted } = handleCurrencyInput(newVal, true);
                                   setEditingValorFrete(formatted);
-                                  handleFieldChange('valorFrete', value);
                                 }
                               }
                             }}
@@ -2370,11 +2402,16 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                               setEditingValorFrete(currentVal > 0 ? formatCurrency(currentVal, false) : '');
                               e.target.select();
                             }}
-                            onBlur={() => setEditingValorFrete(null)}
+                            onBlur={() => {
+                              if (editingValorFrete !== null) {
+                                const parsedVal = parseFloat(editingValorFrete.replace(/\./g, '').replace(',', '.')) || 0;
+                                handleFieldChange('valorFrete', parsedVal);
+                              }
+                              setEditingValorFrete(null);
+                            }}
                             onChange={(e) => {
-                              const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                              const { formatted } = handleCurrencyInput(e.target.value, true);
                               setEditingValorFrete(formatted);
-                              handleFieldChange('valorFrete', value);
                             }}
                             placeholder="0,00"
                             className={`w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 font-mono font-bold shadow-2xs ${

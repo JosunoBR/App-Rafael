@@ -461,9 +461,9 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                               </td>
                             )}
                             {/* Descrição / Favorecido */}
-                            <td className="py-2.5 px-4">
+                            <td className="py-2.5 px-4" title={item.observacao ? `${item.descricao}\n\nℹ️ ${item.observacao}` : item.descricao}>
                               <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                                <span className={isPaid ? 'line-through text-slate-400' : ''}>
+                                <span className={`${isPaid ? 'line-through text-slate-400' : ''} ${item.observacao ? 'cursor-help' : ''}`}>
                                   {item.descricao}
                                 </span>
                                 {hasFiscalAdjustment && (
@@ -486,11 +486,6 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                                   </span>
                                 )}
                               </div>
-                              {item.observacao && (
-                                <span className="text-[10px] text-slate-400 block truncate max-w-xs">
-                                  {item.observacao}
-                                </span>
-                              )}
                             </td>
 
                             {/* Situação: Previsão (Azul) vs Confirmado (Esmeralda) */}

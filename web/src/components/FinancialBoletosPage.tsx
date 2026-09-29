@@ -1264,9 +1264,9 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4 font-semibold text-slate-900 dark:text-white">
+                        <td className="py-3 px-4 font-semibold text-slate-900 dark:text-white" title={item.observacao ? `${item.descricao}\n\nℹ️ ${item.observacao}` : item.descricao}>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={isPaid ? 'line-through text-slate-400' : ''}>
+                            <span className={`${isPaid ? 'line-through text-slate-400' : ''} ${item.observacao ? 'cursor-help' : ''}`}>
                               {item.descricao}
                             </span>
                             {hasFiscalAdjustment && (
@@ -1289,11 +1289,6 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                               </span>
                             )}
                           </div>
-                          {item.observacao && (
-                            <span className="text-[10px] text-slate-400 block truncate max-w-xs font-normal">
-                              {item.observacao}
-                            </span>
-                          )}
                         </td>
                         <td className="py-3 px-3">
                           <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">

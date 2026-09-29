@@ -10,7 +10,22 @@ class ProductRepository {
   }
 
   async findByCodigo(codigo) {
-    return await queryOne("SELECT * FROM products WHERE codigo = ?", [codigo]);
+    return await queryOne("SELECT * FROM products WHERE LOWER(codigo) = LOWER(?) OR LOWER(codigoInterno) = LOWER(?)", [codigo, codigo]);
+  }
+
+  async findNextAvailableCodigo() {
+    const rows = await queryAll("SELECT codigo, codigoInterno FROM products");
+    let maxNum = 0;
+    rows.forEach(r => {
+      const code = r.codigoInterno || r.codigo || '';
+      const match = code.match(/(?:PRD|PRE|PROD)-(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    const nextNum = maxNum > 0 ? maxNum + 1 : (rows.length + 1);
+    return `PRD-${String(nextNum).padStart(3, '0')}`;
   }
 
   async upsert(product) {
@@ -21,9 +36,30 @@ class ProductRepository {
     const supplierId = product.supplierId || product.fornecedorPadraoId || '';
     const nomeFornecedor = product.nomeFornecedor || product.fornecedorPadraoNome || '';
 
-    let existing = await this.findById(product.id);
-    if (!existing && codInterno) {
-      existing = await this.findByCodigo(codInterno);
+    let existing = product.id ? await this.findById(product.id) : null;
+    let finalCodInterno = codInterno;
+
+    // 🛡️ Prevenção estrita de duplicidade de código de produto
+    if (codInterno) {
+      const conflict = await this.findByCodigo(codInterno);
+      if (conflict && (!existing || conflict.id !== existing.id)) {
+        const nextCod = await this.findNextAvailableCodigo();
+        if (product.autoAssignNextOnConflict) {
+          finalCodInterno = nextCod;
+        } else {
+          const err = new Error(`Não é permitido duplicar código de produto! O código "${codInterno}" já pertence ao produto "${conflict.descricao || 'Existente'}" (${conflict.nomeFornecedor || 'Fornecedor'}).`);
+          err.statusCode = 409;
+          err.code = 'PRODUCT_CODE_CONFLICT';
+          err.suggestedNextCode = nextCod;
+          err.conflictProduct = {
+            id: conflict.id,
+            codigo: conflict.codigo,
+            descricao: conflict.descricao,
+            nomeFornecedor: conflict.nomeFornecedor
+          };
+          throw err;
+        }
+      }
     }
 
     const targetId = existing ? existing.id : (product.id || ('prod_' + Date.now()));
@@ -46,8 +82,8 @@ class ProductRepository {
         WHERE id = ?
       `;
       await execute(sql, [
-        codInterno,
-        codInterno,
+        finalCodInterno,
+        finalCodInterno,
         codForn,
         codBarras,
         product.descricao,
@@ -76,8 +112,8 @@ class ProductRepository {
       `;
       await execute(sql, [
         targetId,
-        codInterno,
-        codInterno,
+        finalCodInterno,
+        finalCodInterno,
         codForn,
         codBarras,
         product.descricao,

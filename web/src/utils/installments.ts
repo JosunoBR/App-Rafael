@@ -524,14 +524,14 @@ export function generateOrderInstallments(
     ? order.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
     : undefined;
 
+  const isExplicitCif = String(order.header?.tipoFrete || '').toUpperCase() === 'CIF';
+
   let rawValorFrete = Number(order.header?.valorFrete ?? order.header?.valorFreteGlobal) || 0;
-  if (rawValorFrete <= 0 && existingFrete && existingFrete.valor > 0) {
+  if (!isExplicitCif && rawValorFrete <= 0 && existingFrete && existingFrete.valor > 0) {
     rawValorFrete = existingFrete.valor;
   }
 
-  // É CIF estrito apenas se não houver valor de frete nem parcela de frete
-  const isExplicitCif = String(order.header?.tipoFrete || '').toUpperCase() === 'CIF' && rawValorFrete <= 0 && !existingFrete;
-  const isCif = isExplicitCif;
+  const isCif = isExplicitCif || (rawValorFrete <= 0 && !existingFrete);
   const valorFrete = isCif ? 0 : rawValorFrete;
   const valorBaseMercadoria = Math.max(0, netTotal - valorFrete);
 
@@ -735,7 +735,7 @@ export function generateOrderInstallments(
 
   // CENÁRIO C: BOLETO AUTOMÁTICO DE FRETE (10 DIAS APÓS A DATA DE ENTREGA)
   // Só gera se não for modalidade CIF e houver frete destacado ou parcela pré-existente
-  if ((!isCif && valorFrete > 0) || (existingFrete && existingFrete.valor > 0)) {
+  if (!isCif && (valorFrete > 0 || (existingFrete && existingFrete.valor > 0))) {
     const freteDueDate = addDaysToDate(baseDeliveryDate, 10);
     const nextParcelaNum = list.length + 1;
     const customFreteDate = customDates?.['frete'] || customDates?.[String(nextParcelaNum)];

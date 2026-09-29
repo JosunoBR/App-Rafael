@@ -17,9 +17,123 @@ export const OrderAuditModal: React.FC<OrderAuditModalProps> = ({ order, onClose
     const load = async () => {
       setLoading(true);
       try {
-        const data = await fetchDistributionAuditLogs(order.header.id || order.header.numeroPedido);
+        const orderId = order.header.id;
+        const numPedido = order.header.numeroPedido;
+        const serverLogs = await fetchDistributionAuditLogs(orderId, numPedido).catch(() => []);
+        
+        // 🛡️ Marcos Oficiais Registrados no SQLite para este pedido
+        const localMilestones: DistributionAuditLog[] = [];
+
+        // Marco: Distribuição CD (ex: Root)
+        if (order.header.distribuidoPor || order.header.distribuicaoConcluida) {
+          localMilestones.push({
+            id: `local_dist_${order.header.id}`,
+            orderId: order.header.id,
+            numeroPedido: order.header.numeroPedido,
+            fornecedor: order.header.fornecedor,
+            usuarioNome: order.header.distribuidoPor || 'Root',
+            usuarioRole: 'deposito',
+            acao: 'LIBERADO_SEPARACAO',
+            observacoes: order.header.observacaoDistribuicao || `Distribuição no CD concluída por ${order.header.distribuidoPor || 'Root'} e liberada para separação.`,
+            timestamp: order.header.dataDistribuicao || order.header.updatedAt || new Date().toISOString(),
+            createdAt: order.header.dataDistribuicao || order.header.updatedAt || new Date().toISOString()
+          });
+        }
+
+        // Marco: Aprovação Comercial
+        if (order.header.aprovadoPor || order.header.dataAprovacao) {
+          localMilestones.push({
+            id: `local_aprov_${order.header.id}`,
+            orderId: order.header.id,
+            numeroPedido: order.header.numeroPedido,
+            fornecedor: order.header.fornecedor,
+            usuarioNome: order.header.aprovadoPor || 'Diretoria',
+            usuarioRole: 'diretoria',
+            acao: 'APROVACAO_COMERCIAL',
+            observacoes: `Pedido aprovado comercialmente por ${order.header.aprovadoPor || 'Diretoria'} e enviado para esteira.`,
+            timestamp: order.header.dataAprovacao || order.header.createdAt || new Date().toISOString(),
+            createdAt: order.header.dataAprovacao || order.header.createdAt || new Date().toISOString()
+          });
+        }
+
+        // Marco: Separação na Doca
+        if (order.header.separadoPor || order.header.separacaoConcluida) {
+          localMilestones.push({
+            id: `local_sep_${order.header.id}`,
+            orderId: order.header.id,
+            numeroPedido: order.header.numeroPedido,
+            fornecedor: order.header.fornecedor,
+            usuarioNome: order.header.separadoPor || 'Conferente',
+            usuarioRole: 'separacao',
+            acao: 'CONFERENCIA_SEPARACAO',
+            observacoes: order.header.observacaoSeparacao || `Separação e conferência na doca concluída por ${order.header.separadoPor || 'Conferente'}.`,
+            timestamp: order.header.dataSeparacao || order.header.updatedAt || new Date().toISOString(),
+            createdAt: order.header.dataSeparacao || order.header.updatedAt || new Date().toISOString()
+          });
+        }
+
+        // Marco: Recebimento Físico na Matriz
+        if (order.header.recebidoPor || order.header.recebidoMatriz) {
+          localMilestones.push({
+            id: `local_rec_${order.header.id}`,
+            orderId: order.header.id,
+            numeroPedido: order.header.numeroPedido,
+            fornecedor: order.header.fornecedor,
+            usuarioNome: order.header.recebidoPor || 'Almoxarifado',
+            usuarioRole: 'deposito',
+            acao: 'RECEBIMENTO_MATRIZ',
+            observacoes: `Recebimento físico na Matriz registrado por ${order.header.recebidoPor || 'Almoxarifado'}${order.header.numeroNotaFiscal ? ` (NF: ${order.header.numeroNotaFiscal})` : ''}.`,
+            timestamp: order.header.dataRecebimentoMatriz || order.header.updatedAt || new Date().toISOString(),
+            createdAt: order.header.dataRecebimentoMatriz || order.header.updatedAt || new Date().toISOString()
+          });
+        }
+
+        // Marco: Liberação de Boletos
+        if (order.header.boletosLiberados || order.header.boletosLiberadosPor) {
+          localMilestones.push({
+            id: `local_fin_${order.header.id}`,
+            orderId: order.header.id,
+            numeroPedido: order.header.numeroPedido,
+            fornecedor: order.header.fornecedor,
+            usuarioNome: order.header.boletosLiberadosPor || 'Diretoria',
+            usuarioRole: 'diretoria',
+            acao: 'LIBERACAO_FINANCEIRO',
+            observacoes: `Boletos liberados para o Financeiro por ${order.header.boletosLiberadosPor || 'Diretoria'}.`,
+            timestamp: order.header.boletosLiberadosEm || order.header.updatedAt || new Date().toISOString(),
+            createdAt: order.header.boletosLiberadosEm || order.header.updatedAt || new Date().toISOString()
+          });
+        }
+
+        // Marco: Criação do Pedido
+        if (order.header.createdAt || order.header.dataPedido) {
+          localMilestones.push({
+            id: `local_create_${order.header.id}`,
+            orderId: order.header.id,
+            numeroPedido: order.header.numeroPedido,
+            fornecedor: order.header.fornecedor,
+            usuarioNome: 'Comprador',
+            usuarioRole: 'comprador',
+            acao: 'CRIACAO_PEDIDO',
+            observacoes: `Pedido comercial ${order.header.numeroPedido} criado e registrado na esteira.`,
+            timestamp: order.header.createdAt || order.header.dataPedido || new Date().toISOString(),
+            createdAt: order.header.createdAt || order.header.dataPedido || new Date().toISOString()
+          });
+        }
+
+        // Combinar logs do servidor e marcos locais deduplicando por acao
+        const combined = Array.isArray(serverLogs) ? [...serverLogs] : [];
+        for (const lm of localMilestones) {
+          const exists = combined.some(cl => cl.acao === lm.acao);
+          if (!exists) {
+            combined.push(lm);
+          }
+        }
+
+        // Ordenar cronologicamente do mais recente para o mais antigo
+        combined.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+
         if (isMounted) {
-          setLogs(Array.isArray(data) ? data : []);
+          setLogs(combined);
         }
       } catch (err) {
         console.error('Erro ao buscar logs da esteira:', err);
@@ -35,6 +149,18 @@ export const OrderAuditModal: React.FC<OrderAuditModalProps> = ({ order, onClose
 
   const getActionBadge = (acao: string) => {
     switch (acao) {
+      case 'CRIACAO_PEDIDO':
+        return {
+          label: 'Pedido Criado',
+          icon: FileText,
+          color: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300'
+        };
+      case 'APROVACAO_COMERCIAL':
+        return {
+          label: 'Aprovação Comercial',
+          icon: CheckCircle2,
+          color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300'
+        };
       case 'ENVIO_DISTRIBUICAO':
         return {
           label: 'Envio para Distribuição',
@@ -52,6 +178,24 @@ export const OrderAuditModal: React.FC<OrderAuditModalProps> = ({ order, onClose
           label: 'Separação & Conferência Concluída',
           icon: Receipt,
           color: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300'
+        };
+      case 'RECEBIMENTO_MATRIZ':
+        return {
+          label: 'Recebimento Físico na Matriz',
+          icon: Truck,
+          color: 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border-teal-300'
+        };
+      case 'LIBERACAO_FINANCEIRO':
+        return {
+          label: 'Boletos Liberados p/ Financeiro',
+          icon: ShieldCheck,
+          color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300'
+        };
+      case 'RETROCESSO_STATUS':
+        return {
+          label: 'Retrocesso na Esteira',
+          icon: History,
+          color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300'
         };
       case 'FINALIZACAO_PEDIDO':
         return {

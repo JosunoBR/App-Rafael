@@ -37,6 +37,7 @@ import { ParsedExcelOrder, CatalogProductStatus } from './types';
 import { formatISODateToBR } from './excelDateHelper';
 import { downloadModelTemplate } from './modelTemplateGenerator';
 import { getNextOrderNumber } from '../../utils/storage';
+import { checkOrderNumberInDb, fetchNextOrderNumberFromDb } from '../../utils/api';
 
 interface OrderImportModalProps {
   isOpen: boolean;
@@ -85,6 +86,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
   const [percentualNotaInput, setPercentualNotaInput] = useState<number>(100);
   const [percentualDescontoOffInput, setPercentualDescontoOffInput] = useState<number>(0);
   const [observacoesInput, setObservacoesInput] = useState<string>('');
+  const [tipoFreteInput, setTipoFreteInput] = useState<'CIF' | 'FOB' | 'Retira'>('CIF');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [isNewSupplier, setIsNewSupplier] = useState(false);
   const [catalogAnalysis, setCatalogAnalysis] = useState<ReturnType<typeof analyzeCatalogProducts> | null>(null);
@@ -197,19 +199,32 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
         cleanNumero.toUpperCase().includes('FORNEC') ||
         cleanNumero.toUpperCase().includes('PLANILHA');
 
-      // 🛡️ Prevenção de duplicidade: se o número já existir no sistema, gera o próximo livre
-      const numberAlreadyTaken = cleanNumero && existingOrders.some(o => 
-        o.header.numeroPedido && o.header.numeroPedido.trim().toUpperCase() === cleanNumero.toUpperCase()
+      // 🛡️ Prevenção de duplicidade: checagem local e em tempo real no banco SQLite
+      let numberAlreadyTaken = Boolean(
+        cleanNumero && existingOrders.some(o => 
+          o.header.numeroPedido && o.header.numeroPedido.trim().toUpperCase() === cleanNumero.toUpperCase()
+        )
       );
 
+      if (cleanNumero && !numberAlreadyTaken) {
+        try {
+          const availCheck = await checkOrderNumberInDb(cleanNumero);
+          if (!availCheck.available) {
+            numberAlreadyTaken = true;
+          }
+        } catch {}
+      }
+
       if (isBogus || numberAlreadyTaken) {
-        cleanNumero = getNextOrderNumber(existingOrders);
+        const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(existingOrders));
+        cleanNumero = nextNum;
       }
       parsed.header.numeroPedido = cleanNumero;
       setOrderNumberInput(cleanNumero);
       setPercentualNotaInput(parsed.header.percentualNota !== undefined ? parsed.header.percentualNota : 100);
       setPercentualDescontoOffInput(parsed.header.percentualDescontoOff || 0);
       setObservacoesInput(parsed.header.observacoes || '');
+      setTipoFreteInput(parsed.header.tipoFrete || 'CIF');
 
       setParsedData(parsed);
       setSelectedSupplier(matchedSupplier);
@@ -229,6 +244,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
     setPercentualNotaInput(100);
     setPercentualDescontoOffInput(0);
     setObservacoesInput('');
+    setTipoFreteInput('CIF');
     setSelectedSupplier(null);
     setIsNewSupplier(false);
     setCatalogAnalysis(null);
@@ -310,6 +326,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
       parsedData.header.percentualNota = percentualNotaInput;
       parsedData.header.percentualDescontoOff = percentualDescontoOffInput;
       parsedData.header.observacoes = observacoesInput.trim();
+      parsedData.header.tipoFrete = tipoFreteInput;
 
       const order = mapParsedExcelToOrder(
         parsedData,
@@ -720,7 +737,18 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                     <span className="text-slate-900 dark:text-white font-medium block truncate mt-0.5" title={parsedData.header.condicaoPagamento}>
                       {parsedData.header.condicaoPagamento}
                     </span>
-                    <span className="block text-[10px] text-slate-500 mt-0.5">Frete: {parsedData.header.tipoFrete || 'Retira'}</span>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-500 font-semibold shrink-0">Frete:</span>
+                      <select
+                        value={tipoFreteInput}
+                        onChange={(e) => setTipoFreteInput(e.target.value as 'CIF' | 'FOB' | 'Retira')}
+                        className="text-[11px] font-bold py-0.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                      >
+                        <option value="CIF">🚚 CIF (Fornecedor)</option>
+                        <option value="FOB">🚛 FOB (Mega 12)</option>
+                        <option value="Retira">🏬 Retira (Local)</option>
+                      </select>
+                    </div>
                   </div>
 
                   {/* % Nota Fiscal (Faturamento em NF) */}

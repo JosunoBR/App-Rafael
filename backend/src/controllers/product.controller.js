@@ -36,6 +36,15 @@ class ProductController {
     }
   }
 
+  async getNextCode(req, res, next) {
+    try {
+      const nextCode = await productService.getNextAvailableCode();
+      return res.json({ nextCode });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getById(req, res, next) {
     try {
       const product = await productService.getProduct(req.params.id);

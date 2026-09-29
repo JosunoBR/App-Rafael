@@ -138,7 +138,7 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
   let dataPedidoVal: any = null;
   let dataEntregaVal: any = null;
   const observacoesList: string[] = [];
-  let tipoFrete: 'CIF' | 'FOB' | 'Retira' = 'Retira';
+  let tipoFrete: 'CIF' | 'FOB' | 'Retira' = 'CIF';
 
   // Determinar onde inicia a tabela de itens para limitar a varredura do cabeçalho
   let tableHeaderRowIndex = -1;

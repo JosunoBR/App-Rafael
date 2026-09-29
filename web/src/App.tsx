@@ -88,6 +88,15 @@ import {
 import { 
   OrderAuditModal 
 } from './components/OrderAuditModal';
+import { 
+  IOSAlertModal, 
+  IOSAlertOptions, 
+  IOSAlertType 
+} from './components/IOSAlertModal';
+import { 
+  IOSNotificationBanner, 
+  IOSBannerMessage 
+} from './components/IOSNotificationBanner';
 
 import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem, SeparationPreset, FiscalPreset } from './shared/types';
 import { 
@@ -132,6 +141,7 @@ import {
   saveProductToDb,
   saveProductsBatchToDb,
   deleteProductFromDb,
+  fetchNextProductCodeFromDb,
   fetchOrdersFromDb, 
   saveOrderToDb, 
   deleteOrderFromDb,
@@ -163,7 +173,8 @@ import {
   sendOrderToDistributionApi,
   releaseOrderToSeparationApi,
   sendOrderToFaturamentoApi,
-  finalizeOrderPipelineApi
+  finalizeOrderPipelineApi,
+  checkOrderNumberInDb
 } from './utils/api';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
 import { exportOrderToExcel } from './utils/excelExporter';
@@ -305,12 +316,30 @@ export function App() {
     return list.length > 0 ? list : [order];
   }, [savedOrders, order]);
 
-  // Toast Notification
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  // 📱 Sistema de Alertas & Notificações Estilo iPhone (iOS Design System)
+  const [iosAlert, setIosAlert] = useState<IOSAlertOptions | null>(null);
+  const [iosBanner, setIosBanner] = useState<IOSBannerMessage | null>(null);
 
+  const triggerIOSAlert = (options: IOSAlertOptions) => {
+    setIosAlert(options);
+  };
+
+  const triggerIOSBanner = (message: string, type: IOSAlertType = 'success', title?: string) => {
+    setIosBanner({ message, type, title });
+  };
+
+  // Toast e Mensagens: Nenhum erro pode ser silencioso. Se for erro, abre o modal iOS!
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+    if (type === 'error') {
+      triggerIOSAlert({
+        title: 'Atenção',
+        message: message,
+        type: 'error',
+        confirmText: 'Entendi'
+      });
+    } else {
+      triggerIOSBanner(message, type);
+    }
   };
   
   // Carregar dados oficiais do banco de dados SQLite (prioridade máxima)
@@ -648,7 +677,7 @@ export function App() {
     const cleanNum = (targetOrder.header.numeroPedido || '').trim().toUpperCase();
     if (!cleanNum) return;
 
-    // 🛡️ Não permite salvar se o número de pedido colidir com outro pedido existente
+    // 🛡️ Não permite salvar se o número de pedido colidir com outro pedido existente (Alerta visual estilo iPhone)
     const duplicate = savedOrders.find(o => 
       o.header.id !== targetOrder.header.id && 
       o.header.numeroPedido && 
@@ -656,6 +685,11 @@ export function App() {
     );
     if (duplicate) {
       console.warn(`[AutoSave] Abortado: número ${cleanNum} já pertence a outro pedido (${duplicate.header.fornecedor}).`);
+      triggerIOSBanner(
+        `O número ${cleanNum} já pertence ao pedido de "${duplicate.header.fornecedor || 'outro fornecedor'}". O rascunho em aberto não será sincronizado até ser ajustado.`,
+        'warning',
+        'Número Duplicado em Aberto'
+      );
       return;
     }
 
@@ -672,12 +706,13 @@ export function App() {
       ? targetOrder.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
       : undefined;
 
-    let targetValorFrete = Number(targetOrder.header.valorFrete ?? targetOrder.header.valorFreteGlobal) || 0;
-    if (targetValorFrete <= 0 && existingFrete && existingFrete.valor > 0) {
+    const isExplicitCif = String(targetOrder.header?.tipoFrete || '').toUpperCase() === 'CIF';
+    let targetValorFrete = isExplicitCif ? 0 : (Number(targetOrder.header.valorFrete ?? targetOrder.header.valorFreteGlobal) || 0);
+    if (!isExplicitCif && targetValorFrete <= 0 && existingFrete && existingFrete.valor > 0) {
       targetValorFrete = existingFrete.valor;
     }
-    let targetTipoFrete = targetOrder.header.tipoFrete;
-    if (targetValorFrete > 0 && (!targetTipoFrete || targetTipoFrete === 'CIF')) {
+    let targetTipoFrete = isExplicitCif ? 'CIF' : targetOrder.header.tipoFrete;
+    if (!isExplicitCif && targetValorFrete > 0 && (!targetTipoFrete || targetTipoFrete === 'CIF')) {
       targetTipoFrete = 'FOB';
     }
 
@@ -714,9 +749,17 @@ export function App() {
     });
 
     try {
-      await saveOrderToDb(orderToSave);
-    } catch (err) {
+      await saveOrderToDb(orderToSave, { autoAssignNextOnConflict: false });
+    } catch (err: any) {
       console.warn('Aviso ao sincronizar pedido silenciosamente com o SQLite:', err);
+      // Nenhum erro silencioso: avisa via banner iOS para o usuário saber que a nuvem não recebeu o rascunho
+      if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
+        triggerIOSBanner(
+          `O número ${orderToSave.header.numeroPedido} colidiu com outro pedido no servidor. Ajuste o número antes de salvar.`,
+          'warning',
+          'Conflito de Pedido'
+        );
+      }
     }
   };
 
@@ -802,13 +845,14 @@ export function App() {
       let newFiscal = prev.fiscalConfig || fiscalConfig;
       let updatedItems = prev.items;
 
-      const rawValorFrete = Number(updatedHeader?.valorFrete ?? updatedHeader?.valorFreteGlobal) || 0;
-      let effectiveTipoFrete = updatedHeader?.tipoFrete;
-      if (rawValorFrete > 0 && (!effectiveTipoFrete || effectiveTipoFrete === 'CIF')) {
+      const isExplicitCif = String(updatedHeader?.tipoFrete || '').toUpperCase() === 'CIF';
+      const rawValorFrete = isExplicitCif ? 0 : (Number(updatedHeader?.valorFrete ?? updatedHeader?.valorFreteGlobal) || 0);
+      let effectiveTipoFrete = isExplicitCif ? 'CIF' : updatedHeader?.tipoFrete;
+      if (!isExplicitCif && rawValorFrete > 0 && (!effectiveTipoFrete || effectiveTipoFrete === 'CIF')) {
         effectiveTipoFrete = 'FOB';
         updatedHeader = { ...updatedHeader, tipoFrete: 'FOB' };
       }
-      const isCif = String(effectiveTipoFrete || 'CIF').toUpperCase().includes('CIF') && rawValorFrete <= 0;
+      const isCif = isExplicitCif || (String(effectiveTipoFrete || 'CIF').toUpperCase().includes('CIF') && rawValorFrete <= 0);
       if (isCif) {
         updatedHeader = {
           ...updatedHeader,
@@ -862,12 +906,17 @@ export function App() {
         };
       }
 
+      let nextInstallments = generateOrderInstallments({ ...prev, header: updatedHeader, items: updatedItems }, undefined, undefined, true);
+      if (isCif) {
+        nextInstallments = nextInstallments.filter(inst => !inst.isBoletoFrete && inst.tipoTitulo !== 'frete' && !inst.observacao?.toLowerCase().includes('frete'));
+      }
+
       return { 
         ...prev, 
         header: updatedHeader,
         fiscalConfig: newFiscal,
         items: updatedItems,
-        installments: generateOrderInstallments({ ...prev, header: updatedHeader, items: updatedItems }, undefined, undefined, true)
+        installments: nextInstallments
       };
     });
   };
@@ -1480,25 +1529,66 @@ export function App() {
   const handleSaveDraftOrder = async () => {
     const validItems = order.items.filter(it => !isOrderItemBlank(it));
     if (validItems.length === 0 && (!order.header.fornecedor || order.header.fornecedor.trim() === '')) {
-      showToast('Não é possível salvar um pedido totalmente vazio.', 'error');
+      triggerIOSAlert({
+        title: 'Pedido Totalmente Vazio',
+        message: 'Não é possível salvar um pedido sem nenhum fornecedor ou produto preenchido.',
+        type: 'error',
+        confirmText: 'Entendi'
+      });
       return;
     }
 
     const cleanNum = (order.header.numeroPedido || '').trim().toUpperCase();
     if (!cleanNum) {
-      showToast('O número do pedido é obrigatório.', 'error');
+      triggerIOSAlert({
+        title: 'Número Obrigatório',
+        message: 'O número do pedido é obrigatório. Por favor, informe um número de pedido antes de salvar.',
+        type: 'error',
+        confirmText: 'Ajustar'
+      });
       return;
     }
 
-    // 🛡️ Validação Estrita de Unicidade: impede duplicidade de número chave
-    const conflict = savedOrders.find(o => 
+    // 🛡️ Validação Estrita de Unicidade em tempo real (Local e no SQLite)
+    let conflict = savedOrders.find(o => 
       o.header.id !== order.header.id && 
       o.header.numeroPedido && 
       o.header.numeroPedido.trim().toUpperCase() === cleanNum
     );
+
+    let conflictFornecedor = conflict?.header?.fornecedor;
+
+    if (!conflict) {
+      try {
+        const dbCheck = await checkOrderNumberInDb(cleanNum, order.header.id);
+        if (!dbCheck.available) {
+          conflict = true as any;
+          conflictFornecedor = (dbCheck as any).conflictFornecedor || 'outro fornecedor';
+        }
+      } catch {}
+    }
+
+    // ⛔ BLOQUEIO TOTAL: Não permite salvar enquanto o número duplicado não for ajustado!
     if (conflict) {
-      showToast(`Não é possível salvar: O número "${order.header.numeroPedido}" já pertence ao pedido do fornecedor "${conflict.header.fornecedor || 'outro fornecedor'}". Números de pedido devem ser únicos!`, 'error');
-      return;
+      const nextFree = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(savedOrders));
+      triggerIOSAlert({
+        title: 'Número de Pedido Duplicado',
+        message: `Não é possível salvar este pedido!\n\nO número "${order.header.numeroPedido}" já pertence ao pedido do fornecedor "${conflictFornecedor || 'já cadastrado'}".\n\nNúmeros de pedido devem ser únicos. Por favor, ajuste o número do pedido no cabeçalho antes de prosseguir.`,
+        type: 'error',
+        confirmText: 'Ajustar Manualmente',
+        actionText: `Usar Próximo Livre (${nextFree})`,
+        onAction: () => {
+          setOrder(prev => ({
+            ...prev,
+            header: {
+              ...prev.header,
+              numeroPedido: nextFree
+            }
+          }));
+          triggerIOSBanner(`Número atualizado para ${nextFree}. Agora você já pode salvar o pedido!`, 'info');
+        }
+      });
+      return; // IMPEDE O SALVAMENTO!
     }
 
     await autoRegisterProductsFromOrder(validItems);
@@ -1514,7 +1604,12 @@ export function App() {
 
     // 🛡️ Se o pedido já foi fechado, compradores não podem alterar pedidos em esteira sem liberação da Diretoria ou Faturamento
     if (isClosed && currentUser?.role !== 'diretoria' && currentUser?.role !== 'faturamento') {
-      showToast('Este pedido já foi aprovado e está na esteira operacional. Para efetuar alterações comerciais ou de quantidades, solicite a liberação à Diretoria ou ao Faturamento.', 'error');
+      triggerIOSAlert({
+        title: 'Pedido Bloqueado na Esteira',
+        message: 'Este pedido já foi aprovado e está na esteira operacional. Para efetuar alterações comerciais ou de quantidades, solicite a liberação à Diretoria ou ao Faturamento.',
+        type: 'error',
+        confirmText: 'OK'
+      });
       return;
     }
 
@@ -1537,26 +1632,82 @@ export function App() {
     };
 
     try {
-      await saveOrderToDb(orderWithInstallments);
+      // autoAssignNextOnConflict: false para respeitar a decisão consciente do usuário
+      const saveRes = await saveOrderToDb(orderWithInstallments, { autoAssignNextOnConflict: false });
+      const effectiveOrder: PurchaseOrder = saveRes?.order ? {
+        ...saveRes.order,
+        items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
+      } : {
+        ...orderWithInstallments,
+        header: {
+          ...orderWithInstallments.header,
+          numeroPedido: orderWithInstallments.header.numeroPedido
+        },
+        items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
+      };
+
       try {
-        saveOrderToHistory(orderWithInstallments);
+        saveOrderToHistory(effectiveOrder);
       } catch (localErr) {
         console.warn('Aviso: cópia em localStorage não pôde ser salva (cota):', localErr);
       }
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
-      setOrder({
-        ...orderWithInstallments,
-        items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
-      });
+      setOrder(effectiveOrder);
+
       if (isClosed) {
         const updaterRole = currentUser?.role === 'faturamento' ? 'pelo Faturamento' : 'pela Diretoria';
-        showToast(`Pedido ${order.header.numeroPedido} atualizado com sucesso ${updaterRole}!`, 'success');
+        triggerIOSBanner(`Pedido ${effectiveOrder.header.numeroPedido} atualizado ${updaterRole}!`, 'success');
       } else {
-        showToast(`Pedido ${order.header.numeroPedido} salvo com sucesso em espera!`, 'success');
+        triggerIOSBanner(`Pedido ${effectiveOrder.header.numeroPedido} salvo com sucesso em espera!`, 'success');
       }
     } catch (err: any) {
       console.error('Erro ao salvar pedido no servidor:', err);
+      if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
+        const nextFree = err.suggestedNextNumber || await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(savedOrders));
+        const conflictForn = err.conflictDetails?.conflictFornecedor;
+        const msgDetail = conflictForn 
+          ? `O número "${order.header.numeroPedido}" já pertence a outro pedido registrado no sistema (Fornecedor: ${conflictForn}).`
+          : (err.message || 'Este número de pedido já está em uso.');
+
+        triggerIOSAlert({
+          title: 'Número de Pedido Duplicado',
+          message: `${msgDetail}\n\nHá o próximo número sequencial livre disponível:\n👉 ${nextFree}\n\nDeseja aplicar este número e salvar o pedido agora no sistema?`,
+          type: 'error',
+          confirmText: 'Ajustar Manualmente',
+          actionText: nextFree ? `⚡ Usar Próximo Livre (${nextFree}) e Salvar` : undefined,
+          onAction: nextFree ? async () => {
+            const renumberedOrder: PurchaseOrder = {
+              ...orderWithInstallments,
+              header: {
+                ...orderWithInstallments.header,
+                numeroPedido: nextFree
+              }
+            };
+            setOrder(renumberedOrder);
+            try {
+              const res = await saveOrderToDb(renumberedOrder, { autoAssignNextOnConflict: false });
+              const effective: PurchaseOrder = res?.order ? {
+                ...res.order,
+                items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
+              } : renumberedOrder;
+              try { saveOrderToHistory(effective); } catch {}
+              const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+              setSavedOrders(updatedOrders);
+              setOrder(effective);
+              triggerIOSBanner(`Pedido salvo com sucesso como ${nextFree}!`, 'success');
+            } catch (retryErr: any) {
+              triggerIOSAlert({
+                title: 'Erro ao Salvar Pedido',
+                message: retryErr.message || 'Não foi possível salvar o pedido reatribuído.',
+                type: 'error',
+                confirmText: 'OK'
+              });
+            }
+          } : undefined
+        });
+        return;
+      }
       if (isOfflineError(err)) {
         saveOrderToHistory(orderWithInstallments);
         setSavedOrders(loadSavedOrdersList());
@@ -1564,10 +1715,123 @@ export function App() {
           ...orderWithInstallments,
           items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
         });
-        showToast(`Você está sem conexão. Pedido ${order.header.numeroPedido} salvo localmente (contingência).`, 'info');
+        triggerIOSBanner(`Você está sem conexão. Pedido ${order.header.numeroPedido} salvo localmente (contingência).`, 'info');
         return;
       }
-      showToast(err.message || 'Erro ao salvar pedido no Banco de Dados.', 'error');
+      triggerIOSAlert({
+        title: 'Erro ao Salvar no Servidor',
+        message: err.message || 'Não foi possível salvar o pedido no banco de dados do sistema.',
+        type: 'error',
+        confirmText: 'OK'
+      });
+    }
+  };
+
+  // Helper para execução do fechamento de pedido com persistência oficial
+  const executeCloseOrder = async (targetOrderNumber: string, validItems: OrderItem[]) => {
+    await autoRegisterProductsFromOrder(validItems);
+
+    const today = new Date().toISOString().split('T')[0];
+    const orderDate = order.header.dataPedido || order.header.dataEmissao || today;
+
+    const closedOrder: PurchaseOrder = {
+      ...order,
+      items: validItems,
+      header: {
+        ...order.header,
+        numeroPedido: targetOrderNumber,
+        dataPedido: orderDate,
+        dataEmissao: order.header.dataEmissao || orderDate,
+        status: 'Aprovado',
+        aprovadoPor: currentUser?.nome || 'Comprador',
+        dataAprovacao: new Date().toISOString(),
+        isDraft: false,
+        updatedAt: new Date().toISOString()
+      }
+    };
+
+    const orderWithInstallments: PurchaseOrder = {
+      ...closedOrder,
+      installments: generateOrderInstallments(closedOrder, undefined, undefined, true)
+    };
+
+    try {
+      const saveRes = await saveOrderToDb(orderWithInstallments, { autoAssignNextOnConflict: false });
+      const effectiveNum = saveRes?.newNumber || targetOrderNumber;
+      const orderToPersist = saveRes?.order || {
+        ...orderWithInstallments,
+        header: { ...orderWithInstallments.header, numeroPedido: effectiveNum }
+      };
+
+      try {
+        saveOrderToHistory(orderToPersist);
+      } catch (localErr) {
+        console.warn('Aviso: cópia em localStorage não pôde ser salva (cota):', localErr);
+      }
+      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(updatedOrders);
+      clearCurrentDraft();
+
+      confetti({
+        particleCount: 80,
+        spread: 80,
+        origin: { y: 0.65 }
+      });
+
+      const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
+      const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
+      setOrder({
+        ...cleanOrder,
+        items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
+      });
+
+      triggerIOSBanner(`Pedido ${effectiveNum} FECHADO e gravado no Banco de Dados!`, 'success');
+    } catch (err: any) {
+      console.error('Erro ao fechar pedido no servidor:', err);
+      if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
+        const nextFree = err.suggestedNextNumber || await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(savedOrders));
+        const conflictForn = err.conflictDetails?.conflictFornecedor;
+        const msgDetail = conflictForn 
+          ? `O número "${targetOrderNumber}" já pertence a outro pedido registrado no sistema (Fornecedor: ${conflictForn}).`
+          : (err.message || 'Este número de pedido já está em uso.');
+
+        triggerIOSAlert({
+          title: 'Número de Pedido Duplicado',
+          message: `${msgDetail}\n\nHá o próximo número sequencial livre disponível:\n👉 ${nextFree}\n\nDeseja aplicar este número e fechar o pedido agora?`,
+          type: 'error',
+          confirmText: 'Ajustar Manualmente',
+          actionText: nextFree ? `⚡ Usar Próximo Livre (${nextFree}) e Fechar` : undefined,
+          onAction: nextFree ? async () => {
+            setOrder(prev => ({
+              ...prev,
+              header: { ...prev.header, numeroPedido: nextFree }
+            }));
+            await executeCloseOrder(nextFree, validItems);
+          } : undefined
+        });
+        return;
+      }
+      if (isOfflineError(err)) {
+        saveOrderToHistory(orderWithInstallments);
+        setSavedOrders(loadSavedOrdersList());
+        clearCurrentDraft();
+
+        const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
+        const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
+        setOrder({
+          ...cleanOrder,
+          items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
+        });
+
+        triggerIOSBanner(`Você está offline. Pedido ${targetOrderNumber} fechado localmente e será enviado ao reconectar.`, 'info');
+        return;
+      }
+      triggerIOSAlert({
+        title: 'Erro ao Fechar Pedido',
+        message: err.message || 'Erro ao gravar pedido no banco de dados do sistema.',
+        type: 'error',
+        confirmText: 'OK'
+      });
     }
   };
 
@@ -1589,88 +1853,32 @@ export function App() {
       return;
     }
 
-    // 🛡️ Validação Estrita de Unicidade
+    // 🛡️ Validação Estrita de Unicidade no sistema e cache local
     const conflict = savedOrders.find(o => 
       o.header.id !== order.header.id && 
       o.header.numeroPedido && 
       o.header.numeroPedido.trim().toUpperCase() === cleanNum
     );
     if (conflict) {
-      showToast(`Não é possível fechar o pedido: O número "${order.header.numeroPedido}" já pertence a outro pedido (${conflict.header.fornecedor || 'Fornecedor'}).`, 'error');
+      const nextFree = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(savedOrders));
+      triggerIOSAlert({
+        title: 'Número de Pedido Duplicado',
+        message: `Não é possível fechar o pedido: O número "${order.header.numeroPedido}" já pertence a outro pedido registrado no sistema (Fornecedor: ${conflict.header.fornecedor || 'Fornecedor'}).\n\nHá o próximo número sequencial livre disponível:\n👉 ${nextFree}\n\nDeseja aplicar o próximo número livre e fechar o pedido agora?`,
+        type: 'error',
+        confirmText: 'Ajustar Manualmente',
+        actionText: nextFree ? `⚡ Usar Próximo Livre (${nextFree}) e Fechar` : undefined,
+        onAction: nextFree ? async () => {
+          setOrder(prev => ({
+            ...prev,
+            header: { ...prev.header, numeroPedido: nextFree }
+          }));
+          await executeCloseOrder(nextFree, validItems);
+        } : undefined
+      });
       return;
     }
 
-    await autoRegisterProductsFromOrder(validItems);
-
-    const today = new Date().toISOString().split('T')[0];
-    const orderDate = order.header.dataPedido || order.header.dataEmissao || today;
-
-    const closedOrder: PurchaseOrder = {
-      ...order,
-      items: validItems,
-      header: {
-        ...order.header,
-        dataPedido: orderDate,
-        dataEmissao: order.header.dataEmissao || orderDate,
-        status: 'Aprovado',
-        aprovadoPor: currentUser?.nome || 'Comprador',
-        dataAprovacao: new Date().toISOString(),
-        isDraft: false,
-        updatedAt: new Date().toISOString()
-      }
-    };
-
-    const orderWithInstallments: PurchaseOrder = {
-      ...closedOrder,
-      installments: generateOrderInstallments(closedOrder, undefined, undefined, true)
-    };
-
-    const closedNum = closedOrder.header.numeroPedido;
-
-    try {
-      await saveOrderToDb(orderWithInstallments);
-      try {
-        saveOrderToHistory(orderWithInstallments);
-      } catch (localErr) {
-        console.warn('Aviso: cópia em localStorage não pôde ser salva (cota):', localErr);
-      }
-      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
-      setSavedOrders(updatedOrders);
-      clearCurrentDraft();
-
-      confetti({
-        particleCount: 80,
-        spread: 80,
-        origin: { y: 0.65 }
-      });
-
-      const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
-      const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
-      setOrder({
-        ...cleanOrder,
-        items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
-      });
-
-      showToast(`Pedido ${closedNum} FECHADO e gravado no Banco de Dados!`, 'success');
-    } catch (err: any) {
-      console.error('Erro ao fechar pedido no servidor:', err);
-      if (isOfflineError(err)) {
-        saveOrderToHistory(orderWithInstallments);
-        setSavedOrders(loadSavedOrdersList());
-        clearCurrentDraft();
-
-        const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
-        const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
-        setOrder({
-          ...cleanOrder,
-          items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
-        });
-
-        showToast(`Você está offline. Pedido ${closedNum} fechado localmente e será enviado ao reconectar.`, 'info');
-        return;
-      }
-      showToast(err.message || 'Erro ao fechar pedido no Banco de Dados.', 'error');
-    }
+    await executeCloseOrder(cleanNum, validItems);
   };
 
   // 3. Duplicar Pedido Atual
@@ -1682,7 +1890,7 @@ export function App() {
       try {
         duplicated = await duplicateOrderInDb(order.header.id);
       } catch {
-        const nextNum = getNextOrderNumber();
+        const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
         const newId = 'po_' + Date.now();
         duplicated = {
           ...order,
@@ -1729,7 +1937,7 @@ export function App() {
       duplicated.installments = generateOrderInstallments(duplicated, undefined, undefined, false);
 
       // Salva no banco e histórico com a data atual e as parcelas geradas
-      await saveOrderToDb(duplicated).catch(() => {});
+      await saveOrderToDb(duplicated, { autoAssignNextOnConflict: false }).catch(() => {});
       saveOrderToHistory(duplicated);
 
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
@@ -1738,9 +1946,21 @@ export function App() {
         ...duplicated,
         items: ensureTrailingBlankItem(duplicated.items || [], targetFiscal, storeConfigs)
       });
-      showToast(`Pedido duplicado com sucesso: ${duplicated.header.numeroPedido}! Altere os itens e quantidades.`, 'success');
+
+      // 📱 Lembrete obrigatório estilo iPhone ao duplicar pedido
+      triggerIOSAlert({
+        title: 'Pedido Duplicado',
+        message: `Este pedido foi duplicado a partir do pedido anterior e recebeu o novo número sequencial ${duplicated.header.numeroPedido}.\n\n⚠️ Lembrete importante:\nVerifique e confirme o Número do Pedido, Fornecedor e as Datas de Entrega antes de finalizar a negociação.`,
+        type: 'info',
+        confirmText: 'Entendi, vou revisar'
+      });
     } catch (err: any) {
-      showToast(`Erro ao duplicar pedido: ${err.message}`, 'error');
+      triggerIOSAlert({
+        title: 'Erro ao Duplicar Pedido',
+        message: err.message || 'Não foi possível duplicar o pedido selecionado.',
+        type: 'error',
+        confirmText: 'OK'
+      });
     }
   };
 
@@ -2391,20 +2611,41 @@ export function App() {
     saveOrderToHistory(cleanOrder);
 
     try {
-      await saveOrderToDb(cleanOrder);
+      const saveRes = await saveOrderToDb(cleanOrder);
+      const effectiveOrder = saveRes?.order || {
+        ...cleanOrder,
+        header: {
+          ...cleanOrder.header,
+          numeroPedido: saveRes?.newNumber || cleanOrder.header.numeroPedido
+        }
+      };
+
+      setOrder(effectiveOrder);
+      saveCurrentOrder(effectiveOrder);
+      saveOrderToHistory(effectiveOrder);
+
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
+
+      setActiveNav('orders');
+      setViewMode('desktop');
+      confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
+
+      if (saveRes?.numberReassigned) {
+        showToast(`⚠️ Concorrência evitada: O número ${saveRes.originalNumber} já estava em uso. Pedido importado como ${saveRes.newNumber}!`, 'info');
+      } else {
+        showToast(`Pedido ${effectiveOrder.header.numeroPedido} importado com sucesso! (Salvo em cotação)`, 'success');
+      }
     } catch {
       setSavedOrders(prev => {
         const filtered = prev.filter(o => o.header.id !== cleanOrder.header.id && o.header.numeroPedido !== cleanOrder.header.numeroPedido);
         return [cleanOrder, ...filtered];
       });
+      setActiveNav('orders');
+      setViewMode('desktop');
+      confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
+      showToast(`Pedido ${cleanOrder.header.numeroPedido} importado com sucesso! (Salvo em cotação)`, 'success');
     }
-
-    setActiveNav('orders');
-    setViewMode('desktop');
-    confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
-    showToast(`Pedido ${importedOrder.header.numeroPedido} importado com sucesso! (Salvo em cotação)`, 'success');
   };
 
   const handleExportCommercialPDF = () => {
@@ -2484,6 +2725,34 @@ export function App() {
 
   // Product Catalog Handlers
   const handleSaveProduct = async (productToSave: Product, silent: boolean = false) => {
+    const rawCode = (productToSave.codigoInterno || productToSave.codigo || '').trim().toUpperCase();
+    if (rawCode) {
+      const localConflict = products.find(p => 
+        p.id !== productToSave.id && 
+        ((p.codigoInterno || '').trim().toUpperCase() === rawCode || (p.codigo || '').trim().toUpperCase() === rawCode)
+      );
+      if (localConflict) {
+        const nextCode = generateNextProductCode(products);
+        triggerIOSAlert({
+          title: 'Código de Produto Já Cadastrado',
+          message: `O código "${rawCode}" já pertence ao produto "${localConflict.descricao}" (${localConflict.nomeFornecedor || 'Fornecedor'}).\n\nHá o próximo código sequencial livre disponível no sistema:\n👉 ${nextCode}\n\nDeseja aplicar este código e salvar o produto agora no sistema?`,
+          type: 'error',
+          confirmText: 'Ajustar Manualmente',
+          actionText: `⚡ Usar Próximo Código (${nextCode}) e Salvar`,
+          onAction: async () => {
+            const renumberedProduct: Product = {
+              ...productToSave,
+              codigo: nextCode,
+              codigoInterno: nextCode,
+              updatedAt: new Date().toISOString()
+            };
+            await handleSaveProduct(renumberedProduct, silent);
+          }
+        });
+        return;
+      }
+    }
+
     try {
       await saveProductToDb(productToSave);
       const updated = await fetchProductsFromDb();
@@ -2495,6 +2764,29 @@ export function App() {
       }
     } catch (err: any) {
       console.error('Erro ao salvar produto:', err);
+      if (err?.status === 409 || err?.code === 'PRODUCT_CODE_CONFLICT') {
+        const nextCode = err.suggestedNextCode || await fetchNextProductCodeFromDb().catch(() => generateNextProductCode(products));
+        const conflictDesc = err.conflictProduct?.descricao || 'outro produto cadastrado';
+        const codeUsed = productToSave.codigoInterno || productToSave.codigo || '';
+
+        triggerIOSAlert({
+          title: 'Código de Produto Já Cadastrado',
+          message: `O código "${codeUsed}" já está em uso pelo produto "${conflictDesc}" no sistema.\n\nHá o próximo código sequencial livre disponível:\n👉 ${nextCode}\n\nDeseja aplicar este código e salvar o produto agora?`,
+          type: 'error',
+          confirmText: 'Ajustar Manualmente',
+          actionText: nextCode ? `⚡ Usar Próximo Código (${nextCode}) e Salvar` : undefined,
+          onAction: nextCode ? async () => {
+            const renumberedProduct: Product = {
+              ...productToSave,
+              codigo: nextCode,
+              codigoInterno: nextCode,
+              updatedAt: new Date().toISOString()
+            };
+            await handleSaveProduct(renumberedProduct, silent);
+          } : undefined
+        });
+        return;
+      }
       if (isOfflineError(err)) {
         const updated = saveProduct(productToSave);
         setProducts(updated);
@@ -2845,22 +3137,7 @@ export function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans antialiased">
       
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-5 right-5 z-50 animate-in slide-in-from-bottom-5 duration-300">
-          <div className={`px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-2.5 text-xs font-semibold ${
-            toast.type === 'success' 
-              ? 'bg-emerald-950/90 text-emerald-200 border-emerald-800' 
-              : toast.type === 'error'
-              ? 'bg-rose-950/90 text-rose-200 border-rose-800'
-              : 'bg-slate-900/90 text-slate-200 border-slate-700'
-          }`}>
-            {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
-            {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
-            <span>{toast.message}</span>
-          </div>
-        </div>
-      )}
+
 
       {/* Sidebar Lateral de Navegação (6 Páginas + Gestão de Usuários) */}
       <Sidebar
@@ -3388,6 +3665,18 @@ export function App() {
           onClose={() => setPipelineAuditOrder(null)}
         />
       )}
+
+      {/* 📱 Sistema de Notificações & Alertas Estilo iPhone (iOS Design System) */}
+      <IOSAlertModal
+        isOpen={Boolean(iosAlert)}
+        alert={iosAlert}
+        onClose={() => setIosAlert(null)}
+      />
+
+      <IOSNotificationBanner
+        notification={iosBanner}
+        onClose={() => setIosBanner(null)}
+      />
 
     </div>
   );

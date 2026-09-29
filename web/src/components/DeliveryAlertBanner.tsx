@@ -18,9 +18,6 @@ import { getDeliveryAlertsSummary, OrderDeliveryAlert } from '../utils/deliveryA
 interface DeliveryAlertBannerProps {
   orders: PurchaseOrder[];
   onSelectOrder: (order: PurchaseOrder) => void;
-  onNavigateToHistory?: () => void;
-  onApplyFilter?: (filterType: 'all' | 'late' | 'today' | 'upcoming') => void;
-  activeFilter?: string;
   defaultExpanded?: boolean;
   className?: string;
 }
@@ -28,9 +25,6 @@ interface DeliveryAlertBannerProps {
 export const DeliveryAlertBanner: React.FC<DeliveryAlertBannerProps> = ({
   orders,
   onSelectOrder,
-  onNavigateToHistory,
-  onApplyFilter,
-  activeFilter,
   defaultExpanded = false,
   className = ''
 }) => {
@@ -79,16 +73,6 @@ export const DeliveryAlertBanner: React.FC<DeliveryAlertBannerProps> = ({
         {/* Ações Rápidas do Cabeçalho */}
         <div className="flex items-center gap-2 self-end sm:self-center shrink-0 flex-wrap">
 
-          {onNavigateToHistory && (
-            <button
-              type="button"
-              onClick={onNavigateToHistory}
-              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-            >
-              <span>Ver no Histórico</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
 
           <button
             type="button"

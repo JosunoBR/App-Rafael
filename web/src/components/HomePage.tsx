@@ -306,7 +306,6 @@ export const HomePage: React.FC<HomePageProps> = ({
         <DeliveryAlertBanner
           orders={savedOrders}
           onSelectOrder={onSelectOrder}
-          onNavigateToHistory={() => onNavigate('orders')}
         />
       )}
 

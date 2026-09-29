@@ -19,6 +19,7 @@ import { PurchaseOrder, User, CentralStockItem } from '../shared/types';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 import { ActiveNavTab, canAccessTab, canCreateOrEditOrders, canAuthorizeFinancialRelease, canConfirmReceipt } from '../shared/permissions';
 import { toBrDate } from '../utils/masks';
+import { DeliveryAlertBanner } from './DeliveryAlertBanner';
 
 interface HomePageProps {
   currentUser: User;
@@ -299,6 +300,15 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Alerta de Atraso e Previsão de Entregas (Central de Compras & Gestão) */}
+      {canAccessOrders && (
+        <DeliveryAlertBanner
+          orders={savedOrders}
+          onSelectOrder={onSelectOrder}
+          onNavigateToHistory={() => onNavigate('orders')}
+        />
+      )}
 
       {/* 2. Barra Executiva de KPIs (Pulse Indicators) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

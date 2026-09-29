@@ -17,7 +17,10 @@ import {
   X,
   RotateCcw,
   CreditCard,
-  Scale
+  Scale,
+  AlertTriangle,
+  Clock,
+  Calendar
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { calculateOrderTotals } from '../shared/orderCalculationEngine';
@@ -26,6 +29,8 @@ import { toBrDate } from '../utils/masks';
 import { PurchaseControlCard } from './PurchaseControlCard';
 import { DeleteOrderConfirmModal } from './DeleteOrderConfirmModal';
 import { OrderRollbackModal } from './OrderRollbackModal';
+import { DeliveryAlertBanner } from './DeliveryAlertBanner';
+import { getOrderDeliveryAlert } from '../utils/deliveryAlerts';
 import { User } from '../shared/types';
 import { canConfirmReceipt, canAuthorizeFinancialRelease, canEditSpecificOrder, canRollbackOrderStatus } from '../shared/permissions';
 
@@ -89,6 +94,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('todos');
+  const [deliveryAlertFilter, setDeliveryAlertFilter] = useState<'all' | 'late' | 'today' | 'upcoming'>('all');
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
   const [orderToRollback, setOrderToRollback] = useState<PurchaseOrder | null>(null);
@@ -225,6 +231,14 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         }
       }
 
+      // 9. Filtro de Alerta de Entrega
+      if (deliveryAlertFilter !== 'all') {
+        const dAlert = getOrderDeliveryAlert(o);
+        if (!dAlert || dAlert.severity !== deliveryAlertFilter) {
+          return false;
+        }
+      }
+
       return true;
     });
 
@@ -281,7 +295,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     }
 
     return result;
-  }, [orders, searchTerm, selectedStatusTab, columnFilters, sortField, sortDirection]);
+  }, [orders, searchTerm, selectedStatusTab, columnFilters, sortField, sortDirection, deliveryAlertFilter]);
 
   const totalPedidos = orders.length;
 
@@ -346,7 +360,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               </span>
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Arquivo central de compras salvas no banco de dados SQLite com controle de status e romaneios
+              Arquivo central de compras salvas no sistema com controle de status e romaneios
             </p>
           </div>
         </div>
@@ -359,6 +373,14 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
           Criar Novo Pedido
         </button>
       </div>
+
+      {/* Alerta de Atraso e Previsão de Entregas para Compradores */}
+      <DeliveryAlertBanner
+        orders={orders}
+        onSelectOrder={onSelectOrder}
+        onApplyFilter={(type) => setDeliveryAlertFilter(type)}
+        activeFilter={deliveryAlertFilter}
+      />
 
       {/* 2. Card de Controle de Compras (Filtros por Mês, Ano etc., Médias, Extremos e Navegação) */}
       <PurchaseControlCard
@@ -716,7 +738,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition"
                       title="Clique para ordenar por data"
                     >
-                      <span>Data</span>
+                      <span>Data / Entrega</span>
                       {sortField === 'data' ? (
                         sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                       ) : (
@@ -1007,6 +1029,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                     Math.abs(ord.header.ajusteFiscalDiferenca || 0) > 0.001
                   );
                   const ajusteDiff = ord.header.ajusteFiscalDiferenca || 0;
+                  const deliveryAlert = getOrderDeliveryAlert(ord);
 
                   return (
                     <tr key={ord.header.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition group">
@@ -1047,9 +1070,26 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         )}
                       </td>
 
-                      {/* Data */}
+                      {/* Data / Previsão de Entrega */}
                       <td className="py-3.5 px-3 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
-                        {toBrDate(ord.header.dataPedido || ord.header.createdAt)}
+                        <div>{toBrDate(ord.header.dataPedido || ord.header.createdAt)}</div>
+                        {deliveryAlert ? (
+                          <div className="mt-1">
+                            <span 
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border shadow-2xs ${deliveryAlert.badgeBg} ${deliveryAlert.badgeText} ${deliveryAlert.badgeBorder}`}
+                              title={`Previsão: ${deliveryAlert.dataEntregaPrevistaBr} (${deliveryAlert.label})`}
+                            >
+                              {deliveryAlert.severity === 'late' && <AlertTriangle className="w-3 h-3 text-rose-500 dark:text-rose-400 shrink-0 animate-pulse" />}
+                              {deliveryAlert.severity === 'today' && <Clock className="w-3 h-3 text-amber-500 dark:text-amber-400 shrink-0" />}
+                              {deliveryAlert.severity === 'upcoming' && <Calendar className="w-3 h-3 text-sky-500 dark:text-sky-400 shrink-0" />}
+                              <span>{deliveryAlert.label}</span>
+                            </span>
+                          </div>
+                        ) : ord.header.dataEntregaPrevista ? (
+                          <div className="text-[10px] text-slate-400 mt-0.5" title="Previsão de entrega">
+                            Prev: {toBrDate(ord.header.dataEntregaPrevista)}
+                          </div>
+                        ) : null}
                       </td>
 
                       {/* Itens */}

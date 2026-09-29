@@ -222,6 +222,7 @@ class FinancialService {
       primeiroVencimento,
       dataVencimento,
       datasCustomizadas = [],
+      valoresCustomizados = [],
       tipo = 'despesa',
       categoria = 'OPERACIONAL',
       fornecedor = '',
@@ -373,8 +374,14 @@ class FinancialService {
     }
 
     for (let i = 1; i <= totalQtd; i++) {
-      // Ajusta os centavos restantes na 1ª parcela
-      const valorItem = (i === 1) ? (valorParcelaBase + diferencaCentavos) : valorParcelaBase;
+      // Ajusta os centavos restantes na 1ª parcela por padrão ou usa valor customizado enviado
+      let valorItem = (i === 1) ? (valorParcelaBase + diferencaCentavos) : valorParcelaBase;
+      if (Array.isArray(valoresCustomizados) && valoresCustomizados[i - 1] !== undefined) {
+        const parsedCustom = parseFloat(valoresCustomizados[i - 1]);
+        if (!isNaN(parsedCustom) && parsedCustom > 0) {
+          valorItem = parsedCustom;
+        }
+      }
       
       let dueBr = '';
       if (Array.isArray(datasCustomizadas) && datasCustomizadas[i - 1]) {

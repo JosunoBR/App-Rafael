@@ -85,6 +85,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   const [parcelasCount, setParcelasCount] = useState<number>(3);
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
   const [datasCustomizadas, setDatasCustomizadas] = useState<string[]>([]);
+  const [valoresCustomizados, setValoresCustomizados] = useState<string[]>([]);
   const [isRecorrente, setIsRecorrente] = useState<boolean>(false);
 
   const [saving, setSaving] = useState(false);
@@ -108,6 +109,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
       setParcelasCount(3);
       setIntervaloDias(30);
       setDatasCustomizadas([]);
+      setValoresCustomizados([]);
       setIsRecorrente(false);
       setErrorMsg(null);
     }
@@ -127,33 +129,150 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     }
   }, [dataBase, parcelasCount, intervaloDias, modoParcelamento]);
 
-  // Valor numérico parseado
+  // Valor numérico parseado do total
   const valorTotalNum = useMemo(() => {
     if (!valorTotalStr) return 0;
     const clean = valorTotalStr.replace(/\./g, '').replace(',', '.');
     return parseFloat(clean) || 0;
   }, [valorTotalStr]);
 
-  // Grade de parcelas calculadas para preview em tempo real
+  // Gerar / inicializar valores padrão de parcelas ao alterar valorTotalNum, parcelasCount ou modo
+  useEffect(() => {
+    if (modoParcelamento === 'parcelado' && parcelasCount > 0) {
+      if (valorTotalNum > 0) {
+        const valBase = Math.floor((valorTotalNum / parcelasCount) * 100) / 100;
+        const diff = Math.round((valorTotalNum - (valBase * parcelasCount)) * 100) / 100;
+        const initial = Array.from({ length: parcelasCount }, (_, i) => {
+          const val = (i === 0) ? (valBase + diff) : valBase;
+          return val.toFixed(2);
+        });
+        setValoresCustomizados(initial);
+      } else {
+        setValoresCustomizados(Array.from({ length: parcelasCount }, () => ''));
+      }
+    }
+  }, [valorTotalNum, parcelasCount, modoParcelamento]);
+
+  // Edição manual de valor de uma parcela individual
+  const handleCustomValorChange = (index: number, newValor: string) => {
+    setValoresCustomizados(prev => {
+      const updated = [...prev];
+      while (updated.length < parcelasCount) {
+        updated.push('0.00');
+      }
+      updated[index] = newValor;
+      return updated;
+    });
+  };
+
+  // Soma atual das parcelas digitadas
+  const somaParcelasNum = useMemo(() => {
+    if (modoParcelamento !== 'parcelado') return valorTotalNum;
+    const sum = valoresCustomizados.reduce((acc, curr) => acc + (parseFloat(curr) || 0), 0);
+    return Math.round(sum * 100) / 100;
+  }, [modoParcelamento, valoresCustomizados, valorTotalNum]);
+
+  // Diferença entre soma das parcelas e total do lançamento (tolerância de centavos)
+  const diferencaParcelas = useMemo(() => {
+    if (modoParcelamento !== 'parcelado' || valorTotalNum <= 0) return 0;
+    return Math.round((somaParcelasNum - valorTotalNum) * 100) / 100;
+  }, [modoParcelamento, somaParcelasNum, valorTotalNum]);
+
+  // Status de conferência de valores:
+  // - 'excedeu': soma das parcelas maior que total (vermelho claro)
+  // - 'abaixo': soma das parcelas menor que total (azul claro)
+  // - 'igualou': soma exatamente igual ao total (verde claro)
+  const statusConferencia = useMemo<'neutro' | 'abaixo' | 'excedeu' | 'igualou'>(() => {
+    if (modoParcelamento !== 'parcelado' || valorTotalNum <= 0) return 'neutro';
+    if (diferencaParcelas > 0.005) return 'excedeu';
+    if (diferencaParcelas < -0.005) return 'abaixo';
+    return 'igualou';
+  }, [modoParcelamento, valorTotalNum, diferencaParcelas]);
+
+  // Cores suaves, claras e não chamativas conforme solicitado:
+  const colorClasses = useMemo(() => {
+    if (modoParcelamento !== 'parcelado' || valorTotalNum <= 0) {
+      return {
+        inputParcela: 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-amber-500',
+        inputTotal: 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-amber-500',
+        card: 'border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900',
+        statusBanner: 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+      };
+    }
+
+    if (statusConferencia === 'excedeu') {
+      return {
+        inputParcela: 'border-rose-300 dark:border-rose-800/80 bg-rose-50/50 dark:bg-rose-950/20 text-rose-950 dark:text-rose-100 focus:ring-rose-200 focus:border-rose-400',
+        inputTotal: 'border-rose-300 dark:border-rose-800 bg-rose-50/25 dark:bg-rose-950/15 focus:ring-rose-200 focus:border-rose-400',
+        card: 'border-rose-200 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/10',
+        statusBanner: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300'
+      };
+    }
+
+    if (statusConferencia === 'abaixo') {
+      return {
+        inputParcela: 'border-sky-300 dark:border-sky-800/80 bg-sky-50/50 dark:bg-sky-950/20 text-sky-950 dark:text-sky-100 focus:ring-sky-200 focus:border-sky-400',
+        inputTotal: 'border-sky-300 dark:border-sky-800 bg-sky-50/25 dark:bg-sky-950/15 focus:ring-sky-200 focus:border-sky-400',
+        card: 'border-sky-200 dark:border-sky-900/60 bg-sky-50/20 dark:bg-sky-950/10',
+        statusBanner: 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-900 text-sky-800 dark:text-sky-300'
+      };
+    }
+
+    // igualou
+    return {
+      inputParcela: 'border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 focus:ring-emerald-200 focus:border-emerald-400',
+      inputTotal: 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/25 dark:bg-emerald-950/15 focus:ring-emerald-200 focus:border-emerald-400',
+      card: 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10',
+      statusBanner: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300'
+    };
+  }, [modoParcelamento, valorTotalNum, statusConferencia]);
+
+  // Ajusta diferença restante na última parcela para igualar com um clique
+  const handleAjustarDiferencaNaUltima = () => {
+    if (parcelasCount <= 0 || valorTotalNum <= 0) return;
+    setValoresCustomizados(prev => {
+      const updated = [...prev];
+      while (updated.length < parcelasCount) updated.push('0.00');
+      let somaOutras = 0;
+      for (let i = 0; i < parcelasCount - 1; i++) {
+        somaOutras += parseFloat(updated[i]) || 0;
+      }
+      const valUltima = Math.max(0, Math.round((valorTotalNum - somaOutras) * 100) / 100);
+      updated[parcelasCount - 1] = valUltima.toFixed(2);
+      return updated;
+    });
+  };
+
+  // Redistribuir igualmente entre todas as parcelas
+  const handleDistribuirIgualmente = () => {
+    if (parcelasCount <= 0 || valorTotalNum <= 0) return;
+    const valBase = Math.floor((valorTotalNum / parcelasCount) * 100) / 100;
+    const diff = Math.round((valorTotalNum - (valBase * parcelasCount)) * 100) / 100;
+    const recalculated = Array.from({ length: parcelasCount }, (_, i) => {
+      const val = (i === 0) ? (valBase + diff) : valBase;
+      return val.toFixed(2);
+    });
+    setValoresCustomizados(recalculated);
+  };
+
+  // Grade de parcelas calculadas para preview e edição
   const previewParcelas = useMemo(() => {
     if (modoParcelamento === 'a_vista' || parcelasCount <= 1 || valorTotalNum <= 0) {
       return [];
     }
-    const valBase = Math.floor((valorTotalNum / parcelasCount) * 100) / 100;
-    const diff = Math.round((valorTotalNum - (valBase * parcelasCount)) * 100) / 100;
 
     return Array.from({ length: parcelasCount }, (_, i) => {
-      const val = (i === 0) ? (valBase + diff) : valBase;
+      const valStr = valoresCustomizados[i] ?? '';
       const due = datasCustomizadas[i] || dataBase;
       return {
         num: i + 1,
         total: parcelasCount,
         label: `${i + 1}/${parcelasCount}`,
-        valor: val,
+        valor: valStr,
         vencimento: due
       };
     });
-  }, [modoParcelamento, parcelasCount, valorTotalNum, datasCustomizadas, dataBase]);
+  }, [modoParcelamento, parcelasCount, valorTotalNum, valoresCustomizados, datasCustomizadas, dataBase]);
 
   // Pré-visualização da projeção contínua de 6 meses para despesas fixas recorrentes
   const recurringPreview = useMemo(() => {
@@ -206,6 +325,29 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
       return;
     }
 
+    if (modoParcelamento === 'parcelado') {
+      if (Math.abs(diferencaParcelas) > 0.01) {
+        if (diferencaParcelas > 0) {
+          setErrorMsg(
+            `A soma das parcelas (R$ ${somaParcelasNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) excede o total do lançamento (R$ ${valorTotalNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) em R$ ${diferencaParcelas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Ajuste os valores para que coincidam antes de salvar.`
+          );
+        } else {
+          setErrorMsg(
+            `A soma das parcelas (R$ ${somaParcelasNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) está abaixo do total do lançamento (R$ ${valorTotalNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Faltam R$ ${Math.abs(diferencaParcelas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para igualar o total.`
+          );
+        }
+        return;
+      }
+
+      for (let i = 0; i < parcelasCount; i++) {
+        const valParc = parseFloat(valoresCustomizados[i]) || 0;
+        if (valParc <= 0) {
+          setErrorMsg(`A parcela ${i + 1}/${parcelasCount} deve possuir um valor válido maior que zero.`);
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -227,6 +369,9 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
         primeiroVencimento: dataBase,
         dataVencimento: dataBase,
         datasCustomizadas: modoParcelamento === 'parcelado' ? datasCustomizadas : [dataBase],
+        valoresCustomizados: modoParcelamento === 'parcelado'
+          ? valoresCustomizados.map(v => parseFloat(v) || 0)
+          : [valorTotalNum],
         recorrente: isRecorrente,
         mesesProjecao: 6
       };
@@ -449,9 +594,24 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
               {/* Valor Total */}
               <div className="sm:col-span-4">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Valor Total do Lançamento (R$) <span className="text-rose-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Valor Total do Lançamento (R$) <span className="text-rose-500">*</span>
+                  </label>
+                  {modoParcelamento === 'parcelado' && valorTotalNum > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border transition-colors ${
+                      statusConferencia === 'excedeu'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
+                        : statusConferencia === 'abaixo'
+                        ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900'
+                    }`}>
+                      {statusConferencia === 'excedeu' && 'Excedendo'}
+                      {statusConferencia === 'abaixo' && 'Abaixo'}
+                      {statusConferencia === 'igualou' && 'Conferido'}
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-slate-400 text-sm font-bold">R$</span>
                   <input
@@ -461,7 +621,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                     placeholder="0,00"
                     value={valorTotalStr}
                     onChange={e => setValorTotalStr(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold text-base focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                    className={`w-full pl-9 pr-3 py-2.5 rounded-xl border font-bold text-base transition-colors focus:outline-hidden focus:ring-2 ${colorClasses.inputTotal}`}
                     required
                   />
                 </div>
@@ -571,30 +731,127 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
               </div>
             )}
 
-            {/* Grade de Preview das Parcelas Calculadas */}
+            {/* Grade de Preview das Parcelas Calculadas (Valores e Datas Editáveis) */}
             {modoParcelamento === 'parcelado' && previewParcelas.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-2">
-                  Pré-visualização das Parcelas Geradas (datas editáveis):
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                    Pré-visualização das Parcelas (Valores e Datas Editáveis):
+                  </span>
+                  
+                  {/* Atalhos rápidos de ajuste */}
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    {statusConferencia !== 'igualou' && (
+                      <button
+                        type="button"
+                        onClick={handleAjustarDiferencaNaUltima}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-2xs transition-all flex items-center gap-1"
+                        title="Ajusta automaticamente a diferença na última parcela para fechar o valor exato"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        Ajustar na última
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleDistribuirIgualmente}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-2xs transition-all flex items-center gap-1"
+                      title="Redistribui o valor total igualmente entre todas as parcelas"
+                    >
+                      <Repeat className="w-3 h-3 text-slate-400" />
+                      Dividir igualmente
+                    </button>
+                  </div>
+                </div>
+
+                {/* Banner / Card de Conferência de Valores com cores suaves */}
+                <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-3 transition-colors ${colorClasses.statusBanner}`}>
+                  <div className="flex items-center gap-2.5">
+                    {statusConferencia === 'excedeu' && (
+                      <div className="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                        <AlertCircle className="w-4 h-4" />
+                      </div>
+                    )}
+                    {statusConferencia === 'abaixo' && (
+                      <div className="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                        <Clock className="w-4 h-4" />
+                      </div>
+                    )}
+                    {statusConferencia === 'igualou' && (
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <Check className="w-4 h-4" />
+                      </div>
+                    )}
+                    {statusConferencia === 'neutro' && (
+                      <div className="w-7 h-7 rounded-lg bg-slate-500/20 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0">
+                        <Tag className="w-4 h-4" />
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-bold text-[13px]">
+                        {statusConferencia === 'excedeu' && 'Soma das parcelas excede o total do lançamento'}
+                        {statusConferencia === 'abaixo' && 'Soma das parcelas abaixo do total do lançamento'}
+                        {statusConferencia === 'igualou' && 'Valores conferidos! A soma bate 100% com o total'}
+                        {statusConferencia === 'neutro' && 'Conferência de Parcelas'}
+                      </p>
+                      <p className="text-[11px] opacity-90">
+                        Soma das parcelas: <strong className="font-semibold">R$ {somaParcelasNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> | Total esperado: <strong className="font-semibold">R$ {valorTotalNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        {statusConferencia === 'excedeu' && (
+                          <span className="font-bold text-rose-700 dark:text-rose-300 ml-1">
+                            (Excedendo R$ {diferencaParcelas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                          </span>
+                        )}
+                        {statusConferencia === 'abaixo' && (
+                          <span className="font-bold text-sky-700 dark:text-sky-300 ml-1">
+                            (Faltam R$ {Math.abs(diferencaParcelas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Grade de Parcelas Editáveis */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1.5">
                   {previewParcelas.map((p, idx) => (
                     <div
                       key={p.num}
-                      className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs"
+                      className={`p-3 rounded-xl border flex flex-col gap-2 text-xs transition-colors overflow-hidden ${colorClasses.card}`}
                     >
-                      <div>
-                        <span className="font-bold text-amber-600 dark:text-amber-400">Parcela {p.label}</span>
-                        <p className="text-[13px] font-bold text-slate-900 dark:text-white">
-                          R$ {p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-amber-600 dark:text-amber-400">
+                          Parcela {p.label}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          #{p.num}
+                        </span>
                       </div>
-                      <input
-                        type="date"
-                        value={datasCustomizadas[idx] || ''}
-                        onChange={e => handleCustomDateChange(idx, e.target.value)}
-                        className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-mono"
-                      />
+
+                      <div className="grid grid-cols-2 gap-2 items-center">
+                        {/* Campo de valor da parcela editável com as cores solicitadas */}
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-2 text-xs font-bold opacity-60">R$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            placeholder="0,00"
+                            value={valoresCustomizados[idx] ?? ''}
+                            onChange={e => handleCustomValorChange(idx, e.target.value)}
+                            className={`w-full pl-8 pr-2 py-1.5 rounded-lg border text-xs font-bold transition-colors focus:outline-hidden focus:ring-2 ${colorClasses.inputParcela}`}
+                          />
+                        </div>
+
+                        {/* Campo de data da parcela editável */}
+                        <div className="relative">
+                          <input
+                            type="date"
+                            value={datasCustomizadas[idx] || ''}
+                            onChange={e => handleCustomDateChange(idx, e.target.value)}
+                            className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                          />
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>

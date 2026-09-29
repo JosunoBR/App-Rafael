@@ -112,33 +112,6 @@ export const DeliveryAlertBanner: React.FC<DeliveryAlertBannerProps> = ({
 
         {/* Ações Rápidas do Cabeçalho */}
         <div className="flex items-center gap-2 self-end sm:self-center shrink-0 flex-wrap">
-          {onApplyFilter && (
-            <div className="flex items-center gap-1.5 bg-white/80 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={() => onApplyFilter(activeFilter === 'late' ? 'all' : 'late')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-                  activeFilter === 'late'
-                    ? 'bg-rose-600 text-white shadow-xs'
-                    : 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
-                }`}
-                title="Filtrar tabela apenas com pedidos atrasados"
-              >
-                <Filter className="w-3 h-3" />
-                <span>Atrasados ({summary.lateCount})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onApplyFilter(activeFilter === 'all' ? 'all' : 'all')}
-                className={`px-2 py-1 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer ${
-                  activeFilter === 'all' ? 'underline font-bold' : ''
-                }`}
-              >
-                Limpar
-              </button>
-            </div>
-          )}
 
           {onNavigateToHistory && (
             <button

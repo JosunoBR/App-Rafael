@@ -94,7 +94,6 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('todos');
-  const [deliveryAlertFilter, setDeliveryAlertFilter] = useState<'all' | 'late' | 'today' | 'upcoming'>('all');
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
   const [orderToRollback, setOrderToRollback] = useState<PurchaseOrder | null>(null);
@@ -231,14 +230,6 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         }
       }
 
-      // 9. Filtro de Alerta de Entrega
-      if (deliveryAlertFilter !== 'all') {
-        const dAlert = getOrderDeliveryAlert(o);
-        if (!dAlert || dAlert.severity !== deliveryAlertFilter) {
-          return false;
-        }
-      }
-
       return true;
     });
 
@@ -295,7 +286,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     }
 
     return result;
-  }, [orders, searchTerm, selectedStatusTab, columnFilters, sortField, sortDirection, deliveryAlertFilter]);
+  }, [orders, searchTerm, selectedStatusTab, columnFilters, sortField, sortDirection]);
 
   const totalPedidos = orders.length;
 
@@ -378,8 +369,6 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
       <DeliveryAlertBanner
         orders={orders}
         onSelectOrder={onSelectOrder}
-        onApplyFilter={(type) => setDeliveryAlertFilter(type)}
-        activeFilter={deliveryAlertFilter}
       />
 
       {/* 2. Card de Controle de Compras (Filtros por Mês, Ano etc., Médias, Extremos e Navegação) */}

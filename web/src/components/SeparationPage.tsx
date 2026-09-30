@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   FileText, 
   CheckCircle2, 
@@ -26,7 +27,8 @@ import {
   Layers,
   ChevronDown,
   Loader2,
-  Truck
+  Truck,
+  SlidersHorizontal
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User, SeparationPreset } from '../shared/types';
 import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations, adjustSeparationReserveProportionally } from '../shared/separationEngine';
@@ -76,6 +78,33 @@ export function convertAvariaToUnits(quantidade: number, unidadeMedida: string =
       return q;        // 1 UN = 1 peça
   }
 }
+
+export interface SeparationColumnMeta {
+  key: string;
+  label: string;
+  category: 'produto' | 'balanco';
+  width?: number;
+  title?: string;
+}
+
+const SEPARATION_BASE_COLUMNS: SeparationColumnMeta[] = [
+  { key: 'foto', label: 'Foto do Produto', category: 'produto', width: 50, title: 'Miniatura com ampliação da foto' },
+  { key: 'produto', label: 'Dados do Produto', category: 'produto', width: 220, title: 'Descrição, código interno e tags' },
+  { key: 'refFabrica', label: 'Referência Fábrica', category: 'produto', width: 95, title: 'Código de fábrica informado pelo fornecedor' },
+  { key: 'pdv', label: 'Preço Venda (PDV)', category: 'produto', width: 80, title: 'Preço de venda sugerido (PDV Alvo)' },
+  { key: 'qtdPac', label: 'Qtd no Pacote', category: 'produto', width: 80, title: 'Quantidade de peças na embalagem/pacote' },
+  { key: 'comprado', label: 'Total Comprado', category: 'balanco', title: 'Total bruto de unidades compradas' },
+  { key: 'estoqueCd', label: 'Estoque CD', category: 'balanco', title: 'Unidades retidas para o Centro de Distribuição' },
+  { key: 'lojasTotal', label: 'Total Lojas', category: 'balanco', title: 'Total líquido distribuído entre filiais' },
+];
+
+const FROZEN_COLUMNS_CONFIG = [
+  { key: 'foto', width: 50 },
+  { key: 'produto', width: 220 },
+  { key: 'refFabrica', width: 95 },
+  { key: 'pdv', width: 80 },
+  { key: 'qtdPac', width: 80 },
+] as const;
 
 export const SeparationPage: React.FC<SeparationPageProps> = ({
   order,
@@ -287,6 +316,118 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   // Modal de Detalhes de Separação
   const [modalItem, setModalItem] = useState<OrderItem | null>(null);
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
+
+  // Estados para Controle de Visibilidade de Colunas da Grade (Configuração do Usuário)
+  const [isColumnsDropdownOpen, setIsColumnsDropdownOpen] = useState(false);
+  const [columnsTab, setColumnsTab] = useState<'geral' | 'lojas'>('geral');
+  const [columnsCoords, setColumnsCoords] = useState<{ top: number; left: number } | null>(null);
+  const columnsDropdownRef = useRef<HTMLDivElement>(null);
+  const columnsButtonRef = useRef<HTMLButtonElement>(null);
+
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('mega12_separation_columns_visibility');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {}
+    return {};
+  });
+
+  const isColVisible = (key: string): boolean => visibleColumns[key] !== false;
+
+  const toggleColumnVisibility = (key: string) => {
+    setVisibleColumns(prev => {
+      const next = { ...prev, [key]: prev[key] === false ? true : false };
+      try {
+        localStorage.setItem('mega12_separation_columns_visibility', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const setAllStoresVisibility = (visible: boolean) => {
+    setVisibleColumns(prev => {
+      const next = { ...prev };
+      activeStores.forEach(s => {
+        next[`store_${s.id}`] = visible;
+      });
+      try {
+        localStorage.setItem('mega12_separation_columns_visibility', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const showAllColumns = () => {
+    const next: Record<string, boolean> = {};
+    SEPARATION_BASE_COLUMNS.forEach(c => { next[c.key] = true; });
+    activeStores.forEach(s => { next[`store_${s.id}`] = true; });
+    setVisibleColumns(next);
+    try {
+      localStorage.setItem('mega12_separation_columns_visibility', JSON.stringify(next));
+    } catch (e) {}
+  };
+
+  const resetColumns = () => {
+    setVisibleColumns({});
+    try {
+      localStorage.removeItem('mega12_separation_columns_visibility');
+    } catch (e) {}
+  };
+
+  const updateColumnsPosition = () => {
+    if (!columnsButtonRef.current) return;
+    const rect = columnsButtonRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const isFlipped = spaceBelow < 380 && rect.top > 380;
+    setColumnsCoords({
+      top: isFlipped ? Math.max(10, rect.top - 390) : rect.bottom + 6,
+      left: Math.max(12, Math.min(rect.right - 280, window.innerWidth - 300))
+    });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        columnsDropdownRef.current &&
+        !columnsDropdownRef.current.contains(target) &&
+        columnsButtonRef.current &&
+        !columnsButtonRef.current.contains(target)
+      ) {
+        setIsColumnsDropdownOpen(false);
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      if (isColumnsDropdownOpen) {
+        updateColumnsPosition();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [isColumnsDropdownOpen]);
+
+  // Função para calcular o offset horizontal das colunas congeladas dinamicamente
+  const getStickyLeft = (key: string): number => {
+    let left = 0;
+    for (const col of FROZEN_COLUMNS_CONFIG) {
+      if (col.key === key) break;
+      if (visibleColumns[col.key] !== false) {
+        left += col.width;
+      }
+    }
+    return left;
+  };
 
   // Lista de avarias registradas
   const [avariasList, setAvariasList] = useState<AvariaRecord[]>(() => {
@@ -985,8 +1126,38 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Botão de Controle de Colunas Visíveis */}
+            <button
+              ref={columnsButtonRef}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsColumnsDropdownOpen(prev => {
+                  const next = !prev;
+                  if (next && columnsButtonRef.current) {
+                    const rect = columnsButtonRef.current.getBoundingClientRect();
+                    const spaceBelow = window.innerHeight - rect.bottom;
+                    const isFlipped = spaceBelow < 380 && rect.top > 380;
+                    setColumnsCoords({
+                      top: isFlipped ? Math.max(10, rect.top - 390) : rect.bottom + 6,
+                      left: Math.max(12, Math.min(rect.right - 280, window.innerWidth - 300))
+                    });
+                  }
+                  return next;
+                });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 transition cursor-pointer shadow-2xs"
+              title="Configurar Colunas Visíveis da Grade"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span>Colunas</span>
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold">
+                {SEPARATION_BASE_COLUMNS.filter(c => isColVisible(c.key)).length + activeStores.filter(s => isColVisible(`store_${s.id}`)).length}/{SEPARATION_BASE_COLUMNS.length + activeStores.length}
+              </span>
+            </button>
+
             <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
-              {activeStores.length} Lojas Ativas • Rateio Direto
+              {activeStores.filter(s => isColVisible(`store_${s.id}`)).length} Lojas Visíveis • Rateio Direto
             </span>
           </div>
         </div>
@@ -995,48 +1166,94 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         <div className="overflow-auto max-h-[calc(100vh-260px)] min-h-[380px] scrollbar-thin">
           <table className="w-full text-left border-collapse text-xs">
             
-            {/* Linha 1 de Cabeçalho: Dados do Produto, Qtd no Pac, Balanço Geral e Rateio das Lojas */}
+            {/* Linha 1 de Cabeçalho: Foto, Descrição, Ref. Fábrica, PDV, Qtd no Pac, Balanço Geral e Rateio */}
             <thead className="sticky top-0 z-30 shadow-xs">
               <tr className="border-b border-slate-200 dark:border-slate-700 text-center font-extrabold text-[11px] h-[34px]">
-                <th 
-                  rowSpan={2} 
-                  className="py-2.5 px-3 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 sticky left-0 top-0 z-50 w-[240px] min-w-[240px] max-w-[240px] uppercase shadow-xs select-none"
-                >
-                  DADOS DO PRODUTO
-                </th>
-                <th 
-                  rowSpan={2} 
-                  className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 sticky left-[240px] top-0 z-50 w-[80px] min-w-[80px] max-w-[80px] uppercase shadow-xs select-none" 
-                  title="Quantidade de unidades por pacote/caixa (Embalagem)"
-                >
-                  QTD NO PAC
-                </th>
-                <th 
-                  colSpan={3} 
-                  className="py-2 px-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide sticky top-0 z-30 select-none"
-                >
-                  BALANÇO GERAL
-                </th>
-                <th 
-                  colSpan={activeStores.length} 
-                  className="py-2 px-2 bg-emerald-50/80 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide sticky top-0 z-30 select-none"
-                >
-                  RATEIO INDIVIDUAL POR LOJA ({activeStores.length} FILIAIS)
-                </th>
+                {isColVisible('foto') && (
+                  <th 
+                    rowSpan={2} 
+                    style={{ left: `${getStickyLeft('foto')}px` }}
+                    className="py-2.5 px-1.5 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 sticky top-0 z-50 w-[50px] min-w-[50px] max-w-[50px] uppercase shadow-xs select-none text-center"
+                  >
+                    FOTO
+                  </th>
+                )}
+                {isColVisible('produto') && (
+                  <th 
+                    rowSpan={2} 
+                    style={{ left: `${getStickyLeft('produto')}px` }}
+                    className="py-2.5 px-3 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 sticky top-0 z-50 w-[220px] min-w-[220px] max-w-[220px] uppercase shadow-xs select-none text-left"
+                  >
+                    DADOS DO PRODUTO
+                  </th>
+                )}
+                {isColVisible('refFabrica') && (
+                  <th 
+                    rowSpan={2} 
+                    style={{ left: `${getStickyLeft('refFabrica')}px` }}
+                    className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 sticky top-0 z-50 w-[95px] min-w-[95px] max-w-[95px] uppercase shadow-xs select-none" 
+                    title="Referência de Fábrica / Código Fornecedor"
+                  >
+                    REF. FÁBRICA
+                  </th>
+                )}
+                {isColVisible('pdv') && (
+                  <th 
+                    rowSpan={2} 
+                    style={{ left: `${getStickyLeft('pdv')}px` }}
+                    className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 sticky top-0 z-50 w-[80px] min-w-[80px] max-w-[80px] uppercase shadow-xs select-none" 
+                    title="Preço de Venda Sugerido (PDV Alvo)"
+                  >
+                    PDV
+                  </th>
+                )}
+                {isColVisible('qtdPac') && (
+                  <th 
+                    rowSpan={2} 
+                    style={{ left: `${getStickyLeft('qtdPac')}px` }}
+                    className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 sticky top-0 z-50 w-[80px] min-w-[80px] max-w-[80px] uppercase shadow-xs select-none" 
+                    title="Quantidade de unidades por pacote/caixa (Embalagem)"
+                  >
+                    QTD NO PAC
+                  </th>
+                )}
+                
+                {['comprado', 'estoqueCd', 'lojasTotal'].filter(isColVisible).length > 0 && (
+                  <th 
+                    colSpan={['comprado', 'estoqueCd', 'lojasTotal'].filter(isColVisible).length} 
+                    className="py-2 px-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide sticky top-0 z-30 select-none text-center"
+                  >
+                    BALANÇO GERAL
+                  </th>
+                )}
+                {activeStores.filter(s => isColVisible(`store_${s.id}`)).length > 0 && (
+                  <th 
+                    colSpan={activeStores.filter(s => isColVisible(`store_${s.id}`)).length} 
+                    className="py-2 px-2 bg-emerald-50/80 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide sticky top-0 z-30 select-none text-center"
+                  >
+                    RATEIO INDIVIDUAL POR LOJA ({activeStores.filter(s => isColVisible(`store_${s.id}`)).length} FILIAIS)
+                  </th>
+                )}
               </tr>
 
               {/* Linha 2 de Cabeçalho: Subcolunas e Nomes das Lojas (Congelada abaixo da linha 1) */}
               <tr className="bg-slate-50/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 h-[34px]">
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-emerald-50/80 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 min-w-[75px] sticky top-[34px] z-30 select-none">
-                  Comprado
-                </th>
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-amber-50/80 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 min-w-[85px] sticky top-[34px] z-30 select-none">
-                  Estoque CD
-                </th>
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 min-w-[70px] sticky top-[34px] z-30 select-none">
-                  Lojas
-                </th>
-                {activeStores.map(store => (
+                {isColVisible('comprado') && (
+                  <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-emerald-50/80 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 min-w-[75px] sticky top-[34px] z-30 select-none">
+                    Comprado
+                  </th>
+                )}
+                {isColVisible('estoqueCd') && (
+                  <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-amber-50/80 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 min-w-[85px] sticky top-[34px] z-30 select-none">
+                    Estoque CD
+                  </th>
+                )}
+                {isColVisible('lojasTotal') && (
+                  <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 min-w-[70px] sticky top-[34px] z-30 select-none">
+                    Lojas
+                  </th>
+                )}
+                {activeStores.filter(s => isColVisible(`store_${s.id}`)).map(store => (
                   <th 
                     key={store.id} 
                     title={store.name}
@@ -1060,38 +1277,50 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition group">
                     
-                    {/* 1. Descrição e Código com Foto (Coluna Congelada 1) */}
-                    <td className="py-2 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[240px] min-w-[240px] max-w-[240px] shadow-xs">
-                      <div className="flex items-center gap-2.5">
-                        {/* Foto Miniatura */}
-                        <div 
-                          className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center cursor-pointer shadow-xs"
-                          onClick={() => item.fotoUrl && setZoomedImage({ url: item.fotoUrl, title: item.descricao })}
-                          title={item.fotoUrl ? "Clique para ver a foto ampliada" : "Sem foto"}
-                        >
-                          {item.fotoUrl ? (
-                            <img 
-                              src={item.fotoUrl} 
-                              alt="" 
-                              loading="lazy" 
-                              decoding="async" 
-                              className="w-full h-full object-cover hover:scale-110 transition" 
-                            />
-                          ) : (
-                            <ImageIcon className="w-4 h-4 text-slate-400" />
-                          )}
+                    {/* 1. Coluna de Foto (Congelada 1) */}
+                    {isColVisible('foto') && (
+                      <td 
+                        style={{ left: `${getStickyLeft('foto')}px` }}
+                        className="py-2 px-1.5 text-center border-r border-slate-200 dark:border-slate-700 sticky bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[50px] min-w-[50px] max-w-[50px] shadow-xs"
+                      >
+                        <div className="flex items-center justify-center">
+                          <div 
+                            className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center cursor-pointer shadow-2xs hover:ring-2 hover:ring-indigo-500/40 transition"
+                            onClick={() => item.fotoUrl && setZoomedImage({ url: item.fotoUrl, title: item.descricao })}
+                            title={item.fotoUrl ? "Clique para ver a foto ampliada" : "Sem foto"}
+                          >
+                            {item.fotoUrl ? (
+                              <img 
+                                src={item.fotoUrl} 
+                                alt="" 
+                                loading="lazy" 
+                                decoding="async" 
+                                className="w-full h-full object-cover hover:scale-110 transition" 
+                              />
+                            ) : (
+                              <ImageIcon className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+                            )}
+                          </div>
                         </div>
+                      </td>
+                    )}
 
+                    {/* 2. Descrição e Código Interno (Congelada 2) */}
+                    {isColVisible('produto') && (
+                      <td 
+                        style={{ left: `${getStickyLeft('produto')}px` }}
+                        className="py-2 px-3 border-r border-slate-200 dark:border-slate-700 sticky bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[220px] min-w-[220px] max-w-[220px] shadow-xs"
+                      >
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-900 dark:text-white truncate max-w-[170px] text-xs" title={item.descricao}>
+                          <div className="font-bold text-slate-900 dark:text-white truncate max-w-[200px] text-xs" title={item.descricao}>
                             {item.descricao || 'Item sem descrição'}
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
-                            <span className="px-1.5 py-0.2 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800">
+                            <span className="px-1.5 py-0.2 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800" title="Código Interno">
                               {item.codigoInterno || item.codigo || 'S/ CÓD'}
                             </span>
-                            <span className="font-semibold text-slate-600 dark:text-slate-400">
-                              {item.qtdTotalUnidades.toLocaleString('pt-BR')}
+                            <span className="font-semibold text-slate-600 dark:text-slate-400" title="Total Comprado">
+                              {item.qtdTotalUnidades.toLocaleString('pt-BR')} un
                             </span>
                             {item.separacaoManual && (
                               <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-sans font-semibold text-[9px]">
@@ -1100,52 +1329,87 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                             )}
                           </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
+                    )}
 
-                    {/* 2. Qtd do Pacote (Coluna Congelada 2) */}
-                    <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs sticky left-[240px] bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[80px] min-w-[80px] max-w-[80px] shadow-xs">
-                      <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/60 font-bold text-slate-700 dark:text-slate-300 text-[11px]" title={`Embalagem com ${Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1} peças`}>
-                        {Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1}
-                      </span>
-                    </td>
+                    {/* 3. Referência de Fábrica (Congelada 3) */}
+                    {isColVisible('refFabrica') && (
+                      <td 
+                        style={{ left: `${getStickyLeft('refFabrica')}px` }}
+                        className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 sticky bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[95px] min-w-[95px] max-w-[95px] shadow-xs"
+                      >
+                        <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300 truncate block" title={`Ref. Fábrica: ${item.codigoFornecedor || 'Não informada'}`}>
+                          {item.codigoFornecedor || '-'}
+                        </span>
+                      </td>
+                    )}
 
-                    {/* 3. Total Comprado */}
-                    <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-emerald-600 dark:text-emerald-400 text-xs">
-                      {item.qtdTotalUnidades.toLocaleString('pt-BR')}
-                    </td>
+                    {/* 4. Preço de Venda Sugerido / PDV (Congelada 4) */}
+                    {isColVisible('pdv') && (
+                      <td 
+                        style={{ left: `${getStickyLeft('pdv')}px` }}
+                        className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 sticky bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[80px] min-w-[80px] max-w-[80px] shadow-xs"
+                      >
+                        <span className="font-mono text-xs font-bold text-slate-900 dark:text-white" title={`Preço PDV Alvo: R$ ${item.pdvAlvo ? Number(item.pdvAlvo).toFixed(2).replace('.', ',') : '-'}`}>
+                          {item.pdvAlvo && Number(item.pdvAlvo) > 0 ? `R$ ${Number(item.pdvAlvo).toFixed(2).replace('.', ',')}` : '-'}
+                        </span>
+                      </td>
+                    )}
 
-                    {/* 4. Estoque CD */}
-                    <td className="py-2 px-2 text-center border-r border-slate-100 dark:border-slate-800">
-                      <input
-                        type="number"
-                        min="0"
-                        max={item.qtdTotalUnidades}
-                        value={status.reserveStockUnits === 0 ? '' : status.reserveStockUnits}
-                        placeholder="0"
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => handleUpdateItemReserveUnits(item, parseFloat(e.target.value) || 0)}
-                        className="w-12 h-7 px-1 text-center font-mono font-bold text-xs rounded-lg border border-amber-300 bg-amber-50/50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700 outline-hidden focus:ring-2 focus:ring-amber-500"
-                        title="Quantidade de unidades guardadas no Estoque Central"
-                      />
-                    </td>
+                    {/* 5. Qtd do Pacote (Congelada 5) */}
+                    {isColVisible('qtdPac') && (
+                      <td 
+                        style={{ left: `${getStickyLeft('qtdPac')}px` }}
+                        className="py-2 px-2 text-center font-mono font-bold border-r border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs sticky bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[80px] min-w-[80px] max-w-[80px] shadow-xs"
+                      >
+                        <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/60 font-bold text-slate-700 dark:text-slate-300 text-[11px]" title={`Embalagem com ${Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1} peças`}>
+                          {Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1}
+                        </span>
+                      </td>
+                    )}
 
-                    {/* 5. Lojas */}
-                    <td className={`py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-xs ${
-                      status.isOverAllocated 
-                        ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/50' 
-                        : 'text-slate-700 dark:text-slate-300'
-                    }`}>
-                      {status.allocatedUnits.toLocaleString('pt-BR')}
-                      {status.isOverAllocated && (
-                        <div className="text-[9px] font-bold text-rose-600 mt-0.5">
-                          +{status.excessUnits}
-                        </div>
-                      )}
-                    </td>
+                    {/* 6. Total Comprado */}
+                    {isColVisible('comprado') && (
+                      <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-emerald-600 dark:text-emerald-400 text-xs min-w-[75px]">
+                        {item.qtdTotalUnidades.toLocaleString('pt-BR')}
+                      </td>
+                    )}
 
-                    {/* 6. Células de Cada Loja */}
-                    {activeStores.map(store => {
+                    {/* 7. Estoque CD */}
+                    {isColVisible('estoqueCd') && (
+                      <td className="py-2 px-2 text-center border-r border-slate-100 dark:border-slate-800 min-w-[85px]">
+                        <input
+                          type="number"
+                          min="0"
+                          max={item.qtdTotalUnidades}
+                          value={status.reserveStockUnits === 0 ? '' : status.reserveStockUnits}
+                          placeholder="0"
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => handleUpdateItemReserveUnits(item, parseFloat(e.target.value) || 0)}
+                          className="w-12 h-7 px-1 text-center font-mono font-bold text-xs rounded-lg border border-amber-300 bg-amber-50/50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700 outline-hidden focus:ring-2 focus:ring-amber-500"
+                          title="Quantidade de unidades guardadas no Estoque Central"
+                        />
+                      </td>
+                    )}
+
+                    {/* 8. Lojas */}
+                    {isColVisible('lojasTotal') && (
+                      <td className={`py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-xs min-w-[70px] ${
+                        status.isOverAllocated 
+                          ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/50' 
+                          : 'text-slate-700 dark:text-slate-300'
+                      }`}>
+                        {status.allocatedUnits.toLocaleString('pt-BR')}
+                        {status.isOverAllocated && (
+                          <div className="text-[9px] font-bold text-rose-600 mt-0.5">
+                            +{status.excessUnits}
+                          </div>
+                        )}
+                      </td>
+                    )}
+
+                    {/* 9..N Células de Cada Loja */}
+                    {activeStores.filter(s => isColVisible(`store_${s.id}`)).map(store => {
                       const rawAllocUnits = item.separacaoLojas?.[store.id] || 0;
                       
                       const avariaInfo = avariasMap.get(`${item.id}_${store.id}`);
@@ -1199,27 +1463,76 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             {/* Linha de Totais Gerais (Congelada no Rodapé) */}
             <tfoot className="sticky bottom-0 z-30">
               <tr className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 font-extrabold text-xs text-slate-700 dark:text-slate-300 shadow-xs">
-                <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900 z-40 uppercase text-xs w-[240px] min-w-[240px] max-w-[240px]">
-                  TOTAL GERAL
-                </td>
-                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-400 sticky left-[240px] bg-slate-50 dark:bg-slate-900 z-40 w-[80px] min-w-[80px] max-w-[80px]">
-                  -
-                </td>
-                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-slate-900">
-                  {totalPecasGeralBruto.toLocaleString('pt-BR')}
-                </td>
-                <td className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-                  <div className="inline-block w-12 h-7 leading-7 text-center font-mono font-bold text-xs rounded-lg border border-amber-300 bg-amber-50/50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700">
-                    {totalPecasGuardadasEstoque.toLocaleString('pt-BR')}
-                  </div>
-                </td>
-                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900">
-                  {totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')}
-                </td>
-                {activeStores.map(store => {
+                {/* 1. Foto */}
+                {isColVisible('foto') && (
+                  <td 
+                    style={{ left: `${getStickyLeft('foto')}px` }}
+                    className="py-2.5 px-1.5 text-center border-r border-slate-200 dark:border-slate-700 sticky bg-slate-50 dark:bg-slate-900 z-40 w-[50px] min-w-[50px] max-w-[50px] font-mono text-slate-400"
+                  >
+                    -
+                  </td>
+                )}
+                {/* 2. Descrição */}
+                {isColVisible('produto') && (
+                  <td 
+                    style={{ left: `${getStickyLeft('produto')}px` }}
+                    className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 sticky bg-slate-50 dark:bg-slate-900 z-40 uppercase text-xs w-[220px] min-w-[220px] max-w-[220px]"
+                  >
+                    TOTAL GERAL
+                  </td>
+                )}
+                {/* 3. Ref Fábrica */}
+                {isColVisible('refFabrica') && (
+                  <td 
+                    style={{ left: `${getStickyLeft('refFabrica')}px` }}
+                    className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-400 sticky bg-slate-50 dark:bg-slate-900 z-40 w-[95px] min-w-[95px] max-w-[95px]"
+                  >
+                    -
+                  </td>
+                )}
+                {/* 4. PDV */}
+                {isColVisible('pdv') && (
+                  <td 
+                    style={{ left: `${getStickyLeft('pdv')}px` }}
+                    className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-400 sticky bg-slate-50 dark:bg-slate-900 z-40 w-[80px] min-w-[80px] max-w-[80px]"
+                  >
+                    -
+                  </td>
+                )}
+                {/* 5. Qtd no Pac */}
+                {isColVisible('qtdPac') && (
+                  <td 
+                    style={{ left: `${getStickyLeft('qtdPac')}px` }}
+                    className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-400 sticky bg-slate-50 dark:bg-slate-900 z-40 w-[80px] min-w-[80px] max-w-[80px]"
+                  >
+                    -
+                  </td>
+                )}
+                {/* 6. Total Comprado */}
+                {isColVisible('comprado') && (
+                  <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-slate-900 min-w-[75px]">
+                    {totalPecasGeralBruto.toLocaleString('pt-BR')}
+                  </td>
+                )}
+                {/* 7. Estoque CD */}
+                {isColVisible('estoqueCd') && (
+                  <td className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 min-w-[85px]">
+                    <div className="inline-block w-12 h-7 leading-7 text-center font-mono font-bold text-xs rounded-lg border border-amber-300 bg-amber-50/50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700">
+                      {totalPecasGuardadasEstoque.toLocaleString('pt-BR')}
+                    </div>
+                  </td>
+                )}
+                {/* 8. Lojas */}
+                {isColVisible('lojasTotal') && (
+                  <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 min-w-[70px]">
+                    {totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')}
+                  </td>
+                )}
+                {/* 9..N Lojas */}
+                {activeStores.filter(s => isColVisible(`store_${s.id}`)).map(store => {
                   const somaLojaUnidades = order.items.reduce((acc, item) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);
                   return (
-                    <td key={store.id} className="py-2.5 px-2 text-center font-mono border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                    <td key={store.id} className="py-2.5 px-2 text-center font-mono border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 min-w-[60px]">
                       <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                         {somaLojaUnidades.toLocaleString('pt-BR')}
                       </div>
@@ -1231,6 +1544,184 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
           </table>
         </div>
+
+        {/* Portal com Dropdown Flutuante de Configuração de Colunas */}
+        {isColumnsDropdownOpen && columnsCoords && createPortal(
+          <div
+            ref={columnsDropdownRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              top: `${columnsCoords.top}px`,
+              left: `${columnsCoords.left}px`,
+              zIndex: 999999
+            }}
+            className="w-72 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-3 text-left font-sans normal-case tracking-normal animate-in fade-in slide-in-from-top-2 duration-150"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-white">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Colunas da Grade</span>
+              </div>
+              <span className="text-[10px] font-mono text-slate-400">
+                {SEPARATION_BASE_COLUMNS.filter(c => isColVisible(c.key)).length + activeStores.filter(s => isColVisible(`store_${s.id}`)).length}/{SEPARATION_BASE_COLUMNS.length + activeStores.length}
+              </span>
+            </div>
+
+            {/* Abas: Gerais vs Lojas */}
+            <div className="flex items-center gap-1 p-0.5 mb-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setColumnsTab('geral')}
+                className={`flex-1 py-1 px-2 rounded-md transition text-center cursor-pointer ${
+                  columnsTab === 'geral' 
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs' 
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+              >
+                Gerais ({SEPARATION_BASE_COLUMNS.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setColumnsTab('lojas')}
+                className={`flex-1 py-1 px-2 rounded-md transition text-center cursor-pointer ${
+                  columnsTab === 'lojas' 
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs' 
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+              >
+                Filiais ({activeStores.length})
+              </button>
+            </div>
+
+            {/* Lista de Caixas de Seleção */}
+            <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+              {columnsTab === 'geral' ? (
+                <>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-0.5">
+                    Dados do Produto
+                  </div>
+                  {SEPARATION_BASE_COLUMNS.filter(c => c.category === 'produto').map(col => {
+                    const isVisible = isColVisible(col.key);
+                    return (
+                      <label
+                        key={col.key}
+                        className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer text-xs text-slate-700 dark:text-slate-300 transition"
+                      >
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isVisible}
+                            onChange={() => toggleColumnVisibility(col.key)}
+                            className="rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                          <span className={isVisible ? 'font-medium text-slate-900 dark:text-white' : 'text-slate-400'}>
+                            {col.label}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 pt-2 py-0.5 border-t border-slate-100 dark:border-slate-800">
+                    Balanço Geral
+                  </div>
+                  {SEPARATION_BASE_COLUMNS.filter(c => c.category === 'balanco').map(col => {
+                    const isVisible = isColVisible(col.key);
+                    return (
+                      <label
+                        key={col.key}
+                        className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer text-xs text-slate-700 dark:text-slate-300 transition"
+                      >
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isVisible}
+                            onChange={() => toggleColumnVisibility(col.key)}
+                            className="rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                          <span className={isVisible ? 'font-medium text-slate-900 dark:text-white' : 'text-slate-400'}>
+                            {col.label}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between px-2 py-1 mb-1 bg-slate-50 dark:bg-slate-800/50 rounded text-[11px]">
+                    <span className="text-slate-500 text-[10px]">
+                      Visíveis: {activeStores.filter(s => isColVisible(`store_${s.id}`)).length}/{activeStores.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAllStoresVisibility(true)}
+                        className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
+                      >
+                        Todas
+                      </button>
+                      <span className="text-slate-300 dark:text-slate-600">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setAllStoresVisibility(false)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+                      >
+                        Nenhuma
+                      </button>
+                    </div>
+                  </div>
+                  {activeStores.map(store => {
+                    const isVisible = isColVisible(`store_${store.id}`);
+                    return (
+                      <label
+                        key={store.id}
+                        className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer text-xs text-slate-700 dark:text-slate-300 transition"
+                      >
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isVisible}
+                            onChange={() => toggleColumnVisibility(`store_${store.id}`)}
+                            className="rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                          <span className={isVisible ? 'font-medium text-slate-900 dark:text-white' : 'text-slate-400'}>
+                            {store.shortName || store.name}
+                          </span>
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono font-bold">
+                          {store.cluster}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+              <button
+                type="button"
+                onClick={resetColumns}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-1 cursor-pointer transition"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Restaurar Padrão
+              </button>
+              <button
+                type="button"
+                onClick={showAllColumns}
+                className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
+              >
+                Marcar Todas
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
 
       {/* 5. Bloco de Apontamento de Doca & Registro de Avarias */}

@@ -29,10 +29,11 @@ class ExportController {
       }
       const order = bodyData.order || bodyData;
       const stores = bodyData.stores || order.storeConfigs || [];
+      const visibleColumns = bodyData.visibleColumns || {};
       const type = req.query.type || bodyData.type || order.exportType || 'order';
 
       const { buffer, filename } = (type === 'separation')
-        ? exportService.generateSeparationPdf(order, stores)
+        ? exportService.generateSeparationPdf(order, stores, visibleColumns)
         : exportService.generateCommercialOrderPdf(order);
 
       res.setHeader('Content-Type', 'application/pdf');
@@ -51,8 +52,9 @@ class ExportController {
       }
       const order = bodyData.order || bodyData;
       const stores = bodyData.stores || order.storeConfigs || [];
+      const visibleColumns = bodyData.visibleColumns || {};
 
-      const { buffer, filename } = exportService.generateSeparationPdf(order, stores);
+      const { buffer, filename } = exportService.generateSeparationPdf(order, stores, visibleColumns);
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

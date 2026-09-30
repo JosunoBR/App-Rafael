@@ -2662,8 +2662,8 @@ export function App() {
     }
   };
 
-  const handleExportSeparationPDF = () => {
-    exportRomaneioPDF(order, storeConfigs);
+  const handleExportSeparationPDF = (visibleColumns?: Record<string, boolean>) => {
+    exportRomaneioPDF(order, storeConfigs, visibleColumns);
     showToast('Romaneio PDF de Separação gerado com sucesso!', 'success');
   };
 

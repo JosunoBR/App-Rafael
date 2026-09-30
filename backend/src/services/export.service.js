@@ -654,7 +654,9 @@ class ExportService {
   // 2. PDF DO ROMANEIO DE SEPARAÇÃO (DOCA / 20 LOJAS)
   // Formato: A4 Paisagem | COM AS 20 LOJAS E CONFERÊNCIA
   // ==========================================
-  generateSeparationPdf(order, customStores = []) {
+  generateSeparationPdf(order, customStores = [], visibleColumns = {}) {
+    const isColVisible = (key) => visibleColumns[key] !== false;
+
     const doc = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
@@ -729,26 +731,53 @@ class ExportService {
     doc.text(`Previsão de Entrega: ${dataEntrega}`, 209, 21);
 
     // =========================================================================
-    // 2. BANNER DE ALERTA OBRIGATÓRIO (Âmbar/Amarelo Oficial ALS 10)
+    // 2. CARD DE DADOS: FORNECEDOR
     // =========================================================================
-    doc.setFillColor(254, 243, 199); // Amber-100
-    doc.setDrawColor(245, 158, 11); // Amber-500
-    doc.setLineWidth(0.3);
-    doc.roundedRect(10, 27, 277, 6.5, 1, 1, 'FD');
+    const cardY = 27.5;
+    const cardW = 277;
 
-    doc.setTextColor(146, 64, 14); // Amber-800
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.2);
-    doc.text('! ATENÇÃO OBRIGATÓRIA: AGENDAR ENTREGA COM ROBERTA: (42) 9 9136-5009  |  DESCARREGAMENTO POR CONTA DO FORNECEDOR', 14, 31.5);
+    // Coluna 1 (Esquerda) e Coluna 2 (Direita)
+    const col1X = 13;
+    const col2X = 160;
+    const col1MaxW = col2X - col1X - 6; // ~141 mm
+    const col2MaxW = cardW + 10 - col2X - 3; // ~124 mm
 
-    // =========================================================================
-    // 3. CARDS DE DADOS: COMPRADOR & FORNECEDOR (Lado a Lado)
-    // =========================================================================
-    const cardY = 35.5;
-    const cardH = 28.5;
-    const cardW = 136;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(15, 23, 42);
 
-    // Card 1: Comprador / Faturamento (Esquerda)
+    const col1Fields = [
+      `Fornecedor: ${fornecedorNome}`,
+      `Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`
+    ];
+    const col1Lines = [];
+    col1Fields.forEach(f => {
+      const split = doc.splitTextToSize(f, col1MaxW);
+      if (Array.isArray(split)) {
+        split.forEach((s, idx) => col1Lines.push(idx > 0 ? `  ${s.trim()}` : s.trim()));
+      } else if (split) {
+        col1Lines.push(split);
+      }
+    });
+
+    const col2Fields = [
+      `Tipo de Frete: ${tipoFrete}`
+    ];
+    const col2Lines = [];
+    col2Fields.forEach(f => {
+      const split = doc.splitTextToSize(f, col2MaxW);
+      if (Array.isArray(split)) {
+        split.forEach((s, idx) => col2Lines.push(idx > 0 ? `  ${s.trim()}` : s.trim()));
+      } else if (split) {
+        col2Lines.push(split);
+      }
+    });
+
+    const maxRomaneioLines = Math.max(2, col1Lines.length, col2Lines.length);
+    const romaneioLineStep = 3.8;
+    const neededRomaneioH = 8.5 + (maxRomaneioLines - 1) * romaneioLineStep + 2.5;
+    const cardH = Math.max(15, neededRomaneioH);
+
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(203, 213, 225);
     doc.roundedRect(10, cardY, cardW, cardH, 1.5, 1.5, 'FD');
@@ -758,110 +787,226 @@ class ExportService {
     doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.2);
-    doc.text('DADOS DA EMPRESA COMPRADORA & FATURAMENTO:', 13, cardY + 3.8);
+    doc.text('DADOS DO FORNECEDOR:', 13, cardY + 3.8);
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text('Razão Social: ALS 10 BAZAR E BRINQUEDOS LTDA', 13, cardY + 8.5);
-    doc.text('CNPJ: 37.144.240/0001-70       IE: 90847822-35', 13, cardY + 12.1);
-    doc.text('End. Entrega: Av. José Galiciolli, 152 – BR153 – Centro – Irati – PR (CEP: 84500-009)', 13, cardY + 15.7);
-    doc.text('E-mail para Boletos e XML: als.conecta@gmail.com', 13, cardY + 19.3);
-    doc.text('Compras: (55) 9 9659-6315 (Rafael)  |  Faturamento: (55) 9 99691-0247 (Ketlyn)', 13, cardY + 22.9);
-    doc.text('Financeiro: (55) 9 3618-5609 (Bruna)', 13, cardY + 26.5);
 
-    // Card 2: Fornecedor & Comercial (Direita)
-    const card2X = 151;
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(card2X, cardY, cardW, cardH, 1.5, 1.5, 'FD');
-
-    doc.setFillColor(241, 245, 249);
-    doc.rect(card2X + 0.2, cardY + 0.2, cardW - 0.4, 5, 'F');
-    doc.setTextColor(30, 41, 59);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.2);
-    doc.text('DADOS DO FORNECEDOR & CONDIÇÕES COMERCIAIS:', card2X + 3, cardY + 3.8);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Fornecedor: ${fornecedorNome}`, card2X + 3, cardY + 8.5);
-    doc.text(`Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`, card2X + 3, cardY + 12.1);
-
-    const offValue = Number(order.header?.percentualDescontoOff || 0);
-    doc.text(`% OFF (Desconto Negociado): ${offValue}%`, card2X + 3, cardY + 15.7);
-
-    doc.text(`Condição de Pagto: ${condicaoPagamento}`, card2X + 3, cardY + 19.3);
-    doc.text(`Forma de Pagto: ${formaPagamento}`, card2X + 3, cardY + 22.9);
-    doc.text(`Tipo de Frete: ${tipoFrete}`, card2X + 3, cardY + 26.5);
-
-    // =========================================================================
-    // 4. TABELA DE SEPARAÇÃO (20 LOJAS)
-    // =========================================================================
-    const headCols = [
-      'Cód / Descrição', 
-      'Total Compra',
-      'Estoque CD',
-      'Total Lojas', 
-      ...activeStores.map(s => s.shortName || s.name)
-    ];
-
-    const bodyRows = (order.items || []).map(item => {
-      let totalItemAvarias = 0;
-      let rawAllocTotal = 0;
-      const storeCols = activeStores.map(s => {
-        const rawAlloc = item.separacaoLojas?.[s.id] || 0;
-        rawAllocTotal += rawAlloc;
-        const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
-        totalItemAvarias += avUnits;
-        const effective = Math.max(0, rawAlloc - avUnits);
-
-        if (avUnits > 0) {
-          return `${effective} (-${avUnits})`;
-        }
-        return effective > 0 ? effective.toLocaleString('pt-BR') : '-';
-      });
-
-      const reserveCD = Math.max(0, (Number(item.qtdTotalUnidades) || 0) - rawAllocTotal);
-      const totalLiquidoLojas = Math.max(0, rawAllocTotal - totalItemAvarias);
-      const codIdent = item.codigoInterno || item.codigo || '';
-
-      return [
-        `${codIdent}\n${item.descricao || ''}`,
-        Number(item.qtdTotalUnidades || 0).toLocaleString('pt-BR'),
-        reserveCD > 0 ? reserveCD.toLocaleString('pt-BR') : '-',
-        totalLiquidoLojas > 0 ? totalLiquidoLojas.toLocaleString('pt-BR') : '-',
-        ...storeCols
-      ];
+    col1Lines.forEach((lineText, idx) => {
+      doc.text(lineText, col1X, cardY + 8.5 + idx * romaneioLineStep);
     });
 
-    // Totais do Rodapé
-    const totaisLojas = activeStores.map(s => {
-      const somaLoja = (order.items || []).reduce((acc, item) => {
-        const raw = item.separacaoLojas?.[s.id] || 0;
-        const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
-        return acc + Math.max(0, raw - avUnits);
-      }, 0);
-      return somaLoja > 0 ? somaLoja.toLocaleString('pt-BR') : '0';
+    col2Lines.forEach((lineText, idx) => {
+      doc.text(lineText, col2X, cardY + 8.5 + idx * romaneioLineStep);
     });
 
+    // =========================================================================
+    // 3. TABELA DE SEPARAÇÃO (DINÂMICA CONFORME COLUNAS VISÍVEIS)
+    // =========================================================================
+    // Pré-cálculo dos totais gerais
     const totalGeralCompra = (order.items || []).reduce((acc, item) => acc + (Number(item.qtdTotalUnidades) || 0), 0);
     const totalGeralEstoque = (order.items || []).reduce((acc, item) => {
       const raw = activeStores.reduce((sum, s) => sum + (Number(item.separacaoLojas?.[s.id]) || 0), 0);
       return acc + Math.max(0, (Number(item.qtdTotalUnidades) || 0) - raw);
     }, 0);
-    const totalGeralPecasEfetivas = totaisLojas.reduce((acc, val) => acc + (parseInt(val.replace(/\D/g, '')) || 0), 0);
-    const footerRow = [
-      'TOTAL GERAL EFETIVO', 
-      totalGeralCompra.toLocaleString('pt-BR'),
-      totalGeralEstoque.toLocaleString('pt-BR'),
-      totalGeralPecasEfetivas.toLocaleString('pt-BR'), 
-      ...totaisLojas
-    ];
+
+    const totaisLojasMap = new Map();
+    activeStores.forEach(s => {
+      const somaLoja = (order.items || []).reduce((acc, item) => {
+        const raw = item.separacaoLojas?.[s.id] || 0;
+        const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
+        return acc + Math.max(0, raw - avUnits);
+      }, 0);
+      totaisLojasMap.set(s.id, somaLoja);
+    });
+    const totalGeralPecasEfetivas = Array.from(totaisLojasMap.values()).reduce((acc, val) => acc + val, 0);
+
+    const dynamicCols = [];
+
+    // 1. Foto
+    if (isColVisible('foto')) {
+      dynamicCols.push({
+        key: 'foto',
+        header: 'Foto',
+        cellWidth: 10,
+        halign: 'center',
+        getValue: (item) => (item.fotoUrl && typeof item.fotoUrl === 'string' && item.fotoUrl.startsWith('data:image') ? '' : '-'),
+        getFooter: () => '-'
+      });
+    }
+
+    // 2. Produto (Cód / Descrição)
+    if (isColVisible('produto')) {
+      const hasExtraCols = isColVisible('refFabrica') || isColVisible('pdv');
+      dynamicCols.push({
+        key: 'produto',
+        header: 'Cód / Descrição',
+        cellWidth: hasExtraCols ? 42 : 55,
+        halign: 'left',
+        fontStyle: 'bold',
+        getValue: (item) => {
+          const cod = item.codigoInterno || item.codigo || '';
+          const desc = item.descricao || '';
+          return cod ? `${cod}\n${desc}` : desc;
+        },
+        getFooter: () => 'TOTAL GERAL EFETIVO'
+      });
+    }
+
+    // 3. Referência de Fábrica
+    if (isColVisible('refFabrica')) {
+      dynamicCols.push({
+        key: 'refFabrica',
+        header: 'Ref. Fábrica',
+        cellWidth: 16,
+        halign: 'center',
+        getValue: (item) => item.codigoFornecedor || '-',
+        getFooter: () => '-'
+      });
+    }
+
+    // 4. Preço PDV Alvo
+    if (isColVisible('pdv')) {
+      dynamicCols.push({
+        key: 'pdv',
+        header: 'PDV',
+        cellWidth: 14,
+        halign: 'center',
+        getValue: (item) => (item.pdvAlvo && Number(item.pdvAlvo) > 0 ? `R$ ${Number(item.pdvAlvo).toFixed(2).replace('.', ',')}` : '-'),
+        getFooter: () => '-'
+      });
+    }
+
+    // 5. Qtd por Pacote
+    if (isColVisible('qtdPac')) {
+      dynamicCols.push({
+        key: 'qtdPac',
+        header: 'Qtd Pac',
+        cellWidth: 12,
+        halign: 'center',
+        getValue: (item) => `${Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1} un`,
+        getFooter: () => '-'
+      });
+    }
+
+    // 6. Total Compra
+    if (isColVisible('comprado')) {
+      dynamicCols.push({
+        key: 'comprado',
+        header: 'Total Compra',
+        cellWidth: 12,
+        halign: 'center',
+        fontStyle: 'bold',
+        fillColor: [241, 245, 249],
+        getValue: (item) => Number(item.qtdTotalUnidades || 0).toLocaleString('pt-BR'),
+        getFooter: () => totalGeralCompra.toLocaleString('pt-BR')
+      });
+    }
+
+    // 7. Estoque CD
+    if (isColVisible('estoqueCd')) {
+      dynamicCols.push({
+        key: 'estoqueCd',
+        header: 'Estoque CD',
+        cellWidth: 12,
+        halign: 'center',
+        fontStyle: 'bold',
+        fillColor: [254, 243, 199],
+        textColor: [146, 64, 14],
+        getValue: (item) => {
+          const rawAllocTotal = activeStores.reduce((sum, s) => sum + (Number(item.separacaoLojas?.[s.id]) || 0), 0);
+          const reserveCD = Math.max(0, (Number(item.qtdTotalUnidades) || 0) - rawAllocTotal);
+          return reserveCD > 0 ? reserveCD.toLocaleString('pt-BR') : '-';
+        },
+        getFooter: () => totalGeralEstoque.toLocaleString('pt-BR')
+      });
+    }
+
+    // 8. Total Lojas
+    if (isColVisible('lojasTotal')) {
+      dynamicCols.push({
+        key: 'lojasTotal',
+        header: 'Total Lojas',
+        cellWidth: 12,
+        halign: 'center',
+        fontStyle: 'bold',
+        fillColor: [236, 253, 245],
+        textColor: [6, 95, 70],
+        getValue: (item) => {
+          let totalItemAvarias = 0;
+          let rawAllocTotal = 0;
+          activeStores.forEach(s => {
+            const rawAlloc = item.separacaoLojas?.[s.id] || 0;
+            rawAllocTotal += rawAlloc;
+            const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
+            totalItemAvarias += avUnits;
+          });
+          const totalLiquidoLojas = Math.max(0, rawAllocTotal - totalItemAvarias);
+          return totalLiquidoLojas > 0 ? totalLiquidoLojas.toLocaleString('pt-BR') : '-';
+        },
+        getFooter: () => totalGeralPecasEfetivas.toLocaleString('pt-BR')
+      });
+    }
+
+    // 9. Lojas Ativas (Filtradas por isColVisible('store_' + s.id))
+    activeStores.forEach(s => {
+      const storeKey = `store_${s.id}`;
+      if (isColVisible(storeKey)) {
+        dynamicCols.push({
+          key: storeKey,
+          header: s.shortName || s.name,
+          halign: 'center',
+          getValue: (item) => {
+            const rawAlloc = item.separacaoLojas?.[s.id] || 0;
+            const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
+            const effective = Math.max(0, rawAlloc - avUnits);
+            if (avUnits > 0) {
+              return `${effective} (-${avUnits})`;
+            }
+            return effective > 0 ? effective.toLocaleString('pt-BR') : '-';
+          },
+          getFooter: () => {
+            const soma = totaisLojasMap.get(s.id) || 0;
+            return soma > 0 ? soma.toLocaleString('pt-BR') : '0';
+          }
+        });
+      }
+    });
+
+    if (dynamicCols.length === 0) {
+      dynamicCols.push({
+        key: 'produto',
+        header: 'Cód / Descrição',
+        halign: 'left',
+        fontStyle: 'bold',
+        getValue: (item) => item.descricao || item.codigo || '',
+        getFooter: () => 'TOTAL GERAL'
+      });
+    }
+
+    const headCols = dynamicCols.map(c => c.header);
+    const bodyRows = (order.items || []).map(item => dynamicCols.map(c => c.getValue(item)));
+    const footerRow = dynamicCols.map(c => c.getFooter());
+
+    if (!isColVisible('produto') && footerRow.length > 0) {
+      footerRow[0] = 'TOTAL GERAL';
+    }
+
+    const columnStyles = {};
+    const fotoColIdx = dynamicCols.findIndex(c => c.key === 'foto');
+
+    dynamicCols.forEach((col, idx) => {
+      const style = { halign: col.halign };
+      if (col.cellWidth) style.cellWidth = col.cellWidth;
+      if (col.fontStyle) style.fontStyle = col.fontStyle;
+      if (col.fillColor) style.fillColor = col.fillColor;
+      if (col.textColor) style.textColor = col.textColor;
+      columnStyles[idx] = style;
+    });
 
     autoTable(doc, {
-      startY: 66,
+      startY: cardY + cardH + 2.5,
       margin: { left: 10, right: 10, bottom: 14, top: 12 },
       head: [headCols],
       body: [...bodyRows, footerRow],
@@ -882,17 +1027,25 @@ class ExportService {
         halign: 'center',
         valign: 'middle'
       },
-      columnStyles: {
-        0: { halign: 'left', fontStyle: 'bold', cellWidth: 42 },
-        1: { fillColor: [241, 245, 249], fontStyle: 'bold', halign: 'center', cellWidth: 12 },
-        2: { fillColor: [254, 243, 199], fontStyle: 'bold', halign: 'center', textColor: [146, 64, 14], cellWidth: 12 },
-        3: { fillColor: [236, 253, 245], fontStyle: 'bold', halign: 'center', textColor: [6, 95, 70], cellWidth: 12 }
-      },
+      columnStyles,
       didParseCell: (data) => {
         if (data.row.index === bodyRows.length) {
           data.cell.styles.fillColor = [209, 250, 229];
           data.cell.styles.fontStyle = 'bold';
           data.cell.styles.textColor = [6, 78, 59];
+        }
+      },
+      didDrawCell: (data) => {
+        if (fotoColIdx !== -1 && data.column.index === fotoColIdx && data.section === 'body' && data.row.index < (order.items || []).length) {
+          const it = (order.items || [])[data.row.index];
+          if (it?.fotoUrl && typeof it.fotoUrl === 'string' && it.fotoUrl.startsWith('data:image')) {
+            try {
+              const dim = Math.min(data.cell.width - 1.6, data.cell.height - 1.6);
+              const x = data.cell.x + (data.cell.width - dim) / 2;
+              const y = data.cell.y + (data.cell.height - dim) / 2;
+              doc.addImage(it.fotoUrl, 'JPEG', x, y, dim, dim);
+            } catch (err) {}
+          }
         }
       }
     });
@@ -966,9 +1119,9 @@ class ExportService {
   }
 
   // Wrapper de retrocompatibilidade
-  generatePdf(order, customStores = [], type = 'order') {
+  generatePdf(order, customStores = [], type = 'order', visibleColumns = {}) {
     if (type === 'separation' || order.exportType === 'separation') {
-      return this.generateSeparationPdf(order, customStores);
+      return this.generateSeparationPdf(order, customStores, visibleColumns);
     }
     return this.generateCommercialOrderPdf(order);
   }

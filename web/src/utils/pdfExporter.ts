@@ -695,7 +695,22 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
 // 2. EXPORTAÇÃO DO ROMANEIO DE SEPARAÇÃO (PARA DOCA & 20 LOJAS)
 // Formato: A4 Paisagem (Landscape) | GRADE DAS 20 LOJAS, AVARIAS E DOCA
 // =========================================================================
-export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: StoreConfig[]) {
+export function exportRomaneioPDF(
+  rawOrder: PurchaseOrder, 
+  fallbackStores?: StoreConfig[], 
+  visibleColumnsParam?: Record<string, boolean>
+) {
+  let visibleColumns: Record<string, boolean> = visibleColumnsParam || {};
+  if (!visibleColumnsParam) {
+    try {
+      const saved = localStorage.getItem('mega12_separation_columns_visibility');
+      if (saved) {
+        visibleColumns = JSON.parse(saved);
+      }
+    } catch (e) {}
+  }
+  const isColVisible = (key: string): boolean => visibleColumns[key] !== false;
+
   const order: PurchaseOrder = {
     ...rawOrder,
     items: (rawOrder.items || []).filter(it => Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoInterno?.trim() || it.codigoFornecedor?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0))
@@ -780,41 +795,24 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     doc.text(`Previsão de Entrega: ${dataEntrega}`, 209, 21);
 
     // =========================================================================
-    // 2. BANNER DE ALERTA OBRIGATÓRIO (Âmbar/Amarelo Oficial ALS 10)
+    // 2. CARD DE DADOS: FORNECEDOR
     // =========================================================================
-    doc.setFillColor(254, 243, 199); // Amber-100
-    doc.setDrawColor(245, 158, 11); // Amber-500
-    doc.setLineWidth(0.3);
-    doc.roundedRect(10, 27, 277, 6.5, 1, 1, 'FD');
-
-    doc.setTextColor(146, 64, 14); // Amber-800
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.2);
-    doc.text('! ATENÇÃO OBRIGATÓRIA: AGENDAR ENTREGA COM ROBERTA: (42) 9 9136-5009  |  DESCARREGAMENTO POR CONTA DO FORNECEDOR', 14, 31.5);
-
-    // =========================================================================
-    // 3. CARD DE DADOS: FORNECEDOR & CONDIÇÕES COMERCIAIS
-    // =========================================================================
-    const cardY = 35.5;
+    const cardY = 27.5;
     const cardW = 277;
-    const baseCardH = 20;
 
     // Coluna 1 (Esquerda) e Coluna 2 (Direita)
-    const offValue = Number(order.header?.percentualDescontoOff || 0);
     const col1X = 13;
-    const col2X = 150;
-    const col1MaxW = col2X - col1X - 4; // ~133 mm
-    const col2MaxW = cardW + 10 - col2X - 3; // ~134 mm
+    const col2X = 160;
+    const col1MaxW = col2X - col1X - 6; // ~141 mm
+    const col2MaxW = cardW + 10 - col2X - 3; // ~124 mm
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
 
-    const offPercentSeparacao = order.header?.percentualNota !== undefined ? order.header.percentualNota : 100;
     const col1Fields = [
       `Fornecedor: ${fornecedorNome}`,
-      `Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`,
-      `OFF %: ${offPercentSeparacao}%`
+      `Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`
     ];
     const col1Lines: string[] = [];
     col1Fields.forEach(f => {
@@ -827,8 +825,6 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     });
 
     const col2Fields = [
-      `Condição de Pagto: ${condicaoPagamento}`,
-      `Forma de Pagto: ${formaPagamento}`,
       `Tipo de Frete: ${tipoFrete}`
     ];
     const col2Lines: string[] = [];
@@ -841,10 +837,10 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
       }
     });
 
-    const maxRomaneioLines = Math.max(3, col1Lines.length, col2Lines.length);
-    const romaneioLineStep = maxRomaneioLines > 3 ? 3.2 : 3.8;
-    const neededRomaneioH = 8.5 + (maxRomaneioLines - 1) * romaneioLineStep + 2.3;
-    const cardH = Math.max(baseCardH, neededRomaneioH);
+    const maxRomaneioLines = Math.max(2, col1Lines.length, col2Lines.length);
+    const romaneioLineStep = 3.8;
+    const neededRomaneioH = 8.5 + (maxRomaneioLines - 1) * romaneioLineStep + 2.5;
+    const cardH = Math.max(15, neededRomaneioH);
 
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(203, 213, 225);
@@ -855,7 +851,7 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.2);
-    doc.text('DADOS DO FORNECEDOR & CONDIÇÕES COMERCIAIS:', 13, cardY + 3.8);
+    doc.text('DADOS DO FORNECEDOR:', 13, cardY + 3.8);
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
@@ -870,68 +866,223 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
     });
 
     // =========================================================================
-    // 4. TABELA DE SEPARAÇÃO (20 LOJAS)
+    // 4. TABELA DE SEPARAÇÃO (DINÂMICA CONFORME COLUNAS VISÍVEIS)
     // =========================================================================
-    const headCols = [
-      'Cód / Descrição', 
-      'Total Compra',
-      'Estoque CD',
-      'Total Lojas', 
-      ...activeStores.map(s => s.shortName || s.name)
-    ];
-
-    const bodyRows = (order.items || []).map(item => {
-      let totalItemAvarias = 0;
-      let rawAllocTotal = 0;
-      const storeCols = activeStores.map(s => {
-        const rawAlloc = item.separacaoLojas?.[s.id] || 0;
-        rawAllocTotal += rawAlloc;
-        const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
-        totalItemAvarias += avUnits;
-        const effective = Math.max(0, rawAlloc - avUnits);
-
-        if (avUnits > 0) {
-          return `${effective} (-${avUnits})`;
-        }
-        return effective > 0 ? effective.toLocaleString('pt-BR') : '-';
-      });
-
-      const reserveCD = Math.max(0, (Number(item.qtdTotalUnidades) || 0) - rawAllocTotal);
-      const totalLiquidoLojas = Math.max(0, rawAllocTotal - totalItemAvarias);
-      const codIdent = item.codigoInterno || item.codigo || '';
-
-      return [
-        `${codIdent}\n${item.descricao || ''}`,
-        Number(item.qtdTotalUnidades || 0).toLocaleString('pt-BR'),
-        reserveCD > 0 ? reserveCD.toLocaleString('pt-BR') : '-',
-        totalLiquidoLojas > 0 ? totalLiquidoLojas.toLocaleString('pt-BR') : '-',
-        ...storeCols
-      ];
-    });
-
-    // Totais do Rodapé
-    const totaisLojas = activeStores.map(s => {
-      const somaLoja = (order.items || []).reduce((acc, item) => {
-        const raw = item.separacaoLojas?.[s.id] || 0;
-        const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
-        return acc + Math.max(0, raw - avUnits);
-      }, 0);
-      return somaLoja > 0 ? somaLoja.toLocaleString('pt-BR') : '0';
-    });
-
+    // Pré-cálculo dos totais gerais
     const totalGeralCompra = (order.items || []).reduce((acc, item) => acc + (Number(item.qtdTotalUnidades) || 0), 0);
     const totalGeralEstoque = (order.items || []).reduce((acc, item) => {
       const raw = activeStores.reduce((sum, s) => sum + (Number(item.separacaoLojas?.[s.id]) || 0), 0);
       return acc + Math.max(0, (Number(item.qtdTotalUnidades) || 0) - raw);
     }, 0);
-    const totalGeralPecasEfetivas = totaisLojas.reduce((acc, val) => acc + (parseInt(val.replace(/\D/g, '')) || 0), 0);
-    const footerRow = [
-      'TOTAL GERAL EFETIVO', 
-      totalGeralCompra.toLocaleString('pt-BR'),
-      totalGeralEstoque.toLocaleString('pt-BR'),
-      totalGeralPecasEfetivas.toLocaleString('pt-BR'), 
-      ...totaisLojas
-    ];
+
+    const totaisLojasMap = new Map<string, number>();
+    activeStores.forEach(s => {
+      const somaLoja = (order.items || []).reduce((acc, item) => {
+        const raw = item.separacaoLojas?.[s.id] || 0;
+        const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
+        return acc + Math.max(0, raw - avUnits);
+      }, 0);
+      totaisLojasMap.set(s.id, somaLoja);
+    });
+    const totalGeralPecasEfetivas = Array.from(totaisLojasMap.values()).reduce((acc, val) => acc + val, 0);
+
+    // Definição das colunas possíveis com checagem de visibilidade
+    interface RomaneioColumnDef {
+      key: string;
+      header: string;
+      cellWidth?: number;
+      halign: 'left' | 'center' | 'right';
+      fontStyle?: 'normal' | 'bold';
+      fillColor?: [number, number, number];
+      textColor?: [number, number, number];
+      getValue: (item: any) => string;
+      getFooter: () => string;
+    }
+
+    const dynamicCols: RomaneioColumnDef[] = [];
+
+    // 1. Foto
+    if (isColVisible('foto')) {
+      dynamicCols.push({
+        key: 'foto',
+        header: 'Foto',
+        cellWidth: 10,
+        halign: 'center',
+        getValue: (item) => (item.fotoUrl && typeof item.fotoUrl === 'string' && item.fotoUrl.startsWith('data:image') ? '' : '-'),
+        getFooter: () => '-'
+      });
+    }
+
+    // 2. Produto (Cód / Descrição)
+    if (isColVisible('produto')) {
+      const hasExtraCols = isColVisible('refFabrica') || isColVisible('pdv');
+      dynamicCols.push({
+        key: 'produto',
+        header: 'Cód / Descrição',
+        cellWidth: hasExtraCols ? 42 : 55,
+        halign: 'left',
+        fontStyle: 'bold',
+        getValue: (item) => {
+          const cod = item.codigoInterno || item.codigo || '';
+          const desc = item.descricao || '';
+          return cod ? `${cod}\n${desc}` : desc;
+        },
+        getFooter: () => 'TOTAL GERAL EFETIVO'
+      });
+    }
+
+    // 3. Referência de Fábrica
+    if (isColVisible('refFabrica')) {
+      dynamicCols.push({
+        key: 'refFabrica',
+        header: 'Ref. Fábrica',
+        cellWidth: 16,
+        halign: 'center',
+        getValue: (item) => item.codigoFornecedor || '-',
+        getFooter: () => '-'
+      });
+    }
+
+    // 4. Preço PDV Alvo
+    if (isColVisible('pdv')) {
+      dynamicCols.push({
+        key: 'pdv',
+        header: 'PDV',
+        cellWidth: 14,
+        halign: 'center',
+        getValue: (item) => (item.pdvAlvo && Number(item.pdvAlvo) > 0 ? `R$ ${Number(item.pdvAlvo).toFixed(2).replace('.', ',')}` : '-'),
+        getFooter: () => '-'
+      });
+    }
+
+    // 5. Qtd por Pacote
+    if (isColVisible('qtdPac')) {
+      dynamicCols.push({
+        key: 'qtdPac',
+        header: 'Qtd Pac',
+        cellWidth: 12,
+        halign: 'center',
+        getValue: (item) => `${Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1} un`,
+        getFooter: () => '-'
+      });
+    }
+
+    // 6. Total Compra
+    if (isColVisible('comprado')) {
+      dynamicCols.push({
+        key: 'comprado',
+        header: 'Total Compra',
+        cellWidth: 12,
+        halign: 'center',
+        fontStyle: 'bold',
+        fillColor: [241, 245, 249],
+        getValue: (item) => Number(item.qtdTotalUnidades || 0).toLocaleString('pt-BR'),
+        getFooter: () => totalGeralCompra.toLocaleString('pt-BR')
+      });
+    }
+
+    // 7. Estoque CD
+    if (isColVisible('estoqueCd')) {
+      dynamicCols.push({
+        key: 'estoqueCd',
+        header: 'Estoque CD',
+        cellWidth: 12,
+        halign: 'center',
+        fontStyle: 'bold',
+        fillColor: [254, 243, 199],
+        textColor: [146, 64, 14],
+        getValue: (item) => {
+          const rawAllocTotal = activeStores.reduce((sum, s) => sum + (Number(item.separacaoLojas?.[s.id]) || 0), 0);
+          const reserveCD = Math.max(0, (Number(item.qtdTotalUnidades) || 0) - rawAllocTotal);
+          return reserveCD > 0 ? reserveCD.toLocaleString('pt-BR') : '-';
+        },
+        getFooter: () => totalGeralEstoque.toLocaleString('pt-BR')
+      });
+    }
+
+    // 8. Total Lojas
+    if (isColVisible('lojasTotal')) {
+      dynamicCols.push({
+        key: 'lojasTotal',
+        header: 'Total Lojas',
+        cellWidth: 12,
+        halign: 'center',
+        fontStyle: 'bold',
+        fillColor: [236, 253, 245],
+        textColor: [6, 95, 70],
+        getValue: (item) => {
+          let totalItemAvarias = 0;
+          let rawAllocTotal = 0;
+          activeStores.forEach(s => {
+            const rawAlloc = item.separacaoLojas?.[s.id] || 0;
+            rawAllocTotal += rawAlloc;
+            const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
+            totalItemAvarias += avUnits;
+          });
+          const totalLiquidoLojas = Math.max(0, rawAllocTotal - totalItemAvarias);
+          return totalLiquidoLojas > 0 ? totalLiquidoLojas.toLocaleString('pt-BR') : '-';
+        },
+        getFooter: () => totalGeralPecasEfetivas.toLocaleString('pt-BR')
+      });
+    }
+
+    // 9. Lojas Ativas (Filtradas por isColVisible('store_' + s.id))
+    activeStores.forEach(s => {
+      const storeKey = `store_${s.id}`;
+      if (isColVisible(storeKey)) {
+        dynamicCols.push({
+          key: storeKey,
+          header: s.shortName || s.name,
+          halign: 'center',
+          getValue: (item) => {
+            const rawAlloc = item.separacaoLojas?.[s.id] || 0;
+            const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
+            const effective = Math.max(0, rawAlloc - avUnits);
+            if (avUnits > 0) {
+              return `${effective} (-${avUnits})`;
+            }
+            return effective > 0 ? effective.toLocaleString('pt-BR') : '-';
+          },
+          getFooter: () => {
+            const soma = totaisLojasMap.get(s.id) || 0;
+            return soma > 0 ? soma.toLocaleString('pt-BR') : '0';
+          }
+        });
+      }
+    });
+
+    // Se nenhuma coluna estiver selecionada (caso extremo), restaura produto e lojas
+    if (dynamicCols.length === 0) {
+      dynamicCols.push({
+        key: 'produto',
+        header: 'Cód / Descrição',
+        halign: 'left',
+        fontStyle: 'bold',
+        getValue: (item) => item.descricao || item.codigo || '',
+        getFooter: () => 'TOTAL GERAL'
+      });
+    }
+
+    const headCols = dynamicCols.map(c => c.header);
+    const bodyRows = (order.items || []).map(item => dynamicCols.map(c => c.getValue(item)));
+    const footerRow = dynamicCols.map(c => c.getFooter());
+
+    // Se a coluna de produto não estiver visível mas houver rodapé, garante que a 1ª coluna tenha o texto de total
+    if (!isColVisible('produto') && footerRow.length > 0) {
+      footerRow[0] = 'TOTAL GERAL';
+    }
+
+    const columnStyles: Record<number, any> = {};
+    const fotoColIdx = dynamicCols.findIndex(c => c.key === 'foto');
+
+    dynamicCols.forEach((col, idx) => {
+      const style: any = { halign: col.halign };
+      if (col.cellWidth) style.cellWidth = col.cellWidth;
+      if (col.fontStyle) style.fontStyle = col.fontStyle;
+      if (col.fillColor) style.fillColor = col.fillColor;
+      if (col.textColor) style.textColor = col.textColor;
+      columnStyles[idx] = style;
+    });
 
     autoTable(doc, {
       startY: cardY + cardH + 2.5,
@@ -955,17 +1106,25 @@ export function exportRomaneioPDF(rawOrder: PurchaseOrder, fallbackStores?: Stor
         halign: 'center',
         valign: 'middle'
       },
-      columnStyles: {
-        0: { halign: 'left', fontStyle: 'bold', cellWidth: 42 },
-        1: { fillColor: [241, 245, 249], fontStyle: 'bold', halign: 'center', cellWidth: 12 },
-        2: { fillColor: [254, 243, 199], fontStyle: 'bold', halign: 'center', textColor: [146, 64, 14], cellWidth: 12 },
-        3: { fillColor: [236, 253, 245], fontStyle: 'bold', halign: 'center', textColor: [6, 95, 70], cellWidth: 12 }
-      },
+      columnStyles,
       didParseCell: (data) => {
         if (data.row.index === bodyRows.length) {
           data.cell.styles.fillColor = [209, 250, 229];
           data.cell.styles.fontStyle = 'bold';
           data.cell.styles.textColor = [6, 78, 59];
+        }
+      },
+      didDrawCell: (data) => {
+        if (fotoColIdx !== -1 && data.column.index === fotoColIdx && data.section === 'body' && data.row.index < (order.items || []).length) {
+          const it = (order.items || [])[data.row.index];
+          if (it?.fotoUrl && typeof it.fotoUrl === 'string' && it.fotoUrl.startsWith('data:image')) {
+            try {
+              const dim = Math.min(data.cell.width - 1.6, data.cell.height - 1.6);
+              const x = data.cell.x + (data.cell.width - dim) / 2;
+              const y = data.cell.y + (data.cell.height - dim) / 2;
+              doc.addImage(it.fotoUrl, 'JPEG', x, y, dim, dim);
+            } catch (err) {}
+          }
         }
       }
     });

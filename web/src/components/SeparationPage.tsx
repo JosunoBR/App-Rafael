@@ -42,7 +42,7 @@ interface SeparationPageProps {
   stores: StoreConfig[];
   presets?: SeparationPreset[];
   currentUser?: User | null;
-  onExportPDF: () => void;
+  onExportPDF: (visibleColumns?: Record<string, boolean>) => void;
   onExportExcel?: () => void;
   onNavigateToOrders: () => void;
   onNavigateToHistory?: () => void;
@@ -884,7 +884,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
           {/* Botão Romaneio PDF */}
           <button
-            onClick={onExportPDF}
+            onClick={() => onExportPDF(visibleColumns)}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition cursor-pointer"
             title="Gerar Romaneio PDF Paisagem A4 com tabela das lojas e volumes"
           >

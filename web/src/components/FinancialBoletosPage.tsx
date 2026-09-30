@@ -53,7 +53,8 @@ import {
   downloadFinancialComprovanteBlob,
   deleteFinancialEntryFromDb,
   cancelRecurringSeriesInDb,
-  batchPayFinancialEntriesInDb
+  batchPayFinancialEntriesInDb,
+  FinancialFilters
 } from '../utils/api';
 import { toBrDate, formatCurrency } from '../utils/masks';
 import { exportFinancialToExcel, exportFinancialToPdf } from '../utils/financialExporter';
@@ -80,6 +81,13 @@ interface FinancialBoletosPageProps {
 const MONTHS_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+export const FORMAS_OPCOES = [
+  { id: 'BOLETO', label: '📄 Boletos' },
+  { id: 'DEPOSITO', label: '🏦 Depósitos' },
+  { id: 'DINHEIRO_PIX', label: '💵 Dinheiro / PIX' },
+  { id: 'CHEQUE', label: '📜 Cheques' }
 ];
 
 export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
@@ -132,7 +140,16 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   const [selectedStore, setSelectedStore] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedFormaPagamento, setSelectedFormaPagamento] = useState<string>('all');
+  
+  // Formas de Pagamento selecionadas (vazio ou todas = Todas as Formas)
+  const [selectedFormas, setSelectedFormas] = useState<string[]>([]);
+
+  // Período e Atalhos Rápidos (D = Dia, S = Semana, M = Mês, custom = Período Livre)
+  const [periodMode, setPeriodMode] = useState<'D' | 'S' | 'M' | 'custom'>('M');
+  const [referenceDate, setReferenceDate] = useState<Date>(() => new Date());
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Visão da Diretoria: 'all' (Geral), 'confirmados' (Confirmados/Lançados), 'previstos' (Apenas Previsão)
@@ -192,30 +209,146 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   const [isLoadingComprovante, setIsLoadingComprovante] = useState<boolean>(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
+  // Funções Auxiliares de Datas para Navegação e Atalhos Rápidos
+  const toIsoDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const getWeekBounds = (ref: Date) => {
+    const d = new Date(ref);
+    const day = d.getDay(); // 0 é domingo, 1 é segunda...
+    const diff = day === 0 ? -6 : 1 - day; // Ajusta para segunda-feira
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diff);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { start: toIsoDate(monday), end: toIsoDate(sunday) };
+  };
+
+  const handleSelectPeriodMode = (mode: 'D' | 'S' | 'M') => {
+    setPeriodMode(mode);
+    if (mode === 'D') {
+      const iso = toIsoDate(referenceDate);
+      setStartDate(iso);
+      setEndDate(iso);
+    } else if (mode === 'S') {
+      const { start, end } = getWeekBounds(referenceDate);
+      setStartDate(start);
+      setEndDate(end);
+    } else if (mode === 'M') {
+      setStartDate('');
+      setEndDate('');
+    }
+  };
+
+  const handlePrevPeriod = () => {
+    if (periodMode === 'D') {
+      const nextRef = new Date(referenceDate);
+      nextRef.setDate(nextRef.getDate() - 1);
+      setReferenceDate(nextRef);
+      const iso = toIsoDate(nextRef);
+      setStartDate(iso);
+      setEndDate(iso);
+    } else if (periodMode === 'S') {
+      const nextRef = new Date(referenceDate);
+      nextRef.setDate(nextRef.getDate() - 7);
+      setReferenceDate(nextRef);
+      const { start, end } = getWeekBounds(nextRef);
+      setStartDate(start);
+      setEndDate(end);
+    } else {
+      // Modo Mês ou Livre
+      handlePrevMonth();
+    }
+  };
+
+  const handleNextPeriod = () => {
+    if (periodMode === 'D') {
+      const nextRef = new Date(referenceDate);
+      nextRef.setDate(nextRef.getDate() + 1);
+      setReferenceDate(nextRef);
+      const iso = toIsoDate(nextRef);
+      setStartDate(iso);
+      setEndDate(iso);
+    } else if (periodMode === 'S') {
+      const nextRef = new Date(referenceDate);
+      nextRef.setDate(nextRef.getDate() + 7);
+      setReferenceDate(nextRef);
+      const { start, end } = getWeekBounds(nextRef);
+      setStartDate(start);
+      setEndDate(end);
+    } else {
+      // Modo Mês ou Livre
+      handleNextMonth();
+    }
+  };
+
+  const handleToggleForma = (formaId: string) => {
+    if (formaId === 'all') {
+      setSelectedFormas([]);
+      return;
+    }
+    setSelectedFormas(prev => {
+      if (prev.includes(formaId)) {
+        return prev.filter(f => f !== formaId);
+      } else {
+        return [...prev, formaId];
+      }
+    });
+  };
+
+  const handleStartDateChange = (val: string) => {
+    setStartDate(val);
+    setPeriodMode('custom');
+  };
+
+  const handleEndDateChange = (val: string) => {
+    setEndDate(val);
+    setPeriodMode('custom');
+  };
+
+  const handleClearPeriod = () => {
+    setStartDate('');
+    setEndDate('');
+    setPeriodMode('M');
+  };
+
   // Carregar lançamentos e resumo do sistema
   const loadFinancialData = useCallback(async () => {
     setLoading(true);
     try {
+      const isCustomDate = Boolean(startDate || endDate);
+      const formaParam = (selectedFormas.length > 0 && selectedFormas.length < FORMAS_OPCOES.length)
+        ? selectedFormas.join(',')
+        : undefined;
+
       // Filtros da listagem de lançamentos
-      const listFilters = {
-        year: selectedYear !== 'all' ? selectedYear : undefined,
-        month: selectedMonth !== 'all' ? selectedMonth : undefined,
+      const listFilters: FinancialFilters = {
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        year: (!isCustomDate && selectedYear !== 'all') ? selectedYear : undefined,
+        month: (!isCustomDate && selectedMonth !== 'all') ? selectedMonth : undefined,
         lojaNome: selectedStore !== 'all' ? selectedStore : undefined,
         categoria: selectedCategory !== 'all' ? selectedCategory : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
-        formaPagamento: selectedFormaPagamento !== 'all' ? selectedFormaPagamento : undefined,
+        formaPagamento: formaParam,
         statusPrevisao: viewMode === 'all' ? undefined : (viewMode === 'confirmados' ? 'CONFIRMADO' : 'PREVISTO'),
         search: searchQuery.trim() || undefined
       };
 
       // Filtros do resumo
-      const summaryFilters = {
-        year: selectedYear !== 'all' ? selectedYear : undefined,
-        month: selectedMonth !== 'all' ? selectedMonth : undefined,
+      const summaryFilters: FinancialFilters = {
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        year: (!isCustomDate && selectedYear !== 'all') ? selectedYear : undefined,
+        month: (!isCustomDate && selectedMonth !== 'all') ? selectedMonth : undefined,
         lojaNome: selectedStore !== 'all' ? selectedStore : undefined,
         categoria: selectedCategory !== 'all' ? selectedCategory : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
-        formaPagamento: selectedFormaPagamento !== 'all' ? selectedFormaPagamento : undefined,
+        formaPagamento: formaParam,
         statusPrevisao: viewMode === 'all' ? undefined : (viewMode === 'confirmados' ? 'CONFIRMADO' : 'PREVISTO'),
         search: searchQuery.trim() || undefined
       };
@@ -225,14 +358,30 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
         fetchFinancialSummaryFromDb(summaryFilters)
       ]);
 
-      setEntries(entriesData);
+      // Camada defensiva: garante que apenas registros dentro do intervalo de datas sejam exibidos
+      const sanitizedEntries = (startDate || endDate)
+        ? entriesData.filter(e => {
+            const raw = (e.dataVencimento || '').trim();
+            if (!raw) return false;
+            let iso = raw;
+            if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+              const [d, m, y] = raw.split('/');
+              iso = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+            }
+            if (startDate && iso < startDate) return false;
+            if (endDate && iso > endDate) return false;
+            return true;
+          })
+        : entriesData;
+
+      setEntries(sanitizedEntries);
       setSummary(summaryData);
     } catch (err: any) {
       console.error('Erro ao carregar financeiro:', err);
     } finally {
       setLoading(false);
     }
-  }, [selectedYear, selectedMonth, selectedStore, selectedCategory, selectedStatus, selectedFormaPagamento, searchQuery, viewMode]);
+  }, [selectedYear, selectedMonth, startDate, endDate, selectedStore, selectedCategory, selectedStatus, selectedFormas, searchQuery, viewMode]);
 
   useEffect(() => {
     loadFinancialData();
@@ -630,20 +779,29 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   // Descrição legível dos filtros ativos para o cabeçalho das exportações
   const filtersDescription = useMemo(() => {
     const parts: string[] = [];
-    if (selectedMonth !== 'all') {
+    if (startDate || endDate) {
+      const s = startDate ? (startDate.includes('-') ? startDate.split('-').reverse().join('/') : startDate) : 'Início';
+      const e = endDate ? (endDate.includes('-') ? endDate.split('-').reverse().join('/') : endDate) : 'Fim';
+      parts.push(`Período: ${s} a ${e}`);
+    } else if (selectedMonth !== 'all') {
       const mIdx = parseInt(selectedMonth, 10) - 1;
       parts.push(`Mês: ${MONTHS_NAMES[mIdx] || selectedMonth}/${selectedYear}`);
     } else {
       parts.push(`Ano: ${selectedYear}`);
     }
-    if (selectedFormaPagamento !== 'all') parts.push(`Forma: ${selectedFormaPagamento}`);
+
+    if (selectedFormas.length > 0 && selectedFormas.length < FORMAS_OPCOES.length) {
+      const names = selectedFormas.map(f => FORMAS_OPCOES.find(o => o.id === f)?.label || f);
+      parts.push(`Formas: ${names.join(', ')}`);
+    }
+
     if (selectedStore !== 'all') parts.push(`Loja: ${selectedStore}`);
     if (selectedCategory !== 'all') parts.push(`Categoria: ${selectedCategory}`);
     if (selectedStatus !== 'all') parts.push(`Status: ${selectedStatus}`);
     if (viewMode !== 'all') parts.push(`Diretoria: ${viewMode === 'confirmados' ? 'Confirmados' : 'Previstos'}`);
     if (searchQuery.trim()) parts.push(`Busca: "${searchQuery.trim()}"`);
     return parts.join(' | ') || 'Geral (Todos os Lançamentos)';
-  }, [selectedMonth, selectedYear, selectedFormaPagamento, selectedStore, selectedCategory, selectedStatus, viewMode, searchQuery]);
+  }, [startDate, endDate, selectedMonth, selectedYear, selectedFormas, selectedStore, selectedCategory, selectedStatus, viewMode, searchQuery]);
 
   // Exportação Excel - Requer seleção prévia via checkbox conforme especificação
   const handleExportExcel = () => {
@@ -967,64 +1125,156 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
       {/* 3. Barra de Navegação de Mês, Filtros e Abas */}
       <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
         
-        {/* Linha 1: Navegação de Mês e Abas */}
+        {/* Linha 1: Controles de Período (D/S/M, Intervalo Customizado, Navegação) e Abas */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
-          {/* Seletor de Período Mês / Ano com Dropdowns e Filtro Rápido */}
+          {/* Seletor de Período Flexível (Atalhos Rápidos + Intervalo Livre + Dropdowns) */}
           <div className="flex flex-wrap items-center gap-2">
+            
+            {/* Atalhos Rápidos de Período [ D ] [ S ] [ M ] */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900/80 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => handleSelectPeriodMode('D')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  periodMode === 'D'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Visão Diária (Hoje)"
+              >
+                D
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectPeriodMode('S')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  periodMode === 'S'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Visão Semanal (Esta Semana)"
+              >
+                S
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectPeriodMode('M')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  periodMode === 'M'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Visão Mensal"
+              >
+                M
+              </button>
+            </div>
+
+            {/* Botão Retroceder Período */}
             <button
               type="button"
-              disabled={selectedMonth === 'all'}
-              onClick={handlePrevMonth}
-              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              title="Mês Anterior"
+              onClick={handlePrevPeriod}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+              title="Período Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            {/* Dropdown Mês */}
-            <div className="relative flex items-center">
-              <Calendar className="w-4 h-4 text-amber-500 absolute left-3 pointer-events-none" />
-              <select
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(e.target.value)}
-                className="pl-9 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-xs text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-xs cursor-pointer"
-              >
-                <option value="all">📅 Todos os Meses (Visão Geral)</option>
-                {MONTHS_NAMES.map((name, idx) => {
-                  const mVal = String(idx + 1).padStart(2, '0');
-                  return (
-                    <option key={mVal} value={mVal}>
-                      {name}
+            {/* Se estiver no modo Mês sem data livre: Exibe Dropdowns Mês e Ano */}
+            {periodMode === 'M' && !startDate && !endDate ? (
+              <>
+                {/* Dropdown Mês */}
+                <div className="relative flex items-center">
+                  <Calendar className="w-4 h-4 text-amber-500 absolute left-3 pointer-events-none" />
+                  <select
+                    value={selectedMonth}
+                    onChange={e => setSelectedMonth(e.target.value)}
+                    className="pl-9 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-xs text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-xs cursor-pointer"
+                  >
+                    <option value="all">📅 Todos os Meses (Visão Geral)</option>
+                    {MONTHS_NAMES.map((name, idx) => {
+                      const mVal = String(idx + 1).padStart(2, '0');
+                      return (
+                        <option key={mVal} value={mVal}>
+                          {name}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Dropdown Ano Dinâmico */}
+                <select
+                  value={selectedYear}
+                  onChange={e => setSelectedYear(e.target.value)}
+                  className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-xs text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-xs cursor-pointer"
+                >
+                  {availableYears.map(year => (
+                    <option key={year} value={String(year)}>
+                      {year}
                     </option>
-                  );
-                })}
-              </select>
-            </div>
+                  ))}
+                  <option value="all">Todos os Anos</option>
+                </select>
+              </>
+            ) : (
+              /* Seletor Livre de Datas: De [date] Até [date] */
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">De:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => handleStartDateChange(e.target.value)}
+                  className="bg-white dark:bg-slate-800 text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500"
+                />
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Até:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={e => handleEndDateChange(e.target.value)}
+                  className="bg-white dark:bg-slate-800 text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleClearPeriod}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50"
+                  title="Voltar para seleção mensal padrão"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
-            {/* Dropdown Ano Dinâmico */}
-            <select
-              value={selectedYear}
-              onChange={e => setSelectedYear(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-xs text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-xs cursor-pointer"
-            >
-              {availableYears.map(year => (
-                <option key={year} value={String(year)}>
-                  {year}
-                </option>
-              ))}
-              <option value="all">Todos os Anos</option>
-            </select>
-
+            {/* Botão Avançar Período */}
             <button
               type="button"
-              disabled={selectedMonth === 'all'}
-              onClick={handleNextMonth}
-              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              title="Próximo Mês"
+              onClick={handleNextPeriod}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+              title="Próximo Período"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
+
+            {/* Se estiver no modo Mês, botão para alternar rapidamente para período livre se desejar */}
+            {periodMode === 'M' && !startDate && !endDate && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPeriodMode('custom');
+                  const now = new Date();
+                  const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+                  const lastDay = toIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+                  setStartDate(firstDay);
+                  setEndDate(lastDay);
+                }}
+                className="px-2.5 py-1.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-[11px] font-medium text-slate-500 hover:text-amber-600 dark:text-slate-400 hover:border-amber-400 transition-colors cursor-pointer"
+                title="Definir intervalo livre De/Até"
+              >
+                📅 Período Livre
+              </button>
+            )}
+
           </div>
 
           {/* Abas de Visualização (Matriz de Compras Removida) */}
@@ -1063,30 +1313,44 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
         {/* Linha 1.5: Botões de Acesso Rápido por Forma de Pagamento e Exportação */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-700/60">
           
-          {/* Botões de Acesso Rápido de Forma de Pagamento */}
-          <div className="flex flex-wrap items-center gap-1 bg-slate-50 dark:bg-slate-900/60 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
+          {/* Botões de Acesso Rápido de Forma de Pagamento com Multi-Seleção Toggle Cumulativo */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 dark:bg-slate-900/60 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2">
-              Forma:
+              Formas:
             </span>
-            {[
-              { id: 'all', label: 'Todas as Formas' },
-              { id: 'BOLETO', label: '📄 Boletos' },
-              { id: 'DEPOSITO', label: '🏦 Depósitos' },
-              { id: 'DINHEIRO_PIX', label: '💵 Dinheiro / PIX' }
-            ].map(f => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setSelectedFormaPagamento(f.id)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  selectedFormaPagamento === f.id
-                    ? 'bg-amber-500 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+            
+            {/* Todas as Formas */}
+            <button
+              type="button"
+              onClick={() => handleToggleForma('all')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                selectedFormas.length === 0 || selectedFormas.length === FORMAS_OPCOES.length
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50'
+              }`}
+            >
+              Todas
+            </button>
+
+            {/* Opções individuais toggláveis: Boletos, Depósitos, Dinheiro/PIX, Cheques */}
+            {FORMAS_OPCOES.map(f => {
+              const isActive = selectedFormas.includes(f.id);
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => handleToggleForma(f.id)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-amber-500 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50'
+                  }`}
+                >
+                  {isActive && <Check className="w-3 h-3 stroke-[3]" />}
+                  <span>{f.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Botões de Seleção Geral e Exportação */}
@@ -1232,6 +1496,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
           onSelectOrder={onSelectOrder}
           selectedYear={selectedYear}
           selectedMonth={selectedMonth}
+          isDateRangeActive={Boolean(startDate || endDate)}
           onPayEntry={(id) => {
             const entry = entries.find(e => e.id === id);
             if (entry) handleOpenPayModal(entry);

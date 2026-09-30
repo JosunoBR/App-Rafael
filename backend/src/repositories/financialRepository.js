@@ -28,12 +28,26 @@ class FinancialRepository {
    * Busca registros com filtros múltiplos: mês, ano, loja, categoria, status, tipo, busca de texto.
    * Suporta formato brasileiro DD/MM/YYYY e legado YYYY-MM-DD.
    */
-  async findAll({ month, year, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = {}) {
+  async findAll({ month, year, startDate, endDate, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = {}) {
     let sql = 'SELECT * FROM financial_entries WHERE 1=1';
     const params = [];
 
-    // Filtro por Ano/Mês no formato brasileiro DD/MM/YYYY e compatibilidade legada YYYY-MM-DD
-    if (year && year !== 'all' && month && month !== 'all') {
+    // Expressão SQL para normalizar dataVencimento para formato comparável YYYY-MM-DD
+    const isoVencExpr = `(CASE WHEN dataVencimento LIKE '__/__/____' THEN SUBSTR(dataVencimento, 7, 4) || '-' || SUBSTR(dataVencimento, 4, 2) || '-' || SUBSTR(dataVencimento, 1, 2) ELSE SUBSTR(dataVencimento, 1, 10) END)`;
+
+    // Filtro por Intervalo Customizado de Datas (startDate e endDate) ou por Mês/Ano
+    if (startDate || endDate) {
+      if (startDate) {
+        const isoStart = startDate.includes('/') ? startDate.split('/').reverse().join('-') : startDate;
+        sql += ` AND ${isoVencExpr} >= ?`;
+        params.push(isoStart);
+      }
+      if (endDate) {
+        const isoEnd = endDate.includes('/') ? endDate.split('/').reverse().join('-') : endDate;
+        sql += ` AND ${isoVencExpr} <= ?`;
+        params.push(isoEnd);
+      }
+    } else if (year && year !== 'all' && month && month !== 'all') {
       const formattedMonth = String(month).padStart(2, '0');
       sql += ' AND (dataVencimento LIKE ? OR dataVencimento LIKE ?)';
       params.push(`%/${formattedMonth}/${year}`, `${year}-${formattedMonth}-%`);
@@ -86,19 +100,34 @@ class FinancialRepository {
     }
 
     if (formaPagamento && formaPagamento !== 'all') {
-      const fpUpper = formaPagamento.toUpperCase();
-      if (fpUpper === 'BOLETO') {
-        sql += ' AND UPPER(formaPagamento) LIKE ?';
-        params.push('%BOLETO%');
-      } else if (fpUpper === 'DEPOSITO' || fpUpper === 'DEPÓSITO') {
-        sql += ' AND (UPPER(formaPagamento) LIKE ? OR UPPER(formaPagamento) LIKE ?)';
-        params.push('%DEPÓSITO%', '%DEPOSITO%');
-      } else if (fpUpper === 'DINHEIRO_PIX' || fpUpper === 'PIX' || fpUpper === 'DINHEIRO') {
-        sql += ' AND (UPPER(formaPagamento) LIKE ? OR UPPER(formaPagamento) LIKE ?)';
-        params.push('%DINHEIRO%', '%PIX%');
-      } else {
-        sql += ' AND UPPER(formaPagamento) = ?';
-        params.push(fpUpper);
+      const rawFormas = Array.isArray(formaPagamento)
+        ? formaPagamento
+        : String(formaPagamento).split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+
+      const formas = rawFormas.filter(f => f !== 'ALL');
+      if (formas.length > 0) {
+        const orClauses = [];
+        for (const fp of formas) {
+          if (fp === 'BOLETO') {
+            orClauses.push('UPPER(formaPagamento) LIKE ?');
+            params.push('%BOLETO%');
+          } else if (fp === 'DEPOSITO' || fp === 'DEPÓSITO') {
+            orClauses.push('(UPPER(formaPagamento) LIKE ? OR UPPER(formaPagamento) LIKE ?)');
+            params.push('%DEPÓSITO%', '%DEPOSITO%');
+          } else if (fp === 'DINHEIRO_PIX' || fp === 'PIX' || fp === 'DINHEIRO') {
+            orClauses.push('(UPPER(formaPagamento) LIKE ? OR UPPER(formaPagamento) LIKE ?)');
+            params.push('%DINHEIRO%', '%PIX%');
+          } else if (fp === 'CHEQUE') {
+            orClauses.push('UPPER(formaPagamento) LIKE ?');
+            params.push('%CHEQUE%');
+          } else {
+            orClauses.push('UPPER(formaPagamento) = ?');
+            params.push(fp);
+          }
+        }
+        if (orClauses.length > 0) {
+          sql += ` AND (${orClauses.join(' OR ')})`;
+        }
       }
     }
 

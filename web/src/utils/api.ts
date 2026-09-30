@@ -553,6 +553,8 @@ export async function deletePaymentConditionFromDb(id: string): Promise<void> {
 export interface FinancialFilters {
   month?: string;
   year?: string;
+  startDate?: string;
+  endDate?: string;
   storeId?: string;
   lojaNome?: string;
   categoria?: string;

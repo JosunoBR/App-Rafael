@@ -32,6 +32,7 @@ interface FinancialDailyViewProps {
   onSelectOrder?: (order: PurchaseOrder) => void;
   selectedYear: string;
   selectedMonth: string;
+  isDateRangeActive?: boolean;
   onPayEntry: (id: string) => void;
   onSelectEntry: (entry: FinancialEntry) => void;
   onDeleteEntry: (id: string) => void;
@@ -63,6 +64,7 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
   onSelectOrder,
   selectedYear,
   selectedMonth,
+  isDateRangeActive = false,
   onPayEntry,
   onSelectEntry,
   onDeleteEntry,
@@ -130,6 +132,8 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
       abertoDia: number;
     }> = {};
 
+    const isMultiMonth = selectedMonth === 'all' || isDateRangeActive;
+
     entries.forEach(entry => {
       const due = (entry.dataVencimento || '').trim();
       let diaNum = 1;
@@ -138,7 +142,7 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
       } else if (due.includes('-')) {
         diaNum = parseInt(due.split('-')[2], 10) || 1;
       }
-      const groupKey = selectedMonth === 'all' ? (due || 'sem_data') : String(diaNum);
+      const groupKey = isMultiMonth ? (due || 'sem_data') : String(diaNum);
 
       if (!groups[groupKey]) {
         groups[groupKey] = {
@@ -164,7 +168,7 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
     });
 
     return Object.values(groups).sort((a, b) => {
-      if (selectedMonth === 'all') {
+      if (isMultiMonth) {
         const toSortKey = (d: string) => {
           if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
             const [dia, mes, ano] = d.split('/');
@@ -176,7 +180,7 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
       }
       return a.dia - b.dia;
     });
-  }, [entries, selectedMonth]);
+  }, [entries, selectedMonth, isDateRangeActive]);
 
   const toggleDay = (key: string) => {
     setCollapsedDays(prev => ({ ...prev, [key]: !prev[key] }));
@@ -246,8 +250,8 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
       <div className="space-y-3">
         {dailyGroups.map(group => {
           const isCollapsed = Boolean(collapsedDays[group.key]);
-          const isToday = selectedMonth === 'all'
-            ? group.dateIso === todayIso
+          const isToday = (selectedMonth === 'all' || isDateRangeActive)
+            ? (toBrDate(group.dateIso) === toBrDate(todayIso) || group.dateIso === todayIso)
             : (isCurrentMonth && group.dia === currentDayNum);
           const percentPago = group.totalDia > 0 ? Math.round((group.pagoDia / group.totalDia) * 100) : 0;
           const isTotalmentePago = group.abertoDia === 0 && group.totalDia > 0;

@@ -4,10 +4,12 @@ const financialService = require('../services/financialService');
 class FinancialController {
   async getEntries(req, res) {
     try {
-      const { month, year, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = req.query;
+      const { month, year, startDate, endDate, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = req.query;
       const entries = await financialService.listEntries({
         month,
         year,
+        startDate,
+        endDate,
         storeId,
         lojaNome,
         categoria,
@@ -27,10 +29,12 @@ class FinancialController {
 
   async getSummary(req, res) {
     try {
-      const { month, year, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = req.query;
+      const { month, year, startDate, endDate, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = req.query;
       const summary = await financialService.getSummary({
         month,
         year,
+        startDate,
+        endDate,
         storeId,
         lojaNome,
         categoria,

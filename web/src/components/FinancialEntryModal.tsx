@@ -158,7 +158,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     setValoresCustomizados(prev => {
       const updated = [...prev];
       while (updated.length < parcelasCount) {
-        updated.push('0,00');
+        updated.push('');
       }
       updated[index] = newValor;
       return updated;
@@ -233,7 +233,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     if (parcelasCount <= 0 || valorTotalNum <= 0) return;
     setValoresCustomizados(prev => {
       const updated = [...prev];
-      while (updated.length < parcelasCount) updated.push('0,00');
+      while (updated.length < parcelasCount) updated.push('');
       let somaOutrasCentavos = 0;
       for (let i = 0; i < parcelasCount - 1; i++) {
         somaOutrasCentavos += Math.round(parseCurrency(updated[i]) * 100);
@@ -639,12 +639,16 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                     onFocus={(e) => {
                       if (valorTotalNum > 0) {
                         setValorTotalStr(formatCurrency(valorTotalNum, false));
+                      } else {
+                        setValorTotalStr('');
                       }
                       e.target.select();
                     }}
                     onBlur={() => {
                       if (valorTotalNum > 0) {
                         setValorTotalStr(formatCurrency(valorTotalNum, false));
+                      } else {
+                        setValorTotalStr('');
                       }
                     }}
                     onChange={(e) => {
@@ -885,6 +889,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                               const currentVal = parseCurrency(valoresCustomizados[idx]);
                               if (currentVal > 0) {
                                 handleCustomValorChange(idx, formatCurrency(currentVal, false));
+                              } else {
+                                handleCustomValorChange(idx, '');
                               }
                               e.target.select();
                             }}
@@ -892,6 +898,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                               const currentVal = parseCurrency(valoresCustomizados[idx]);
                               if (currentVal > 0) {
                                 handleCustomValorChange(idx, formatCurrency(currentVal, false));
+                              } else {
+                                handleCustomValorChange(idx, '');
                               }
                             }}
                             onChange={(e) => {

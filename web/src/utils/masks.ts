@@ -46,7 +46,13 @@ export function handleCurrencyInput(
     }
   }
 
+  // Se o usuário está apagando um "0,00" via Backspace, limpa o campo diretamente em vez de travar no zero
+  if (str === '0,0') {
+    return { formatted: allowEmpty ? '' : '', value: 0 };
+  }
+
   const hasComma = str.includes(',');
+  let commaPresent = hasComma;
 
   let intPartDigits = '';
   let decPartDigits = '';
@@ -58,13 +64,22 @@ export function handleCurrencyInput(
 
     // Remove separadores de milhar (pontos) e outros caracteres não-numéricos antes da vírgula
     intPartDigits = beforeComma.replace(/\D/g, '');
-    // Decimais limitados a no máximo 2 dígitos
-    decPartDigits = afterComma.replace(/\D/g, '').slice(0, 2);
+    const rawAfter = afterComma.replace(/\D/g, '');
+
+    // 🛡️ Proteção Anti-0 Travado: se o campo tinha "0,00" (ou 0) e o usuário digitou novos dígitos no final
+    if ((intPartDigits === '' || intPartDigits === '0') && rawAfter.startsWith('00') && rawAfter.length > 2) {
+      intPartDigits = rawAfter.slice(2);
+      decPartDigits = '';
+      commaPresent = false;
+    } else {
+      // Decimais limitados a no máximo 2 dígitos
+      decPartDigits = rawAfter.slice(0, 2);
+    }
   } else {
     intPartDigits = str.replace(/\D/g, '');
   }
 
-  if (!intPartDigits && !decPartDigits && !hasComma) {
+  if (!intPartDigits && !decPartDigits && !commaPresent) {
     return { formatted: allowEmpty ? '' : '', value: 0 };
   }
 
@@ -77,7 +92,7 @@ export function handleCurrencyInput(
 
   // Formatação do inteiro com pontuação de milhar brasileira (.)
   let formattedInt = '';
-  if (intPartDigits === '' && hasComma) {
+  if (intPartDigits === '' && commaPresent) {
     formattedInt = '0';
   } else if (intVal === 0 && intPartDigits.includes('0')) {
     formattedInt = '0';
@@ -88,7 +103,7 @@ export function handleCurrencyInput(
   }
 
   let formatted = formattedInt;
-  if (hasComma) {
+  if (commaPresent) {
     formatted = `${formattedInt},${decPartDigits}`;
   }
 

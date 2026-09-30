@@ -991,46 +991,59 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           </div>
         </div>
 
-        {/* Tabela Scrollável */}
-        <div className="overflow-x-auto">
+        {/* Tabela Scrollável com colunas e cabeçalho congelados */}
+        <div className="overflow-auto max-h-[calc(100vh-260px)] min-h-[380px] scrollbar-thin">
           <table className="w-full text-left border-collapse text-xs">
             
-            {/* Linha 1 de Cabeçalho: Lojas Diretas sem Cluster */}
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-700 text-center font-extrabold text-[11px]">
-                <th rowSpan={2} className="py-2.5 px-3 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 sticky left-0 z-20 min-w-[220px] uppercase">
+            {/* Linha 1 de Cabeçalho: Dados do Produto, Qtd no Pac, Balanço Geral e Rateio das Lojas */}
+            <thead className="sticky top-0 z-30 shadow-xs">
+              <tr className="border-b border-slate-200 dark:border-slate-700 text-center font-extrabold text-[11px] h-[34px]">
+                <th 
+                  rowSpan={2} 
+                  className="py-2.5 px-3 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 sticky left-0 top-0 z-50 w-[240px] min-w-[240px] max-w-[240px] uppercase shadow-xs select-none"
+                >
                   DADOS DO PRODUTO
                 </th>
-                <th colSpan={4} className="py-2 px-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                <th 
+                  rowSpan={2} 
+                  className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 sticky left-[240px] top-0 z-50 w-[80px] min-w-[80px] max-w-[80px] uppercase shadow-xs select-none" 
+                  title="Quantidade de unidades por pacote/caixa (Embalagem)"
+                >
+                  QTD NO PAC
+                </th>
+                <th 
+                  colSpan={3} 
+                  className="py-2 px-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide sticky top-0 z-30 select-none"
+                >
                   BALANÇO GERAL
                 </th>
-                <th colSpan={activeStores.length} className="py-2 px-2 bg-emerald-50/70 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                <th 
+                  colSpan={activeStores.length} 
+                  className="py-2 px-2 bg-emerald-50/80 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide sticky top-0 z-30 select-none"
+                >
                   RATEIO INDIVIDUAL POR LOJA ({activeStores.length} FILIAIS)
                 </th>
               </tr>
 
-              {/* Linha 2 de Cabeçalho: Subcolunas e Nomes das Lojas */}
-              <tr className="bg-slate-50/60 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 min-w-[70px]" title="Quantidade de unidades por pacote/caixa (Embalagem)">
-                  Qtd do Pac
-                </th>
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 min-w-[75px]">
+              {/* Linha 2 de Cabeçalho: Subcolunas e Nomes das Lojas (Congelada abaixo da linha 1) */}
+              <tr className="bg-slate-50/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 h-[34px]">
+                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-emerald-50/80 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 min-w-[75px] sticky top-[34px] z-30 select-none">
                   Comprado
                 </th>
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 min-w-[85px]">
+                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-amber-50/80 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 min-w-[85px] sticky top-[34px] z-30 select-none">
                   Estoque CD
                 </th>
-                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 min-w-[70px]">
+                <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 min-w-[70px] sticky top-[34px] z-30 select-none">
                   Lojas
                 </th>
                 {activeStores.map(store => (
                   <th 
                     key={store.id} 
                     title={store.name}
-                    className={`py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 min-w-[60px] whitespace-nowrap font-bold text-[11px] ${
-                      store.cluster === 'A' ? 'bg-blue-50/30 dark:bg-blue-950/20 text-slate-700 dark:text-slate-300' : 
-                      store.cluster === 'B' ? 'bg-slate-50/50 dark:bg-slate-900/30 text-slate-700 dark:text-slate-300' : 
-                      'bg-teal-50/30 dark:bg-teal-950/20 text-slate-700 dark:text-slate-300'
+                    className={`py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 min-w-[60px] whitespace-nowrap font-bold text-[11px] sticky top-[34px] z-30 select-none ${
+                      store.cluster === 'A' ? 'bg-blue-50 dark:bg-blue-950/70 text-slate-700 dark:text-slate-200' : 
+                      store.cluster === 'B' ? 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200' : 
+                      'bg-teal-50 dark:bg-teal-950/70 text-slate-700 dark:text-slate-200'
                     }`}
                   >
                     {store.shortName || store.name}
@@ -1045,10 +1058,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 const status = itemStatusList[idx];
 
                 return (
-                  <tr key={item.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition">
+                  <tr key={item.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition group">
                     
-                    {/* 1. Descrição e Código com Foto */}
-                    <td className="py-2 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-800 z-10">
+                    {/* 1. Descrição e Código com Foto (Coluna Congelada 1) */}
+                    <td className="py-2 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[240px] min-w-[240px] max-w-[240px] shadow-xs">
                       <div className="flex items-center gap-2.5">
                         {/* Foto Miniatura */}
                         <div 
@@ -1070,7 +1083,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                         </div>
 
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-900 dark:text-white truncate max-w-[190px] text-xs" title={item.descricao}>
+                          <div className="font-bold text-slate-900 dark:text-white truncate max-w-[170px] text-xs" title={item.descricao}>
                             {item.descricao || 'Item sem descrição'}
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
@@ -1090,19 +1103,19 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       </div>
                     </td>
 
-                    {/* Qtd do Pacote */}
-                    <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs">
+                    {/* 2. Qtd do Pacote (Coluna Congelada 2) */}
+                    <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs sticky left-[240px] bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[80px] min-w-[80px] max-w-[80px] shadow-xs">
                       <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/60 font-bold text-slate-700 dark:text-slate-300 text-[11px]" title={`Embalagem com ${Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1} peças`}>
                         {Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1}
                       </span>
                     </td>
 
-                    {/* 2. Total Comprado */}
+                    {/* 3. Total Comprado */}
                     <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-emerald-600 dark:text-emerald-400 text-xs">
                       {item.qtdTotalUnidades.toLocaleString('pt-BR')}
                     </td>
 
-                    {/* 3. Estoque CD */}
+                    {/* 4. Estoque CD */}
                     <td className="py-2 px-2 text-center border-r border-slate-100 dark:border-slate-800">
                       <input
                         type="number"
@@ -1117,7 +1130,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       />
                     </td>
 
-                    {/* 4. Lojas */}
+                    {/* 5. Lojas */}
                     <td className={`py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-xs ${
                       status.isOverAllocated 
                         ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/50' 
@@ -1131,7 +1144,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       )}
                     </td>
 
-                    {/* 5. Células de Cada Loja */}
+                    {/* 6. Células de Cada Loja */}
                     {activeStores.map(store => {
                       const rawAllocUnits = item.separacaoLojas?.[store.id] || 0;
                       
@@ -1183,30 +1196,30 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               })}
             </tbody>
 
-            {/* Linha de Totais Gerais */}
-            <tfoot>
-              <tr className="bg-slate-50 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-700 font-extrabold text-xs text-slate-700 dark:text-slate-300">
-                <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 uppercase text-xs">
+            {/* Linha de Totais Gerais (Congelada no Rodapé) */}
+            <tfoot className="sticky bottom-0 z-30">
+              <tr className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 font-extrabold text-xs text-slate-700 dark:text-slate-300 shadow-xs">
+                <td className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-50 dark:bg-slate-900 z-40 uppercase text-xs w-[240px] min-w-[240px] max-w-[240px]">
                   TOTAL GERAL
                 </td>
-                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-400">
+                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-400 sticky left-[240px] bg-slate-50 dark:bg-slate-900 z-40 w-[80px] min-w-[80px] max-w-[80px]">
                   -
                 </td>
-                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-slate-900">
                   {totalPecasGeralBruto.toLocaleString('pt-BR')}
                 </td>
-                <td className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700">
+                <td className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
                   <div className="inline-block w-12 h-7 leading-7 text-center font-mono font-bold text-xs rounded-lg border border-amber-300 bg-amber-50/50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700">
                     {totalPecasGuardadasEstoque.toLocaleString('pt-BR')}
                   </div>
                 </td>
-                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-700 dark:text-slate-300">
+                <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900">
                   {totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')}
                 </td>
                 {activeStores.map(store => {
                   const somaLojaUnidades = order.items.reduce((acc, item) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);
                   return (
-                    <td key={store.id} className="py-2.5 px-2 text-center font-mono border-r border-slate-200 dark:border-slate-700">
+                    <td key={store.id} className="py-2.5 px-2 text-center font-mono border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
                       <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                         {somaLojaUnidades.toLocaleString('pt-BR')}
                       </div>

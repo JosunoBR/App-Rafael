@@ -19,7 +19,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { FinancialCategory, FinancialPaymentMethod, Supplier, StoreConfig } from '../shared/types';
-import { toBrDate } from '../utils/masks';
+import { toBrDate, handleCurrencyInput, formatCurrency, parseCurrency } from '../utils/masks';
 
 interface FinancialEntryModalProps {
   isOpen: boolean;
@@ -129,22 +129,22 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     }
   }, [dataBase, parcelasCount, intervaloDias, modoParcelamento]);
 
-  // Valor numérico parseado do total
+  // Valor numérico parseado com segurança no padrão brasileiro ou float
   const valorTotalNum = useMemo(() => {
-    if (!valorTotalStr) return 0;
-    const clean = valorTotalStr.replace(/\./g, '').replace(',', '.');
-    return parseFloat(clean) || 0;
+    return parseCurrency(valorTotalStr);
   }, [valorTotalStr]);
 
   // Gerar / inicializar valores padrão de parcelas ao alterar valorTotalNum, parcelasCount ou modo
+  // Distribuição precisa em centavos: rateia igualmente e atribui centavos residuais na 1ª parcela
   useEffect(() => {
     if (modoParcelamento === 'parcelado' && parcelasCount > 0) {
       if (valorTotalNum > 0) {
-        const valBase = Math.floor((valorTotalNum / parcelasCount) * 100) / 100;
-        const diff = Math.round((valorTotalNum - (valBase * parcelasCount)) * 100) / 100;
+        const totalCentavos = Math.round(valorTotalNum * 100);
+        const baseCentavos = Math.floor(totalCentavos / parcelasCount);
+        const restoCentavos = totalCentavos - (baseCentavos * parcelasCount);
         const initial = Array.from({ length: parcelasCount }, (_, i) => {
-          const val = (i === 0) ? (valBase + diff) : valBase;
-          return val.toFixed(2);
+          const centavos = (i === 0) ? (baseCentavos + restoCentavos) : baseCentavos;
+          return formatCurrency(centavos / 100, false);
         });
         setValoresCustomizados(initial);
       } else {
@@ -153,29 +153,30 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     }
   }, [valorTotalNum, parcelasCount, modoParcelamento]);
 
-  // Edição manual de valor de uma parcela individual
+  // Edição manual de valor de uma parcela individual (armazenando string formatada pt-BR)
   const handleCustomValorChange = (index: number, newValor: string) => {
     setValoresCustomizados(prev => {
       const updated = [...prev];
       while (updated.length < parcelasCount) {
-        updated.push('0.00');
+        updated.push('0,00');
       }
       updated[index] = newValor;
       return updated;
     });
   };
 
-  // Soma atual das parcelas digitadas
+  // Soma atual das parcelas digitadas calculada com precisão em centavos
   const somaParcelasNum = useMemo(() => {
     if (modoParcelamento !== 'parcelado') return valorTotalNum;
-    const sum = valoresCustomizados.reduce((acc, curr) => acc + (parseFloat(curr) || 0), 0);
-    return Math.round(sum * 100) / 100;
+    const sumCentavos = valoresCustomizados.reduce((acc, curr) => acc + Math.round(parseCurrency(curr) * 100), 0);
+    return sumCentavos / 100;
   }, [modoParcelamento, valoresCustomizados, valorTotalNum]);
 
-  // Diferença entre soma das parcelas e total do lançamento (tolerância de centavos)
+  // Diferença exata entre soma das parcelas e total do lançamento (em centavos)
   const diferencaParcelas = useMemo(() => {
     if (modoParcelamento !== 'parcelado' || valorTotalNum <= 0) return 0;
-    return Math.round((somaParcelasNum - valorTotalNum) * 100) / 100;
+    const diffCentavos = Math.round(somaParcelasNum * 100) - Math.round(valorTotalNum * 100);
+    return diffCentavos / 100;
   }, [modoParcelamento, somaParcelasNum, valorTotalNum]);
 
   // Status de conferência de valores:
@@ -184,8 +185,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   // - 'igualou': soma exatamente igual ao total (verde claro)
   const statusConferencia = useMemo<'neutro' | 'abaixo' | 'excedeu' | 'igualou'>(() => {
     if (modoParcelamento !== 'parcelado' || valorTotalNum <= 0) return 'neutro';
-    if (diferencaParcelas > 0.005) return 'excedeu';
-    if (diferencaParcelas < -0.005) return 'abaixo';
+    if (diferencaParcelas > 0.001) return 'excedeu';
+    if (diferencaParcelas < -0.001) return 'abaixo';
     return 'igualou';
   }, [modoParcelamento, valorTotalNum, diferencaParcelas]);
 
@@ -232,13 +233,14 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     if (parcelasCount <= 0 || valorTotalNum <= 0) return;
     setValoresCustomizados(prev => {
       const updated = [...prev];
-      while (updated.length < parcelasCount) updated.push('0.00');
-      let somaOutras = 0;
+      while (updated.length < parcelasCount) updated.push('0,00');
+      let somaOutrasCentavos = 0;
       for (let i = 0; i < parcelasCount - 1; i++) {
-        somaOutras += parseFloat(updated[i]) || 0;
+        somaOutrasCentavos += Math.round(parseCurrency(updated[i]) * 100);
       }
-      const valUltima = Math.max(0, Math.round((valorTotalNum - somaOutras) * 100) / 100);
-      updated[parcelasCount - 1] = valUltima.toFixed(2);
+      const totalCentavos = Math.round(valorTotalNum * 100);
+      const valUltimaCentavos = Math.max(0, totalCentavos - somaOutrasCentavos);
+      updated[parcelasCount - 1] = formatCurrency(valUltimaCentavos / 100, false);
       return updated;
     });
   };
@@ -246,11 +248,12 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   // Redistribuir igualmente entre todas as parcelas
   const handleDistribuirIgualmente = () => {
     if (parcelasCount <= 0 || valorTotalNum <= 0) return;
-    const valBase = Math.floor((valorTotalNum / parcelasCount) * 100) / 100;
-    const diff = Math.round((valorTotalNum - (valBase * parcelasCount)) * 100) / 100;
+    const totalCentavos = Math.round(valorTotalNum * 100);
+    const baseCentavos = Math.floor(totalCentavos / parcelasCount);
+    const restoCentavos = totalCentavos - (baseCentavos * parcelasCount);
     const recalculated = Array.from({ length: parcelasCount }, (_, i) => {
-      const val = (i === 0) ? (valBase + diff) : valBase;
-      return val.toFixed(2);
+      const centavos = (i === 0) ? (baseCentavos + restoCentavos) : baseCentavos;
+      return formatCurrency(centavos / 100, false);
     });
     setValoresCustomizados(recalculated);
   };
@@ -340,7 +343,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
       }
 
       for (let i = 0; i < parcelasCount; i++) {
-        const valParc = parseFloat(valoresCustomizados[i]) || 0;
+        const valParc = parseCurrency(valoresCustomizados[i]);
         if (valParc <= 0) {
           setErrorMsg(`A parcela ${i + 1}/${parcelasCount} deve possuir um valor válido maior que zero.`);
           return;
@@ -370,7 +373,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
         dataVencimento: dataBase,
         datasCustomizadas: modoParcelamento === 'parcelado' ? datasCustomizadas : [dataBase],
         valoresCustomizados: modoParcelamento === 'parcelado'
-          ? valoresCustomizados.map(v => parseFloat(v) || 0)
+          ? valoresCustomizados.map(v => parseCurrency(v))
           : [valorTotalNum],
         recorrente: isRecorrente,
         mesesProjecao: 6
@@ -615,12 +618,39 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-slate-400 text-sm font-bold">R$</span>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="0,00"
                     value={valorTotalStr}
-                    onChange={e => setValorTotalStr(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === '.') {
+                        e.preventDefault();
+                        const target = e.currentTarget;
+                        const currentVal = target.value;
+                        if (!currentVal.includes(',')) {
+                          const selStart = target.selectionStart ?? currentVal.length;
+                          const selEnd = target.selectionEnd ?? currentVal.length;
+                          const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                          const { formatted } = handleCurrencyInput(newVal, false);
+                          setValorTotalStr(formatted);
+                        }
+                      }
+                    }}
+                    onFocus={(e) => {
+                      if (valorTotalNum > 0) {
+                        setValorTotalStr(formatCurrency(valorTotalNum, false));
+                      }
+                      e.target.select();
+                    }}
+                    onBlur={() => {
+                      if (valorTotalNum > 0) {
+                        setValorTotalStr(formatCurrency(valorTotalNum, false));
+                      }
+                    }}
+                    onChange={(e) => {
+                      const { formatted } = handleCurrencyInput(e.target.value, false);
+                      setValorTotalStr(formatted);
+                    }}
                     className={`w-full pl-9 pr-3 py-2.5 rounded-xl border font-bold text-base transition-colors focus:outline-hidden focus:ring-2 ${colorClasses.inputTotal}`}
                     required
                   />
@@ -668,10 +698,11 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                       onChange={e => setIntervaloDias(parseInt(e.target.value, 10) || 30)}
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     >
+                      <option value={10}>10 dias</option>
                       <option value={15}>15 dias</option>
                       <option value={21}>21 dias</option>
                       <option value={28}>28 dias</option>
-                      <option value={30}>30 dias (Mensal)</option>
+                      <option value={30}>30 dias</option>
                       <option value={45}>45 dias</option>
                       <option value={60}>60 dias</option>
                     </select>
@@ -828,16 +859,45 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 items-center">
-                        {/* Campo de valor da parcela editável com as cores solicitadas */}
+                        {/* Campo de valor da parcela editável com comportamento de digitação igual à tabela de produtos */}
                         <div className="relative">
                           <span className="absolute left-2.5 top-2 text-xs font-bold opacity-60">R$</span>
                           <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
+                            type="text"
+                            inputMode="decimal"
                             placeholder="0,00"
                             value={valoresCustomizados[idx] ?? ''}
-                            onChange={e => handleCustomValorChange(idx, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === '.') {
+                                e.preventDefault();
+                                const target = e.currentTarget;
+                                const currentVal = target.value;
+                                if (!currentVal.includes(',')) {
+                                  const selStart = target.selectionStart ?? currentVal.length;
+                                  const selEnd = target.selectionEnd ?? currentVal.length;
+                                  const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                                  const { formatted } = handleCurrencyInput(newVal, false);
+                                  handleCustomValorChange(idx, formatted);
+                                }
+                              }
+                            }}
+                            onFocus={(e) => {
+                              const currentVal = parseCurrency(valoresCustomizados[idx]);
+                              if (currentVal > 0) {
+                                handleCustomValorChange(idx, formatCurrency(currentVal, false));
+                              }
+                              e.target.select();
+                            }}
+                            onBlur={() => {
+                              const currentVal = parseCurrency(valoresCustomizados[idx]);
+                              if (currentVal > 0) {
+                                handleCustomValorChange(idx, formatCurrency(currentVal, false));
+                              }
+                            }}
+                            onChange={(e) => {
+                              const { formatted } = handleCurrencyInput(e.target.value, false);
+                              handleCustomValorChange(idx, formatted);
+                            }}
                             className={`w-full pl-8 pr-2 py-1.5 rounded-lg border text-xs font-bold transition-colors focus:outline-hidden focus:ring-2 ${colorClasses.inputParcela}`}
                           />
                         </div>

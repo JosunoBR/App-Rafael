@@ -133,10 +133,26 @@ export function handleOneDecimalInput(
 }
 
 /**
+ * Converte qualquer valor monetário (string ou número, formatado em pt-BR com vírgula ou número decimal JS) para número float seguro.
+ * Ex: "16.279,86" -> 16279.86 | "16279,86" -> 16279.86 | "16279.86" -> 16279.86 | "0,86" -> 0.86
+ */
+export function parseCurrency(value: number | string | undefined | null): number {
+  if (value === undefined || value === null || value === '') return 0;
+  if (typeof value === 'number') return isNaN(value) ? 0 : value;
+  let str = String(value).trim().replace(/[R$\s]/g, '');
+  if (!str) return 0;
+  if (str.includes(',')) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  }
+  const num = parseFloat(str);
+  return isNaN(num) ? 0 : Math.round(num * 100) / 100;
+}
+
+/**
  * Retorna apenas a string formatada em R$ a partir de um valor numérico ou string
  */
 export function formatCurrency(value: number | string | undefined | null, showPrefix: boolean = false): string {
-  const num = typeof value === 'number' ? value : (parseFloat(String(value || 0).replace(',', '.')) || 0);
+  const num = parseCurrency(value);
   const formatted = num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return showPrefix ? `R$ ${formatted}` : formatted;
 }

@@ -25,6 +25,18 @@ function toBrDate(val) {
   return str;
 }
 
+function parseCurrencyNumber(val) {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (!val) return 0;
+  let str = String(val).trim().replace(/[R$\s]/g, '');
+  if (!str) return 0;
+  if (str.includes(',')) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  }
+  const num = parseFloat(str);
+  return isNaN(num) ? 0 : Math.round(num * 100) / 100;
+}
+
 function dateToTimestamp(val) {
   if (!val) return 0;
   const str = String(val).trim();
@@ -238,7 +250,7 @@ class FinancialService {
     } = data;
 
     const totalQtd = Math.max(1, parseInt(parcelasCount, 10) || 1);
-    const montanteTotal = parseFloat(valorTotal || valor) || 0;
+    const montanteTotal = parseCurrencyNumber(valorTotal !== undefined && valorTotal !== null ? valorTotal : valor);
 
     if (!descricao || !descricao.trim()) {
       throw new Error('Descrição da conta/despesa é obrigatória.');
@@ -360,9 +372,10 @@ class FinancialService {
       });
     }
 
-    // Se for parcelado em N vezes (Padrão ERP)
-    const valorParcelaBase = Math.floor((montanteTotal / totalQtd) * 100) / 100;
-    const diferencaCentavos = Math.round((montanteTotal - (valorParcelaBase * totalQtd)) * 100) / 100;
+    // Se for parcelado em N vezes (Padrão ERP com precisão em centavos)
+    const totalCentavos = Math.round(montanteTotal * 100);
+    const baseCentavos = Math.floor(totalCentavos / totalQtd);
+    const restoCentavos = totalCentavos - (baseCentavos * totalQtd);
 
     const createdEntries = [];
     let baseDateObj;
@@ -375,10 +388,10 @@ class FinancialService {
 
     for (let i = 1; i <= totalQtd; i++) {
       // Ajusta os centavos restantes na 1ª parcela por padrão ou usa valor customizado enviado
-      let valorItem = (i === 1) ? (valorParcelaBase + diferencaCentavos) : valorParcelaBase;
+      let valorItem = (i === 1) ? ((baseCentavos + restoCentavos) / 100) : (baseCentavos / 100);
       if (Array.isArray(valoresCustomizados) && valoresCustomizados[i - 1] !== undefined) {
-        const parsedCustom = parseFloat(valoresCustomizados[i - 1]);
-        if (!isNaN(parsedCustom) && parsedCustom > 0) {
+        const parsedCustom = parseCurrencyNumber(valoresCustomizados[i - 1]);
+        if (parsedCustom > 0) {
           valorItem = parsedCustom;
         }
       }

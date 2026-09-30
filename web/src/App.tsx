@@ -911,13 +911,23 @@ export function App() {
         nextInstallments = nextInstallments.filter(inst => !inst.isBoletoFrete && inst.tipoTitulo !== 'frete' && !inst.observacao?.toLowerCase().includes('frete'));
       }
 
-      return { 
+      const newOrder: PurchaseOrder = { 
         ...prev, 
         header: updatedHeader,
         fiscalConfig: newFiscal,
         items: updatedItems,
         installments: nextInstallments
       };
+
+      if (updatedHeader.dataEntregaPrevista !== prev.header.dataEntregaPrevista) {
+        saveCurrentOrder(newOrder);
+        saveOrderToHistory(newOrder);
+        setSavedOrders(loadSavedOrdersList());
+        saveOrderSilently(newOrder).catch(() => {});
+        showToast(`Previsão de entrega atualizada para ${updatedHeader.dataEntregaPrevista || 'A definir'}. Boletos recalculados!`, 'info');
+      }
+
+      return newOrder;
     });
   };
 
@@ -3286,23 +3296,8 @@ export function App() {
                     }}
                   />
 
-                  <fieldset 
-                    disabled={Boolean(
-                      order.header.status && 
-                      order.header.status !== 'Em Cotação' && 
-                      order.header.status !== 'Rascunho' && 
-                      currentUser?.role !== 'diretoria' && 
-                      currentUser?.role !== 'faturamento'
-                    )}
-                    style={{ minWidth: 0 }}
-                    className={Boolean(
-                      order.header.status && 
-                      order.header.status !== 'Em Cotação' && 
-                      order.header.status !== 'Rascunho' && 
-                      currentUser?.role !== 'diretoria' && 
-                      currentUser?.role !== 'faturamento'
-                    ) ? 'space-y-6 opacity-85 pointer-events-none select-none border-none p-0 m-0 w-full max-w-full min-w-0' : 'space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0'}
-                  >
+                  {/* 1. Formulário de Cabeçalho do Pedido (Previsão de Entrega liberada para o Comprador até a confirmação física) */}
+                  <div className="space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0">
                     <OrderHeaderForm 
                       header={order.header} 
                       suppliers={suppliers}
@@ -3318,54 +3313,88 @@ export function App() {
                       hasSupplierTemplate={Boolean(activeSupplierTemplate)}
                       supplierTemplateItemsCount={activeSupplierTemplate?.items?.length || 0}
                       showToast={showToast}
+                      isLocked={Boolean(
+                        order.header.status && 
+                        order.header.status !== 'Em Cotação' && 
+                        order.header.status !== 'Rascunho' && 
+                        currentUser?.role !== 'diretoria' && 
+                        currentUser?.role !== 'faturamento' &&
+                        currentUser?.role !== ('root' as any)
+                      )}
+                      canEditDeliveryDate={Boolean(
+                        currentUser?.role === 'diretoria' ||
+                        currentUser?.role === 'faturamento' ||
+                        currentUser?.role === ('root' as any) ||
+                        !order.header.recebidoMatriz
+                      )}
                     />
 
-                    {/* Card Retrátil de Engenharia Fiscal do Pedido (Entrada e Saída) */}
-                    <OrderFiscalCard
-                      fiscalConfig={order.fiscalConfig || fiscalConfig}
-                      onChangeFiscalConfig={handleOrderFiscalConfigChange}
-                      aliquotaStHeader={order.header.aliquotaSt}
-                      onUpdateHeaderSt={(newSt) => {
-                        handleHeaderChange({
-                          ...order.header,
-                          aliquotaSt: newSt
-                        });
-                      }}
-                      valorFreteHeader={order.header.valorFrete}
-                      onUpdateHeaderFrete={(newFrete) => {
-                        handleHeaderChange({
-                          ...order.header,
-                          valorFrete: newFrete,
-                          valorFreteGlobal: newFrete
-                        });
-                      }}
-                      totalMercadorias={calculateOrderMerchandiseTotal(order)}
-                      averageItemPrice={averageItemPrice}
-                      samplePdv={samplePdv}
-                      fiscalPresets={fiscalPresets}
-                      onSaveFiscalPreset={handleSaveFiscalPreset}
-                      onDeleteFiscalPreset={handleDeleteFiscalPreset}
-                    />
+                    {/* 2. Engenharia Fiscal e Grade de Itens (Bloqueados para o Comprador após aprovação) */}
+                    <fieldset 
+                      disabled={Boolean(
+                        order.header.status && 
+                        order.header.status !== 'Em Cotação' && 
+                        order.header.status !== 'Rascunho' && 
+                        currentUser?.role !== 'diretoria' && 
+                        currentUser?.role !== 'faturamento' &&
+                        currentUser?.role !== ('root' as any)
+                      )}
+                      style={{ minWidth: 0 }}
+                      className={Boolean(
+                        order.header.status && 
+                        order.header.status !== 'Em Cotação' && 
+                        order.header.status !== 'Rascunho' && 
+                        currentUser?.role !== 'diretoria' && 
+                        currentUser?.role !== 'faturamento' &&
+                        currentUser?.role !== ('root' as any)
+                      ) ? 'space-y-6 opacity-85 pointer-events-none select-none border-none p-0 m-0 w-full max-w-full min-w-0' : 'space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0'}
+                    >
+                      {/* Card Retrátil de Engenharia Fiscal do Pedido (Entrada e Saída) */}
+                      <OrderFiscalCard
+                        fiscalConfig={order.fiscalConfig || fiscalConfig}
+                        onChangeFiscalConfig={handleOrderFiscalConfigChange}
+                        aliquotaStHeader={order.header.aliquotaSt}
+                        onUpdateHeaderSt={(newSt) => {
+                          handleHeaderChange({
+                            ...order.header,
+                            aliquotaSt: newSt
+                          });
+                        }}
+                        valorFreteHeader={order.header.valorFrete}
+                        onUpdateHeaderFrete={(newFrete) => {
+                          handleHeaderChange({
+                            ...order.header,
+                            valorFrete: newFrete,
+                            valorFreteGlobal: newFrete
+                          });
+                        }}
+                        totalMercadorias={calculateOrderMerchandiseTotal(order)}
+                        averageItemPrice={averageItemPrice}
+                        samplePdv={samplePdv}
+                        fiscalPresets={fiscalPresets}
+                        onSaveFiscalPreset={handleSaveFiscalPreset}
+                        onDeleteFiscalPreset={handleDeleteFiscalPreset}
+                      />
 
-
-                    <OrderItemsTable
-                      items={order.items}
-                      orderHeader={order.header}
-                      globalFiscal={order.fiscalConfig || fiscalConfig}
-                      stores={storeConfigs}
-                      products={products}
-                      suppliers={suppliers}
-                      currentSupplierName={order.header.fornecedor}
-                      currentSupplierId={order.header.supplierId}
-                      percentualDescontoOff={order.header.percentualDescontoOff}
-                      onUpdateItem={handleUpdateItem}
-                      onAddItem={handleAddItem}
-                      onDuplicateItem={handleDuplicateItem}
-                      onDeleteItem={handleDeleteItem}
-                      onSaveProduct={handleSaveProduct}
-                      onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
-                    />
-                  </fieldset>
+                      <OrderItemsTable
+                        items={order.items}
+                        orderHeader={order.header}
+                        globalFiscal={order.fiscalConfig || fiscalConfig}
+                        stores={storeConfigs}
+                        products={products}
+                        suppliers={suppliers}
+                        currentSupplierName={order.header.fornecedor}
+                        currentSupplierId={order.header.supplierId}
+                        percentualDescontoOff={order.header.percentualDescontoOff}
+                        onUpdateItem={handleUpdateItem}
+                        onAddItem={handleAddItem}
+                        onDuplicateItem={handleDuplicateItem}
+                        onDeleteItem={handleDeleteItem}
+                        onSaveProduct={handleSaveProduct}
+                        onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
+                      />
+                    </fieldset>
+                  </div>
 
                   {/* Card de Ajuste Fiscal da Entrega (Conciliação da Nota Fiscal com Produtos e Boletos) */}
                   <OrderFiscalAdjustmentCard

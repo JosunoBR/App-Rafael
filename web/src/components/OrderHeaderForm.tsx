@@ -71,6 +71,8 @@ interface OrderHeaderFormProps {
   hasSupplierTemplate?: boolean;
   supplierTemplateItemsCount?: number;
   showToast?: (msg: string, type?: 'success' | 'info' | 'error') => void;
+  isLocked?: boolean;
+  canEditDeliveryDate?: boolean;
 }
 
 export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({ 
@@ -84,8 +86,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   onLoadSupplierTemplate,
   hasSupplierTemplate = false,
   supplierTemplateItemsCount = 0,
-  showToast
+  showToast,
+  isLocked = false,
+  canEditDeliveryDate
 }) => {
+  const isReceiptConfirmed = Boolean(header.recebidoMatriz);
+  const isDeliveryDateEditable = canEditDeliveryDate !== undefined 
+    ? canEditDeliveryDate 
+    : (!isReceiptConfirmed || !isLocked);
+
   const [isExpanded, setIsExpanded] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [supplierFilterText, setSupplierFilterText] = useState('');
@@ -1558,6 +1567,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
             
             {/* 1. Nº Pedido */}
+            {/* 1. Nº Pedido */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -1572,12 +1582,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               </div>
               <input
                 type="text"
+                disabled={isLocked}
                 value={header.numeroPedido}
                 onChange={(e) => handleFieldChange('numeroPedido', e.target.value)}
-                className={`w-full px-3 py-2 text-xs rounded-lg border bg-white dark:bg-slate-900 font-mono font-bold transition-colors outline-hidden ${
-                  duplicateOrderConflict
-                    ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20 text-rose-700 dark:text-rose-300 bg-rose-50/50 dark:bg-rose-950/20'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                className={`w-full px-3 py-2 text-xs rounded-lg border font-mono font-bold transition-colors outline-hidden ${
+                  isLocked
+                    ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
+                    : duplicateOrderConflict
+                      ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20 text-rose-700 dark:text-rose-300 bg-rose-50/50 dark:bg-rose-950/20'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
                 }`}
                 placeholder="Ex: PED-0001"
               />
@@ -1587,15 +1600,17 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
                     <span>Já existe no pedido de <b>{duplicateOrderConflict.header.fornecedor || 'outro fornecedor'}</b>. Números devem ser únicos!</span>
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleApplyNextOrderNumber}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 px-2 py-1 rounded-md border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
-                    title="Preencher com o próximo número sequencial livre disponível no banco"
-                  >
-                    <Zap className="w-3 h-3 text-emerald-600 dark:text-emerald-400 fill-emerald-500" />
-                    Usar Próximo Livre
-                  </button>
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      onClick={handleApplyNextOrderNumber}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 px-2 py-1 rounded-md border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                      title="Preencher com o próximo número sequencial livre disponível no banco"
+                    >
+                      <Zap className="w-3 h-3 text-emerald-600 dark:text-emerald-400 fill-emerald-500" />
+                      Usar Próximo Livre
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1610,7 +1625,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {/* Botão Salvar como Pedido Padrão */}
-                  {onSaveAsSupplierTemplate && currentSupplier && (
+                  {onSaveAsSupplierTemplate && currentSupplier && !isLocked && (
                     <button
                       type="button"
                       onClick={onSaveAsSupplierTemplate}
@@ -1627,23 +1642,28 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               <div className="relative">
                 <input
                   type="text"
+                  disabled={isLocked}
                   value={header.fornecedor}
                   onChange={(e) => {
                     handleFieldChange('fornecedor', e.target.value);
                     setIsDropdownOpen(true);
                   }}
                   onFocus={() => {
-                    setIsDropdownOpen(true);
+                    if (!isLocked) setIsDropdownOpen(true);
                   }}
                   onClick={() => {
-                    setIsDropdownOpen(true);
+                    if (!isLocked) setIsDropdownOpen(true);
                   }}
-                  className="w-full pl-3 pr-16 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium"
+                  className={`w-full pl-3 pr-16 py-2 text-xs rounded-lg border outline-hidden font-medium ${
+                    isLocked
+                      ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                  }`}
                   placeholder="Selecione ou digite o fornecedor..."
                 />
                 
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                  {header.fornecedor && (
+                  {header.fornecedor && !isLocked && (
                     <button
                       type="button"
                       onClick={() => {
@@ -1661,22 +1681,24 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsDropdownOpen(prev => !prev);
-                      setSupplierFilterText('');
-                    }}
-                    className="p-1 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded cursor-pointer transition"
-                    title={isDropdownOpen ? "Fechar lista de fornecedores" : "Abrir lista de fornecedores"}
-                  >
-                    {isDropdownOpen ? <ChevronUp className="w-4 h-4 text-emerald-500" /> : <ChevronDown className="w-4 h-4" />}
-                  </button>
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDropdownOpen(prev => !prev);
+                        setSupplierFilterText('');
+                      }}
+                      className="p-1 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded cursor-pointer transition"
+                      title={isDropdownOpen ? "Fechar lista de fornecedores" : "Abrir lista de fornecedores"}
+                    >
+                      {isDropdownOpen ? <ChevronUp className="w-4 h-4 text-emerald-500" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Dropdown Suggestions List (Abre ao clicar ou focar) */}
-              {isDropdownOpen && (
+              {isDropdownOpen && !isLocked && (
                 <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-80 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col">
                   {/* Barra de Pesquisa Dentro do Dropdown */}
                   <div className="p-2.5 bg-slate-50 dark:bg-slate-900/90 border-b border-slate-100 dark:border-slate-700/60 sticky top-0 z-10 backdrop-blur-xs">
@@ -1786,13 +1808,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               <div className="relative">
                 <input
                   type="number"
+                  disabled={isLocked}
                   step="0.1"
                   min="0"
                   max="100"
                   value={header.percentualNota === 0 ? '' : (header.percentualNota !== undefined ? header.percentualNota : 100)}
                   onFocus={(e) => e.target.select()}
                   onChange={(e) => handleFieldChange('percentualNota', parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold pr-8 font-mono"
+                  className={`w-full px-3 py-2 text-xs rounded-lg border outline-hidden font-bold pr-8 font-mono ${
+                    isLocked
+                      ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                  }`}
                   placeholder="100"
                 />
                 <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
@@ -1809,9 +1836,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               </label>
               <input
                 type="text"
+                disabled={isLocked}
                 value={header.vendedor}
                 onChange={(e) => handleFieldChange('vendedor', e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                className={`w-full px-3 py-2 text-xs rounded-lg border outline-hidden ${
+                  isLocked
+                    ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                }`}
                 placeholder="Roberto Lima"
               />
             </div>
@@ -1823,12 +1855,17 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               </label>
               <input
                 type="text"
+                disabled={isLocked}
                 value={header.contatoVendedor?.includes('@') ? header.contatoVendedor : maskPhone(header.contatoVendedor || '')}
                 onChange={(e) => {
                   const val = e.target.value;
                   handleFieldChange('contatoVendedor', val.includes('@') ? val : maskPhone(val));
                 }}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono"
+                className={`w-full px-3 py-2 text-xs rounded-lg border outline-hidden font-mono ${
+                  isLocked
+                    ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                }`}
               />
             </div>
 
@@ -1841,48 +1878,77 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               <div className="relative flex items-center">
                 <input
                   type="text"
+                  disabled={isLocked}
                   value={toBrDate(header.dataPedido || header.dataEmissao || new Date().toISOString().split('T')[0])}
                   onChange={(e) => handleFieldChange('dataPedido', maskDate(e.target.value))}
                   placeholder="DD/MM/AAAA"
                   maxLength={10}
-                  className="w-full px-3 py-2 pr-8 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-medium"
+                  className={`w-full px-3 py-2 pr-8 text-xs rounded-lg border outline-hidden font-mono font-medium ${
+                    isLocked
+                      ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                  }`}
                 />
-                <input
-                  type="date"
-                  value={toIsoDate(header.dataPedido || header.dataEmissao || new Date().toISOString().split('T')[0])}
-                  onChange={(e) => handleFieldChange('dataPedido', toBrDate(e.target.value))}
-                  className="absolute right-1 w-7 h-7 opacity-0 cursor-pointer z-10"
-                  tabIndex={-1}
-                  title="Selecionar no calendário"
-                />
+                {!isLocked && (
+                  <input
+                    type="date"
+                    value={toIsoDate(header.dataPedido || header.dataEmissao || new Date().toISOString().split('T')[0])}
+                    onChange={(e) => handleFieldChange('dataPedido', toBrDate(e.target.value))}
+                    className="absolute right-1 w-7 h-7 opacity-0 cursor-pointer z-10"
+                    tabIndex={-1}
+                    title="Selecionar no calendário"
+                  />
+                )}
                 <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 pointer-events-none" />
               </div>
             </div>
 
-            {/* 7. Data Entrega Prevista */}
+            {/* 7. Data Entrega Prevista (EDITÁVEL ATÉ O RECEBIMENTO FÍSICO) */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5 text-slate-400" />
-                Previsão de Entrega
-              </label>
+              <div className="flex items-center justify-between mb-1 gap-1 flex-wrap">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Truck className="w-3.5 h-3.5 text-slate-400" />
+                  Previsão de Entrega
+                </label>
+                {isDeliveryDateEditable && isLocked && (
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-50 dark:bg-emerald-950/70 px-1.5 py-0.2 rounded border border-emerald-300 dark:border-emerald-700">
+                    Editável até o recebimento
+                  </span>
+                )}
+                {isReceiptConfirmed && (
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                    Recebido em {toBrDate(header.dataRecebimentoMatriz)}
+                  </span>
+                )}
+              </div>
               <div className="relative flex items-center">
                 <input
                   type="text"
+                  disabled={!isDeliveryDateEditable}
                   value={toBrDate(header.dataEntregaPrevista)}
                   onChange={(e) => handleFieldChange('dataEntregaPrevista', maskDate(e.target.value))}
                   placeholder="DD/MM/AAAA"
                   maxLength={10}
-                  className="w-full px-3 py-2 pr-8 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-medium"
+                  className={`w-full px-3 py-2 pr-8 text-xs rounded-lg border outline-hidden font-mono font-medium transition-all ${
+                    !isDeliveryDateEditable
+                      ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : isLocked
+                        ? 'border-emerald-500 dark:border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 text-slate-900 dark:text-white ring-1 ring-emerald-500/30 focus:ring-2 focus:ring-emerald-500 font-bold shadow-2xs'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                  }`}
+                  title={!isDeliveryDateEditable ? 'Data fixada após confirmação do recebimento físico na Matriz' : 'Alterar previsão de entrega do pedido'}
                 />
-                <input
-                  type="date"
-                  value={toIsoDate(header.dataEntregaPrevista)}
-                  onChange={(e) => handleFieldChange('dataEntregaPrevista', toBrDate(e.target.value))}
-                  className="absolute right-1 w-7 h-7 opacity-0 cursor-pointer z-10"
-                  tabIndex={-1}
-                  title="Selecionar no calendário"
-                />
-                <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 pointer-events-none" />
+                {isDeliveryDateEditable && (
+                  <input
+                    type="date"
+                    value={toIsoDate(header.dataEntregaPrevista)}
+                    onChange={(e) => handleFieldChange('dataEntregaPrevista', toBrDate(e.target.value))}
+                    className="absolute right-1 w-7 h-7 opacity-0 cursor-pointer z-10"
+                    tabIndex={-1}
+                    title="Selecionar no calendário"
+                  />
+                )}
+                <Calendar className={`w-3.5 h-3.5 absolute right-2.5 pointer-events-none ${isDeliveryDateEditable ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-600'}`} />
               </div>
             </div>
 
@@ -1925,12 +1991,13 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
             const valorMaximoBoletoCalculado = isEntradaMista ? valorPorParcelaSaldo : (valorTotalPedido > 0 && currentParcelas > 0 ? (valorTotalPedido / currentParcelas) : 0);
             
             return (
-              <div className={`p-4 rounded-2xl border transition-all ${
-                (valorMaximoBoletoCalculado > LIMITE_MAXIMO_BOLETO) 
-                  ? 'bg-rose-50/60 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800/80 shadow-xs' 
-                  : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/90 dark:border-slate-700'
-              }`}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5">
+              <fieldset disabled={isLocked} className={isLocked ? 'opacity-85 pointer-events-none select-none border-none p-0 m-0' : 'border-none p-0 m-0'}>
+                <div className={`p-4 rounded-2xl border transition-all ${
+                  (valorMaximoBoletoCalculado > LIMITE_MAXIMO_BOLETO) 
+                    ? 'bg-rose-50/60 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800/80 shadow-xs' 
+                    : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/90 dark:border-slate-700'
+                }`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                       <CreditCard className="w-3.5 h-3.5" />
@@ -2574,8 +2641,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
                 )}
               </div>
-            );
-          })()}
+            </fieldset>
+          );
+        })()}
 
           {/* SEÇÃO 3: DESCRIÇÃO DO FORNECEDOR (ESPELHO) & DESCRIÇÃO DO PEDIDO */}
           <div className="space-y-3">

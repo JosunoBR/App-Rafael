@@ -93,7 +93,48 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   onRollbackSuccess
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatusTab, setSelectedStatusTab] = useState<string>('todos');
+  
+  // Status da esteira oficial suportados para o perfil atual
+  const ALL_PIPELINE_STATUSES = useMemo(() => {
+    if (currentUser?.role === 'faturamento') {
+      return ['Aprovado', 'Em Separação', 'Faturamento', 'Finalizado'];
+    }
+    return ['Em Cotação', 'Aprovado', 'Em Separação', 'Faturamento', 'Finalizado'];
+  }, [currentUser?.role]);
+
+  // Conjunto de status ligados/ativos no filtro (por padrão todos ligados)
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => new Set(
+    currentUser?.role === 'faturamento'
+      ? ['Aprovado', 'Em Separação', 'Faturamento', 'Finalizado']
+      : ['Em Cotação', 'Aprovado', 'Em Separação', 'Faturamento', 'Finalizado']
+  ));
+
+  const isAllSelected = useMemo(() => {
+    return ALL_PIPELINE_STATUSES.length > 0 && ALL_PIPELINE_STATUSES.every(st => selectedStatuses.has(st));
+  }, [ALL_PIPELINE_STATUSES, selectedStatuses]);
+
+  // Alterna liga/desliga de um status individual (desliga apenas ele se estiver ligado, sem desativar os outros)
+  const handleToggleStatus = (status: string) => {
+    setSelectedStatuses(prev => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  };
+
+  // Liga/desliga todos os status ao clicar em "Todos os Pedidos"
+  const handleToggleAll = () => {
+    if (isAllSelected) {
+      setSelectedStatuses(new Set());
+    } else {
+      setSelectedStatuses(new Set(ALL_PIPELINE_STATUSES));
+    }
+  };
+
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
   const [orderToRollback, setOrderToRollback] = useState<PurchaseOrder | null>(null);
@@ -182,10 +223,10 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         if (!matchesSearch) return false;
       }
 
-      // 3. Aba de Status
+      // 3. Filtro Multi-Status da Esteira (Liga e Desliga)
       const rawStatus = o.header.status || 'Em Cotação';
       const currentStatus = (rawStatus === 'Em Distribuição') ? 'Em Separação' : (rawStatus === 'Rascunho' ? 'Em Cotação' : rawStatus);
-      if (selectedStatusTab !== 'todos' && currentStatus !== selectedStatusTab) {
+      if (!selectedStatuses.has(currentStatus)) {
         return false;
       }
 
@@ -286,7 +327,20 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     }
 
     return result;
-  }, [orders, searchTerm, selectedStatusTab, columnFilters, sortField, sortDirection]);
+  }, [orders, searchTerm, selectedStatuses, columnFilters, sortField, sortDirection]);
+
+  // Pedidos filtrados dinamicamente pelos botões multi-status da esteira (para sincronização com o Card de Controle de Compras / Financeiro)
+  const statusFilteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      if (currentUser?.role === 'faturamento') {
+        const raw = o.header.status || 'Em Cotação';
+        if (raw === 'Em Cotação' || raw === 'Rascunho') return false;
+      }
+      const rawStatus = o.header.status || 'Em Cotação';
+      const currentStatus = (rawStatus === 'Em Distribuição') ? 'Em Separação' : (rawStatus === 'Rascunho' ? 'Em Cotação' : rawStatus);
+      return selectedStatuses.has(currentStatus);
+    });
+  }, [orders, currentUser?.role, selectedStatuses]);
 
   const totalPedidos = orders.length;
 
@@ -371,96 +425,139 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         onSelectOrder={onSelectOrder}
       />
 
-      {/* 2. Card de Controle de Compras (Filtros por Mês, Ano etc., Médias, Extremos e Navegação) */}
+      {/* 2. Card de Controle de Compras (Filtros por Mês, Ano etc., Médias, Extremos e Navegação Sincronizados com a Esteira) */}
       <PurchaseControlCard
-        orders={orders}
+        orders={statusFilteredOrders}
         onSelectOrder={onSelectOrder}
       />
 
-      {/* 3. Abas de Status da Esteira Operacional Oficial (5 Etapas) */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      {/* 3. Abas de Status da Esteira Operacional Oficial (5 Etapas) - Liga e Desliga Dinâmico */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 select-none">
+        
+        {/* Botão: Todos os Pedidos (Liga / Desliga os botões ao lado) */}
         <button
-          onClick={() => setSelectedStatusTab('todos')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-            selectedStatusTab === 'todos'
-              ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+          type="button"
+          onClick={handleToggleAll}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
+            isAllSelected
+              ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
           }`}
+          title={isAllSelected ? "Todos ligados. Clique para desligar todos os botões ao lado" : "Clique para ligar todos os botões ao lado"}
         >
           <span>Todos os Pedidos</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20 dark:bg-white/20">
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+            isAllSelected 
+              ? 'bg-white/20 dark:bg-slate-200 text-white dark:text-slate-900' 
+              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+          }`}>
             {countByStatus.todos}
           </span>
         </button>
 
+        {/* 1. Em Cotação */}
         {currentUser?.role !== 'faturamento' && (
           <button
-            onClick={() => setSelectedStatusTab('Em Cotação')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-              selectedStatusTab === 'Em Cotação'
-                ? 'bg-amber-500 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50'
+            type="button"
+            onClick={() => handleToggleStatus('Em Cotação')}
+            className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
+              selectedStatuses.has('Em Cotação')
+                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 font-bold'
+                : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
             }`}
+            title={selectedStatuses.has('Em Cotação') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
           >
             <span>🟡 1. Em Cotação</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+              selectedStatuses.has('Em Cotação') 
+                ? 'bg-amber-200/70 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-bold' 
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+            }`}>
               {countByStatus['Em Cotação']}
             </span>
           </button>
         )}
 
+        {/* 2. Aprovados */}
         <button
-          onClick={() => setSelectedStatusTab('Aprovado')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-            selectedStatusTab === 'Aprovado'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-50'
+          type="button"
+          onClick={() => handleToggleStatus('Aprovado')}
+          className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
+            selectedStatuses.has('Aprovado')
+              ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-700/80 font-bold'
+              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
           }`}
+          title={selectedStatuses.has('Aprovado') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
         >
           <span>🔵 2. Aprovados</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+            selectedStatuses.has('Aprovado') 
+              ? 'bg-blue-200/70 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 font-bold' 
+              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+          }`}>
             {countByStatus['Aprovado']}
           </span>
         </button>
 
+        {/* 3. Separação */}
         <button
-          onClick={() => setSelectedStatusTab('Em Separação')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-            selectedStatusTab === 'Em Separação'
-              ? 'bg-purple-600 text-white shadow-xs'
-              : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50'
+          type="button"
+          onClick={() => handleToggleStatus('Em Separação')}
+          className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
+            selectedStatuses.has('Em Separação')
+              ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-700/80 font-bold'
+              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
           }`}
+          title={selectedStatuses.has('Em Separação') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
         >
           <span>🟣 3. Separação</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+            selectedStatuses.has('Em Separação') 
+              ? 'bg-purple-200/70 dark:bg-purple-900/60 text-purple-900 dark:text-purple-200 font-bold' 
+              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+          }`}>
             {countByStatus['Em Separação'] || 0}
           </span>
         </button>
 
+        {/* 4. Faturamento */}
         <button
-          onClick={() => setSelectedStatusTab('Faturamento')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-            selectedStatusTab === 'Faturamento'
-              ? 'bg-amber-600 text-white shadow-xs'
-              : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50'
+          type="button"
+          onClick={() => handleToggleStatus('Faturamento')}
+          className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
+            selectedStatuses.has('Faturamento')
+              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 font-bold'
+              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
           }`}
+          title={selectedStatuses.has('Faturamento') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
         >
           <span>🟠 4. Faturamento</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+            selectedStatuses.has('Faturamento') 
+              ? 'bg-amber-200/70 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-bold' 
+              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+          }`}>
             {countByStatus['Faturamento'] || 0}
           </span>
         </button>
 
+        {/* 5. Finalizados */}
         <button
-          onClick={() => setSelectedStatusTab('Finalizado')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-            selectedStatusTab === 'Finalizado'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-50'
+          type="button"
+          onClick={() => handleToggleStatus('Finalizado')}
+          className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
+            selectedStatuses.has('Finalizado')
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/80 font-bold'
+              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
           }`}
+          title={selectedStatuses.has('Finalizado') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
         >
           <span>🟢 5. Finalizados</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/20">
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+            selectedStatuses.has('Finalizado') 
+              ? 'bg-emerald-200/70 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 font-bold' 
+              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+          }`}>
             {countByStatus['Finalizado'] || 0}
           </span>
         </button>
@@ -959,7 +1056,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                           <span>Todos</span>
                           <span className="font-mono text-[10px] text-slate-400">{orders.length}</span>
                         </button>
-                        {(['Em Cotação', 'Aprovado', 'Em Distribuição', 'Finalizado'] as const).map(st => (
+                        {(['Em Cotação', 'Aprovado', 'Em Separação', 'Faturamento', 'Finalizado'] as const).map(st => (
                           <button
                             key={st}
                             onClick={() => { setColumnFilters(p => ({ ...p, status: st })); setActiveFilterDropdown(null); }}
@@ -989,18 +1086,33 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Search className="w-8 h-8 text-slate-300 dark:text-slate-600 stroke-1" />
                       <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">Nenhum pedido encontrado</p>
-                      <p className="text-xs text-slate-400">Tente ajustar a busca ou os filtros aplicados nas colunas.</p>
-                      {(hasActiveColumnFilters || searchTerm) && (
-                        <button
-                          onClick={() => {
-                            setSearchTerm('');
-                            handleClearAllColumnFilters();
-                          }}
-                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 transition cursor-pointer"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          Limpar todos os filtros
-                        </button>
+                      {selectedStatuses.size === 0 ? (
+                        <>
+                          <p className="text-xs text-slate-400">Todos os botões de status da esteira estão desligados.</p>
+                          <button
+                            type="button"
+                            onClick={handleToggleAll}
+                            className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 shadow-sm transition cursor-pointer"
+                          >
+                            Ligar Todos os Pedidos
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-slate-400">Tente ajustar a busca ou os filtros aplicados nas colunas.</p>
+                          {(hasActiveColumnFilters || searchTerm) && (
+                            <button
+                              onClick={() => {
+                                setSearchTerm('');
+                                handleClearAllColumnFilters();
+                              }}
+                              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 transition cursor-pointer"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              Limpar todos os filtros
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>

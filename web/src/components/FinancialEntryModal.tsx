@@ -50,14 +50,6 @@ const FORMAS_PAGAMENTO: FinancialPaymentMethod[] = [
   'CHEQUE'
 ];
 
-const BANCOS_SUGESTOES = [
-  'Banco Santander',
-  'Caixa Interno Loja',
-  'Banco do Brasil',
-  'Bradesco',
-  'Itaú',
-  'Nubank / Cora'
-];
 
 export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   isOpen,
@@ -78,14 +70,17 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   const [documentoRef, setDocumentoRef] = useState('');
   const [observacao, setObservacao] = useState('');
   
-  // Valores e Parcelamento (Padrão ERP)
+  // Valores e Parcelamento (Padrão ERP idêntico à Tabela de Cotação)
   const [modoParcelamento, setModoParcelamento] = useState<'a_vista' | 'parcelado'>('a_vista');
-  const [valorTotalStr, setValorTotalStr] = useState<string>('');
+  const [valorTotalNum, setValorTotalNum] = useState<number>(0);
+  const [editingValorTotal, setEditingValorTotal] = useState<string | null>(null);
   const [dataBase, setDataBase] = useState<string>(() => new Date().toISOString().substring(0, 10));
   const [parcelasCount, setParcelasCount] = useState<number>(3);
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
   const [datasCustomizadas, setDatasCustomizadas] = useState<string[]>([]);
-  const [valoresCustomizados, setValoresCustomizados] = useState<string[]>([]);
+  const [parcelasValoresNum, setParcelasValoresNum] = useState<number[]>([]);
+  const [editingParcelasMap, setEditingParcelasMap] = useState<Record<number, string>>({});
+  const [lockedIndices, setLockedIndices] = useState<Set<number>>(new Set());
   const [isRecorrente, setIsRecorrente] = useState<boolean>(false);
 
   const [saving, setSaving] = useState(false);
@@ -104,12 +99,15 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
       setDocumentoRef('');
       setObservacao('');
       setModoParcelamento('a_vista');
-      setValorTotalStr('');
+      setValorTotalNum(0);
+      setEditingValorTotal(null);
       setDataBase(new Date().toISOString().substring(0, 10));
       setParcelasCount(3);
       setIntervaloDias(30);
       setDatasCustomizadas([]);
-      setValoresCustomizados([]);
+      setParcelasValoresNum([]);
+      setEditingParcelasMap({});
+      setLockedIndices(new Set());
       setIsRecorrente(false);
       setErrorMsg(null);
     }
@@ -129,36 +127,33 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     }
   }, [dataBase, parcelasCount, intervaloDias, modoParcelamento]);
 
-  // Valor numérico parseado com segurança no padrão brasileiro ou float
-  const valorTotalNum = useMemo(() => {
-    return parseCurrency(valorTotalStr);
-  }, [valorTotalStr]);
-
   // Gerar / inicializar valores padrão de parcelas ao alterar valorTotalNum, parcelasCount ou modo
   // Distribuição precisa em centavos: rateia igualmente e atribui centavos residuais na 1ª parcela
   useEffect(() => {
     if (modoParcelamento === 'parcelado' && parcelasCount > 0) {
+      setLockedIndices(new Set());
+      setEditingParcelasMap({});
       if (valorTotalNum > 0) {
         const totalCentavos = Math.round(valorTotalNum * 100);
         const baseCentavos = Math.floor(totalCentavos / parcelasCount);
         const restoCentavos = totalCentavos - (baseCentavos * parcelasCount);
         const initial = Array.from({ length: parcelasCount }, (_, i) => {
           const centavos = (i === 0) ? (baseCentavos + restoCentavos) : baseCentavos;
-          return formatCurrency(centavos / 100, false);
+          return centavos / 100;
         });
-        setValoresCustomizados(initial);
+        setParcelasValoresNum(initial);
       } else {
-        setValoresCustomizados(Array.from({ length: parcelasCount }, () => ''));
+        setParcelasValoresNum(Array.from({ length: parcelasCount }, () => 0));
       }
     }
   }, [valorTotalNum, parcelasCount, modoParcelamento]);
 
-  // Edição manual de valor de uma parcela individual (armazenando string formatada pt-BR)
-  const handleCustomValorChange = (index: number, newValor: string) => {
-    setValoresCustomizados(prev => {
+  // Edição manual de valor numérico de uma parcela individual
+  const handleParcelaNumChange = (index: number, newValor: number) => {
+    setParcelasValoresNum(prev => {
       const updated = [...prev];
       while (updated.length < parcelasCount) {
-        updated.push('');
+        updated.push(0);
       }
       updated[index] = newValor;
       return updated;
@@ -168,94 +163,83 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   // Soma atual das parcelas digitadas calculada com precisão em centavos
   const somaParcelasNum = useMemo(() => {
     if (modoParcelamento !== 'parcelado') return valorTotalNum;
-    const sumCentavos = valoresCustomizados.reduce((acc, curr) => acc + Math.round(parseCurrency(curr) * 100), 0);
+    const sumCentavos = parcelasValoresNum.reduce((acc, curr) => acc + Math.round((curr || 0) * 100), 0);
     return sumCentavos / 100;
-  }, [modoParcelamento, valoresCustomizados, valorTotalNum]);
+  }, [modoParcelamento, parcelasValoresNum, valorTotalNum]);
 
-  // Diferença exata entre soma das parcelas e total do lançamento (em centavos)
-  const diferencaParcelas = useMemo(() => {
-    if (modoParcelamento !== 'parcelado' || valorTotalNum <= 0) return 0;
-    const diffCentavos = Math.round(somaParcelasNum * 100) - Math.round(valorTotalNum * 100);
-    return diffCentavos / 100;
-  }, [modoParcelamento, somaParcelasNum, valorTotalNum]);
+  // ⚡ Ajuste Inteligente Automático: ao editar qualquer parcela, redistribui o saldo restante entre as demais
+  const handleAutoAdjust = (editedIndex: number) => {
+    if (parcelasCount <= 1 || valorTotalNum <= 0) return;
 
-  // Status de conferência de valores:
-  // - 'excedeu': soma das parcelas maior que total (vermelho claro)
-  // - 'abaixo': soma das parcelas menor que total (azul claro)
-  // - 'igualou': soma exatamente igual ao total (verde claro)
-  const statusConferencia = useMemo<'neutro' | 'abaixo' | 'excedeu' | 'igualou'>(() => {
-    if (modoParcelamento !== 'parcelado' || valorTotalNum <= 0) return 'neutro';
-    if (diferencaParcelas > 0.001) return 'excedeu';
-    if (diferencaParcelas < -0.001) return 'abaixo';
-    return 'igualou';
-  }, [modoParcelamento, valorTotalNum, diferencaParcelas]);
-
-  // Cores suaves, claras e não chamativas conforme solicitado:
-  const colorClasses = useMemo(() => {
-    if (modoParcelamento !== 'parcelado' || valorTotalNum <= 0) {
-      return {
-        inputParcela: 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-amber-500',
-        inputTotal: 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-amber-500',
-        card: 'border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900',
-        statusBanner: 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-      };
+    const valDigitado = parcelasValoresNum[editedIndex] || 0;
+    let finalVal = valDigitado;
+    if (valDigitado > valorTotalNum) {
+      showToast('O valor da parcela não pode exceder o total do lançamento.', 'info');
+      finalVal = valorTotalNum;
     }
 
-    if (statusConferencia === 'excedeu') {
-      return {
-        inputParcela: 'border-rose-300 dark:border-rose-800/80 bg-rose-50/50 dark:bg-rose-950/20 text-rose-950 dark:text-rose-100 focus:ring-rose-200 focus:border-rose-400',
-        inputTotal: 'border-rose-300 dark:border-rose-800 bg-rose-50/25 dark:bg-rose-950/15 focus:ring-rose-200 focus:border-rose-400',
-        card: 'border-rose-200 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/10',
-        statusBanner: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300'
-      };
-    }
+    setLockedIndices(prevLocked => {
+      const nextLocked = new Set(prevLocked);
+      nextLocked.add(editedIndex);
 
-    if (statusConferencia === 'abaixo') {
-      return {
-        inputParcela: 'border-sky-300 dark:border-sky-800/80 bg-sky-50/50 dark:bg-sky-950/20 text-sky-950 dark:text-sky-100 focus:ring-sky-200 focus:border-sky-400',
-        inputTotal: 'border-sky-300 dark:border-sky-800 bg-sky-50/25 dark:bg-sky-950/15 focus:ring-sky-200 focus:border-sky-400',
-        card: 'border-sky-200 dark:border-sky-900/60 bg-sky-50/20 dark:bg-sky-950/10',
-        statusBanner: 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-900 text-sky-800 dark:text-sky-300'
-      };
-    }
-
-    // igualou
-    return {
-      inputParcela: 'border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 focus:ring-emerald-200 focus:border-emerald-400',
-      inputTotal: 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/25 dark:bg-emerald-950/15 focus:ring-emerald-200 focus:border-emerald-400',
-      card: 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10',
-      statusBanner: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300'
-    };
-  }, [modoParcelamento, valorTotalNum, statusConferencia]);
-
-  // Ajusta diferença restante na última parcela para igualar com um clique
-  const handleAjustarDiferencaNaUltima = () => {
-    if (parcelasCount <= 0 || valorTotalNum <= 0) return;
-    setValoresCustomizados(prev => {
-      const updated = [...prev];
-      while (updated.length < parcelasCount) updated.push('');
-      let somaOutrasCentavos = 0;
-      for (let i = 0; i < parcelasCount - 1; i++) {
-        somaOutrasCentavos += Math.round(parseCurrency(updated[i]) * 100);
-      }
       const totalCentavos = Math.round(valorTotalNum * 100);
-      const valUltimaCentavos = Math.max(0, totalCentavos - somaOutrasCentavos);
-      updated[parcelasCount - 1] = formatCurrency(valUltimaCentavos / 100, false);
-      return updated;
+
+      // Encontra parcelas automáticas que ainda podem absorver o saldo
+      let unlocked: number[] = [];
+      for (let i = 0; i < parcelasCount; i++) {
+        if (!nextLocked.has(i)) unlocked.push(i);
+      }
+
+      // Se todas as parcelas foram editadas, destrava as outras para permitir rebalanceamento
+      if (unlocked.length === 0) {
+        unlocked = Array.from({ length: parcelasCount }, (_, i) => i).filter(i => i !== editedIndex);
+        nextLocked.clear();
+        nextLocked.add(editedIndex);
+      }
+
+      // Soma de todas as parcelas fixadas manualmente
+      let lockedSumCentavos = 0;
+      parcelasValoresNum.forEach((val, i) => {
+        if (i === editedIndex) {
+          lockedSumCentavos += Math.round(finalVal * 100);
+        } else if (nextLocked.has(i)) {
+          lockedSumCentavos += Math.round((val || 0) * 100);
+        }
+      });
+
+      // Saldo restante em centavos para redistribuir
+      const remainingCentavos = Math.max(0, totalCentavos - lockedSumCentavos);
+      const baseCentavos = Math.floor(remainingCentavos / unlocked.length);
+      const restoCentavos = remainingCentavos - (baseCentavos * unlocked.length);
+
+      setParcelasValoresNum(prev => {
+        const updated = [...prev];
+        while (updated.length < parcelasCount) updated.push(0);
+        updated[editedIndex] = finalVal;
+        unlocked.forEach((uIdx, pos) => {
+          const centavos = (pos === 0) ? (baseCentavos + restoCentavos) : baseCentavos;
+          updated[uIdx] = centavos / 100;
+        });
+        return updated;
+      });
+
+      return nextLocked;
     });
   };
 
-  // Redistribuir igualmente entre todas as parcelas
+  // Redistribuir igualmente entre todas as parcelas (reseta todas as travas manuais)
   const handleDistribuirIgualmente = () => {
     if (parcelasCount <= 0 || valorTotalNum <= 0) return;
+    setLockedIndices(new Set());
+    setEditingParcelasMap({});
     const totalCentavos = Math.round(valorTotalNum * 100);
     const baseCentavos = Math.floor(totalCentavos / parcelasCount);
     const restoCentavos = totalCentavos - (baseCentavos * parcelasCount);
     const recalculated = Array.from({ length: parcelasCount }, (_, i) => {
       const centavos = (i === 0) ? (baseCentavos + restoCentavos) : baseCentavos;
-      return formatCurrency(centavos / 100, false);
+      return centavos / 100;
     });
-    setValoresCustomizados(recalculated);
+    setParcelasValoresNum(recalculated);
   };
 
   // Grade de parcelas calculadas para preview e edição
@@ -265,17 +249,17 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     }
 
     return Array.from({ length: parcelasCount }, (_, i) => {
-      const valStr = valoresCustomizados[i] ?? '';
+      const valNum = parcelasValoresNum[i] ?? 0;
       const due = datasCustomizadas[i] || dataBase;
       return {
         num: i + 1,
         total: parcelasCount,
         label: `${i + 1}/${parcelasCount}`,
-        valor: valStr,
+        valor: valNum,
         vencimento: due
       };
     });
-  }, [modoParcelamento, parcelasCount, valorTotalNum, valoresCustomizados, datasCustomizadas, dataBase]);
+  }, [modoParcelamento, parcelasCount, valorTotalNum, parcelasValoresNum, datasCustomizadas, dataBase]);
 
   // Pré-visualização da projeção contínua de 6 meses para despesas fixas recorrentes
   const recurringPreview = useMemo(() => {
@@ -329,21 +313,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
     }
 
     if (modoParcelamento === 'parcelado') {
-      if (Math.abs(diferencaParcelas) > 0.01) {
-        if (diferencaParcelas > 0) {
-          setErrorMsg(
-            `A soma das parcelas (R$ ${somaParcelasNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) excede o total do lançamento (R$ ${valorTotalNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) em R$ ${diferencaParcelas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Ajuste os valores para que coincidam antes de salvar.`
-          );
-        } else {
-          setErrorMsg(
-            `A soma das parcelas (R$ ${somaParcelasNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) está abaixo do total do lançamento (R$ ${valorTotalNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Faltam R$ ${Math.abs(diferencaParcelas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para igualar o total.`
-          );
-        }
-        return;
-      }
-
       for (let i = 0; i < parcelasCount; i++) {
-        const valParc = parseCurrency(valoresCustomizados[i]);
+        const valParc = parcelasValoresNum[i] || 0;
         if (valParc <= 0) {
           setErrorMsg(`A parcela ${i + 1}/${parcelasCount} deve possuir um valor válido maior que zero.`);
           return;
@@ -373,7 +344,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
         dataVencimento: dataBase,
         datasCustomizadas: modoParcelamento === 'parcelado' ? datasCustomizadas : [dataBase],
         valoresCustomizados: modoParcelamento === 'parcelado'
-          ? valoresCustomizados.map(v => parseCurrency(v))
+          ? parcelasValoresNum.map(v => v || 0)
           : [valorTotalNum],
         recorrente: isRecorrente,
         mesesProjecao: 6
@@ -597,65 +568,50 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
               {/* Valor Total */}
               <div className="sm:col-span-4">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Valor Total do Lançamento (R$) <span className="text-rose-500">*</span>
-                  </label>
-                  {modoParcelamento === 'parcelado' && valorTotalNum > 0 && (
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border transition-colors ${
-                      statusConferencia === 'excedeu'
-                        ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
-                        : statusConferencia === 'abaixo'
-                        ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900'
-                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900'
-                    }`}>
-                      {statusConferencia === 'excedeu' && 'Excedendo'}
-                      {statusConferencia === 'abaixo' && 'Abaixo'}
-                      {statusConferencia === 'igualou' && 'Conferido'}
-                    </span>
-                  )}
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4">
+                  Valor Total do Lançamento (R$) <span className="text-rose-500">*</span>
+                </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-slate-400 text-sm font-bold">R$</span>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold pointer-events-none">R$</span>
                   <input
                     type="text"
                     inputMode="decimal"
                     placeholder="0,00"
-                    value={valorTotalStr}
+                    value={
+                      editingValorTotal !== null
+                        ? editingValorTotal
+                        : (valorTotalNum > 0 ? formatCurrency(valorTotalNum, false) : '')
+                    }
                     onKeyDown={(e) => {
                       if (e.key === '.') {
                         e.preventDefault();
                         const target = e.currentTarget;
                         const currentVal = target.value;
-                        if (!currentVal.includes(',')) {
-                          const selStart = target.selectionStart ?? currentVal.length;
-                          const selEnd = target.selectionEnd ?? currentVal.length;
+                        const selStart = target.selectionStart ?? currentVal.length;
+                        const selEnd = target.selectionEnd ?? currentVal.length;
+                        const remaining = currentVal.slice(0, selStart) + currentVal.slice(selEnd);
+                        if (!remaining.includes(',')) {
                           const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
-                          const { formatted } = handleCurrencyInput(newVal, false);
-                          setValorTotalStr(formatted);
+                          const { formatted, value } = handleCurrencyInput(newVal, false);
+                          setEditingValorTotal(formatted);
+                          setValorTotalNum(value);
                         }
+                        return;
                       }
                     }}
                     onFocus={(e) => {
-                      if (valorTotalNum > 0) {
-                        setValorTotalStr(formatCurrency(valorTotalNum, false));
-                      } else {
-                        setValorTotalStr('');
-                      }
+                      setEditingValorTotal(valorTotalNum > 0 ? formatCurrency(valorTotalNum, false) : '');
                       e.target.select();
                     }}
                     onBlur={() => {
-                      if (valorTotalNum > 0) {
-                        setValorTotalStr(formatCurrency(valorTotalNum, false));
-                      } else {
-                        setValorTotalStr('');
-                      }
+                      setEditingValorTotal(null);
                     }}
                     onChange={(e) => {
-                      const { formatted } = handleCurrencyInput(e.target.value, false);
-                      setValorTotalStr(formatted);
+                      const { formatted, value } = handleCurrencyInput(e.target.value, false);
+                      setEditingValorTotal(formatted);
+                      setValorTotalNum(value);
                     }}
-                    className={`w-full pl-9 pr-3 py-2.5 rounded-xl border font-bold text-base transition-colors focus:outline-hidden focus:ring-2 ${colorClasses.inputTotal}`}
+                    className="w-full h-11 pl-10 pr-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     required
                   />
                 </div>
@@ -663,14 +619,14 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
 
               {/* Data de Vencimento Base / 1ª Parcela */}
               <div className="sm:col-span-4">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4">
                   {modoParcelamento === 'parcelado' ? '1º Vencimento' : 'Data de Vencimento'} <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="date"
                   value={dataBase}
                   onChange={e => setDataBase(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                   required
                 />
               </div>
@@ -679,13 +635,13 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
               {modoParcelamento === 'parcelado' ? (
                 <>
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4">
                       Parcelas
                     </label>
                     <select
                       value={parcelasCount}
                       onChange={e => setParcelasCount(Math.max(2, parseInt(e.target.value, 10) || 2))}
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                      className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     >
                       {Array.from({ length: 23 }, (_, i) => i + 2).map(n => (
                         <option key={n} value={n}>{n}x</option>
@@ -694,13 +650,13 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4">
                       Intervalo (Dias)
                     </label>
                     <select
                       value={intervaloDias}
                       onChange={e => setIntervaloDias(parseInt(e.target.value, 10) || 30)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                      className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     >
                       <option value={10}>10 dias</option>
                       <option value={15}>15 dias</option>
@@ -766,192 +722,139 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
               </div>
             )}
 
-            {/* Grade de Preview das Parcelas Calculadas (Valores e Datas Editáveis) */}
+            {/* Grade de Preview das Parcelas Calculadas (Com Ajuste Automático) */}
             {modoParcelamento === 'parcelado' && previewParcelas.length > 0 && (
               <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                    Pré-visualização das Parcelas (Valores e Datas Editáveis):
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    Parcelas ({previewParcelas.length}x):
                   </span>
                   
-                  {/* Atalhos rápidos de ajuste */}
-                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                    {statusConferencia !== 'igualou' && (
-                      <button
-                        type="button"
-                        onClick={handleAjustarDiferencaNaUltima}
-                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-2xs transition-all flex items-center gap-1"
-                        title="Ajusta automaticamente a diferença na última parcela para fechar o valor exato"
-                      >
-                        <Sparkles className="w-3 h-3 text-amber-500" />
-                        Ajustar na última
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleDistribuirIgualmente}
-                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-2xs transition-all flex items-center gap-1"
-                      title="Redistribui o valor total igualmente entre todas as parcelas"
-                    >
-                      <Repeat className="w-3 h-3 text-slate-400" />
-                      Dividir igualmente
-                    </button>
-                  </div>
-                </div>
-
-                {/* Banner / Card de Conferência de Valores com cores suaves */}
-                <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-3 transition-colors ${colorClasses.statusBanner}`}>
-                  <div className="flex items-center gap-2.5">
-                    {statusConferencia === 'excedeu' && (
-                      <div className="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                        <AlertCircle className="w-4 h-4" />
-                      </div>
-                    )}
-                    {statusConferencia === 'abaixo' && (
-                      <div className="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
-                        <Clock className="w-4 h-4" />
-                      </div>
-                    )}
-                    {statusConferencia === 'igualou' && (
-                      <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                        <Check className="w-4 h-4" />
-                      </div>
-                    )}
-                    {statusConferencia === 'neutro' && (
-                      <div className="w-7 h-7 rounded-lg bg-slate-500/20 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0">
-                        <Tag className="w-4 h-4" />
-                      </div>
-                    )}
-                    <div>
-                      <p className="font-bold text-[13px]">
-                        {statusConferencia === 'excedeu' && 'Soma das parcelas excede o total do lançamento'}
-                        {statusConferencia === 'abaixo' && 'Soma das parcelas abaixo do total do lançamento'}
-                        {statusConferencia === 'igualou' && 'Valores conferidos! A soma bate 100% com o total'}
-                        {statusConferencia === 'neutro' && 'Conferência de Parcelas'}
-                      </p>
-                      <p className="text-[11px] opacity-90">
-                        Soma das parcelas: <strong className="font-semibold">R$ {somaParcelasNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> | Total esperado: <strong className="font-semibold">R$ {valorTotalNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                        {statusConferencia === 'excedeu' && (
-                          <span className="font-bold text-rose-700 dark:text-rose-300 ml-1">
-                            (Excedendo R$ {diferencaParcelas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
-                          </span>
-                        )}
-                        {statusConferencia === 'abaixo' && (
-                          <span className="font-bold text-sky-700 dark:text-sky-300 ml-1">
-                            (Faltam R$ {Math.abs(diferencaParcelas).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDistribuirIgualmente}
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shadow-2xs transition-all flex items-center gap-1"
+                    title="Redistribui o valor total igualmente entre todas as parcelas"
+                  >
+                    <Repeat className="w-3 h-3 text-slate-400" />
+                    Dividir igualmente
+                  </button>
                 </div>
 
                 {/* Grade de Parcelas Editáveis */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1.5">
-                  {previewParcelas.map((p, idx) => (
-                    <div
-                      key={p.num}
-                      className={`p-3 rounded-xl border flex flex-col gap-2 text-xs transition-colors overflow-hidden ${colorClasses.card}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-amber-600 dark:text-amber-400">
-                          Parcela {p.label}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          #{p.num}
-                        </span>
-                      </div>
+                  {previewParcelas.map((p, idx) => {
+                    const isEditingParcela = idx in editingParcelasMap;
+                    const pNumVal = parcelasValoresNum[idx] ?? 0;
+                    const displayParcelaVal = isEditingParcela
+                      ? editingParcelasMap[idx]
+                      : (pNumVal > 0 ? formatCurrency(pNumVal, false) : '');
 
-                      <div className="grid grid-cols-2 gap-2 items-center">
-                        {/* Campo de valor da parcela editável com comportamento de digitação igual à tabela de produtos */}
-                        <div className="relative">
-                          <span className="absolute left-2.5 top-2 text-xs font-bold opacity-60">R$</span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="0,00"
-                            value={valoresCustomizados[idx] ?? ''}
-                            onKeyDown={(e) => {
-                              if (e.key === '.') {
-                                e.preventDefault();
-                                const target = e.currentTarget;
-                                const currentVal = target.value;
-                                if (!currentVal.includes(',')) {
+                    return (
+                      <div
+                        key={p.num}
+                        className="p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900 flex flex-col gap-2 text-xs transition-colors overflow-hidden"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
+                              Parcela {p.label}
+                            </span>
+                            {lockedIndices.has(idx) ? (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                Manual
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                Auto
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            #{p.num}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 items-center">
+                          {/* Campo de valor da parcela com auto-ajuste no blur */}
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-2 text-xs font-bold opacity-60">R$</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              value={displayParcelaVal}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur();
+                                  return;
+                                }
+                                if (e.key === '.') {
+                                  e.preventDefault();
+                                  const target = e.currentTarget;
+                                  const currentVal = target.value;
                                   const selStart = target.selectionStart ?? currentVal.length;
                                   const selEnd = target.selectionEnd ?? currentVal.length;
-                                  const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
-                                  const { formatted } = handleCurrencyInput(newVal, false);
-                                  handleCustomValorChange(idx, formatted);
+                                  const remaining = currentVal.slice(0, selStart) + currentVal.slice(selEnd);
+                                  if (!remaining.includes(',')) {
+                                    const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                                    const { formatted, value } = handleCurrencyInput(newVal, false);
+                                    setEditingParcelasMap(prev => ({ ...prev, [idx]: formatted }));
+                                    handleParcelaNumChange(idx, value);
+                                  }
+                                  return;
                                 }
-                              }
-                            }}
-                            onFocus={(e) => {
-                              const currentVal = parseCurrency(valoresCustomizados[idx]);
-                              if (currentVal > 0) {
-                                handleCustomValorChange(idx, formatCurrency(currentVal, false));
-                              } else {
-                                handleCustomValorChange(idx, '');
-                              }
-                              e.target.select();
-                            }}
-                            onBlur={() => {
-                              const currentVal = parseCurrency(valoresCustomizados[idx]);
-                              if (currentVal > 0) {
-                                handleCustomValorChange(idx, formatCurrency(currentVal, false));
-                              } else {
-                                handleCustomValorChange(idx, '');
-                              }
-                            }}
-                            onChange={(e) => {
-                              const { formatted } = handleCurrencyInput(e.target.value, false);
-                              handleCustomValorChange(idx, formatted);
-                            }}
-                            className={`w-full pl-8 pr-2 py-1.5 rounded-lg border text-xs font-bold transition-colors focus:outline-hidden focus:ring-2 ${colorClasses.inputParcela}`}
-                          />
-                        </div>
+                              }}
+                              onFocus={(e) => {
+                                setEditingParcelasMap(prev => ({
+                                  ...prev,
+                                  [idx]: pNumVal > 0 ? formatCurrency(pNumVal, false) : ''
+                                }));
+                                e.target.select();
+                              }}
+                              onBlur={() => {
+                                setEditingParcelasMap(prev => {
+                                  const next = { ...prev };
+                                  delete next[idx];
+                                  return next;
+                                });
+                                handleAutoAdjust(idx);
+                              }}
+                              onChange={(e) => {
+                                const { formatted, value } = handleCurrencyInput(e.target.value, false);
+                                setEditingParcelasMap(prev => ({ ...prev, [idx]: formatted }));
+                                handleParcelaNumChange(idx, value);
+                              }}
+                              className="w-full pl-8 pr-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold transition-colors focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                            />
+                          </div>
 
-                        {/* Campo de data da parcela editável */}
-                        <div className="relative">
-                          <input
-                            type="date"
-                            value={datasCustomizadas[idx] || ''}
-                            onChange={e => handleCustomDateChange(idx, e.target.value)}
-                            className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                          />
+                          {/* Campo de data da parcela editável */}
+                          <div className="relative">
+                            <input
+                              type="date"
+                              value={datasCustomizadas[idx] || ''}
+                              onChange={e => handleCustomDateChange(idx, e.target.value)}
+                              className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
           </div>
 
-          {/* 4. Forma de Pagamento e Banco */}
+          {/* 4. Forma de Pagamento e Observações */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-            <div className="sm:col-span-6">
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Forma de Pagamento
-                </label>
-                <div className="flex items-center gap-1">
-                  {(['BOLETO', 'DEPÓSITO', 'PIX', 'DINHEIRO'] as const).map(quickFp => (
-                    <button
-                      key={quickFp}
-                      type="button"
-                      onClick={() => setFormaPagamento(quickFp)}
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
-                        formaPagamento === quickFp
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                      }`}
-                    >
-                      {quickFp === 'DEPÓSITO' ? 'Depósito' : quickFp}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <div className="sm:col-span-4">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Forma de Pagamento
+              </label>
               <select
                 value={formaPagamento}
                 onChange={e => setFormaPagamento(e.target.value as any)}
@@ -963,35 +866,16 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
               </select>
             </div>
 
-            <div className="sm:col-span-6">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Conta / Caixa de Pagamento
-              </label>
-              <input
-                type="text"
-                list="bancos-list"
-                value={bancoConta}
-                onChange={e => setBancoConta(e.target.value)}
-                placeholder="Ex: Banco Santander, Caixa Loja..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-              />
-              <datalist id="bancos-list">
-                {BANCOS_SUGESTOES.map(b => (
-                  <option key={b} value={b} />
-                ))}
-              </datalist>
-            </div>
-
-            <div className="sm:col-span-12">
+            <div className="sm:col-span-8">
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Observações
               </label>
-              <textarea
-                rows={2}
+              <input
+                type="text"
                 placeholder="Observações complementares, contrato, chave PIX ou detalhes da despesa..."
                 value={observacao}
                 onChange={e => setObservacao(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               />
             </div>
           </div>

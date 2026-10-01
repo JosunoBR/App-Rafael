@@ -40,7 +40,7 @@ export function handleCurrencyInput(
       str = str.slice(0, -1) + ',';
     } else if (str.includes('.')) {
       const parts = str.split('.');
-      if (parts.length === 2 && parts[1].length <= 2) {
+      if (parts.length === 2) {
         str = parts[0] + ',' + parts[1];
       }
     }

@@ -753,13 +753,14 @@ class OrderService {
     const isAuthorized = currentUser && (
       currentUser.role === 'diretoria' || 
       currentUser.role === 'comprador' || 
+      currentUser.role === 'faturamento' || 
       currentUser.role === 'root' || 
       currentUser.id === 'usr_root' || 
       currentUser.email?.toLowerCase() === 'root' ||
       currentUser.nome?.toLowerCase() === 'root'
     );
     if (!isAuthorized) {
-      const err = new Error('Apenas a Diretoria e o setor de Compras possuem autorização para retroceder o status de um pedido na esteira.');
+      const err = new Error('Apenas a Diretoria, Compras e Faturamento possuem autorização para retroceder o status de um pedido na esteira.');
       err.statusCode = 403;
       throw err;
     }

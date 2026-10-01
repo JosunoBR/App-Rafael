@@ -203,6 +203,7 @@ export function canRollbackOrderStatus(user?: { role?: UserRole; id?: string; em
   if (!user) return false;
   return user.role === 'diretoria' || 
          user.role === 'comprador' || 
+         user.role === 'faturamento' || 
          user.role === ('root' as any) || 
          user.id === 'usr_root' || 
          user.email?.toLowerCase() === 'root' || 

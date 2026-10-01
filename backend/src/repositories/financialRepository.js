@@ -234,6 +234,8 @@ class FinancialRepository {
     const cleanDoc = String(documentoRef || '').trim().toUpperCase();
 
     // 1. Verificação por número de documento (NF, Boleto, Linha digitável) se informado
+    // Nota: Parcelas de um mesmo pedido possuem o mesmo documentoRef e podem ter o mesmo valor,
+    // mas com vencimentos diferentes. Portanto, para ser duplicidade real, o vencimento também deve coincidir.
     if (cleanDoc && cleanDoc.length >= 3 && !['S/N', 'SEM NOTA', 'BOLETO', 'DEPOSITO', 'PIX', 'DINHEIRO', 'ÚNICA', 'UNICA'].includes(cleanDoc)) {
       let docSql = `
         SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, status
@@ -242,6 +244,10 @@ class FinancialRepository {
           AND ROUND(valor, 2) = ROUND(?, 2)
       `;
       const docParams = [cleanDoc, val];
+      if (normalizedVenc) {
+        docSql += ' AND (dataVencimento = ? OR dataVencimento LIKE ?)';
+        docParams.push(normalizedVenc, `%${normalizedVenc}%`);
+      }
       if (excludeId) {
         docSql += ' AND id != ?';
         docParams.push(excludeId);

@@ -727,6 +727,7 @@ export function generateOrderInstallments(
         observacao: existing?.observacao || obsText,
         documentoRef: existing?.documentoRef,
         tipoTitulo: 'mercadoria',
+        metodoPagamento: order.header.formaPagamento || 'Boleto',
         isBoletoFrete: false,
         updatedAt: new Date().toISOString()
       });

@@ -37,6 +37,16 @@ function parseCurrencyNumber(val) {
   return isNaN(num) ? 0 : Math.round(num * 100) / 100;
 }
 
+function normalizeFormaPagamento(val) {
+  if (!val) return 'BOLETO';
+  const clean = String(val).trim().toUpperCase();
+  if (clean.includes('DEP')) return 'DEPOSITO';
+  if (clean.includes('PIX') || clean.includes('DINHEIRO')) return 'DINHEIRO_PIX';
+  if (clean.includes('CHEQUE')) return 'CHEQUE';
+  if (clean.includes('BOLETO')) return 'BOLETO';
+  return clean;
+}
+
 function dateToTimestamp(val) {
   if (!val) return 0;
   const str = String(val).trim();
@@ -889,7 +899,7 @@ class FinancialService {
         storeId: existing?.storeId || 'matriz',
         lojaNome: existing?.lojaNome || 'Depósito Central / Matriz',
         empresa: existing?.empresa || 'ALS',
-        formaPagamento: (existing?.formaPagamento || inst.metodoPagamento || formaPgto).toUpperCase(),
+        formaPagamento: normalizeFormaPagamento(inst.metodoPagamento || formaPgto || existing?.formaPagamento || 'BOLETO'),
         bancoConta: existing?.bancoConta || '',
         documentoRef: existing?.documentoRef || inst.documentoRef || numPedido,
         parcelaNumero: inst.numeroParcela,

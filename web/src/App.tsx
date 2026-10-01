@@ -1613,7 +1613,12 @@ export function App() {
     );
 
     // 🛡️ Se o pedido já foi fechado, compradores não podem alterar pedidos em esteira sem liberação da Diretoria ou Faturamento
-    if (isClosed && currentUser?.role !== 'diretoria' && currentUser?.role !== 'faturamento') {
+    const canSaveThisClosedOrder = currentUser?.role === 'diretoria' || 
+                                   currentUser?.role === 'faturamento' || 
+                                   (currentUser?.role as any) === 'root' || 
+                                   canEditSpecificOrder(currentUser, order.header.status);
+
+    if (isClosed && !canSaveThisClosedOrder) {
       triggerIOSAlert({
         title: 'Pedido Bloqueado na Esteira',
         message: 'Este pedido já foi aprovado e está na esteira operacional. Para efetuar alterações comerciais ou de quantidades, solicite a liberação à Diretoria ou ao Faturamento.',

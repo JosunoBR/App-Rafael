@@ -36,7 +36,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     categoria: '1. Cotação & Compras',
     nome: 'Editar pedidos já fechados/aprovados na esteira',
     obs: 'Permite ajustes pós-fechamento',
-    roleDefaults: { diretoria: true, comprador: true, deposito: false, separacao: false, faturamento: true }
+    roleDefaults: { diretoria: true, comprador: false, deposito: false, separacao: false, faturamento: true }
   },
   {
     codigo: 'orders:approve',

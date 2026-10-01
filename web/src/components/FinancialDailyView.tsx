@@ -625,14 +625,23 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                                   );
                                 })()}
                                 {!isPaid && (
-                                  <button
-                                    type="button"
-                                    title="Baixar / Quitar Pagamento"
-                                    onClick={() => onPayEntry(item.id)}
-                                    className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 hover:text-white transition-all cursor-pointer"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                  </button>
+                                  isPrevisto ? (
+                                    <span
+                                      title="Boleto PREVISTO: Aguarda recebimento físico na Matriz e liberação pelo Faturamento na esteira."
+                                      className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed inline-flex items-center justify-center opacity-60"
+                                    >
+                                      <Clock className="w-3.5 h-3.5" />
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      title="Baixar / Quitar Pagamento"
+                                      onClick={() => onPayEntry(item.id)}
+                                      className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 hover:text-white transition-all cursor-pointer"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                  )
                                 )}
                                 {onEditEntry && (
                                   <button

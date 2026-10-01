@@ -517,6 +517,24 @@ class FinancialService {
       throw new Error('Lançamento não encontrado para baixa.');
     }
 
+    // Regra de Governança Financeira / Compliance:
+    // Boletos com status "PREVISTO" aguardam recebimento físico na Matriz e liberação na esteira
+    const isPrevisto = (before.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO';
+    if (isPrevisto) {
+      const isDiretoriaOrRoot = currentUser && (
+        currentUser.role === 'diretoria' ||
+        currentUser.role === 'root' ||
+        currentUser.id === 'usr_root' ||
+        currentUser.email?.toLowerCase() === 'root' ||
+        currentUser.nome?.toLowerCase() === 'root'
+      );
+      if (!isDiretoriaOrRoot) {
+        const err = new Error('Este boleto está com status "PREVISTO" (aguarda recebimento físico na Matriz e liberação pelo Faturamento) e não pode ser liquidado.');
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
     const allowedExts = ['.png', '.jpg', '.jpeg', '.webp', '.pdf', '.txt', '.csv', '.ret', '.rem', '.log'];
     const comprovantesDir = path.resolve(__dirname, '../../data/comprovantes');
     if (!fs.existsSync(comprovantesDir)) {
@@ -690,6 +708,26 @@ class FinancialService {
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new Error('Nenhum lançamento informado para baixa em lote.');
     }
+
+    // Regra de Governança Financeira / Compliance:
+    // Bloqueia liquidação em lote se houver boletos com status "PREVISTO"
+    const isDiretoriaOrRoot = currentUser && (
+      currentUser.role === 'diretoria' ||
+      currentUser.role === 'root' ||
+      currentUser.id === 'usr_root' ||
+      currentUser.email?.toLowerCase() === 'root' ||
+      currentUser.nome?.toLowerCase() === 'root'
+    );
+    if (!isDiretoriaOrRoot) {
+      const targetEntries = await Promise.all(ids.map(id => financialRepo.findById(id)));
+      const previstos = targetEntries.filter(e => e && (e.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO');
+      if (previstos.length > 0) {
+        const err = new Error(`Existem ${previstos.length} boleto(s) com status "PREVISTO" na seleção que não podem ser liquidados antes da liberação na esteira.`);
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
     const updatedList = await financialRepo.markMultipleAsPaid(ids, paymentData);
     const todayIso = new Date().toISOString().substring(0, 10);
 

@@ -529,6 +529,11 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
 
   // Baixa rápida de Pagamento
   const handleOpenPayModal = (entry: FinancialEntry) => {
+    const isPrevisto = (entry.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO';
+    if (isPrevisto && currentUser?.role !== 'diretoria') {
+      showToast('Boletos com status "PREVISTO" não podem ser baixados antes do recebimento na Matriz e liberação pelo Faturamento.', 'error');
+      return;
+    }
     setPayingEntry(entry);
     setAttachedComprovantes([]);
     setUploadError('');
@@ -732,14 +737,26 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   // Baixa em Lote de Pagamentos
   const handleBatchPayConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
-    const pendingSelectedIds = selectedIds.filter(id => {
-      const entry = entries.find(e => e.id === id);
-      return entry && entry.status !== 'Pago';
-    });
-    if (pendingSelectedIds.length === 0) {
+    const pendingSelectedEntries = selectedIds
+      .map(id => entries.find(e => e.id === id))
+      .filter((e): e is FinancialEntry => Boolean(e && e.status !== 'Pago'));
+
+    if (pendingSelectedEntries.length === 0) {
       showToast('Nenhum dos boletos selecionados está pendente para pagamento.', 'info');
       return;
     }
+
+    if (currentUser?.role !== 'diretoria') {
+      const previstos = pendingSelectedEntries.filter(
+        e => (e.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO'
+      );
+      if (previstos.length > 0) {
+        showToast(`A seleção contém ${previstos.length} boleto(s) com status "PREVISTO" que não podem ser liquidados antes da liberação na esteira.`, 'error');
+        return;
+      }
+    }
+
+    const pendingSelectedIds = pendingSelectedEntries.map(e => e.id);
     setIsBatchPaying(true);
     try {
       const res = await batchPayFinancialEntriesInDb(pendingSelectedIds, {
@@ -1708,14 +1725,23 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {!isPaid && (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenPayModal(item)}
-                                title="Baixar Pagamento"
-                                className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 hover:text-white transition-all cursor-pointer"
-                              >
-                                <Check className="w-3.5 h-3.5" />
-                              </button>
+                              isPrevisto ? (
+                                <span
+                                  title="Boleto PREVISTO: Aguarda recebimento físico na Matriz e liberação pelo Faturamento na esteira."
+                                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed inline-flex items-center justify-center opacity-60"
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPayModal(item)}
+                                  title="Baixar Pagamento"
+                                  className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-600 hover:text-white transition-all cursor-pointer"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                              )
                             )}
                             {(() => {
                               const attachments = getEntryAttachments(item);

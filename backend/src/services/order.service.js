@@ -80,18 +80,34 @@ class OrderService {
     }
 
     // Validação de Permissão: Pedidos fechados / em esteira
+    let isEditingClosed = false;
     const currentId = orderData.header.id;
     if (currentId) {
       const existing = await orderRepository.findById(currentId);
       if (existing && existing.header) {
         const existingStatus = existing.header.status || 'Em Cotação';
         const isClosed = existingStatus !== 'Em Cotação' && existingStatus !== 'Rascunho';
+        isEditingClosed = isClosed;
         if (isClosed && currentUser) {
           const isDiretoriaOrRoot = currentUser.role === 'diretoria' || 
                                     currentUser.role === 'root' || 
                                     currentUser.id === 'usr_root' || 
                                     currentUser.email?.toLowerCase() === 'root' ||
                                     currentUser.nome?.toLowerCase() === 'root';
+
+          const hasEditClosedPermission = currentUser.permissions && currentUser.permissions['orders:edit_closed'] === true;
+          const isDeniedEditClosed = currentUser.permissions && currentUser.permissions['orders:edit_closed'] === false;
+
+          const isAuthorized = isDiretoriaOrRoot || 
+                               currentUser.role === 'faturamento' || 
+                               (hasEditClosedPermission && !isDeniedEditClosed);
+
+          if (!isAuthorized) {
+            const err = new Error(`Seu perfil (${currentUser.role}) não possui autorização para alterar pedidos já fechados/aprovados na esteira.`);
+            err.statusCode = 403;
+            err.code = 'ORDER_CLOSED_FORBIDDEN';
+            throw err;
+          }
 
           // Boletos já liberados no Financeiro: Apenas Diretoria e Faturamento podem alterar
           if (existing.header.boletosLiberados && !isDiretoriaOrRoot && currentUser.role !== 'faturamento') {
@@ -108,6 +124,20 @@ class OrderService {
     this._validateInstallmentsIntegrity(orderData);
 
     const saved = await orderRepository.save(orderData);
+
+    // Auditoria de governança para alterações em pedidos fechados/em esteira
+    if (isEditingClosed && currentUser) {
+      await distributionAuditRepo.create({
+        orderId: saved.header.id,
+        numeroPedido: saved.header.numeroPedido,
+        fornecedor: saved.header.fornecedor,
+        usuarioId: currentUser.id || null,
+        usuarioNome: currentUser.nome || currentUser.email || 'Usuário',
+        usuarioRole: currentUser.role,
+        acao: 'EDICAO_PEDIDO_FECHADO',
+        observacoes: `Alteração salva no pedido fechado/em esteira (${saved.header.status}) por ${currentUser.nome || currentUser.email || 'Usuário'} (${currentUser.role}).`
+      }).catch(e => console.error('Erro ao registrar log de auditoria de alteração:', e));
+    }
 
     // Sincronização automática em tempo real com o Financeiro / Contas a Pagar
     try {

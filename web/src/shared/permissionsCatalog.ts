@@ -231,7 +231,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     categoria: '4. Cadastros & Gestão',
     nome: 'Acessar Histórico Geral de Pedidos / Compras',
     obs: 'Consulta de todas as compras da rede',
-    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: false, faturamento: false }
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: false, faturamento: true }
   },
   {
     codigo: 'nav:dashboard',

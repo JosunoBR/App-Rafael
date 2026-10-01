@@ -161,6 +161,56 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       });
     }
 
+    const isMista = cond.isFormaDupla || 
+      cond.especie === 'Boleto + Depósito (Forma Mista)' || 
+      cond.especie === 'Boleto / Depósito' ||
+      cond.especie?.includes('Múltiplos') ||
+      cond.especie?.includes('Multiplos') ||
+      (cond.depositoParcelasCount !== undefined && cond.saldoParcelasCount !== undefined);
+
+    if (isMista) {
+      const totalQtd = cond.qtdParcelas || (cond.parcelasDias?.length || 4);
+      const depCount = cond.depositoParcelasCount || (cond.parcelasDias?.[0] === 0 ? 1 : 1);
+      const salCount = cond.saldoParcelasCount || Math.max(1, totalQtd - depCount);
+      const finalTotalParc = depCount + salCount;
+
+      const totalPed = orderTotal || 0;
+      const freteNum = Number(header.valorFrete ?? header.valorFreteGlobal) || 0;
+      const baseMercadoria = Math.max(0, totalPed - freteNum);
+
+      const pctBoleto = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
+        ? header.percentualNota
+        : 70;
+      const pctDeposito = cond.percentualEntradaPadrao ?? Math.max(0, 100 - pctBoleto);
+      const calculatedEntrada = baseMercadoria > 0 ? Number((baseMercadoria * (pctDeposito / 100)).toFixed(2)) : (header.valorEntradaAVista || 0);
+
+      const depPrazo = cond.depositoPrazoDias || (cond.parcelasDias?.[0] === 0 ? 'vista' : '30');
+      let salPrazo = cond.saldoPrazoDias || '30';
+      if (!cond.saldoPrazoDias && cond.parcelasDias && cond.parcelasDias.length > depCount) {
+        const step = cond.parcelasDias[depCount] - (cond.parcelasDias[depCount - 1] || 0);
+        if (step > 0) salPrazo = String(step);
+      }
+
+      onChange({
+        ...header,
+        condicaoPagamento: cond.descricao,
+        formaPagamento: 'Boleto / Depósito',
+        prazoDias: 'deposito_e_boleto',
+        isEntradaProporcional: true,
+        percentualEntrada: pctDeposito,
+        valorEntradaAVista: calculatedEntrada,
+        depositoParcelasCount: depCount,
+        depositoPrazoDias: depPrazo,
+        depositoFormaPagamento: cond.depositoForma || 'Depósito',
+        saldoParcelasCount: salCount,
+        saldoPrazoDias: salPrazo,
+        saldoFormaPagamento: cond.saldoForma || 'Boleto',
+        parcelasCount: finalTotalParc,
+        datasVencimentoPersonalizadas: Object.keys(customDates).length > 0 ? customDates : undefined
+      });
+      return;
+    }
+
     let formaPgto = header.formaPagamento || 'Boleto';
     if (cond.especie) {
       const espLower = cond.especie.toLowerCase();
@@ -2042,7 +2092,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </span>
                   </div>
 
-                  <div className="flex-1 flex items-center gap-2">
+                  <div className="flex-1">
                     <select
                       value={getSavedConditionDropdownValue()}
                       onChange={(e) => handleApplySavedConditionById(e.target.value)}
@@ -2055,16 +2105,6 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         </option>
                       ))}
                     </select>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsPaymentCondModalOpen(true)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
-                      title="Cadastrar ou Gerenciar Condições de Pagamento no Banco de Dados"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Nova</span>
-                    </button>
                   </div>
                 </div>
 

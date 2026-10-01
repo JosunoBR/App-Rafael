@@ -32,7 +32,8 @@ export const DEFAULT_PAYMENT_CONDITIONS: PaymentCondition[] = [
   { id: 'cond_45_60_75_90_105_120_135_150', descricao: '45/60/75/90/105/120/135/150 Dias', qtdParcelas: 8, parcelasDias: [45, 60, 75, 90, 105, 120, 135, 150], especie: 'Boleto', ativo: true },
   { id: 'cond_45_55_65_75_85_95_105_115_125_135_145_155', descricao: '45/55/65/75/85/95/105/115/125/135/145/155 Dias', qtdParcelas: 12, parcelasDias: [45, 55, 65, 75, 85, 95, 105, 115, 125, 135, 145, 155], especie: 'Boleto', ativo: true },
   { id: 'cond_30', descricao: '30 Dias (1x)', qtdParcelas: 1, parcelasDias: [30], especie: 'Boleto', ativo: true },
-  { id: 'cond_vista', descricao: '100% À Vista (TED/PIX)', qtdParcelas: 1, parcelasDias: [0], especie: 'Depósito', ativo: true }
+  { id: 'cond_vista', descricao: '100% À Vista (TED/PIX)', qtdParcelas: 1, parcelasDias: [0], especie: 'Depósito / Transferência', ativo: true },
+  { id: 'cond_dep_boleto_30_60_90', descricao: 'Entrada + 30/60/90 Dias (Misto)', qtdParcelas: 4, parcelasDias: [0, 30, 60, 90], especie: 'Boleto / Depósito', ativo: true, isFormaDupla: true, depositoParcelasCount: 1, saldoParcelasCount: 3 }
 ];
 
 export async function loadPaymentConditions(onlyActive: boolean = false): Promise<PaymentCondition[]> {
@@ -54,7 +55,12 @@ export async function loadPaymentConditions(onlyActive: boolean = false): Promis
     try {
       const parsed: PaymentCondition[] = JSON.parse(localRaw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return onlyActive ? parsed.filter(c => c.ativo) : parsed;
+        // Garantir que as condições padrão não desapareçam se o cache estiver incompleto
+        const existingIds = new Set(parsed.map(p => p.id));
+        const existingDescs = new Set(parsed.map(p => p.descricao.toLowerCase().trim()));
+        const missing = DEFAULT_PAYMENT_CONDITIONS.filter(d => !existingIds.has(d.id) && !existingDescs.has(d.descricao.toLowerCase().trim()));
+        const fullList = missing.length > 0 ? [...parsed, ...missing] : parsed;
+        return onlyActive ? fullList.filter(c => c.ativo) : fullList;
       }
     } catch {}
   }
@@ -87,6 +93,16 @@ export async function savePaymentCondition(condition: Partial<PaymentCondition>)
     ativo: condition.ativo !== undefined ? condition.ativo : true,
     padrao: condition.padrao || false,
     observacao: condition.observacao || '',
+    isFormaDupla: condition.isFormaDupla,
+    depositoParcelasCount: condition.depositoParcelasCount,
+    depositoPrazoDias: condition.depositoPrazoDias,
+    depositoParcelasDias: condition.depositoParcelasDias,
+    saldoParcelasCount: condition.saldoParcelasCount,
+    saldoPrazoDias: condition.saldoPrazoDias,
+    saldoParcelasDias: condition.saldoParcelasDias,
+    percentualEntradaPadrao: condition.percentualEntradaPadrao,
+    depositoForma: condition.depositoForma,
+    saldoForma: condition.saldoForma,
     createdAt: condition.createdAt || now,
     updatedAt: now,
     ...(savedCondition || {})

@@ -703,6 +703,17 @@ async function getDatabase() {
         }
       }
     } catch (e) {}
+
+    // Migração de configJson em payment_conditions para suporte a formas duplas/mistas
+    try {
+      const pcTableInfo = dbInstance.exec("PRAGMA table_info(payment_conditions)");
+      if (pcTableInfo[0]) {
+        const pcCols = pcTableInfo[0].values.map(v => v[1]);
+        if (!pcCols.includes('configJson')) {
+          try { dbInstance.run("ALTER TABLE payment_conditions ADD COLUMN configJson TEXT DEFAULT '{}'"); } catch (e) {}
+        }
+      }
+    } catch (e) {}
   } catch (err) {
     console.error('Aviso na verificação de migrações:', err.message);
   }
@@ -732,6 +743,86 @@ async function getDatabase() {
     }
   } catch (userErr) {
     console.error("Aviso na inicializacao do usuario root:", userErr.message);
+  }
+
+  // Garantir condições padrão de pagamento no banco de dados
+  try {
+    const DEFAULT_PAYMENT_CONDITIONS = [
+      { id: 'cond_30_60_90', descricao: '30/60/90 Dias', qtdParcelas: 3, parcelasDias: [30, 60, 90], especie: 'Boleto', ativo: 1, padrao: 1 },
+      { id: 'cond_7_14_21_28', descricao: '7/14/21/28 Dias', qtdParcelas: 4, parcelasDias: [7, 14, 21, 28], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_14_21_28_35_42_49_56', descricao: '14/21/28/35/42/49/56 Dias', qtdParcelas: 7, parcelasDias: [14, 21, 28, 35, 42, 49, 56], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_28_35_42', descricao: '28/35/42 Dias', qtdParcelas: 3, parcelasDias: [28, 35, 42], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_28_35_42_49_56', descricao: '28/35/42/49/56 Dias', qtdParcelas: 5, parcelasDias: [28, 35, 42, 49, 56], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_60', descricao: '30/60 Dias', qtdParcelas: 2, parcelasDias: [30, 60], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_45_60', descricao: '30/45/60 Dias', qtdParcelas: 3, parcelasDias: [30, 45, 60], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_40_50_60', descricao: '30/40/50/60 Dias', qtdParcelas: 4, parcelasDias: [30, 40, 50, 60], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_45_60_75_90', descricao: '30/45/60/75/90 Dias', qtdParcelas: 5, parcelasDias: [30, 45, 60, 75, 90], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_40_50_60_70_80_90', descricao: '30/40/50/60/70/80/90 Dias', qtdParcelas: 7, parcelasDias: [30, 40, 50, 60, 70, 80, 90], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_60_90_120', descricao: '30/60/90/120 Dias', qtdParcelas: 4, parcelasDias: [30, 60, 90, 120], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_45_60_75_90_105_120', descricao: '30/45/60/75/90/105/120 Dias', qtdParcelas: 7, parcelasDias: [30, 45, 60, 75, 90, 105, 120], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_40_50_60_70_80_90_100_110_120', descricao: '30/40/50/60/70/80/90/100/110/120 Dias', qtdParcelas: 10, parcelasDias: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_60_90_120_150', descricao: '30/60/90/120/150 Dias', qtdParcelas: 5, parcelasDias: [30, 60, 90, 120, 150], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_45_60_75_90_105_120_135_150', descricao: '30/45/60/75/90/105/120/135/150 Dias', qtdParcelas: 9, parcelasDias: [30, 45, 60, 75, 90, 105, 120, 135, 150], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30_40_50_60_70_80_90_100_110_120_130_140_150', descricao: '30/40/50/60/70/80/90/100/110/120/130/140/150 Dias', qtdParcelas: 13, parcelasDias: [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_45_60_75_90', descricao: '45/60/75/90 Dias', qtdParcelas: 4, parcelasDias: [45, 60, 75, 90], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_45_55_65_75_85_95_105_115', descricao: '45/55/65/75/85/95/105/115 Dias', qtdParcelas: 8, parcelasDias: [45, 55, 65, 75, 85, 95, 105, 115], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_45_60_75_90_105_120', descricao: '45/60/75/90/105/120 Dias', qtdParcelas: 6, parcelasDias: [45, 60, 75, 90, 105, 120], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_45_60_75_90_105_120_135_150', descricao: '45/60/75/90/105/120/135/150 Dias', qtdParcelas: 8, parcelasDias: [45, 60, 75, 90, 105, 120, 135, 150], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_45_55_65_75_85_95_105_115_125_135_145_155', descricao: '45/55/65/75/85/95/105/115/125/135/145/155 Dias', qtdParcelas: 12, parcelasDias: [45, 55, 65, 75, 85, 95, 105, 115, 125, 135, 145, 155], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_30', descricao: '30 Dias (1x)', qtdParcelas: 1, parcelasDias: [30], especie: 'Boleto', ativo: 1, padrao: 0 },
+      { id: 'cond_vista', descricao: '100% À Vista (TED/PIX)', qtdParcelas: 1, parcelasDias: [0], especie: 'Depósito / Transferência', ativo: 1, padrao: 0 },
+      { id: 'cond_dep_boleto_30_60_90', descricao: 'Entrada + 30/60/90 Dias (Misto)', qtdParcelas: 4, parcelasDias: [0, 30, 60, 90], especie: 'Boleto / Depósito', ativo: 1, padrao: 0, isFormaDupla: true, depositoParcelasCount: 1, saldoParcelasCount: 3 }
+    ];
+
+    const hasPadraoCheck = dbInstance.exec("SELECT id FROM payment_conditions WHERE padrao = 1");
+    const hasPadrao = hasPadraoCheck[0] && hasPadraoCheck[0].values.length > 0;
+    const now = new Date().toISOString();
+
+    for (const c of DEFAULT_PAYMENT_CONDITIONS) {
+      const exists = dbInstance.exec("SELECT id FROM payment_conditions WHERE id = ? OR descricao = ?", [c.id, c.descricao]);
+      if (!exists[0] || exists[0].values.length === 0) {
+        const configJson = JSON.stringify({
+          isFormaDupla: Boolean(c.isFormaDupla),
+          depositoParcelasCount: c.depositoParcelasCount,
+          saldoParcelasCount: c.saldoParcelasCount
+        });
+        const padraoVal = (!hasPadrao && c.padrao === 1) ? 1 : 0;
+        try {
+          dbInstance.run(`
+            INSERT INTO payment_conditions (id, descricao, qtdParcelas, parcelasDiasJson, especie, banco, ativo, padrao, observacao, configJson, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, '', ?, ?, '', ?, ?, ?)
+          `, [
+            c.id,
+            c.descricao,
+            c.qtdParcelas,
+            JSON.stringify(c.parcelasDias),
+            c.especie,
+            c.ativo,
+            padraoVal,
+            configJson,
+            now,
+            now
+          ]);
+        } catch (e) {
+          dbInstance.run(`
+            INSERT INTO payment_conditions (id, descricao, qtdParcelas, parcelasDiasJson, especie, banco, ativo, padrao, observacao, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, '', ?, ?, '', ?, ?)
+          `, [
+            c.id,
+            c.descricao,
+            c.qtdParcelas,
+            JSON.stringify(c.parcelasDias),
+            c.especie,
+            c.ativo,
+            padraoVal,
+            now,
+            now
+          ]);
+        }
+      }
+    }
+  } catch (pcErr) {
+    console.error("Aviso ao semear condições de pagamento padrão:", pcErr.message);
   }
 
   saveDatabaseToDisk();

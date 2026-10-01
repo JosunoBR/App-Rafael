@@ -4,17 +4,13 @@ import {
   Plus,
   Edit2,
   Trash2,
-  CheckCircle2,
   Clock,
   Search,
-  Check,
-  Building2,
   CreditCard,
-  Calendar,
-  Sparkles,
   ArrowLeft,
   Save,
-  AlertCircle
+  AlertCircle,
+  Layers
 } from 'lucide-react';
 import { PaymentCondition } from '../shared/types';
 import {
@@ -29,23 +25,16 @@ interface PaymentConditionsModalProps {
   onSelectCondition?: (condition: PaymentCondition) => void;
 }
 
+// Opções completas de espécies comerciais incluindo Meios Múltiplos
 const ESPECIES_OPTIONS = [
   'Boleto',
-  'Dinheiro / PIX',
+  'Boleto / Depósito (Múltiplos Meios)',
+  'Depósito Bancário',
+  'PIX',
+  'Dinheiro',
   'Cartão de Crédito',
   'Cartão de Débito',
-  'Cheque',
-  'Depósito / Transferência',
-  'Boleto / Depósito'
-];
-
-const BANCOS_SUGESTOES = [
-  'Banco Santander',
-  'Caixa Interno',
-  'Banco do Brasil',
-  'Bradesco',
-  'Itaú',
-  'Nubank / Cora'
+  'Cheque'
 ];
 
 export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
@@ -64,10 +53,9 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
 
   // Campos do formulário
   const [formDescricao, setFormDescricao] = useState('');
-  const [formQtdParcelas, setFormQtdParcelas] = useState<number>(3);
-  const [formParcelasDias, setFormParcelasDias] = useState<number[]>([30, 60, 90]);
+  const [formQtdParcelas, setFormQtdParcelas] = useState<number | string>(3);
+  const [formParcelasDias, setFormParcelasDias] = useState<(number | string)[]>([30, 60, 90]);
   const [formEspecie, setFormEspecie] = useState('Boleto');
-  const [formBanco, setFormBanco] = useState('Banco Santander');
   const [formAtivo, setFormAtivo] = useState(true);
   const [formPadrao, setFormPadrao] = useState(false);
   const [formObservacao, setFormObservacao] = useState('');
@@ -96,33 +84,98 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
     }
   }, [isOpen]);
 
-  // Atualiza a quantidade de campos na grade "Configurar Parcelas"
-  const handleQtdParcelasChange = (newQtd: number) => {
-    const validQtd = Math.max(1, Math.min(24, newQtd));
-    setFormQtdParcelas(validQtd);
+  // Sincronização inteligente ao digitar na Descrição
+  const handleDescricaoChange = (value: string) => {
+    setFormDescricao(value);
 
+    const clean = value.replace(/dias/gi, '').trim();
+    if (clean.includes('/')) {
+      const parts = clean.split('/').map(p => parseInt(p.trim(), 10)).filter(n => !isNaN(n) && n >= 0);
+      if (parts.length >= 1 && parts.length <= 24) {
+        setFormQtdParcelas(parts.length);
+        setFormParcelasDias(parts);
+      }
+    }
+  };
+
+  // Sincroniza a quantidade de parcelas no array de dias
+  const syncParcelasCount = (validQtd: number) => {
     const updated = [...formParcelasDias];
     if (updated.length < validQtd) {
       while (updated.length < validQtd) {
-        const last = updated.length > 0 ? updated[updated.length - 1] : 0;
-        updated.push(last + 30);
+        const lastVal = updated.length > 0 ? Number(updated[updated.length - 1]) || 0 : 0;
+        updated.push(lastVal + 30);
       }
     } else if (updated.length > validQtd) {
       updated.splice(validQtd);
     }
     setFormParcelasDias(updated);
+
+    if (!formDescricao || formDescricao.includes('/') || formDescricao.includes('Dias')) {
+      setFormDescricao(`${updated.map(d => (d === '' ? '0' : d)).join('/')} Dias`);
+    }
   };
 
+  // Atualiza a quantidade de campos ao digitar (permite apagar livremente com Backspace)
+  const handleQtdParcelasChange = (valStr: string) => {
+    if (valStr === '') {
+      setFormQtdParcelas('');
+      return;
+    }
+    const clean = valStr.replace(/\D/g, '');
+    if (!clean) {
+      setFormQtdParcelas('');
+      return;
+    }
+    const rawNum = parseInt(clean, 10);
+    if (rawNum === 0) {
+      setFormQtdParcelas(0);
+      return;
+    }
+    const validQtd = Math.min(24, rawNum);
+    setFormQtdParcelas(validQtd);
+    syncParcelasCount(validQtd);
+  };
+
+  // Ao sair do campo (onBlur), garante valor mínimo de 1 parcela
+  const handleQtdParcelasBlur = () => {
+    const num = typeof formQtdParcelas === 'number' ? formQtdParcelas : parseInt(String(formQtdParcelas), 10);
+    if (isNaN(num) || num < 1) {
+      const fallback = Math.max(1, formParcelasDias.length || 1);
+      setFormQtdParcelas(fallback);
+      syncParcelasCount(fallback);
+    } else {
+      const clamped = Math.min(24, Math.max(1, num));
+      setFormQtdParcelas(clamped);
+      syncParcelasCount(clamped);
+    }
+  };
+
+  // Alteração manual do dia de uma parcela específica (permite limpar com Backspace)
   const handleDiaChange = (index: number, value: string) => {
-    const num = Math.max(0, parseInt(value.replace(/\D/g, ''), 10) || 0);
+    const clean = value.replace(/\D/g, '');
     const updated = [...formParcelasDias];
-    updated[index] = num;
+    updated[index] = clean === '' ? '' : parseInt(clean, 10);
     setFormParcelasDias(updated);
+
+    const numericOnly = updated.filter(d => d !== '' && !isNaN(Number(d)));
+    if (numericOnly.length === updated.length && (!formDescricao || formDescricao.includes('/') || formDescricao.includes('Dias'))) {
+      setFormDescricao(`${numericOnly.join('/')} Dias`);
+    }
+  };
+
+  // Ao sair do campo de dia de parcela, se estiver em branco preenche com 0
+  const handleDiaBlur = (index: number) => {
+    const updated = [...formParcelasDias];
+    if (updated[index] === '' || isNaN(Number(updated[index]))) {
+      updated[index] = 0;
+      setFormParcelasDias(updated);
+    }
   };
 
   // Atalhos de preenchimento rápido dos dias
   const applyQuickInterval = (step: number, startsWithZero: boolean = false) => {
-    const count = formQtdParcelas;
+    const count = Math.min(24, Math.max(1, Number(formQtdParcelas) || formParcelasDias.length || 1));
     const newDias: number[] = [];
     let current = startsWithZero ? 0 : step;
     for (let i = 0; i < count; i++) {
@@ -131,23 +184,19 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
     }
     setFormParcelasDias(newDias);
 
-    // Sugere descrição automática amigável se o usuário ainda não tiver customizado
-    if (!formDescricao || formDescricao.includes('Dias') || formDescricao.includes('/')) {
-      const descSuggested = startsWithZero
-        ? `Entrada + ${newDias.slice(1).join('/')} Dias`
-        : `${newDias.join('/')} Dias`;
-      setFormDescricao(descSuggested);
-    }
+    const descSuggested = startsWithZero
+      ? `Entrada + ${newDias.slice(1).join('/')} Dias`
+      : `${newDias.join('/')} Dias`;
+    setFormDescricao(descSuggested);
   };
 
   // Abrir tela para criar novo
   const handleOpenNew = () => {
     setEditingCondition(null);
-    setFormDescricao('');
+    setFormDescricao('30/60/90 Dias');
     setFormQtdParcelas(3);
     setFormParcelasDias([30, 60, 90]);
     setFormEspecie('Boleto');
-    setFormBanco('Banco Santander');
     setFormAtivo(true);
     setFormPadrao(false);
     setFormObservacao('');
@@ -161,8 +210,18 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
     setFormDescricao(cond.descricao);
     setFormQtdParcelas(cond.qtdParcelas);
     setFormParcelasDias(cond.parcelasDias && cond.parcelasDias.length > 0 ? [...cond.parcelasDias] : [30]);
-    setFormEspecie(cond.especie || 'Boleto');
-    setFormBanco(cond.banco || '');
+
+    // Mapear espécies para as opções da interface
+    let esp = cond.especie || 'Boleto';
+    if (esp === 'Boleto / Depósito' || esp === 'Boleto + Depósito (Forma Mista)' || cond.isFormaDupla) {
+      esp = 'Boleto / Depósito (Múltiplos Meios)';
+    } else if (esp === 'Depósito / Transferência' || esp === 'Depósito') {
+      esp = 'Depósito Bancário';
+    } else if (esp === 'Dinheiro / PIX') {
+      esp = 'PIX';
+    }
+
+    setFormEspecie(esp);
     setFormAtivo(cond.ativo);
     setFormPadrao(cond.padrao || false);
     setFormObservacao(cond.observacao || '');
@@ -175,278 +234,291 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
     e.preventDefault();
     setFormError(null);
 
-    if (!formDescricao.trim()) {
+    const cleanDesc = formDescricao.trim();
+    if (!cleanDesc) {
       setFormError('Informe a descrição da condição de pagamento.');
       return;
     }
 
-    if (formParcelasDias.some(d => isNaN(d) || d < 0)) {
+    const finalQtdParcelas = Math.min(24, Math.max(1, Number(formQtdParcelas) || formParcelasDias.length || 1));
+    const sanitizedDias = formParcelasDias.map(d => (d === '' || isNaN(Number(d)) ? 0 : Number(d)));
+
+    if (sanitizedDias.some(d => isNaN(d) || d < 0)) {
       setFormError('Todos os dias das parcelas devem ser números válidos maiores ou iguais a 0.');
       return;
     }
+
+    const isMultiplo = formEspecie === 'Boleto / Depósito (Múltiplos Meios)' || formEspecie === 'Boleto / Depósito';
+    const especieFinal = isMultiplo ? 'Boleto / Depósito' : formEspecie;
 
     setSaving(true);
     try {
       const payload: Partial<PaymentCondition> = {
         id: editingCondition ? editingCondition.id : undefined,
-        descricao: formDescricao.trim(),
-        qtdParcelas: formQtdParcelas,
-        parcelasDias: formParcelasDias,
-        especie: formEspecie,
-        banco: formBanco.trim(),
+        descricao: cleanDesc,
+        qtdParcelas: finalQtdParcelas,
+        parcelasDias: sanitizedDias,
+        especie: especieFinal,
+        banco: '',
         ativo: formAtivo,
         padrao: formPadrao,
-        observacao: formObservacao.trim()
+        observacao: formObservacao.trim(),
+        isFormaDupla: isMultiplo,
+        depositoParcelasCount: isMultiplo ? 1 : undefined,
+        saldoParcelasCount: isMultiplo ? Math.max(1, finalQtdParcelas - 1) : undefined
       };
 
-      const saved = await savePaymentCondition(payload);
+      await savePaymentCondition(payload);
       await fetchConditions();
       setViewMode('list');
-
-      // Se for acionado diretamente para selecionar no pedido
-      if (onSelectCondition && !editingCondition) {
-        onSelectCondition(saved);
-      }
+      setEditingCondition(null);
     } catch (err: any) {
-      setFormError(err?.message || 'Erro ao salvar condição de pagamento.');
+      console.error('Erro ao salvar condição:', err);
+      setFormError(err?.message || 'Falha ao salvar condição de pagamento.');
     } finally {
       setSaving(false);
     }
   };
 
-  // Excluir
+  // Excluir registro
   const handleDelete = async (cond: PaymentCondition) => {
     if (cond.padrao) {
-      alert('A condição padrão não pode ser excluída.');
+      alert('A condição definida como padrão não pode ser excluída.');
       return;
     }
-
-    if (!window.confirm(`Tem certeza que deseja excluir a condição "${cond.descricao}"?`)) {
-      return;
-    }
+    const confirm = window.confirm(`Deseja realmente excluir a condição "${cond.descricao}"?`);
+    if (!confirm) return;
 
     try {
       await deletePaymentCondition(cond.id);
       await fetchConditions();
-    } catch (err: any) {
-      alert(err?.message || 'Erro ao excluir condição.');
+    } catch (err) {
+      console.error('Erro ao excluir condição:', err);
+      alert('Não foi possível excluir a condição.');
     }
   };
 
-  // Filtros
+  // Filtragem da lista
   const filteredConditions = conditions.filter((c) => {
-    const matchesSearch = c.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (c.especie && c.especie.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (c.banco && c.banco.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesSearch =
+      c.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.especie && c.especie.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesStatus =
-      statusFilter === 'all' ? true :
-      statusFilter === 'active' ? c.ativo : !c.ativo;
-
-    return matchesSearch && matchesStatus;
+    if (statusFilter === 'active') return matchesSearch && c.ativo;
+    if (statusFilter === 'inactive') return matchesSearch && !c.ativo;
+    return matchesSearch;
   });
+
+  const isCurrentMultiplo = formEspecie === 'Boleto / Depósito (Múltiplos Meios)' || formEspecie === 'Boleto / Depósito';
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
         
-        {/* Cabeçalho do Box */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/60">
+        {/* Cabeçalho */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40">
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Condições de Pagamento
-                </h3>
-              </div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Condições de Pagamento
+              </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {viewMode === 'list' 
-                  ? 'Cadastre e gerencie os prazos de vencimento e regras de parcelas' 
-                  : (editingCondition ? `Editando: ${editingCondition.descricao}` : 'Nova Condição de Pagamento')}
+                {viewMode === 'list'
+                  ? 'Catálogo de prazos e formas comerciais'
+                  : editingCondition
+                  ? `Editando: ${editingCondition.descricao}`
+                  : 'Nova Condição de Pagamento'}
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            title="Fechar"
+            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Corpo do Box */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Conteúdo com rolagem */}
+        <div className="p-6 overflow-y-auto flex-1">
           {viewMode === 'list' ? (
+            /* Modo Listagem */
             <div className="space-y-4">
               
-              {/* Barra de Filtros & Ação Superior */}
+              {/* Barra de Filtros e Novo */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                <div className="flex-1 flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Pesquisar por descrição, espécie ou banco..."
-                      className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-medium shadow-2xs"
-                    />
-                  </div>
-
-                  <select
-                    value={statusFilter}
-                    onChange={(e: any) => setStatusFilter(e.target.value)}
-                    className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
-                  >
-                    <option value="all">Todas as Situações</option>
-                    <option value="active">Somente Ativas</option>
-                    <option value="inactive">Somente Inativas</option>
-                  </select>
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar por descrição ou espécie..."
+                    className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                  />
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="all">Todos os Status</option>
+                    <option value="active">Somente Ativas</option>
+                    <option value="inactive">Somente Inativas</option>
+                  </select>
+
                   <button
-                    type="button"
                     onClick={handleOpenNew}
-                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>+ Nova Condição</span>
+                    <span>Nova Condição</span>
                   </button>
                 </div>
               </div>
 
-              {/* Tabela de Listagem */}
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-2xs">
-                <table className="w-full text-left border-collapse">
+              {/* Tabela de Condições */}
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                      <th className="py-3 px-3.5 w-10 text-center" title="Situação (Ativo/Inativo)">St</th>
-                      <th className="py-3 px-3.5">Descrição</th>
-                      <th className="py-3 px-3.5">Espécie</th>
-                      <th className="py-3 px-3.5">Banco / Conta</th>
-                      <th className="py-3 px-3.5">Qtd. Parcelas & Dias</th>
-                      <th className="py-3 px-3.5 text-right w-28">Ações</th>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="py-2.5 px-3.5 text-center w-12">Status</th>
+                      <th className="py-2.5 px-3.5">Descrição</th>
+                      <th className="py-2.5 px-3.5">Espécie / Meio</th>
+                      <th className="py-2.5 px-3.5">Parcelas & Prazos</th>
+                      <th className="py-2.5 px-3.5 text-right w-28">Ações</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {loading ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
-                          Carregando condições de pagamento...
+                        <td colSpan={5} className="py-8 text-center text-slate-400">
+                          Carregando condições...
                         </td>
                       </tr>
                     ) : filteredConditions.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
+                        <td colSpan={5} className="py-8 text-center text-slate-400">
                           Nenhuma condição de pagamento encontrada.
                         </td>
                       </tr>
                     ) : (
-                      filteredConditions.map((cond) => (
-                        <tr
-                          key={cond.id}
-                          className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition group"
-                        >
-                          {/* Status Dot */}
-                          <td className="py-3 px-3.5 text-center">
-                            <span
-                              className={`inline-block w-2.5 h-2.5 rounded-full ${
-                                cond.ativo ? 'bg-emerald-500 shadow-xs shadow-emerald-500/50' : 'bg-slate-400'
-                              }`}
-                              title={cond.ativo ? 'Condição Ativa' : 'Condição Inativa'}
-                            />
-                          </td>
+                      filteredConditions.map((cond) => {
+                        const isMisto = cond.especie === 'Boleto / Depósito' || 
+                          cond.especie?.includes('Múltiplos') || 
+                          cond.isFormaDupla;
 
-                          {/* Descrição */}
-                          <td className="py-3 px-3.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 dark:text-white">
-                                {cond.descricao}
-                              </span>
-                              {cond.padrao && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-extrabold rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                                  PADRÃO
+                        return (
+                          <tr
+                            key={cond.id}
+                            className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition group"
+                          >
+                            {/* Status Dot */}
+                            <td className="py-3 px-3.5 text-center">
+                              <span
+                                className={`inline-block w-2.5 h-2.5 rounded-full ${
+                                  cond.ativo ? 'bg-emerald-500 shadow-xs shadow-emerald-500/50' : 'bg-slate-400'
+                                }`}
+                                title={cond.ativo ? 'Condição Ativa' : 'Condição Inativa'}
+                              />
+                            </td>
+
+                            {/* Descrição */}
+                            <td className="py-3 px-3.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-slate-900 dark:text-white">
+                                  {cond.descricao}
                                 </span>
+                                {cond.padrao && (
+                                  <span className="px-1.5 py-0.5 text-[9px] font-extrabold rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                                    PADRÃO
+                                  </span>
+                                )}
+                                {isMisto && (
+                                  <span className="px-1.5 py-0.5 text-[9px] font-extrabold rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
+                                    <Layers className="w-2.5 h-2.5" />
+                                    MÚLTIPLOS MEIOS
+                                  </span>
+                                )}
+                              </div>
+                              {cond.observacao && (
+                                <p className="text-[11px] text-slate-400 truncate max-w-xs mt-0.5">
+                                  {cond.observacao}
+                                </p>
                               )}
-                            </div>
-                            {cond.observacao && (
-                              <p className="text-[11px] text-slate-400 truncate max-w-xs mt-0.5">
-                                {cond.observacao}
-                              </p>
-                            )}
-                          </td>
+                            </td>
 
-                          {/* Espécie */}
-                          <td className="py-3 px-3.5">
-                            <span className="px-2 py-0.5 text-[11px] font-semibold rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                              {cond.especie || 'Boleto'}
-                            </span>
-                          </td>
-
-                          {/* Banco */}
-                          <td className="py-3 px-3.5 text-slate-600 dark:text-slate-300 font-medium">
-                            {cond.banco || <span className="text-slate-400">—</span>}
-                          </td>
-
-                          {/* Qtd Parcelas & Dias */}
-                          <td className="py-3 px-3.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                                {cond.qtdParcelas}x
+                            {/* Espécie */}
+                            <td className="py-3 px-3.5">
+                              <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-md border ${
+                                isMisto 
+                                  ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 font-bold'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                              }`}>
+                                {isMisto ? 'Boleto / Depósito (Misto)' : (cond.especie || 'Boleto')}
                               </span>
-                              <span className="text-slate-500 text-[11px] font-mono">
-                                ({cond.parcelasDias?.map(d => `${d}d`).join(', ') || '30d'})
-                              </span>
-                            </div>
-                          </td>
+                            </td>
 
-                          {/* Ações */}
-                          <td className="py-3 px-3.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {onSelectCondition && cond.ativo && (
+                            {/* Qtd Parcelas & Dias */}
+                            <td className="py-3 px-3.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                  {cond.qtdParcelas}x
+                                </span>
+                                <span className="text-slate-500 text-[11px] font-mono">
+                                  ({cond.parcelasDias?.map(d => `${d}d`).join(', ') || '30d'})
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Ações */}
+                            <td className="py-3 px-3.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {onSelectCondition && cond.ativo && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      onSelectCondition(cond);
+                                      onClose();
+                                    }}
+                                    className="px-2 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950 dark:hover:bg-emerald-900 rounded-md border border-emerald-300 dark:border-emerald-800 transition cursor-pointer"
+                                    title="Usar esta condição no pedido atual"
+                                  >
+                                    Aplicar
+                                  </button>
+                                )}
+
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    onSelectCondition(cond);
-                                    onClose();
-                                  }}
-                                  className="px-2 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950 dark:hover:bg-emerald-900 rounded-md border border-emerald-300 dark:border-emerald-800 transition"
-                                  title="Usar esta condição no pedido atual"
+                                  onClick={() => handleOpenEdit(cond)}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition cursor-pointer"
+                                  title="Editar condição"
                                 >
-                                  Aplicar
+                                  <Edit2 className="w-3.5 h-3.5" />
                                 </button>
-                              )}
 
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEdit(cond)}
-                                className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition"
-                                title="Editar condição"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(cond)}
-                                disabled={cond.padrao}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition disabled:opacity-30 disabled:cursor-not-allowed"
-                                title={cond.padrao ? 'Condição padrão não pode ser excluída' : 'Excluir condição'}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(cond)}
+                                  disabled={cond.padrao}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                  title={cond.padrao ? 'Condição padrão não pode ser excluída' : 'Excluir condição'}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -463,7 +535,7 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
               </div>
             </div>
           ) : (
-            /* Formulário de Cadastro / Edição */
+            /* Modo Formulário */
             <form onSubmit={handleSave} className="space-y-5">
               
               {formError && (
@@ -473,49 +545,47 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
                 </div>
               )}
 
-              {/* Grid Principal */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Grid Principal Perfeitamente Balanceado */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 
                 {/* 1. Descrição */}
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Descrição da Condição <span className="text-rose-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Descrição da Condição <span className="text-rose-500">*</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400">
+                      (Dica: digitar prazos como 30/60/90 auto-ajusta as parcelas)
+                    </span>
+                  </div>
                   <input
                     type="text"
                     value={formDescricao}
-                    onChange={(e) => setFormDescricao(e.target.value)}
-                    placeholder="Ex: 30/60/90 Dias, 28/56 Dias, À Vista"
+                    onChange={(e) => handleDescricaoChange(e.target.value)}
+                    placeholder="Ex: 30/60/90/120 Dias, 28/56 Dias, À Vista"
                     required
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs"
                   />
                 </div>
 
-                {/* 2. Quantidade de Parcelas */}
+                {/* 2. Espécie (Meio) */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Qtd. Parcelas <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={24}
-                    value={formQtdParcelas}
-                    onChange={(e) => handleQtdParcelasChange(parseInt(e.target.value, 10) || 1)}
-                    required
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold font-mono outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs"
-                  />
-                </div>
-
-                {/* 3. Espécie (Meio) */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Espécie / Meio
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Espécie / Meio</span>
+                    {isCurrentMultiplo && (
+                      <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400">
+                        Múltiplos Meios
+                      </span>
+                    )}
                   </label>
                   <select
                     value={formEspecie}
                     onChange={(e) => setFormEspecie(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                    className={`w-full px-3 py-2 text-xs rounded-xl border font-bold outline-hidden cursor-pointer shadow-2xs transition ${
+                      isCurrentMultiplo
+                        ? 'border-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 focus:ring-2 focus:ring-indigo-500'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500'
+                    }`}
                   >
                     {ESPECIES_OPTIONS.map((esp) => (
                       <option key={esp} value={esp}>
@@ -525,30 +595,25 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
                   </select>
                 </div>
 
-                {/* 4. Banco / Conta Vinculada */}
+                {/* 3. Quantidade de Parcelas */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Banco / Conta Padrão
+                    Qtd. Parcelas <span className="text-rose-500">*</span>
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formBanco}
-                      onChange={(e) => setFormBanco(e.target.value)}
-                      placeholder="Ex: Banco Santander"
-                      list="bancos-sugestoes"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs"
-                    />
-                    <datalist id="bancos-sugestoes">
-                      {BANCOS_SUGESTOES.map((b) => (
-                        <option key={b} value={b} />
-                      ))}
-                    </datalist>
-                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={formQtdParcelas}
+                    onChange={(e) => handleQtdParcelasChange(e.target.value)}
+                    onBlur={handleQtdParcelasBlur}
+                    required
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold font-mono outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                  />
                 </div>
 
-                {/* 5. Toggles de Status e Padrão */}
-                <div className="flex items-center gap-6 pt-5">
+                {/* 4. Toggles de Status e Padrão */}
+                <div className="flex items-center gap-6 sm:col-span-2 pb-2">
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -576,13 +641,23 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
 
               </div>
 
+              {/* DICA INFORMATIVA QUANDO FOR MÚLTIPLOS MEIOS */}
+              {isCurrentMultiplo && (
+                <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex items-center gap-2.5 text-xs text-indigo-900 dark:text-indigo-200">
+                  <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span>
+                    <strong>Múltiplos Meios de Pagamento Ativo:</strong> Ao aplicar esta condição em um pedido, o sistema desdobrará automaticamente o pagamento em <strong>Depósito (Entrada)</strong> e <strong>Boletos (Saldo)</strong> mantendo a quantidade total de parcelas e carências aqui configuradas.
+                  </span>
+                </div>
+              )}
+
               {/* SEÇÃO DINÂMICA: CONFIGURAR PARCELAS */}
               <div className="p-4 rounded-xl border border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                      Configurar Parcelas ({formQtdParcelas} {formQtdParcelas === 1 ? 'parcela' : 'parcelas'})
+                      Configurar Parcelas ({Number(formQtdParcelas) || formParcelasDias.length} {(Number(formQtdParcelas) || formParcelasDias.length) === 1 ? 'parcela' : 'parcelas'})
                     </span>
                   </div>
 
@@ -592,28 +667,28 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => applyQuickInterval(30, false)}
-                      className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-700 dark:text-slate-300 transition"
+                      className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-700 dark:text-slate-300 transition cursor-pointer"
                     >
                       30/60/90...
                     </button>
                     <button
                       type="button"
                       onClick={() => applyQuickInterval(28, false)}
-                      className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-700 dark:text-slate-300 transition"
+                      className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-700 dark:text-slate-300 transition cursor-pointer"
                     >
                       28/56...
                     </button>
                     <button
                       type="button"
                       onClick={() => applyQuickInterval(15, false)}
-                      className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-700 dark:text-slate-300 transition"
+                      className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-700 dark:text-slate-300 transition cursor-pointer"
                     >
                       15/30/45...
                     </button>
                     <button
                       type="button"
                       onClick={() => applyQuickInterval(30, true)}
-                      className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-700 dark:text-slate-300 transition"
+                      className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-700 dark:text-slate-300 transition cursor-pointer"
                       title="Primeira parcela à vista (0 dias) e as demais a cada 30 dias"
                     >
                       Entrada + 30...
@@ -641,6 +716,7 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
                           inputMode="numeric"
                           value={dias}
                           onChange={(e) => handleDiaChange(index, e.target.value)}
+                          onBlur={() => handleDiaBlur(index)}
                           placeholder="0"
                           className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold outline-hidden focus:ring-2 focus:ring-emerald-500 pr-10"
                         />

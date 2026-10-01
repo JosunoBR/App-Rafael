@@ -378,11 +378,24 @@ export interface PaymentCondition {
   qtdParcelas: number;
   parcelasDias: number[]; // ex: [30, 60, 90, 120]
   parcelasDiasJson?: string;
-  especie: string;        // 'Boleto' | 'Dinheiro / PIX' | 'Cartão de Crédito' | 'Cheque' | 'Depósito'
+  especie: string;        // 'Boleto' | 'Boleto + Depósito (Forma Mista)' | 'Depósito Bancário / TED' | 'PIX / Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito' | 'Cheque'
   banco?: string;
   ativo: boolean;
   padrao?: boolean;
   observacao?: string;
+
+  // Suporte Avançado a Condições Mistas / Dupla Forma
+  isFormaDupla?: boolean;
+  depositoParcelasCount?: number;
+  depositoPrazoDias?: string;
+  depositoParcelasDias?: number[];
+  saldoParcelasCount?: number;
+  saldoPrazoDias?: string;
+  saldoParcelasDias?: number[];
+  percentualEntradaPadrao?: number; // Ex: 30 (30% entrada e 70% saldo em boletos)
+  depositoForma?: string;           // Ex: 'Depósito', 'PIX'
+  saldoForma?: string;              // Ex: 'Boleto', 'Cheque'
+
   createdAt?: string;
   updatedAt?: string;
 }

@@ -587,10 +587,9 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                         e.preventDefault();
                         const target = e.currentTarget;
                         const currentVal = target.value;
-                        const selStart = target.selectionStart ?? currentVal.length;
-                        const selEnd = target.selectionEnd ?? currentVal.length;
-                        const remaining = currentVal.slice(0, selStart) + currentVal.slice(selEnd);
-                        if (!remaining.includes(',')) {
+                        if (!currentVal.includes(',')) {
+                          const selStart = target.selectionStart ?? currentVal.length;
+                          const selEnd = target.selectionEnd ?? currentVal.length;
                           const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
                           const { formatted, value } = handleCurrencyInput(newVal, false);
                           setEditingValorTotal(formatted);
@@ -794,10 +793,9 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                                   e.preventDefault();
                                   const target = e.currentTarget;
                                   const currentVal = target.value;
-                                  const selStart = target.selectionStart ?? currentVal.length;
-                                  const selEnd = target.selectionEnd ?? currentVal.length;
-                                  const remaining = currentVal.slice(0, selStart) + currentVal.slice(selEnd);
-                                  if (!remaining.includes(',')) {
+                                  if (!currentVal.includes(',')) {
+                                    const selStart = target.selectionStart ?? currentVal.length;
+                                    const selEnd = target.selectionEnd ?? currentVal.length;
                                     const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
                                     const { formatted, value } = handleCurrencyInput(newVal, false);
                                     setEditingParcelasMap(prev => ({ ...prev, [idx]: formatted }));

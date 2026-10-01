@@ -34,15 +34,16 @@ export function handleCurrencyInput(
     return { formatted: '', value: 0 };
   }
 
-  // Converte ponto em vírgula se foi digitado como separador decimal (ex: "6.", "6.5", "6.52", "1253.52")
+  // Se não contiver vírgula:
   if (!str.includes(',')) {
     if (str.endsWith('.')) {
+      // Usuário digitou ponto no final (ex: "6.") para abrir centavos -> converte para "6,"
       str = str.slice(0, -1) + ',';
     } else if (str.includes('.')) {
-      const parts = str.split('.');
-      if (parts.length === 2) {
-        str = parts[0] + ',' + parts[1];
-      }
+      // Pontos sem vírgula são separadores de milhar (gerados pelo toLocaleString ou digitados).
+      // Ao remover os pontos, garantimos que "6.138" seja tratado como 6138 (e não 6,13)
+      // e que ao apagar dígitos via backspace (ex: "6.13"), retorne o valor inteiro correto (613).
+      str = str.replace(/\./g, '');
     }
   }
 

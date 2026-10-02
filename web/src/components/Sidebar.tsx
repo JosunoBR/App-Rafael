@@ -12,13 +12,15 @@ import {
   ShoppingBag, 
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
   LogOut,
   Users as UsersIcon,
   Boxes, 
   CreditCard,
-  Warehouse
+  Warehouse,
+  TrendingUp
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { canAccessTab, ActiveNavTab } from '../shared/permissions';
@@ -55,6 +57,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   });
 
+  const [isBiMenuOpen, setIsBiMenuOpen] = useState<boolean>(true);
+  const isBiActive = activeNav === 'dashboard' || activeNav === 'bi_products';
+
   const toggleCollapsed = () => {
     setIsCollapsed(prev => {
       const next = !prev;
@@ -76,6 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canAccessSeparation = canAccessTab(userRole, 'separation');
   const canAccessFinancial = canAccessTab(userRole, 'financial');
   const canAccessDashboard = canAccessTab(userRole, 'dashboard');
+  const canAccessBiProducts = canAccessTab(userRole, 'bi_products');
   const canAccessHistory = canAccessTab(userRole, 'history');
   const canAccessSeparationHistory = canAccessTab(userRole, 'separationHistory');
   const canAccessProducts = canAccessTab(userRole, 'products');
@@ -266,7 +272,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* GRUPO 2: GESTÃO & INTELIGÊNCIA */}
-          {(canAccessFinancial || canAccessDashboard || canAccessHistory || canAccessSeparationHistory) && (
+          {(canAccessFinancial || canAccessDashboard || canAccessBiProducts || canAccessHistory || canAccessSeparationHistory) && (
             <div className="space-y-1">
               {!isCollapsed ? (
                 <div className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -292,12 +298,106 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 activeNav === 'financial'
               )}
 
-              {/* Dashboard & BI */}
-              {canAccessDashboard && renderItem(
-                'dashboard',
-                'Dashboard & BI',
-                <BarChart3 className={`w-4 h-4 ${activeNav === 'dashboard' ? 'text-white' : 'text-teal-500'}`} />,
-                activeNav === 'dashboard'
+              {/* Dashboard & BI com Submenu */}
+              {(canAccessDashboard || canAccessBiProducts) && (
+                isCollapsed ? (
+                  <button
+                    key="bi_collapsed"
+                    onClick={() => {
+                      if (activeNav === 'dashboard') {
+                        onSelectNav('bi_products');
+                      } else if (activeNav === 'bi_products') {
+                        onSelectNav('dashboard');
+                      } else {
+                        onSelectNav('dashboard');
+                      }
+                    }}
+                    className={`w-11 h-11 mx-auto rounded-xl flex items-center justify-center transition-all relative cursor-pointer group ${
+                      isBiActive
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                    title={
+                      activeNav === 'bi_products'
+                        ? 'BI Produtos & Lojas (Clique para alternar para Financeiro)'
+                        : 'BI Financeiro (Clique para alternar para Produtos)'
+                    }
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isBiMenuOpen) {
+                          setIsBiMenuOpen(true);
+                          if (!isBiActive) onSelectNav('dashboard');
+                        } else {
+                          setIsBiMenuOpen(prev => !prev);
+                        }
+                      }}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        isBiActive
+                          ? 'bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/60'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <BarChart3 className={`w-4 h-4 shrink-0 ${isBiActive ? 'text-emerald-500' : 'text-slate-500 dark:text-slate-400'}`} />
+                        <span className="truncate">Dashboard & BI</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 text-slate-400">
+                        {isBiMenuOpen ? (
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Submenu Expandido */}
+                    {isBiMenuOpen && (
+                      <div className="pl-3 pr-1 py-1 space-y-1 border-l-2 border-emerald-500/30 dark:border-emerald-500/20 ml-4 animate-in fade-in duration-150">
+                        {canAccessDashboard && (
+                          <button
+                            type="button"
+                            onClick={() => onSelectNav('dashboard')}
+                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                              activeNav === 'dashboard'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <TrendingUp className={`w-3.5 h-3.5 shrink-0 ${activeNav === 'dashboard' ? 'text-white' : 'text-emerald-500'}`} />
+                              <span className="truncate">BI Financeiro</span>
+                            </div>
+                            {activeNav === 'dashboard' && <ChevronRight className="w-3 h-3 opacity-80" />}
+                          </button>
+                        )}
+
+                        {canAccessBiProducts && (
+                          <button
+                            type="button"
+                            onClick={() => onSelectNav('bi_products')}
+                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                              activeNav === 'bi_products'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Boxes className={`w-3.5 h-3.5 shrink-0 ${activeNav === 'bi_products' ? 'text-white' : 'text-teal-400'}`} />
+                              <span className="truncate">BI Produtos & Lojas</span>
+                            </div>
+                            {activeNav === 'bi_products' && <ChevronRight className="w-3 h-3 opacity-80" />}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
               )}
 
               {/* Histórico de Separações */}

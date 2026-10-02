@@ -10,6 +10,7 @@ export type ActiveNavTab =
   | 'separationHistory' 
   | 'products' 
   | 'dashboard' 
+  | 'bi_products'
   | 'suppliers' 
   | 'history' 
   | 'fiscal' 
@@ -85,6 +86,10 @@ export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): 
 
   if (tab === 'separationHistory') {
     return hasPermission(userOrRole, 'nav:separation_history');
+  }
+
+  if (tab === 'bi_products') {
+    return hasPermission(userOrRole, 'nav:dashboard');
   }
 
   return hasPermission(userOrRole, `nav:${tab}`);

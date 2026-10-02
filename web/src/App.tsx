@@ -34,6 +34,9 @@ import {
 import { 
   DashboardView 
 } from './components/DashboardView';
+import {
+  ProductMovementsBI
+} from './components/ProductMovementsBI';
 import { 
   SeparationPage 
 } from './components/SeparationPage';
@@ -3576,7 +3579,7 @@ export function App() {
                 />
               )}
 
-              {/* PÁGINA 4: DASHBOARD EXECUTIVO & BI (Diretoria) */}
+              {/* PÁGINA 4: DASHBOARD EXECUTIVO & BI FINANCEIRO (Diretoria) */}
               {activeNav === 'dashboard' && canAccessTab(currentUser?.role, 'dashboard') && (
                 <DashboardView
                   orders={savedOrders}
@@ -3589,6 +3592,23 @@ export function App() {
                     handleOpenSelectedOrder(selected, target);
                   }}
                   onNavigateToOrders={() => setActiveNav('orders')}
+                  onNavigateToProductsBI={() => setActiveNav('bi_products')}
+                />
+              )}
+
+              {/* PÁGINA 4.0B: BI PRODUTOS & MOVIMENTAÇÃO DE LOJAS (Diretoria) */}
+              {activeNav === 'bi_products' && canAccessTab(currentUser?.role, 'bi_products') && (
+                <ProductMovementsBI
+                  orders={savedOrders.length > 0 ? savedOrders : (order ? [order] : [])}
+                  stores={storeConfigs}
+                  onNavigateToFinancialBI={() => setActiveNav('dashboard')}
+                  onSelectOrder={(selected) => {
+                    const st = selected.header.status;
+                    const target = (st === 'Em Separação' || st === 'Em Distribuição' || st === 'Finalizado' || st === 'Aprovado')
+                      ? 'separation'
+                      : (canAccessTab(currentUser?.role, 'orders') ? 'orders' : 'separation');
+                    handleOpenSelectedOrder(selected, target);
+                  }}
                 />
               )}
 

@@ -39,13 +39,15 @@ interface DashboardViewProps {
   suppliers: Supplier[];
   onSelectOrder?: (order: PurchaseOrder) => void;
   onNavigateToOrders?: () => void;
+  onNavigateToProductsBI?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   orders,
   suppliers,
   onSelectOrder,
-  onNavigateToOrders
+  onNavigateToOrders,
+  onNavigateToProductsBI
 }) => {
   const currentYear = useMemo(() => new Date().getFullYear(), []);
 
@@ -221,6 +223,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       
       {/* 1. Header do Dashboard & Barra de Filtros de Período */}
       <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-5 shadow-xs">
+        {/* Alternância de Módulo do BI: Financeiro vs Produtos */}
+        {onNavigateToProductsBI && (
+          <div className="flex items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100 dark:border-slate-700/60">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold shadow-2xs">
+              <button
+                type="button"
+                className="px-3.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs flex items-center gap-1.5 cursor-default"
+              >
+                <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>BI Financeiro & Compras</span>
+              </button>
+              <button
+                type="button"
+                onClick={onNavigateToProductsBI}
+                className="px-3.5 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Boxes className="w-3.5 h-3.5 text-slate-400" />
+                <span>BI Movimentação & Lojas</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">

@@ -3409,9 +3409,7 @@ export function App() {
                         order.header.status && 
                         order.header.status !== 'Em Cotação' && 
                         order.header.status !== 'Rascunho' && 
-                        currentUser?.role !== 'diretoria' && 
-                        currentUser?.role !== 'faturamento' &&
-                        currentUser?.role !== ('root' as any)
+                        !canEditSpecificOrder(currentUser, order.header.status)
                       )}
                       canEditDeliveryDate={Boolean(
                         currentUser?.role === 'diretoria' ||
@@ -3421,25 +3419,16 @@ export function App() {
                       )}
                     />
 
-                    {/* 2. Engenharia Fiscal e Grade de Itens (Bloqueados para o Comprador após aprovação) */}
+                    {/* 2. Engenharia Fiscal e Grade de Itens */}
                     <fieldset 
                       disabled={Boolean(
                         order.header.status && 
                         order.header.status !== 'Em Cotação' && 
                         order.header.status !== 'Rascunho' && 
-                        currentUser?.role !== 'diretoria' && 
-                        currentUser?.role !== 'faturamento' &&
-                        currentUser?.role !== ('root' as any)
+                        !canEditSpecificOrder(currentUser, order.header.status)
                       )}
                       style={{ minWidth: 0 }}
-                      className={Boolean(
-                        order.header.status && 
-                        order.header.status !== 'Em Cotação' && 
-                        order.header.status !== 'Rascunho' && 
-                        currentUser?.role !== 'diretoria' && 
-                        currentUser?.role !== 'faturamento' &&
-                        currentUser?.role !== ('root' as any)
-                      ) ? 'space-y-6 opacity-85 pointer-events-none select-none border-none p-0 m-0 w-full max-w-full min-w-0' : 'space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0'}
+                      className="space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0"
                     >
                       {/* Card Retrátil de Engenharia Fiscal do Pedido (Entrada e Saída) */}
                       <OrderFiscalCard

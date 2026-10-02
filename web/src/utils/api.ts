@@ -781,6 +781,18 @@ export async function rollbackOrderStatusApi(orderId: string, payload: { targetS
   return res.json();
 }
 
+export async function rescheduleOrderDeliveryApi(
+  orderId: string,
+  payload: { novaDataEntregaPrevista: string; ajustarBoletos?: boolean; motivo?: string }
+): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
+  const res = await apiFetch(`/orders/${encodeURIComponent(orderId)}/reschedule-delivery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
 export async function fetchDistributionAuditLogs(orderId?: string, numeroPedido?: string): Promise<DistributionAuditLog[]> {
   let url = '/audit/distribution';
   if (orderId) {

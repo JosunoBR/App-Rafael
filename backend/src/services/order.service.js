@@ -384,6 +384,155 @@ class OrderService {
   }
 
   /**
+   * Reprograma com segurança a data de entrega prevista do pedido.
+   * Recalcula proporcionalmente os vencimentos das parcelas em aberto caso solicitado,
+   * preservando 100% das parcelas já baixadas/pagas (Governança e Integridade Financeira).
+   */
+  async rescheduleDelivery(orderId, { novaDataEntregaPrevista, ajustarBoletos = true, motivo = '' }, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    if (!novaDataEntregaPrevista) {
+      const err = new Error('Nova data de previsão de entrega é obrigatória.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Não permite reprogramar data se o recebimento físico já foi confirmado na Matriz
+    if (order.header.recebidoMatriz) {
+      const err = new Error('Não é possível alterar a previsão de entrega de um pedido que já teve o recebimento físico confirmado na Matriz.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const dataAntiga = order.header.dataEntregaPrevista || order.header.dataPedido || '';
+
+    const parseFlexible = (val) => {
+      if (!val) return null;
+      const s = String(val).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.split('T')[0] + 'T12:00:00Z');
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+        const [d, m, y] = s.split('/');
+        return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`);
+      }
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const dtAntiga = parseFlexible(dataAntiga);
+    const dtNova = parseFlexible(novaDataEntregaPrevista);
+    if (!dtNova) {
+      const err = new Error('Formato de nova data de entrega inválido. Utilize AAAA-MM-DD ou DD/MM/AAAA.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const y = dtNova.getUTCFullYear();
+    const m = String(dtNova.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(dtNova.getUTCDate()).padStart(2, '0');
+    const novaIso = `${y}-${m}-${d}`;
+
+    let diffDays = 0;
+    if (dtAntiga) {
+      diffDays = Math.round((dtNova.getTime() - dtAntiga.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    let boletosAjustados = 0;
+    let boletosPreservados = 0;
+
+    if (ajustarBoletos && diffDays !== 0 && Array.isArray(order.installments) && order.installments.length > 0) {
+      order.installments = order.installments.map(inst => {
+        const isPaid = String(inst.status || '').toLowerCase() === 'pago' || !!inst.dataPagamento;
+        if (isPaid) {
+          boletosPreservados++;
+          return inst;
+        }
+
+        boletosAjustados++;
+        const currentDue = parseFlexible(inst.dataVencimento || inst.vencimento);
+        if (currentDue) {
+          const shifted = new Date(currentDue.getTime() + diffDays * 24 * 60 * 60 * 1000);
+          const sy = shifted.getUTCFullYear();
+          const sm = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+          const sd = String(shifted.getUTCDate()).padStart(2, '0');
+          const shiftedIso = `${sy}-${sm}-${sd}`;
+          return {
+            ...inst,
+            dataVencimento: shiftedIso,
+            vencimento: shiftedIso,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return inst;
+      });
+    }
+
+    // Histórico auditável de reprogramação
+    const historyEntry = {
+      previousDate: dataAntiga,
+      newDate: novaIso,
+      rescheduledAt: new Date().toISOString(),
+      reason: motivo || 'Reprogramação manual da entrega',
+      rescheduledBy: currentUser.nome || currentUser.username || 'Comprador',
+      diffDays,
+      adjustedInstallments: boletosAjustados
+    };
+
+    order.header.dataEntregaPrevista = novaIso;
+    order.header.deliveryRescheduleHistory = [
+      ...(order.header.deliveryRescheduleHistory || []),
+      historyEntry
+    ];
+    order.header.updatedAt = new Date().toISOString();
+
+    const saved = await orderRepository.save(order);
+
+    // Auditoria de governança
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      usuarioId: currentUser.id,
+      usuarioNome: currentUser.nome || currentUser.username || 'Comprador',
+      acao: 'REPROGRAMAR_ENTREGA',
+      detalhes: JSON.stringify({
+        dataAntiga,
+        novaData: novaIso,
+        diffDays,
+        motivo,
+        boletosAjustados,
+        boletosPreservados
+      })
+    }).catch(e => console.error('Erro ao registrar log de auditoria de reprogramação:', e));
+
+    // Sincronizar com o módulo financeiro (SQLite)
+    try {
+      const financialService = require('./financialService');
+      await financialService.syncSingleOrder(saved);
+    } catch (finErr) {
+      console.error('Erro ao sincronizar reprogramação com o financeiro:', finErr);
+    }
+
+    return {
+      success: true,
+      message: `Previsão de entrega do pedido ${saved.header.numeroPedido} reprogramada para ${novaIso} (${diffDays >= 0 ? '+' : ''}${diffDays} dias). ${boletosAjustados} boletos em aberto atualizados.`,
+      order: saved,
+      diffDays,
+      boletosAjustados,
+      boletosPreservados
+    };
+  }
+
+  /**
    * Confirma o recebimento físico de um pedido na Matriz (entrega do fornecedor).
    * Permitido para: diretoria, comprador, deposito. Bloqueado para: separacao.
    */

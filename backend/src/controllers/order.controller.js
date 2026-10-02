@@ -74,6 +74,21 @@ class OrderController {
       next(err);
     }
   }
+
+  async rescheduleDelivery(req, res, next) {
+    try {
+      const { novaDataEntregaPrevista, ajustarBoletos, motivo } = req.body;
+      const result = await orderService.rescheduleDelivery(
+        req.params.id,
+        { novaDataEntregaPrevista, ajustarBoletos, motivo },
+        req.user
+      );
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async confirmReceipt(req, res, next) {
     try {
       const { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos } = req.body;

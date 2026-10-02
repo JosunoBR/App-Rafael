@@ -45,6 +45,7 @@ interface OrderHistoryPageProps {
   onConfirmReceipt?: (order: PurchaseOrder) => void;
   onAuthorizeFinancial?: (order: PurchaseOrder) => void;
   onRollbackSuccess?: (updatedOrder: PurchaseOrder) => void;
+  onRescheduleOrder?: (order: PurchaseOrder) => void;
 }
 
 type SortField = 'numero' | 'fornecedor' | 'data' | 'itens' | 'pecas' | 'valor' | 'frete' | 'status';
@@ -90,7 +91,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   onNavigateToSeparation,
   onConfirmReceipt,
   onAuthorizeFinancial,
-  onRollbackSuccess
+  onRollbackSuccess,
+  onRescheduleOrder
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -423,6 +425,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
       <DeliveryAlertBanner
         orders={orders}
         onSelectOrder={onSelectOrder}
+        onRescheduleOrder={onRescheduleOrder}
       />
 
       {/* 2. Card de Controle de Compras (Filtros por Mês, Ano etc., Médias, Extremos e Navegação Sincronizados com a Esteira) */}
@@ -1175,7 +1178,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       <td className="py-3.5 px-3 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
                         <div>{toBrDate(ord.header.dataPedido || ord.header.createdAt)}</div>
                         {deliveryAlert ? (
-                          <div className="mt-1">
+                          <div className="mt-1 flex items-center gap-1">
                             <span 
                               className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border shadow-2xs ${deliveryAlert.badgeBg} ${deliveryAlert.badgeText} ${deliveryAlert.badgeBorder}`}
                               title={`Previsão: ${deliveryAlert.dataEntregaPrevistaBr} (${deliveryAlert.label})`}
@@ -1185,10 +1188,36 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                               {deliveryAlert.severity === 'upcoming' && <Calendar className="w-3 h-3 text-sky-500 dark:text-sky-400 shrink-0" />}
                               <span>{deliveryAlert.label}</span>
                             </span>
+                            {onRescheduleOrder && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRescheduleOrder(ord);
+                                }}
+                                className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer"
+                                title="Reprogramar previsão de entrega e parcelas"
+                              >
+                                <Calendar className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
                         ) : ord.header.dataEntregaPrevista ? (
-                          <div className="text-[10px] text-slate-400 mt-0.5" title="Previsão de entrega">
-                            Prev: {toBrDate(ord.header.dataEntregaPrevista)}
+                          <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1" title="Previsão de entrega">
+                            <span>Prev: {toBrDate(ord.header.dataEntregaPrevista)}</span>
+                            {onRescheduleOrder && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRescheduleOrder(ord);
+                                }}
+                                className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer"
+                                title="Reprogramar previsão de entrega e parcelas"
+                              >
+                                <Calendar className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
                         ) : null}
                       </td>

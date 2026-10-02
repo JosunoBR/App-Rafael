@@ -121,7 +121,8 @@ class OrderRepository {
       valorNotaFiscalEntregue: order.header.valorNotaFiscalEntregue,
       ajusteFiscalDiferenca: order.header.ajusteFiscalDiferenca,
       ajusteFiscalData: order.header.ajusteFiscalData,
-      ajusteFiscalUsuario: order.header.ajusteFiscalUsuario
+      ajusteFiscalUsuario: order.header.ajusteFiscalUsuario,
+      deliveryRescheduleHistory: order.header.deliveryRescheduleHistory
     };
     const paymentConfigJson = JSON.stringify(paymentConfig);
 

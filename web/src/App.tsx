@@ -58,6 +58,9 @@ import {
 import {
   ReceiptConfirmationModal
 } from './components/ReceiptConfirmationModal';
+import {
+  RescheduleDeliveryModal
+} from './components/RescheduleDeliveryModal';
 import { 
   FiscalSettingsPage 
 } from './components/FiscalSettingsPage';
@@ -174,11 +177,13 @@ import {
   releaseOrderToSeparationApi,
   sendOrderToFaturamentoApi,
   finalizeOrderPipelineApi,
-  checkOrderNumberInDb
+  checkOrderNumberInDb,
+  rescheduleOrderDeliveryApi
 } from './utils/api';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
 import { exportOrderToExcel } from './utils/excelExporter';
-import { calculateOrderNetTotal, calculateOrderMerchandiseTotal, generateOrderInstallments } from './utils/installments';
+import { calculateOrderNetTotal, calculateOrderMerchandiseTotal, generateOrderInstallments, rescheduleOrderDelivery } from './utils/installments';
+import { toBrDate } from './utils/masks';
 import { calculateItemFiscal, normalizeRateToDecimal } from './shared/fiscalEngine';
 import { DEFAULT_FISCAL_CONFIG } from './shared/constants';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
@@ -301,6 +306,7 @@ export function App() {
   const [supplierModalEditTarget, setSupplierModalEditTarget] = useState<Supplier | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [receiptModalOrder, setReceiptModalOrder] = useState<PurchaseOrder | null>(null);
+  const [rescheduleModalOrder, setRescheduleModalOrder] = useState<PurchaseOrder | null>(null);
   const [pipelineAuditOrder, setPipelineAuditOrder] = useState<PurchaseOrder | null>(null);
 
   // Lista consolidada de pedidos (o pedido em edição em memória sobrepõe a versão antiga salva)
@@ -911,7 +917,7 @@ export function App() {
         nextInstallments = nextInstallments.filter(inst => !inst.isBoletoFrete && inst.tipoTitulo !== 'frete' && !inst.observacao?.toLowerCase().includes('frete'));
       }
 
-      const newOrder: PurchaseOrder = { 
+      let newOrder: PurchaseOrder = { 
         ...prev, 
         header: updatedHeader,
         fiscalConfig: newFiscal,
@@ -919,12 +925,36 @@ export function App() {
         installments: nextInstallments
       };
 
-      if (updatedHeader.dataEntregaPrevista !== prev.header.dataEntregaPrevista) {
-        saveCurrentOrder(newOrder);
-        saveOrderToHistory(newOrder);
-        setSavedOrders(loadSavedOrdersList());
-        saveOrderSilently(newOrder).catch(() => {});
-        showToast(`Previsão de entrega atualizada para ${updatedHeader.dataEntregaPrevista || 'A definir'}. Boletos recalculados!`, 'info');
+      if (
+        updatedHeader.dataEntregaPrevista !== prev.header.dataEntregaPrevista &&
+        (updatedHeader.dataEntregaPrevista?.length === 10 || !updatedHeader.dataEntregaPrevista)
+      ) {
+        try {
+          const rescheduleRes = rescheduleOrderDelivery(
+            { ...prev, header: updatedHeader, items: updatedItems, fiscalConfig: newFiscal },
+            {
+              newDeliveryDate: updatedHeader.dataEntregaPrevista,
+              adjustPendingInstallments: true,
+              reason: 'Ajuste manual no cabeçalho do pedido',
+              userName: currentUser?.nome || currentUser?.email || 'Comprador'
+            }
+          );
+          newOrder = rescheduleRes.updatedOrder;
+          saveCurrentOrder(newOrder);
+          saveOrderToHistory(newOrder);
+          setSavedOrders(loadSavedOrdersList());
+          saveOrderSilently(newOrder).catch(() => {});
+          const daysText = rescheduleRes.diffDays !== 0 ? ` (${rescheduleRes.diffDays > 0 ? '+' : ''}${rescheduleRes.diffDays} dias)` : '';
+          const boletosMsg = rescheduleRes.installmentsAdjustedCount > 0 
+            ? ` ${rescheduleRes.installmentsAdjustedCount} boleto(s) em aberto ajustado(s)!` 
+            : ' Boletos recalculados!';
+          showToast(`Previsão de entrega atualizada para ${toBrDate(updatedHeader.dataEntregaPrevista) || 'A definir'}${daysText}.${boletosMsg}`, 'info');
+        } catch {
+          saveCurrentOrder(newOrder);
+          saveOrderToHistory(newOrder);
+          setSavedOrders(loadSavedOrdersList());
+          saveOrderSilently(newOrder).catch(() => {});
+        }
       }
 
       return newOrder;
@@ -2318,6 +2348,59 @@ export function App() {
     }
   };
 
+  // Handler seguro para reprogramação da previsão de entrega de pedidos e recalibração inteligente de boletos
+  const handleRescheduleDelivery = async (
+    targetOrder: PurchaseOrder,
+    newDate: string,
+    adjustBoletos: boolean,
+    reason?: string
+  ) => {
+    try {
+      const rescheduleRes = rescheduleOrderDelivery(targetOrder, {
+        newDeliveryDate: newDate,
+        adjustPendingInstallments: adjustBoletos,
+        reason,
+        userName: currentUser?.nome || currentUser?.email || 'Comprador'
+      });
+
+      const updatedOrder = rescheduleRes.updatedOrder;
+
+      // 1. Salva no histórico local de contingência
+      saveOrderToHistory(updatedOrder);
+
+      // 2. Se o pedido for o rascunho/pedido atualmente ativo em tela, atualiza o formulário
+      if (order?.header?.id === updatedOrder.header.id) {
+        setOrder(updatedOrder);
+        saveCurrentOrder(updatedOrder);
+      }
+
+      // 3. Atualiza a lista em memória de pedidos salvos
+      setSavedOrders(loadSavedOrdersList());
+
+      // 4. Sincroniza com a API do Backend
+      rescheduleOrderDeliveryApi(updatedOrder.header.id, {
+        novaDataEntregaPrevista: newDate,
+        ajustarBoletos: adjustBoletos,
+        motivo: reason
+      }).catch(err => {
+        console.warn('Aviso ao sincronizar reprogramação com o backend (mantido localmente):', err);
+      });
+
+      const daysText = rescheduleRes.diffDays !== 0
+        ? ` (${rescheduleRes.diffDays > 0 ? '+' : ''}${rescheduleRes.diffDays} dias)`
+        : '';
+      const boletosMsg = rescheduleRes.installmentsAdjustedCount > 0
+        ? ` ${rescheduleRes.installmentsAdjustedCount} boleto(s) em aberto atualizado(s)!`
+        : '';
+
+      showToast(`Previsão de entrega reprogramada para ${toBrDate(newDate)}${daysText}!${boletosMsg}`, 'success');
+      setRescheduleModalOrder(null);
+    } catch (err: any) {
+      showToast(err.message || 'Erro ao reprogramar a entrega do pedido.', 'error');
+      throw err;
+    }
+  };
+
   // Handler para confirmação de recebimento físico na Matriz
   const handleConfirmReceipt = async (payload: {
     dataRecebimento: string;
@@ -3268,6 +3351,7 @@ export function App() {
                   onSwitchViewMode={(mode) => setViewMode(mode)}
                   onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
                   onAuthorizeFinancial={handleAuthorizeFinancial}
+                  onRescheduleOrder={(selected) => setRescheduleModalOrder(selected)}
                 />
               )}
 
@@ -3557,6 +3641,7 @@ export function App() {
                   onNavigateToSeparation={(selected) => handleOpenSelectedOrder(selected, 'separation')}
                   onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
                   onAuthorizeFinancial={handleAuthorizeFinancial}
+                  onRescheduleOrder={(selected) => setRescheduleModalOrder(selected)}
                   onRollbackSuccess={(updated) => {
                     setOrder(updated);
                     saveOrderToHistory(updated);
@@ -3689,6 +3774,18 @@ export function App() {
           currentUser={currentUser}
           onConfirm={handleConfirmReceipt}
           onClose={() => setReceiptModalOrder(null)}
+        />
+      )}
+
+      {/* Modal de Reprogramação da Previsão de Entrega */}
+      {rescheduleModalOrder && (
+        <RescheduleDeliveryModal
+          isOpen={Boolean(rescheduleModalOrder)}
+          order={rescheduleModalOrder}
+          onClose={() => setRescheduleModalOrder(null)}
+          onConfirm={async (targetOrder, newDate, adjustBoletos, reason) => {
+            await handleRescheduleDelivery(targetOrder, newDate, adjustBoletos, reason);
+          }}
         />
       )}
 

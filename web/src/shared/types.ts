@@ -274,6 +274,9 @@ export interface OrderHeader {
   boletosLiberadosPor?: string;        // Usuário da diretoria que autorizou a liberação
   boletosLiberadosEm?: string;         // Timestamp ISO da autorização
 
+  // Histórico de Reprogramação da Entrega
+  deliveryRescheduleHistory?: DeliveryRescheduleEvent[];
+
   // Resumo Financeiro Oficial Consolidado
   totalBruto?: number;
   totalIpi?: number;
@@ -285,6 +288,16 @@ export interface OrderHeader {
 
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DeliveryRescheduleEvent {
+  previousDate: string;
+  newDate: string;
+  rescheduledAt: string;
+  reason?: string;
+  rescheduledBy?: string;
+  diffDays?: number;
+  adjustedInstallments?: number;
 }
 
 // Estrutura de Parcelas e Boletos Financeiros (Editáveis para Acordos Comerciais)

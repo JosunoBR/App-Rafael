@@ -18,6 +18,7 @@ import { getDeliveryAlertsSummary, OrderDeliveryAlert } from '../utils/deliveryA
 interface DeliveryAlertBannerProps {
   orders: PurchaseOrder[];
   onSelectOrder: (order: PurchaseOrder) => void;
+  onRescheduleOrder?: (order: PurchaseOrder) => void;
   defaultExpanded?: boolean;
   className?: string;
 }
@@ -25,6 +26,7 @@ interface DeliveryAlertBannerProps {
 export const DeliveryAlertBanner: React.FC<DeliveryAlertBannerProps> = ({
   orders,
   onSelectOrder,
+  onRescheduleOrder,
   defaultExpanded = false,
   className = ''
 }) => {
@@ -131,9 +133,25 @@ export const DeliveryAlertBanner: React.FC<DeliveryAlertBannerProps> = ({
 
                   <div className="mt-3 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-[10px] text-slate-400">
                     <span className="truncate">Etapa: <strong className="text-slate-600 dark:text-slate-300">{alert.status}</strong></span>
-                    <span className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-0.5">
-                      Abrir Pedido <ArrowRight className="w-3 h-3" />
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {onRescheduleOrder && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRescheduleOrder(alert.order);
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                          title="Reprogramar data de entrega e ajustar boletos"
+                        >
+                          <Calendar className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                          <span>Reprogramar</span>
+                        </button>
+                      )}
+                      <span className="text-slate-600 dark:text-slate-300 font-bold flex items-center gap-0.5">
+                        Abrir <ArrowRight className="w-3 h-3" />
+                      </span>
+                    </div>
                   </div>
                 </div>
               );

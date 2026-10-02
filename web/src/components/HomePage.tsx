@@ -34,6 +34,7 @@ interface HomePageProps {
   onSwitchViewMode: (mode: 'desktop' | 'mobile_purchases' | 'mobile_separation') => void;
   onConfirmReceipt?: (order: PurchaseOrder) => void;
   onAuthorizeFinancial?: (order: PurchaseOrder) => void;
+  onRescheduleOrder?: (order: PurchaseOrder) => void;
 }
 
 type TabFilter = 'todos' | 'Em Cotação' | 'Aprovado' | 'Em Separação' | 'Faturamento' | 'Finalizado';
@@ -50,7 +51,8 @@ export const HomePage: React.FC<HomePageProps> = ({
   onSelectOrder,
   onSwitchViewMode: _onSwitchViewMode,
   onConfirmReceipt,
-  onAuthorizeFinancial
+  onAuthorizeFinancial,
+  onRescheduleOrder
 }) => {
   const [activeTab, setActiveTab] = useState<TabFilter>('todos');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -306,6 +308,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         <DeliveryAlertBanner
           orders={savedOrders}
           onSelectOrder={onSelectOrder}
+          onRescheduleOrder={onRescheduleOrder}
         />
       )}
 

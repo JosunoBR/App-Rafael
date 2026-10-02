@@ -770,3 +770,157 @@ export function generateOrderInstallments(
 
   return list;
 }
+
+export interface RescheduleDeliveryOptions {
+  newDeliveryDate: string;             // YYYY-MM-DD ou DD/MM/AAAA
+  adjustPendingInstallments?: boolean; // default: true
+  reason?: string;
+  userName?: string;
+}
+
+export interface RescheduleDeliveryResult {
+  updatedOrder: PurchaseOrder;
+  diffDays: number;
+  installmentsAdjustedCount: number;
+  installmentsPreservedCount: number;
+}
+
+/**
+ * Realiza o reagendamento seguro da data de previsão de entrega do pedido,
+ * recalculando proporcionalmente os vencimentos das parcelas em aberto (+X ou -X dias)
+ * e mantendo 100% intactas as parcelas já baixadas/pagas (Princípio de Integridade Financeira).
+ */
+export function rescheduleOrderDelivery(
+  order: PurchaseOrder,
+  options: RescheduleDeliveryOptions
+): RescheduleDeliveryResult {
+  const {
+    newDeliveryDate,
+    adjustPendingInstallments = true,
+    reason = '',
+    userName = 'Comprador'
+  } = options;
+
+  if (!order || !order.header) {
+    throw new Error('Pedido inválido para reprogramação.');
+  }
+
+  // Normalizar datas para formato ISO (YYYY-MM-DD)
+  const currentRaw = order.header.dataEntregaPrevista || order.header.dataPedido || new Date().toISOString().split('T')[0];
+  const oldDt = parseDateFlexible(currentRaw);
+  const oldIso = oldDt
+    ? `${oldDt.getUTCFullYear()}-${String(oldDt.getUTCMonth() + 1).padStart(2, '0')}-${String(oldDt.getUTCDate()).padStart(2, '0')}`
+    : currentRaw;
+
+  const newDt = parseDateFlexible(newDeliveryDate);
+  if (!newDt) {
+    throw new Error(`Data de entrega inválida: "${newDeliveryDate}". Utilize o formato DD/MM/AAAA ou AAAA-MM-DD.`);
+  }
+  const newIso = `${newDt.getUTCFullYear()}-${String(newDt.getUTCMonth() + 1).padStart(2, '0')}-${String(newDt.getUTCDate()).padStart(2, '0')}`;
+
+  const diffDays = getDaysDifference(oldIso, newIso);
+
+  let adjustedCount = 0;
+  let preservedCount = 0;
+
+  // Ajuste inteligente das parcelas (apenas as em aberto sofrem deslocamento de dias se adjustPendingInstallments for true)
+  let nextInstallments: PaymentInstallment[] = [];
+
+  if (Array.isArray(order.installments) && order.installments.length > 0) {
+    nextInstallments = order.installments.map(inst => {
+      const isPaid = inst.status === 'Pago' || !!inst.dataPagamento;
+      if (isPaid) {
+        preservedCount++;
+        return inst;
+      }
+
+      if (!adjustPendingInstallments || diffDays === 0) {
+        return inst;
+      }
+
+      adjustedCount++;
+      const currentInstDt = parseDateFlexible(inst.dataVencimento);
+      const currentInstIso = currentInstDt
+        ? `${currentInstDt.getUTCFullYear()}-${String(currentInstDt.getUTCMonth() + 1).padStart(2, '0')}-${String(currentInstDt.getUTCDate()).padStart(2, '0')}`
+        : inst.dataVencimento;
+
+      const newDueIso = addDaysToDate(currentInstIso, diffDays);
+      const newStatus = getInstallmentStatus(newDueIso, inst.dataPagamento);
+
+      return {
+        ...inst,
+        dataVencimento: newDueIso,
+        status: newStatus,
+        updatedAt: new Date().toISOString()
+      };
+    });
+  } else {
+    // Se não havia parcelas geradas previamente, gera a lista do zero usando a nova data
+    const tempOrder = {
+      ...order,
+      header: {
+        ...order.header,
+        dataEntregaPrevista: newIso
+      }
+    };
+    nextInstallments = generateOrderInstallments(tempOrder);
+    adjustedCount = nextInstallments.filter(i => i.status !== 'Pago').length;
+  }
+
+  // Ajuste do mapa de datas personalizadas (se houver)
+  let updatedCustomDates: Record<string, string> | undefined = undefined;
+  if (order.header.datasVencimentoPersonalizadas && adjustPendingInstallments && diffDays !== 0) {
+    updatedCustomDates = {};
+    for (const [key, dateStr] of Object.entries(order.header.datasVencimentoPersonalizadas)) {
+      const parcNum = Number(key);
+      const linked = order.installments?.find(i => i.numeroParcela === parcNum);
+      const isPaid = linked?.status === 'Pago' || !!linked?.dataPagamento;
+      if (isPaid) {
+        updatedCustomDates[key] = dateStr;
+      } else {
+        const dt = parseDateFlexible(dateStr);
+        const iso = dt
+          ? `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
+          : dateStr;
+        updatedCustomDates[key] = addDaysToDate(iso, diffDays);
+      }
+    }
+  } else if (order.header.datasVencimentoPersonalizadas) {
+    updatedCustomDates = { ...order.header.datasVencimentoPersonalizadas };
+  }
+
+  // Evento de Auditoria da Reprogramação
+  const historyEvent = {
+    previousDate: oldIso,
+    newDate: newIso,
+    rescheduledAt: new Date().toISOString(),
+    reason: reason || 'Reprogramação manual da previsão de entrega',
+    rescheduledBy: userName,
+    diffDays,
+    adjustedInstallments: adjustedCount
+  };
+
+  const updatedHeader = {
+    ...order.header,
+    dataEntregaPrevista: newIso,
+    datasVencimentoPersonalizadas: updatedCustomDates,
+    deliveryRescheduleHistory: [
+      ...(order.header.deliveryRescheduleHistory || []),
+      historyEvent
+    ],
+    updatedAt: new Date().toISOString()
+  };
+
+  const updatedOrder: PurchaseOrder = {
+    ...order,
+    header: updatedHeader,
+    installments: nextInstallments
+  };
+
+  return {
+    updatedOrder,
+    diffDays,
+    installmentsAdjustedCount: adjustedCount,
+    installmentsPreservedCount: preservedCount
+  };
+}

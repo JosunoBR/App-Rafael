@@ -12,6 +12,7 @@ router.get('/:id', authMiddleware, (req, res, next) => orderController.getById(r
 router.post('/', authMiddleware, (req, res, next) => orderController.save(req, res, next));
 router.post('/:id/duplicate', authMiddleware, (req, res, next) => orderController.duplicate(req, res, next));
 router.put('/:id/installment', authMiddleware, (req, res, next) => orderController.updateInstallment(req, res, next));
+router.post('/:id/reschedule-delivery', authMiddleware, (req, res, next) => orderController.rescheduleDelivery(req, res, next));
 router.post('/:id/confirm-receipt', authMiddleware, (req, res, next) => orderController.confirmReceipt(req, res, next));
 router.post('/:id/send-to-distribution', authMiddleware, (req, res, next) => orderController.sendToDistribution(req, res, next));
 router.post('/:id/release-to-separation', authMiddleware, (req, res, next) => orderController.releaseToSeparation(req, res, next));

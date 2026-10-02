@@ -89,7 +89,7 @@ export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): 
   }
 
   if (tab === 'bi_products') {
-    return hasPermission(userOrRole, 'nav:dashboard');
+    return hasPermission(userOrRole, 'nav:bi_products') || hasPermission(userOrRole, 'nav:dashboard');
   }
 
   return hasPermission(userOrRole, `nav:${tab}`);

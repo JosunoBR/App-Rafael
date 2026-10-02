@@ -241,6 +241,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     roleDefaults: { diretoria: true, comprador: false, deposito: false, separacao: false, faturamento: false }
   },
   {
+    codigo: 'nav:bi_products',
+    categoria: '4. Cadastros & Gestão',
+    nome: 'Acessar BI de Movimentação & Distribuição de Produtos',
+    obs: 'Acompanhamento físico de peças enviadas, previstas e equilíbrio de lojas',
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: false, faturamento: false }
+  },
+  {
     codigo: 'nav:fiscal',
     categoria: '4. Cadastros & Gestão',
     nome: 'Gerenciar Parâmetros Fiscais (IPI, ST, ICMS, Margens)',

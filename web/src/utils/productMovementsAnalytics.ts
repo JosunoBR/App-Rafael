@@ -2,6 +2,7 @@ import { PurchaseOrder, StoreConfig, OrderItem } from '../shared/types';
 import { DEFAULT_STORES } from '../shared/constants';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
 import { toBrDate } from './masks';
+import { parseDeliveryDate } from './deliveryAlerts';
 
 export interface MovementsFilter {
   year: number;
@@ -45,6 +46,18 @@ export interface SupplierProductMovementDetail {
   quantidadeLoja: number;
   quantidadeTotalPedido: number;
   storeName?: string;
+  isRuptura?: boolean;
+}
+
+export interface SupplierReliabilityMetrics {
+  taxaPontualidade: number; // 0 a 100%
+  pedidosNoPrazo: number;
+  pedidosAtrasados: number;
+  mediaDiasAtraso: number; // dias médios quando atrasa
+  taxaRuptura: number; // % de peças canceladas/cortadas pelo fornecedor
+  pecasCortadas: number;
+  nivelConfiabilidade: 'excelente' | 'atencao' | 'critico';
+  labelConfiabilidade: string;
 }
 
 export interface SupplierMovementSummary {
@@ -56,6 +69,7 @@ export interface SupplierMovementSummary {
   totalProdutosDistintos: number;
   pedidosCount: number;
   produtos: SupplierProductMovementDetail[];
+  reliability: SupplierReliabilityMetrics;
   valor?: number;
 }
 
@@ -214,6 +228,11 @@ export function calculateProductMovementsMetrics(
     totalPecas: number;
     pedidosSet: Set<string>;
     produtos: SupplierProductMovementDetail[];
+    pedidosNoPrazo: number;
+    pedidosAtrasados: number;
+    totalDiasAtraso: number;
+    totalPecasSolicitadas: number;
+    pecasCortadas: number;
   }>();
 
   let globalPecasEntregues = 0;
@@ -227,6 +246,9 @@ export function calculateProductMovementsMetrics(
   let totalPecasReservaCD = 0;
   let globalPedidosEntreguesCount = 0;
   let globalPedidosPrevistosCount = 0;
+
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
 
   // Processa cada pedido
   orders.forEach(order => {
@@ -273,12 +295,62 @@ export function calculateProductMovementsMetrics(
         pecasPrevistas: 0,
         totalPecas: 0,
         pedidosSet: new Set(),
-        produtos: []
+        produtos: [],
+        pedidosNoPrazo: 0,
+        pedidosAtrasados: 0,
+        totalDiasAtraso: 0,
+        totalPecasSolicitadas: 0,
+        pecasCortadas: 0
       });
     }
     const supAcc = suppliersMap.get(fornecedorNome)!;
 
     const orderNumber = order.id ? (order.id.startsWith('ord_') ? order.id.replace('ord_', '') : order.id.slice(-6)) : 'S/N';
+    const orderKey = order.id || orderNumber;
+
+    // Avaliação de prazo de entrega do pedido
+    const dataPrevista = parseDeliveryDate(order.header.dataEntregaPrevista);
+    let isOrderLate = false;
+    let daysLate = 0;
+
+    if (dataPrevista) {
+      if (isDelivered) {
+        const dataReal = parseDeliveryDate(order.header.dataRecebimentoMatriz || order.header.dataFinalizacao || order.header.updatedAt);
+        if (dataReal) {
+          const diffMs = dataReal.getTime() - dataPrevista.getTime();
+          const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+          if (diffDays > 0) {
+            isOrderLate = true;
+            daysLate = diffDays;
+          }
+        }
+      } else {
+        const diffMs = todayMidnight.getTime() - dataPrevista.getTime();
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          isOrderLate = true;
+          daysLate = diffDays;
+        }
+      }
+    }
+
+    if (!supAcc.pedidosSet.has(orderKey)) {
+      if (isOrderLate) {
+        supAcc.pedidosAtrasados++;
+        supAcc.totalDiasAtraso += daysLate;
+      } else {
+        supAcc.pedidosNoPrazo++;
+      }
+    }
+
+    // Contabiliza peças solicitadas e rupturas do pedido
+    (order.items || []).forEach(it => {
+      const pecasIt = Number(it.qtdTotalUnidades) || ((Number(it.qtdNoPacote) || 1) * (Number(it.qtdPacotes) || 0)) || 0;
+      supAcc.totalPecasSolicitadas += pecasIt;
+      if (it.ruptura) {
+        supAcc.pecasCortadas += pecasIt;
+      }
+    });
     const rawDate = isDelivered 
       ? (order.header.dataRecebimentoMatriz || order.header.dataEntregaPrevista || order.header.dataPedido || order.header.createdAt)
       : (order.header.dataEntregaPrevista || order.header.dataPedido || order.header.createdAt);
@@ -472,11 +544,37 @@ export function calculateProductMovementsMetrics(
   const desvioMedio = storeStats.length > 0 ? somaDesviosAbsolutos / storeStats.length : 0;
   const indiceEquilibrioRede = Math.max(0, Math.min(100, Math.round(100 - (desvioMedio * 0.8))));
 
-  // Top Fornecedores que abastecem as lojas (considerando escopo da loja selecionada ou rede)
+  // Top Fornecedores que abastecem as lojas (com Termômetro de Confiabilidade & Pontualidade)
   const topSuppliersToStores: SupplierMovementSummary[] = Array.from(suppliersMap.entries())
     .filter(([_, data]) => data.totalPecas > 0)
     .map(([supplierName, data]) => {
       const produtosDistintos = new Set(data.produtos.map(p => `${p.productCode}__${p.productDescription}`));
+      
+      const totalPedidosAvaliados = data.pedidosNoPrazo + data.pedidosAtrasados;
+      const taxaPontualidade = totalPedidosAvaliados > 0 
+        ? Math.round((data.pedidosNoPrazo / totalPedidosAvaliados) * 100) 
+        : 100;
+      const mediaDiasAtraso = data.pedidosAtrasados > 0 
+        ? Math.round(data.totalDiasAtraso / data.pedidosAtrasados) 
+        : 0;
+      const taxaRuptura = data.totalPecasSolicitadas > 0 
+        ? Math.round((data.pecasCortadas / data.totalPecasSolicitadas) * 100) 
+        : 0;
+
+      let nivelConfiabilidade: 'excelente' | 'atencao' | 'critico' = 'excelente';
+      let labelConfiabilidade = 'Fornecedor Pontual';
+
+      if (taxaPontualidade >= 85 && taxaRuptura <= 5) {
+        nivelConfiabilidade = 'excelente';
+        labelConfiabilidade = 'Alta Confiabilidade';
+      } else if (taxaPontualidade >= 60 && taxaRuptura <= 15) {
+        nivelConfiabilidade = 'atencao';
+        labelConfiabilidade = mediaDiasAtraso > 0 ? `Atraso médio: ${mediaDiasAtraso}d` : 'Atenção a Prazos';
+      } else {
+        nivelConfiabilidade = 'critico';
+        labelConfiabilidade = taxaRuptura > 15 ? `Alto Corte (${taxaRuptura}%)` : `Frequente Atraso (${mediaDiasAtraso}d)`;
+      }
+
       return {
         supplierName,
         pecas: data.totalPecas,
@@ -485,7 +583,17 @@ export function calculateProductMovementsMetrics(
         totalPecas: data.totalPecas,
         totalProdutosDistintos: produtosDistintos.size,
         pedidosCount: data.pedidosSet.size,
-        produtos: data.produtos.sort((a, b) => b.quantidadeLoja - a.quantidadeLoja)
+        produtos: data.produtos.sort((a, b) => b.quantidadeLoja - a.quantidadeLoja),
+        reliability: {
+          taxaPontualidade,
+          pedidosNoPrazo: data.pedidosNoPrazo,
+          pedidosAtrasados: data.pedidosAtrasados,
+          mediaDiasAtraso,
+          taxaRuptura,
+          pecasCortadas: data.pecasCortadas,
+          nivelConfiabilidade,
+          labelConfiabilidade
+        }
       };
     })
     .sort((a, b) => b.totalPecas - a.totalPecas);

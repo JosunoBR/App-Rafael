@@ -843,6 +843,13 @@ class OrderService {
       throw err;
     }
 
+    const role = currentUser.role;
+    if (role && role !== 'faturamento' && role !== 'diretoria' && role !== 'root' && role !== 'admin') {
+      const err = new Error(`Perfil '${role}' não tem autorização para liberar boletos no faturamento.`);
+      err.statusCode = 403;
+      throw err;
+    }
+
     const order = await orderRepository.findById(orderId);
     if (!order) {
       const err = new Error('Pedido não encontrado.');

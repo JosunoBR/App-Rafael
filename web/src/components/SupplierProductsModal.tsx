@@ -10,7 +10,10 @@ import {
   Building2, 
   CheckCircle2, 
   Filter,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Activity,
+  AlertTriangle,
+  ShieldCheck
 } from 'lucide-react';
 import { SupplierMovementSummary, SupplierProductMovementDetail } from '../utils/productMovementsAnalytics';
 
@@ -144,6 +147,62 @@ export const SupplierProductsModal: React.FC<SupplierProductsModalProps> = ({
           </div>
         </div>
 
+        {/* Termômetro de Confiabilidade (Pontualidade nas Entregas & Rupturas) */}
+        {supplier.reliability && (
+          <div className="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-850/60 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <div className={`w-2.5 h-2.5 rounded-full ${
+                supplier.reliability.nivelConfiabilidade === 'excelente'
+                  ? 'bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-950'
+                  : supplier.reliability.nivelConfiabilidade === 'atencao'
+                  ? 'bg-amber-500 ring-2 ring-amber-200 dark:ring-amber-950'
+                  : 'bg-rose-500 ring-2 ring-rose-200 dark:ring-rose-950'
+              }`} />
+              <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-slate-400" />
+                Termômetro de Confiabilidade:
+              </span>
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                supplier.reliability.nivelConfiabilidade === 'excelente'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                  : supplier.reliability.nivelConfiabilidade === 'atencao'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+                  : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800'
+              }`}>
+                {supplier.reliability.labelConfiabilidade}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 text-[11px] font-mono text-slate-600 dark:text-slate-300">
+              <span title={`${supplier.reliability.pedidosNoPrazo} pedidos entregues rigorosamente no prazo`}>
+                Pontualidade: <strong className="text-slate-900 dark:text-white">{supplier.reliability.taxaPontualidade}%</strong>
+                {supplier.reliability.pedidosAtrasados > 0 && (
+                  <span className="text-slate-400 ml-1">
+                    ({supplier.reliability.pedidosAtrasados} atrasados)
+                  </span>
+                )}
+              </span>
+
+              {supplier.reliability.mediaDiasAtraso > 0 && (
+                <span className="text-amber-700 dark:text-amber-400">
+                  Méd. Atraso: <strong>+{supplier.reliability.mediaDiasAtraso}d</strong>
+                </span>
+              )}
+
+              <span>
+                Cortes/Rupturas: <strong className={supplier.reliability.taxaRuptura > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                  {supplier.reliability.taxaRuptura}%
+                </strong>
+                {supplier.reliability.pecasCortadas > 0 && (
+                  <span className="text-slate-400 ml-1">
+                    ({supplier.reliability.pecasCortadas.toLocaleString('pt-BR')} un)
+                  </span>
+                )}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Toolbar de Busca e Filtros */}
         <div className="p-3 sm:px-5 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50/40 dark:bg-slate-900/60">
           <div className="relative flex-1 min-w-[200px]">
@@ -257,6 +316,11 @@ export const SupplierProductsModal: React.FC<SupplierProductsModalProps> = ({
                       }`}>
                         {prod.orderStatus}
                       </span>
+                      {prod.isRuptura && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800">
+                          Corte / Ruptura
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

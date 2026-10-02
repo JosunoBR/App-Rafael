@@ -18,7 +18,8 @@ import {
   DollarSign,
   Plus,
   RefreshCw,
-  Info
+  Info,
+  Activity
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig } from '../shared/types';
 import { DEFAULT_STORES } from '../shared/constants';
@@ -35,7 +36,8 @@ import { SupplierProductsModal } from './SupplierProductsModal';
 interface ProductMovementsBIProps {
   orders: PurchaseOrder[];
   stores?: StoreConfig[];
-  onNavigateToFinancialBI: () => void;
+  onNavigateToFinancialBI?: () => void;
+  canAccessFinancialBI?: boolean;
   onSelectOrder?: (order: PurchaseOrder) => void;
 }
 
@@ -58,6 +60,7 @@ export const ProductMovementsBI: React.FC<ProductMovementsBIProps> = ({
   orders,
   stores = DEFAULT_STORES,
   onNavigateToFinancialBI,
+  canAccessFinancialBI = true,
   onSelectOrder
 }) => {
   const currentYear = useMemo(() => new Date().getFullYear(), []);
@@ -174,24 +177,26 @@ export const ProductMovementsBI: React.FC<ProductMovementsBIProps> = ({
             </div>
           </div>
 
-          {/* Seletor Tipo Pílula: Financeiro vs Produtos */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold self-start lg:self-auto shadow-2xs">
-            <button
-              type="button"
-              onClick={onNavigateToFinancialBI}
-              className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center gap-1.5"
-            >
-              <DollarSign className="w-3.5 h-3.5 text-slate-400" />
-              <span>BI Financeiro & Compras</span>
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs flex items-center gap-1.5 cursor-default"
-            >
-              <Boxes className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>BI Movimentação & Lojas</span>
-            </button>
-          </div>
+          {/* Seletor Tipo Pílula: Financeiro vs Produtos (Apenas exibido se o perfil tiver acesso ao BI Financeiro) */}
+          {canAccessFinancialBI && onNavigateToFinancialBI && (
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold self-start lg:self-auto shadow-2xs">
+              <button
+                type="button"
+                onClick={onNavigateToFinancialBI}
+                className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center gap-1.5"
+              >
+                <DollarSign className="w-3.5 h-3.5 text-slate-400" />
+                <span>BI Financeiro & Compras</span>
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs flex items-center gap-1.5 cursor-default"
+              >
+                <Boxes className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>BI Movimentação & Lojas</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Linha 2: Filtros de Período, Escopo e Lojas */}
@@ -654,6 +659,29 @@ export const ProductMovementsBI: React.FC<ProductMovementsBIProps> = ({
                         <span className="text-slate-500 dark:text-slate-400 font-medium">
                           {sup.pecasPrevistas.toLocaleString('pt-BR')} un
                         </span>
+                      </div>
+                    )}
+
+                    {/* Termômetro de Confiabilidade (Pontualidade & Rupturas) */}
+                    {sup.reliability && (
+                      <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            sup.reliability.nivelConfiabilidade === 'excelente'
+                              ? 'bg-emerald-500'
+                              : sup.reliability.nivelConfiabilidade === 'atencao'
+                              ? 'bg-amber-500'
+                              : 'bg-rose-500'
+                          }`} />
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans">
+                            {sup.reliability.taxaPontualidade}% pontual
+                          </span>
+                        </div>
+                        {sup.reliability.taxaRuptura > 0 && (
+                          <span className="text-[10px] font-mono text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-1 py-0.2 rounded">
+                            {sup.reliability.taxaRuptura}% cortes
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>

@@ -3601,6 +3601,7 @@ export function App() {
                 <ProductMovementsBI
                   orders={savedOrders.length > 0 ? savedOrders : (order ? [order] : [])}
                   stores={storeConfigs}
+                  canAccessFinancialBI={canAccessTab(currentUser?.role, 'dashboard')}
                   onNavigateToFinancialBI={() => setActiveNav('dashboard')}
                   onSelectOrder={(selected) => {
                     const st = selected.header.status;

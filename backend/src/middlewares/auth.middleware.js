@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/environment');
+const userRepository = require('../repositories/userRepository');
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -14,6 +15,16 @@ function authMiddleware(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET);
+    if (!decoded.permissions && decoded.id) {
+      try {
+        const dbUser = await userRepository.findById(decoded.id);
+        if (dbUser && dbUser.permissions) {
+          decoded.permissions = dbUser.permissions;
+        }
+      } catch {
+        // Fallback seguro
+      }
+    }
     req.user = decoded;
     return next();
   } catch (err) {
@@ -25,12 +36,21 @@ function authMiddleware(req, res, next) {
 }
 
 // Middleware opcional (se houver token decodifica, mas não bloqueia a requisição)
-function optionalAuth(req, res, next) {
+async function optionalAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     try {
-      req.user = jwt.verify(token, config.JWT_SECRET);
+      const decoded = jwt.verify(token, config.JWT_SECRET);
+      if (!decoded.permissions && decoded.id) {
+        try {
+          const dbUser = await userRepository.findById(decoded.id);
+          if (dbUser && dbUser.permissions) {
+            decoded.permissions = dbUser.permissions;
+          }
+        } catch {}
+      }
+      req.user = decoded;
     } catch {
       // Ignora erro no opcional
     }

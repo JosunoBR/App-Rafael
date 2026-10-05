@@ -760,13 +760,24 @@ export function App() {
     try {
       await saveOrderToDb(orderToSave, { autoAssignNextOnConflict: false });
     } catch (err: any) {
-      console.warn('Aviso ao sincronizar pedido silenciosamente com o SQLite:', err);
-      // Nenhum erro silencioso: avisa via banner iOS para o usuário saber que a nuvem não recebeu o rascunho
-      if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
+      console.warn('Aviso ao sincronizar pedido com o SQLite:', err);
+      if (err?.status === 403 || err?.code === 'ORDER_CLOSED_FORBIDDEN' || err?.code === 'ORDER_LOCKED') {
+        triggerIOSBanner(
+          err.message || 'Sem autorização para salvar alterações neste pedido no servidor. Suas alterações foram retidas apenas neste navegador.',
+          'error',
+          'Permissão Negada'
+        );
+      } else if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
         triggerIOSBanner(
           `O número ${orderToSave.header.numeroPedido} colidiu com outro pedido no servidor. Ajuste o número antes de salvar.`,
           'warning',
           'Conflito de Pedido'
+        );
+      } else if (err?.message && !isOfflineError(err)) {
+        triggerIOSBanner(
+          `Aviso: O pedido ${orderToSave.header.numeroPedido} não pôde ser gravado no servidor (${err.message}). Alterações salvas apenas em contingência local.`,
+          'warning',
+          'Aviso de Sincronização'
         );
       }
     }
@@ -2763,7 +2774,28 @@ export function App() {
     }
   };
 
-  const handleExportSeparationPDF = (visibleColumns?: Record<string, boolean>) => {
+  const handleExportSeparationPDF = async (visibleColumns?: Record<string, boolean>) => {
+    try {
+      // 🛡️ Garante que a distribuição e separação das filiais sejam persistidas no Banco de Dados antes da emissão do Romaneio
+      await saveOrderToDb(order, { autoAssignNextOnConflict: false });
+      saveOrderToHistory(order);
+      setSavedOrders(prev => {
+        const idx = prev.findIndex(o => o.header.id === order.header.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = order;
+          return next;
+        }
+        return [order, ...prev];
+      });
+    } catch (err: any) {
+      console.error('Erro ao sincronizar pedido antes de emitir o romaneio:', err);
+      triggerIOSBanner(
+        `Atenção: Não foi possível salvar a separação no servidor: ${err?.message || 'Erro de conexão ou permissão'}. O PDF foi gerado apenas com os dados locais deste navegador.`,
+        'error',
+        'Erro de Gravação'
+      );
+    }
     exportRomaneioPDF(order, storeConfigs, visibleColumns);
     showToast('Romaneio PDF de Separação gerado com sucesso!', 'success');
   };

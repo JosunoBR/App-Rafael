@@ -42,7 +42,7 @@ interface SeparationPageProps {
   stores: StoreConfig[];
   presets?: SeparationPreset[];
   currentUser?: User | null;
-  onExportPDF: (visibleColumns?: Record<string, boolean>) => void;
+  onExportPDF: (visibleColumns?: Record<string, boolean>) => void | Promise<void>;
   onExportExcel?: () => void;
   onNavigateToOrders: () => void;
   onNavigateToHistory?: () => void;

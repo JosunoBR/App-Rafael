@@ -98,8 +98,12 @@ class OrderService {
           const hasEditClosedPermission = currentUser.permissions && currentUser.permissions['orders:edit_closed'] === true;
           const isDeniedEditClosed = currentUser.permissions && currentUser.permissions['orders:edit_closed'] === false;
 
+          // Comprador é autorizado na esteira a menos que expressamente negado nas permissões granulares
+          const isCompradorAllowed = currentUser.role === 'comprador' && !isDeniedEditClosed;
+
           const isAuthorized = isDiretoriaOrRoot || 
                                currentUser.role === 'faturamento' || 
+                               isCompradorAllowed ||
                                (hasEditClosedPermission && !isDeniedEditClosed);
 
           if (!isAuthorized) {

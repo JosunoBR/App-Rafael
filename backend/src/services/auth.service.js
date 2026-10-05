@@ -55,11 +55,21 @@ class AuthService {
   }
 
   generateToken(user) {
+    let permissions = user.permissions || {};
+    if (typeof permissions === 'string') {
+      try {
+        permissions = JSON.parse(permissions);
+      } catch {
+        permissions = {};
+      }
+    }
+
     const payload = {
       id: user.id,
       nome: user.nome,
       email: user.email,
-      role: user.role
+      role: user.role,
+      permissions
     };
 
     return jwt.sign(payload, config.JWT_SECRET, {

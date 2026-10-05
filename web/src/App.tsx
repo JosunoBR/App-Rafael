@@ -2458,7 +2458,7 @@ export function App() {
       // 4. Salvar versão com parcelas recalculadas
       await saveOrderToDb(updatedOrderWithInstallments).catch(() => {});
       saveOrderToHistory(updatedOrderWithInstallments);
-      const refreshedList = loadSavedOrdersList();
+      const refreshedList = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(refreshedList);
 
       if (order.header.id === targetOrder.header.id) {
@@ -2502,9 +2502,8 @@ export function App() {
         }
       };
 
-      await saveOrderToDb(updated).catch(() => {});
       saveOrderToHistory(updated);
-      const refreshedList = loadSavedOrdersList();
+      const refreshedList = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(refreshedList);
 
       if (order.header.id === targetOrder.header.id) {

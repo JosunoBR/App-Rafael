@@ -93,9 +93,10 @@ const SEPARATION_BASE_COLUMNS: SeparationColumnMeta[] = [
   { key: 'refFabrica', label: 'Referência Fábrica', category: 'produto', width: 95, title: 'Código de fábrica informado pelo fornecedor' },
   { key: 'pdv', label: 'Preço Venda (PDV)', category: 'produto', width: 80, title: 'Preço de venda sugerido (PDV Alvo)' },
   { key: 'qtdPac', label: 'Qtd no Pacote', category: 'produto', width: 80, title: 'Quantidade de peças na embalagem/pacote' },
-  { key: 'comprado', label: 'Total Comprado', category: 'balanco', title: 'Total bruto de unidades compradas' },
-  { key: 'estoqueCd', label: 'Estoque CD', category: 'balanco', title: 'Unidades retidas para o Centro de Distribuição' },
-  { key: 'lojasTotal', label: 'Total Lojas', category: 'balanco', title: 'Total líquido distribuído entre filiais' },
+  { key: 'comprado', label: 'Total Comprado', category: 'balanco', width: 75, title: 'Total bruto de unidades compradas' },
+  { key: 'recebido', label: 'Qtd Recebida (Doca)', category: 'balanco', width: 90, title: 'Quantidade física conferida na doca' },
+  { key: 'estoqueCd', label: 'Estoque CD', category: 'balanco', width: 85, title: 'Unidades retidas para o Centro de Distribuição' },
+  { key: 'lojasTotal', label: 'Total Lojas', category: 'balanco', width: 70, title: 'Total líquido distribuído entre filiais' },
 ];
 
 const FROZEN_COLUMNS_CONFIG = [
@@ -487,16 +488,20 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     return order.items.map(item => {
       const allocatedUnits = activeStores.reduce((acc, store) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);
       const totalCompradoUnits = Number(item.qtdTotalUnidades) || 0;
-      const reserveStockUnits = Math.max(0, totalCompradoUnits - allocatedUnits);
+      const effectiveReceivedUnits = item.qtdRecebida !== undefined ? Math.max(0, Number(item.qtdRecebida)) : (item.ruptura ? 0 : totalCompradoUnits);
+      const ruptureUnits = Math.max(0, totalCompradoUnits - effectiveReceivedUnits);
+      const reserveStockUnits = Math.max(0, effectiveReceivedUnits - allocatedUnits);
 
-      const isOverAllocated = allocatedUnits > totalCompradoUnits;
-      const excessUnits = isOverAllocated ? allocatedUnits - totalCompradoUnits : 0;
+      const isOverAllocated = allocatedUnits > effectiveReceivedUnits;
+      const excessUnits = isOverAllocated ? allocatedUnits - effectiveReceivedUnits : 0;
 
       return {
         item,
         allocatedUnits,
         reserveStockUnits,
         totalCompradoUnits,
+        effectiveReceivedUnits,
+        ruptureUnits,
         isOverAllocated,
         excessUnits,
         isBalanced: !isOverAllocated
@@ -506,11 +511,13 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
   // Totais Gerais em Peças
   const totalPecasGeralBruto = order.items.reduce((acc, item) => acc + (item.qtdTotalUnidades || 0), 0);
+  const totalPecasRecebidasGeral = itemStatusList.reduce((acc, s) => acc + s.effectiveReceivedUnits, 0);
+  const totalPecasFaltantesDoca = Math.max(0, totalPecasGeralBruto - totalPecasRecebidasGeral);
   const totalPecasDistribuidoLojasBruto = itemStatusList.reduce((acc, s) => acc + s.allocatedUnits, 0);
   const totalPecasDistribuidoLojasLiquido = Math.max(0, totalPecasDistribuidoLojasBruto - totalPecasAvariadasUnidades);
   const totalPecasGuardadasEstoque = itemStatusList.reduce((acc, s) => acc + s.reserveStockUnits, 0);
   
-  const percentualEstoque = totalPecasGeralBruto > 0 ? Math.round((totalPecasGuardadasEstoque / totalPecasGeralBruto) * 100) : 0;
+  const percentualEstoque = totalPecasRecebidasGeral > 0 ? Math.round((totalPecasGuardadasEstoque / totalPecasRecebidasGeral) * 100) : 0;
   const hasAnyOverAllocation = itemStatusList.some(s => s.isOverAllocated);
 
   // Sincronizar inspeção e avarias com o pedido principal no SQLite
@@ -576,6 +583,55 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
     onChangeOrder({
       ...order,
+      items: updatedItems
+    });
+  };
+
+  const handleUpdateItemReceivedUnits = (item: OrderItem, rawReceivedUnits: number) => {
+    if (!onChangeOrder) return;
+    const safeUnits = Math.max(0, Math.floor(rawReceivedUnits || 0));
+    const isRuptura = safeUnits === 0;
+
+    const updatedItems = order.items.map(it => {
+      if (it.id !== item.id) return it;
+
+      const currentAlloc = { ...(it.separacaoLojas || {}) };
+      const currentAllocSum = Object.values(currentAlloc).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      let newAlloc = currentAlloc;
+      let newReserve = it.qtdReservaEstoque ?? 0;
+
+      // Se a quantidade física recebida for inferior ao que já estava distribuído nas lojas, rebalanceia as cotas
+      if (safeUnits < currentAllocSum + newReserve) {
+        const targetPreset = presets.find(p => p.id === selectedPresetId);
+        const sep = targetPreset
+          ? applySeparationPreset(safeUnits, targetPreset, stores)
+          : calculateAutomaticSeparation(safeUnits, stores);
+        newAlloc = sep.allocations;
+        newReserve = sep.reserveStock;
+      }
+
+      return {
+        ...it,
+        qtdRecebida: safeUnits,
+        ruptura: isRuptura,
+        separacaoLojas: newAlloc,
+        qtdReservaEstoque: newReserve
+      };
+    });
+
+    const hasAnyShortage = updatedItems.some(it => {
+      const original = Number(it.qtdTotalUnidades) || 0;
+      const rec = it.qtdRecebida !== undefined ? it.qtdRecebida : original;
+      return it.ruptura || rec < original;
+    });
+
+    onChangeOrder({
+      ...order,
+      header: {
+        ...order.header,
+        possuiDivergenciaFaturamento: hasAnyShortage,
+        divergenciaResolvida: hasAnyShortage ? false : order.header.divergenciaResolvida
+      },
       items: updatedItems
     });
   };
@@ -1218,9 +1274,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                   </th>
                 )}
                 
-                {['comprado', 'estoqueCd', 'lojasTotal'].filter(isColVisible).length > 0 && (
+                {['comprado', 'recebido', 'estoqueCd', 'lojasTotal'].filter(isColVisible).length > 0 && (
                   <th 
-                    colSpan={['comprado', 'estoqueCd', 'lojasTotal'].filter(isColVisible).length} 
+                    colSpan={['comprado', 'recebido', 'estoqueCd', 'lojasTotal'].filter(isColVisible).length} 
                     className="py-2 px-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700 uppercase tracking-wide sticky top-0 z-30 select-none text-center"
                   >
                     BALANÇO GERAL
@@ -1239,8 +1295,13 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               {/* Linha 2 de Cabeçalho: Subcolunas e Nomes das Lojas (Congelada abaixo da linha 1) */}
               <tr className="bg-slate-50/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 h-[34px]">
                 {isColVisible('comprado') && (
-                  <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-emerald-50/80 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 min-w-[75px] sticky top-[34px] z-30 select-none">
+                  <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 min-w-[75px] sticky top-[34px] z-30 select-none" title="Quantidade original solicitada no pedido">
                     Comprado
+                  </th>
+                )}
+                {isColVisible('recebido') && (
+                  <th className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-emerald-50/80 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 min-w-[90px] sticky top-[34px] z-30 select-none" title="Quantidade física conferida na doca">
+                    Recebido
                   </th>
                 )}
                 {isColVisible('estoqueCd') && (
@@ -1370,8 +1431,35 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
                     {/* 6. Total Comprado */}
                     {isColVisible('comprado') && (
-                      <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-emerald-600 dark:text-emerald-400 text-xs min-w-[75px]">
+                      <td className="py-2 px-2 text-center font-mono font-bold border-r border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs min-w-[75px]" title="Total comprado original">
                         {item.qtdTotalUnidades.toLocaleString('pt-BR')}
+                      </td>
+                    )}
+
+                    {/* 6.1 Total Recebido na Doca */}
+                    {isColVisible('recebido') && (
+                      <td className="py-2 px-2 text-center border-r border-slate-100 dark:border-slate-800 min-w-[90px]">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <input
+                            type="number"
+                            min="0"
+                            max={item.qtdTotalUnidades}
+                            value={item.qtdRecebida !== undefined ? item.qtdRecebida : item.qtdTotalUnidades}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => handleUpdateItemReceivedUnits(item, parseFloat(e.target.value) || 0)}
+                            className={`w-14 h-7 px-1 text-center font-mono font-bold text-xs rounded-lg border outline-hidden transition ${
+                              (item.qtdRecebida !== undefined && item.qtdRecebida < item.qtdTotalUnidades)
+                                ? 'border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 focus:ring-2 focus:ring-amber-500'
+                                : 'border-emerald-300 bg-emerald-50/50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500'
+                            }`}
+                            title={`Quantidade física conferida na doca (Comprado: ${item.qtdTotalUnidades})`}
+                          />
+                          {item.qtdRecebida !== undefined && item.qtdRecebida < item.qtdTotalUnidades && (
+                            <span className="text-[9px] font-extrabold text-amber-600 dark:text-amber-400 font-mono">
+                              -{item.qtdTotalUnidades - item.qtdRecebida} un
+                            </span>
+                          )}
+                        </div>
                       </td>
                     )}
 
@@ -1381,7 +1469,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                         <input
                           type="number"
                           min="0"
-                          max={item.qtdTotalUnidades}
+                          max={status.effectiveReceivedUnits}
                           value={status.reserveStockUnits === 0 ? '' : status.reserveStockUnits}
                           placeholder="0"
                           onFocus={(e) => e.target.select()}

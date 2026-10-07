@@ -108,7 +108,7 @@ export function calculateOrderMerchandiseTotal(order: PurchaseOrder): number {
 }
 
 /**
- * Calcula o valor total faturado do pedido (itens com desconto + IPI + ST + frete + outras despesas)
+ * Calcula o valor total faturado do pedido (itens com desconto + IPI + ST + outras despesas - SEM FRETE)
  */
 export function calculateOrderNetTotal(order: PurchaseOrder): number {
   if (!order) return 0;
@@ -498,6 +498,7 @@ export function generateOrderInstallments(
   const prazo = String(customPrazo ?? order.header.prazoDias ?? parsed.prazo ?? '30');
   const netTotal = calculateOrderNetTotal(order);
   const customDates = order.header.datasVencimentoPersonalizadas;
+  const customValues = order.header.valoresParcelasPersonalizados;
 
   // A primeira parcela a prazo é contada a partir da data REAL de entrega da mercadoria na Matriz.
   // Prioridade: (1) data de recebimento físico confirmado, (2) data de entrega prevista, (3) data do pedido.
@@ -533,7 +534,8 @@ export function generateOrderInstallments(
 
   const isCif = isExplicitCif || (rawValorFrete <= 0 && !existingFrete);
   const valorFrete = isCif ? 0 : rawValorFrete;
-  const valorBaseMercadoria = Math.max(0, netTotal - valorFrete);
+  // O frete é 100% à parte e NÃO pode ser abatido nem somado no total das mercadorias/produtos
+  const valorBaseMercadoria = Math.max(0, netTotal);
 
   const condLower = String(order.header?.condicaoPagamento || '').toLowerCase();
   const isCompositeCond = (condLower.includes('depósito') || condLower.includes('deposito')) && (condLower.includes('boleto') || condLower.includes('saldo') || condLower.includes('cheque'));
@@ -584,8 +586,9 @@ export function generateOrderInstallments(
       lastDepositDate = calculatedDueDate;
 
       const origVal = d === 1 ? Number((depBaseValue + depRemainder).toFixed(2)) : depBaseValue;
-      const isDepManuallyOverridden = existingDep?.valor !== undefined && existingDep?.valorOriginal !== undefined && Math.abs(existingDep.valor - existingDep.valorOriginal) > 0.01;
-      const valorFinal = isDepManuallyOverridden ? existingDep.valor : origVal;
+      const customVal = customValues?.[String(d)];
+      const isDepManuallyOverridden = customVal !== undefined || (existingDep?.valor !== undefined && existingDep?.valorOriginal !== undefined && Math.abs(existingDep.valor - existingDep.valorOriginal) > 0.01);
+      const valorFinal = customVal !== undefined ? customVal : (isDepManuallyOverridden && existingDep ? existingDep.valor : origVal);
       const rawDataVenc = customDepDate || calculatedDueDate;
       const dataVencFinal = addDaysToDate(rawDataVenc, 0);
       const statusFinal = existingDep?.status || getInstallmentStatus(dataVencFinal, existingDep?.dataPagamento);
@@ -600,7 +603,7 @@ export function generateOrderInstallments(
         totalParcelas: totalParcelasGeral,
         dataVencimento: dataVencFinal,
         valor: valorFinal,
-        valorOriginal: isDepManuallyOverridden ? existingDep.valorOriginal : origVal,
+        valorOriginal: isDepManuallyOverridden && existingDep ? existingDep.valorOriginal : origVal,
         status: statusFinal,
         dataPagamento: existingDep?.dataPagamento,
         observacao: existingDep?.observacao || (totalParcelasDeposito === 1 && depositoPrazo === 'vista' ? `Entrada / Sinal À Vista (${depFormaLabel})` : `${depFormaLabel} ${d}/${totalParcelasDeposito}`),
@@ -638,10 +641,10 @@ export function generateOrderInstallments(
       }
 
       const originalProportionalVal = j === 1 ? Number((saldoBaseValue + saldoRemainder).toFixed(2)) : saldoBaseValue;
-
+      const customVal = customValues?.[String(numParcela)];
       const customSaldoDate = customDates?.[String(numParcela)];
-      const isManuallyOverridden = existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01;
-      const valorFinal = isManuallyOverridden ? existing.valor : originalProportionalVal;
+      const isManuallyOverridden = customVal !== undefined || (existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01);
+      const valorFinal = customVal !== undefined ? customVal : (isManuallyOverridden && existing ? existing.valor : originalProportionalVal);
       const rawDueDate = customSaldoDate || calculatedDueDate;
       const dataVencimentoFinal = addDaysToDate(rawDueDate, 0);
       const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
@@ -655,7 +658,7 @@ export function generateOrderInstallments(
         totalParcelas: totalParcelasGeral,
         dataVencimento: dataVencimentoFinal,
         valor: valorFinal,
-        valorOriginal: isManuallyOverridden ? existing.valorOriginal : originalProportionalVal,
+        valorOriginal: isManuallyOverridden && existing ? existing.valorOriginal : originalProportionalVal,
         status: statusFinal,
         dataPagamento: existing?.dataPagamento,
         observacao: existing?.observacao || `${salFormaLabel} ${j}/${totalParcelasSaldo}`,
@@ -699,10 +702,10 @@ export function generateOrderInstallments(
       }
 
       const originalProportionalVal = i === 1 ? Number((baseValue + remainder).toFixed(2)) : baseValue;
-
+      const customVal = customValues?.[String(i)];
       const customDate = customDates?.[String(i)];
-      const isManuallyOverridden = existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01;
-      const valorFinal = isManuallyOverridden ? existing.valor : originalProportionalVal;
+      const isManuallyOverridden = customVal !== undefined || (existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01);
+      const valorFinal = customVal !== undefined ? customVal : (isManuallyOverridden && existing ? existing.valor : originalProportionalVal);
       // Stale dates fix: recalculate dynamically if not explicitly in customDates
       const rawDueDate = customDate || calculatedDueDate;
       const dataVencimentoFinal = addDaysToDate(rawDueDate, 0);
@@ -721,7 +724,7 @@ export function generateOrderInstallments(
         totalParcelas: totalParcelas,
         dataVencimento: dataVencimentoFinal,
         valor: valorFinal,
-        valorOriginal: isManuallyOverridden ? existing.valorOriginal : originalProportionalVal,
+        valorOriginal: isManuallyOverridden && existing ? existing.valorOriginal : originalProportionalVal,
         status: statusFinal,
         dataPagamento: existing?.dataPagamento,
         observacao: existing?.observacao || obsText,
@@ -741,9 +744,10 @@ export function generateOrderInstallments(
     const nextParcelaNum = list.length + 1;
     const customFreteDate = customDates?.['frete'] || customDates?.[String(nextParcelaNum)];
 
-    const finalBaseFreightVal = valorFrete > 0 ? valorFrete : existingFrete!.valor;
-    const isFreteManuallyOverridden = existingFrete?.valor !== undefined && existingFrete?.valorOriginal !== undefined && Math.abs(existingFrete.valor - existingFrete.valorOriginal) > 0.01;
-    const valorFreteFinal = isFreteManuallyOverridden ? existingFrete.valor : finalBaseFreightVal;
+    const customFreteVal = customValues?.['frete'] || customValues?.[String(nextParcelaNum)];
+    const finalBaseFreightVal = customFreteVal !== undefined ? customFreteVal : (valorFrete > 0 ? valorFrete : (existingFrete ? existingFrete.valor : 0));
+    const isFreteManuallyOverridden = customFreteVal !== undefined || (existingFrete?.valor !== undefined && existingFrete?.valorOriginal !== undefined && Math.abs(existingFrete.valor - existingFrete.valorOriginal) > 0.01);
+    const valorFreteFinal = customFreteVal !== undefined ? customFreteVal : (isFreteManuallyOverridden && existingFrete ? existingFrete.valor : finalBaseFreightVal);
     const rawFreteDate = customFreteDate || existingFrete?.dataVencimento || freteDueDate;
     const dataVencFrete = addDaysToDate(rawFreteDate, 0);
     const statusFrete = existingFrete?.status || getInstallmentStatus(dataVencFrete, existingFrete?.dataPagamento);
@@ -757,7 +761,7 @@ export function generateOrderInstallments(
       totalParcelas: nextParcelaNum,
       dataVencimento: dataVencFrete,
       valor: valorFreteFinal,
-      valorOriginal: isFreteManuallyOverridden ? existingFrete.valorOriginal : finalBaseFreightVal,
+      valorOriginal: isFreteManuallyOverridden && existingFrete ? existingFrete.valorOriginal : finalBaseFreightVal,
       status: statusFrete,
       dataPagamento: existingFrete?.dataPagamento,
       observacao: existingFrete?.observacao || 'Boleto de Frete (10 dias após a entrega)',

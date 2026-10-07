@@ -109,6 +109,7 @@ class OrderRepository {
       diaVencimentoPersonalizado: order.header.diaVencimentoPersonalizado,
       dataPrimeiroVencimento: order.header.dataPrimeiroVencimento,
       datasVencimentoPersonalizadas: order.header.datasVencimentoPersonalizadas,
+      valoresParcelasPersonalizados: order.header.valoresParcelasPersonalizados,
       valorEntradaAVista: order.header.valorEntradaAVista,
       percentualEntrada: order.header.percentualEntrada,
       isEntradaProporcional: order.header.isEntradaProporcional,
@@ -122,7 +123,12 @@ class OrderRepository {
       ajusteFiscalDiferenca: order.header.ajusteFiscalDiferenca,
       ajusteFiscalData: order.header.ajusteFiscalData,
       ajusteFiscalUsuario: order.header.ajusteFiscalUsuario,
-      deliveryRescheduleHistory: order.header.deliveryRescheduleHistory
+      deliveryRescheduleHistory: order.header.deliveryRescheduleHistory,
+      possuiDivergenciaFaturamento: order.header.possuiDivergenciaFaturamento,
+      divergenciaResolvida: order.header.divergenciaResolvida,
+      divergenciaResolvidaPor: order.header.divergenciaResolvidaPor,
+      dataResolucaoDivergencia: order.header.dataResolucaoDivergencia,
+      tipoResolucaoDivergencia: order.header.tipoResolucaoDivergencia
     };
     const paymentConfigJson = JSON.stringify(paymentConfig);
 
@@ -562,35 +568,40 @@ class OrderRepository {
     try {
       const dbItems = await queryAll("SELECT * FROM order_items WHERE orderId = ?", [r.id]);
       if (dbItems && dbItems.length >= jsonItems.length && dbItems.length > 0) {
-        items = dbItems.map(it => ({
-          id: it.id,
-          codigoInterno: it.codigoInterno,
-          codigoFornecedor: it.codigoFornecedor,
-          codigoBarras: it.codigoBarras || '',
-          codigo: it.codigo,
-          descricao: it.descricao,
-          fotoUrl: it.fotoUrl,
-          qtdNoPacote: it.qtdNoPacote !== undefined ? it.qtdNoPacote : (it.qtdPorPacote || 1),
-          qtdPacotes: it.qtdPacotes !== undefined ? it.qtdPacotes : 0,
-          qtdTotalUnidades: it.qtdTotalUnidades,
-          precoUnitario: it.precoUnitario,
-          valorTotalBruto: it.valorTotalBruto,
-          percentualDesconto: it.percentualDesconto || 0,
-          valorDescontoItem: it.valorDescontoItem || 0,
-          valorTotalLiquido: it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : it.valorTotalBruto,
-          pdvAlvo: it.pdvAlvo,
-          custoLoja: it.custoLoja || 0,
-          custoFornecedor: it.custoFornecedor || 0,
-          despesasPdvUnit: it.despesasPdvUnit,
-          creditoIcmsUnit: it.creditoIcmsUnit,
-          custoRealEfetivo: it.custoRealEfetivo,
-          margemRealUnit: it.margemRealUnit,
-          margemPercentual: it.margemPercentual,
-          qtdReservaEstoque: it.qtdReservaEstoque,
-          separacaoManual: it.separacaoManual === 1,
-          separacaoLojas: it.separacaoLojasJson ? JSON.parse(it.separacaoLojasJson) : {},
-          ruptura: it.ruptura === 1 || it.ruptura === true
-        }));
+        items = dbItems.map((it, idx) => {
+          const jsonMatch = jsonItems.find(j => j.id === it.id || (j.codigo && j.codigo === it.codigo) || (j.codigoInterno && j.codigoInterno === it.codigoInterno)) || jsonItems[idx];
+          return {
+            id: it.id,
+            codigoInterno: it.codigoInterno,
+            codigoFornecedor: it.codigoFornecedor,
+            codigoBarras: it.codigoBarras || '',
+            codigo: it.codigo,
+            descricao: it.descricao,
+            fotoUrl: it.fotoUrl,
+            qtdNoPacote: it.qtdNoPacote !== undefined ? it.qtdNoPacote : (it.qtdPorPacote || 1),
+            qtdPacotes: it.qtdPacotes !== undefined ? it.qtdPacotes : 0,
+            qtdTotalUnidades: it.qtdTotalUnidades,
+            qtdRecebida: it.qtdRecebida !== undefined ? it.qtdRecebida : jsonMatch?.qtdRecebida,
+            motivoRuptura: it.motivoRuptura || jsonMatch?.motivoRuptura,
+            precoUnitario: it.precoUnitario,
+            valorTotalBruto: it.valorTotalBruto,
+            percentualDesconto: it.percentualDesconto || 0,
+            valorDescontoItem: it.valorDescontoItem || 0,
+            valorTotalLiquido: it.valorTotalLiquido !== undefined ? it.valorTotalLiquido : it.valorTotalBruto,
+            pdvAlvo: it.pdvAlvo,
+            custoLoja: it.custoLoja || 0,
+            custoFornecedor: it.custoFornecedor || 0,
+            despesasPdvUnit: it.despesasPdvUnit,
+            creditoIcmsUnit: it.creditoIcmsUnit,
+            custoRealEfetivo: it.custoRealEfetivo,
+            margemRealUnit: it.margemRealUnit,
+            margemPercentual: it.margemPercentual,
+            qtdReservaEstoque: it.qtdReservaEstoque,
+            separacaoManual: it.separacaoManual === 1,
+            separacaoLojas: it.separacaoLojasJson ? JSON.parse(it.separacaoLojasJson) : (jsonMatch?.separacaoLojas || {}),
+            ruptura: it.ruptura === 1 || it.ruptura === true || jsonMatch?.ruptura === true
+          };
+        });
       } else if (jsonItems.length > 0) {
         items = jsonItems;
       } else if (dbItems && dbItems.length > 0) {
@@ -742,6 +753,19 @@ class OrderRepository {
       });
       if (Object.keys(customDates).length > 0) {
         paymentConfig.datasVencimentoPersonalizadas = customDates;
+      }
+    }
+
+    if (!paymentConfig.valoresParcelasPersonalizados && Array.isArray(installments) && installments.length > 0) {
+      const customVals = {};
+      installments.forEach(inst => {
+        if (inst.numeroParcela && inst.valor !== undefined && inst.valorOriginal !== undefined && Math.abs(inst.valor - inst.valorOriginal) > 0.01) {
+          const key = inst.isBoletoFrete ? 'frete' : String(inst.numeroParcela);
+          customVals[key] = inst.valor;
+        }
+      });
+      if (Object.keys(customVals).length > 0) {
+        paymentConfig.valoresParcelasPersonalizados = customVals;
       }
     }
 

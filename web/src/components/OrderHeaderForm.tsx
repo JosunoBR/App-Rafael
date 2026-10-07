@@ -24,7 +24,8 @@ import {
   Check,
   RotateCcw,
   ArrowRightLeft,
-  Zap
+  Zap,
+  Repeat
 } from 'lucide-react';
 import { OrderHeader, Supplier, PaymentCondition, PurchaseOrder } from '../shared/types';
 import { handleCurrencyInput, formatCurrency, maskPhone, maskDate, toBrDate, toIsoDate } from '../utils/masks';
@@ -105,6 +106,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const [editingValorEntrada, setEditingValorEntrada] = useState<string | null>(null);
   const [editingValorFrete, setEditingValorFrete] = useState<string | null>(null);
   const [editingDescontoTotal, setEditingDescontoTotal] = useState<string | null>(null);
+  const [editingParcelasMap, setEditingParcelasMap] = useState<Record<string, string>>({});
 
   // 🛡️ Validação em tempo real de unicidade do número do pedido
   const duplicateOrderConflict = useMemo(() => {
@@ -176,7 +178,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
       const totalPed = orderTotal || 0;
       const freteNum = Number(header.valorFrete ?? header.valorFreteGlobal) || 0;
-      const baseMercadoria = Math.max(0, totalPed - freteNum);
+      // O frete é um valor à parte; as parcelas dos produtos cobrem 100% do total da mercadoria
+      const baseMercadoria = Math.max(0, totalPed);
 
       const pctBoleto = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
         ? header.percentualNota
@@ -512,7 +515,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
   const valorTotalPedido = orderTotal || 0;
   const valorFreteNum = Number(header.valorFrete ?? header.valorFreteGlobal) || 0;
-  const valorBaseMercadoria = Math.max(0, valorTotalPedido - valorFreteNum);
+  // O frete é um valor à parte; as parcelas dos produtos cobrem 100% do total da mercadoria
+  const valorBaseMercadoria = Math.max(0, valorTotalPedido);
 
   const hasCustomOff = header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100;
   const pctBoletoFromOff = hasCustomOff ? header.percentualNota! : (isDepositoEBoleto ? 70 : 70);
@@ -601,7 +605,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         prazoDias: 'deposito_e_boleto',
         parcelasCount: newParcelas,
         condicaoPagamento: newCondString,
-        datasVencimentoPersonalizadas: undefined
+        datasVencimentoPersonalizadas: undefined,
+        valoresParcelasPersonalizados: undefined
       });
       return;
     }
@@ -613,7 +618,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           parcelasCount: 1,
           prazoDias: 'vista',
           condicaoPagamento: '100% À Vista (TED/PIX)',
-          datasVencimentoPersonalizadas: { '1': baseDate }
+          datasVencimentoPersonalizadas: { '1': baseDate },
+          valoresParcelasPersonalizados: undefined
         });
       } else {
         onChange({
@@ -621,7 +627,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           parcelasCount: 1,
           prazoDias: '30',
           condicaoPagamento: '30 Dias',
-          datasVencimentoPersonalizadas: { '1': addDaysToDate(baseDate, 30) }
+          datasVencimentoPersonalizadas: { '1': addDaysToDate(baseDate, 30) },
+          valoresParcelasPersonalizados: undefined
         });
       }
       return;
@@ -690,7 +697,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       parcelasCount: newParcelas,
       prazoDias: newPrazoId,
       condicaoPagamento: newCondString,
-      datasVencimentoPersonalizadas: newCustomDates
+      datasVencimentoPersonalizadas: newCustomDates,
+      valoresParcelasPersonalizados: undefined
     });
   };
 
@@ -726,7 +734,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         saldoParcelasCount: initSaldoParc,
         saldoPrazoDias: initSaldoPrazo,
         condicaoPagamento: newCondString,
-        datasVencimentoPersonalizadas: undefined
+        datasVencimentoPersonalizadas: undefined,
+        valoresParcelasPersonalizados: undefined
       });
       return;
     } 
@@ -761,7 +770,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         saldoParcelasCount: initSaldoParc,
         saldoPrazoDias: initSaldoPrazo,
         condicaoPagamento: newCondString,
-        datasVencimentoPersonalizadas: undefined
+        datasVencimentoPersonalizadas: undefined,
+        valoresParcelasPersonalizados: undefined
       });
       return;
     }
@@ -772,7 +782,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         ...header,
         prazoDias: 'vista',
         condicaoPagamento: newCondString,
-        datasVencimentoPersonalizadas: undefined
+        datasVencimentoPersonalizadas: undefined,
+        valoresParcelasPersonalizados: undefined
       });
       return;
     }
@@ -784,7 +795,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         prazoDias: parsed.prazo,
         parcelasCount: parsed.parcelas,
         condicaoPagamento: newPrazo,
-        datasVencimentoPersonalizadas: undefined
+        datasVencimentoPersonalizadas: undefined,
+        valoresParcelasPersonalizados: undefined
       });
       return;
     }
@@ -797,13 +809,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         ...header,
         prazoDias: String(numDias),
         condicaoPagamento: newCondString,
-        datasVencimentoPersonalizadas: undefined
+        datasVencimentoPersonalizadas: undefined,
+        valoresParcelasPersonalizados: undefined
       });
     } else {
       onChange({
         ...header,
         prazoDias: cleanNum,
-        datasVencimentoPersonalizadas: undefined
+        datasVencimentoPersonalizadas: undefined,
+        valoresParcelasPersonalizados: undefined
       });
     }
   };
@@ -1364,6 +1378,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const rawOrderDate = header.dataPedido || new Date().toISOString().split('T')[0];
   const orderDate = addDaysToDate(rawOrderDate, 0);
   const customDates = header.datasVencimentoPersonalizadas;
+  const customValues = header.valoresParcelasPersonalizados;
 
   const previewInstallments = isEntradaMista
     ? [
@@ -1384,13 +1399,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           const rawCustom = customDates?.[String(d)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
           const labelForma = header.depositoFormaPagamento || 'Depósito';
+          const customVal = customValues?.[String(d)];
           return {
             numeroParcela: d,
             rotulo: (depositoParcelas === 1 && depositoPrazo === 'vista') 
               ? `Entrada (${labelForma})` 
               : `${d}º ${labelForma}`,
             dataVencimento: customDate || defaultDate,
-            valor: valorPorParcelaDeposito,
+            valor: customVal !== undefined ? customVal : valorPorParcelaDeposito,
             isEntrada: true,
             metodoPagamento: labelForma,
             isFrete: false
@@ -1421,11 +1437,12 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           const rawCustom = customDates?.[String(numeroParcela)];
           const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
           const labelForma = header.saldoFormaPagamento || 'Boleto';
+          const customVal = customValues?.[String(numeroParcela)];
           return {
             numeroParcela,
             rotulo: `${b}º ${labelForma} Saldo`,
             dataVencimento: customDate || defaultDate,
-            valor: valorPorParcelaSaldo,
+            valor: customVal !== undefined ? customVal : valorPorParcelaSaldo,
             isEntrada: false,
             metodoPagamento: labelForma,
             isFrete: false
@@ -1444,11 +1461,17 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         const defaultDate = addDaysToDate(baseDate, defaultOffset);
         const rawCustom = customDates?.[String(num)];
         const customDate = rawCustom ? addDaysToDate(rawCustom, 0) : undefined;
+
+        const baseVal = currentParcelas > 0 ? Number((valorBaseMercadoria / currentParcelas).toFixed(2)) : valorBaseMercadoria;
+        const remVal = currentParcelas > 0 ? Number((valorBaseMercadoria - baseVal * currentParcelas).toFixed(2)) : 0;
+        const defaultProportionalVal = num === 1 ? Number((baseVal + remVal).toFixed(2)) : baseVal;
+        const customVal = customValues?.[String(num)];
+
         return {
           numeroParcela: num,
           rotulo: `${num}ª Parcela`,
           dataVencimento: customDate || defaultDate,
-          valor: currentParcelas > 0 ? valorBaseMercadoria / currentParcelas : valorBaseMercadoria,
+          valor: customVal !== undefined ? customVal : defaultProportionalVal,
           isEntrada: false,
           metodoPagamento: header.formaPagamento || 'Boleto',
           isFrete: false
@@ -1461,11 +1484,12 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     const freteNum = previewInstallments.length + 1;
     const rawFreteCustom = customDates?.['frete'] || customDates?.[String(freteNum)];
     const customDateFrete = rawFreteCustom ? addDaysToDate(rawFreteCustom, 0) : undefined;
+    const customFreteVal = customValues?.['frete'] || customValues?.[String(freteNum)];
     previewInstallments.push({
       numeroParcela: freteNum,
       rotulo: 'Boleto Frete (10d)',
       dataVencimento: customDateFrete || defaultDateFrete,
-      valor: valorFreteNum,
+      valor: customFreteVal !== undefined ? customFreteVal : valorFreteNum,
       isEntrada: false,
       metodoPagamento: 'Boleto',
       isFrete: true
@@ -1473,6 +1497,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   }
 
   const hasCustomDates = Boolean(customDates && Object.keys(customDates).length > 0);
+  const hasCustomValues = Boolean(customValues && Object.keys(customValues).length > 0);
 
   // Altera a data de uma parcela e recalcula automaticamente todas as parcelas subsequentes
   const handleInstallmentDateChange = (numeroParcela: number, newDate: string, isFrete: boolean) => {
@@ -1520,6 +1545,92 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     onChange({
       ...header,
       datasVencimentoPersonalizadas: undefined
+    });
+  };
+
+  // ⚡ Ajuste Inteligente Automático de Valores: ao editar qualquer parcela, redistribui o saldo restante entre as demais
+  const handleAutoAdjustParcelaValue = (targetKey: string, newValor: number) => {
+    const isFreteKey = targetKey === 'frete' || previewInstallments.find(i => (i as any).isFrete && String(i.numeroParcela) === targetKey);
+    if (isFreteKey) {
+      const safeVal = Math.max(0, newValor);
+      onChange({
+        ...header,
+        valorFrete: safeVal,
+        valorFreteGlobal: safeVal,
+        valoresParcelasPersonalizados: {
+          ...(header.valoresParcelasPersonalizados || {}),
+          frete: safeVal
+        }
+      });
+      return;
+    }
+
+    if (valorBaseMercadoria <= 0) {
+      onChange({
+        ...header,
+        valoresParcelasPersonalizados: {
+          ...(header.valoresParcelasPersonalizados || {}),
+          [targetKey]: Math.max(0, newValor)
+        }
+      });
+      return;
+    }
+
+    const mercInstallments = previewInstallments.filter(i => !(i as any).isFrete);
+    if (mercInstallments.length <= 1) {
+      onChange({
+        ...header,
+        valoresParcelasPersonalizados: {
+          ...(header.valoresParcelasPersonalizados || {}),
+          [targetKey]: Math.max(0, newValor)
+        }
+      });
+      return;
+    }
+
+    const allKeys = mercInstallments.map(i => String(i.numeroParcela));
+    const nextCustomValues: Record<string, number> = { ...(header.valoresParcelasPersonalizados || {}) };
+
+    let finalVal = Math.max(0, newValor);
+    if (finalVal > valorBaseMercadoria) {
+      finalVal = valorBaseMercadoria;
+    }
+    nextCustomValues[targetKey] = finalVal;
+
+    // Detecta parcelas automáticas que ainda podem absorver o saldo
+    let unlocked = allKeys.filter(k => k !== targetKey && header.valoresParcelasPersonalizados?.[k] === undefined);
+    if (unlocked.length === 0) {
+      unlocked = allKeys.filter(k => k !== targetKey);
+    }
+
+    const totalCentavos = Math.round(valorBaseMercadoria * 100);
+    let lockedSumCentavos = 0;
+    allKeys.forEach(k => {
+      if (!unlocked.includes(k)) {
+        lockedSumCentavos += Math.round((nextCustomValues[k] || 0) * 100);
+      }
+    });
+
+    const remainingCentavos = Math.max(0, totalCentavos - lockedSumCentavos);
+    const baseCentavos = Math.floor(remainingCentavos / unlocked.length);
+    const restoCentavos = remainingCentavos - (baseCentavos * unlocked.length);
+
+    unlocked.forEach((uKey, pos) => {
+      const centavos = (pos === 0) ? (baseCentavos + restoCentavos) : baseCentavos;
+      nextCustomValues[uKey] = centavos / 100;
+    });
+
+    onChange({
+      ...header,
+      valoresParcelasPersonalizados: nextCustomValues
+    });
+  };
+
+  const handleResetParcelasValores = () => {
+    setEditingParcelasMap({});
+    onChange({
+      ...header,
+      valoresParcelasPersonalizados: undefined
     });
   };
 
@@ -2083,6 +2194,115 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
                 </div>
 
+                {/* BANNER DE GOVERNANÇA FINANCEIRA: DIVERGÊNCIA DE RECEBIMENTO NA DOCA */}
+                {header.possuiDivergenciaFaturamento && (
+                  <div className={`mb-4 p-3.5 rounded-2xl border transition-all ${
+                    !header.divergenciaResolvida
+                      ? 'bg-amber-50/90 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800/80 shadow-xs'
+                      : 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800/80 shadow-2xs'
+                  }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-2.5">
+                        <div className={`p-1.5 rounded-xl shrink-0 mt-0.5 ${
+                          !header.divergenciaResolvida
+                            ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300'
+                            : 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300'
+                        }`}>
+                          {!header.divergenciaResolvida ? (
+                            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black text-slate-900 dark:text-white">
+                              {!header.divergenciaResolvida
+                                ? '⚠️ Divergência de Recebimento Detectada na Doca'
+                                : '✓ Divergência de Recebimento Homologada pelo Financeiro'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                              !header.divergenciaResolvida
+                                ? 'bg-amber-200/80 text-amber-900 dark:bg-amber-900 dark:text-amber-200'
+                                : 'bg-emerald-200/80 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200'
+                            }`}>
+                              {!header.divergenciaResolvida ? 'Ação Financeira Necessária' : 'Boletos Conciliados'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                            {!header.divergenciaResolvida
+                              ? 'A conferência física da doca apontou entrega com itens em falta/ruptura. A Nota Fiscal faturou a menor. Escolha como conciliar os boletos antes de liberar para o Contas a Pagar:'
+                              : `Boletos alinhados com a entrega física (${header.tipoResolucaoDivergencia === 'manual' ? 'Ajuste Manual' : 'Rebalanceamento Automático'}). Pronto para faturamento.`}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Botões de Ação do Financeiro */}
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto flex-wrap">
+                        {!header.divergenciaResolvida ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleResetParcelasValores();
+                                onChange({
+                                  ...header,
+                                  divergenciaResolvida: true,
+                                  tipoResolucaoDivergencia: 'automatica',
+                                  dataResolucaoDivergencia: new Date().toISOString()
+                                });
+                                if (showToast) {
+                                  showToast('Boletos rebalanceados automaticamente com sucesso!', 'success');
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-white bg-amber-600 hover:bg-amber-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"
+                              title="Recalcula e divide o total recebido igualmente entre todas as parcelas"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Rebalancear Automaticamente</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onChange({
+                                  ...header,
+                                  divergenciaResolvida: true,
+                                  tipoResolucaoDivergencia: 'manual',
+                                  dataResolucaoDivergencia: new Date().toISOString()
+                                });
+                                if (showToast) {
+                                  showToast('Modo de ajuste manual confirmado. Ajuste os valores desejados abaixo.', 'info');
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
+                              title="Permite editar os valores e centavos de cada parcela manualmente"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Ajustar Manualmente</span>
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onChange({
+                                ...header,
+                                divergenciaResolvida: false,
+                                tipoResolucaoDivergencia: undefined
+                              });
+                            }}
+                            className="px-2.5 py-1 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 transition flex items-center gap-1 cursor-pointer"
+                            title="Reabrir divergência para revisar ou alterar valores"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Reabrir Conferência</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* BARRA: CONDIÇÃO SALVA NO BANCO DE DADOS */}
                 <div className="p-2.5 mb-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                   <div className="flex items-center gap-2 shrink-0">
@@ -2598,81 +2818,168 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         handleFieldChange('descontoComercialTotal', value);
                       }}
                       placeholder="0,00"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-mono font-bold text-emerald-600 dark:text-emerald-400 shadow-2xs"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs"
                     />
                   </div>
                 </div>
 
-                {/* Prévia dos Boletos e Parcelas */}
+                {/* Prévia dos Boletos e Parcelas (Totalmente Editáveis - Padrão Novo Lançamento) */}
                 {previewInstallments.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-700">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 flex items-center justify-between">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-emerald-500" />
                         <span>Previsão de Vencimento dos Títulos ({previewInstallments.length}x):</span>
                       </div>
-                      {hasCustomDates && (
-                        <button
-                          type="button"
-                          onClick={handleResetDates}
-                          className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-bold flex items-center gap-1 cursor-pointer transition lowercase first-letter:uppercase"
-                          title="Restaurar datas automáticas calculadas pelo intervalo selecionado"
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          <span>Redefinir prazos padrão</span>
-                        </button>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {hasCustomValues && !isLocked && (
+                          <button
+                            type="button"
+                            onClick={handleResetParcelasValores}
+                            className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-bold flex items-center gap-1 cursor-pointer transition lowercase first-letter:uppercase"
+                            title="Redistribui o valor total igualmente entre todas as parcelas"
+                          >
+                            <Repeat className="w-3 h-3 text-amber-500" />
+                            <span>Dividir valores igualmente</span>
+                          </button>
+                        )}
+                        {hasCustomDates && !isLocked && (
+                          <button
+                            type="button"
+                            onClick={handleResetDates}
+                            className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-bold flex items-center gap-1 cursor-pointer transition lowercase first-letter:uppercase"
+                            title="Restaurar datas automáticas calculadas pelo intervalo selecionado"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Redefinir prazos padrão</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
                       {previewInstallments.map((inst) => {
-                        const isFreteItem = (inst as any).isFrete;
+                        const isFreteItem = Boolean((inst as any).isFrete);
                         const isEntradaItem = inst.isEntrada;
                         const metodo = (inst as any).metodoPagamento || (isEntradaItem ? 'Depósito' : isFreteItem ? 'Boleto' : 'Boleto');
                         const isDeposito = metodo === 'Depósito' || isEntradaItem;
+                        const targetKey = isFreteItem ? 'frete' : String(inst.numeroParcela);
+                        const isManual = header.valoresParcelasPersonalizados?.[targetKey] !== undefined;
+
+                        const isEditing = targetKey in editingParcelasMap;
+                        const displayVal = isEditing
+                          ? editingParcelasMap[targetKey]
+                          : (inst.valor > 0 ? formatCurrency(inst.valor, false) : '');
 
                         return (
                           <div 
-                            key={inst.numeroParcela}
-                            className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 shadow-xs transition-all ${
+                            key={targetKey}
+                            className={`p-2.5 rounded-xl border text-xs flex flex-col gap-2 shadow-2xs transition-all ${
                               isFreteItem
-                                ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-300 dark:border-sky-800 text-sky-900 dark:text-sky-200'
+                                ? 'bg-sky-50/70 dark:bg-sky-950/40 border-sky-300/80 dark:border-sky-800'
                                 : isDeposito
-                                ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200'
+                                ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300/80 dark:border-indigo-800'
                                 : (inst.valor > LIMITE_MAXIMO_BOLETO)
-                                ? 'bg-rose-50/90 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800'
-                                : 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                                ? 'bg-rose-50/70 dark:bg-rose-950/40 border-rose-300/80 dark:border-rose-800'
+                                : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-300/80 dark:border-emerald-800'
                             }`}
                           >
-                            <span className="font-bold shrink-0 flex items-center gap-1">
-                              <span>{isFreteItem ? '🚚' : isDeposito ? '🏦' : '📄'}</span>
-                              <span className={isFreteItem ? 'text-sky-900 dark:text-sky-200' : isDeposito ? 'text-indigo-950 dark:text-indigo-200' : 'text-emerald-950 dark:text-emerald-200'}>
-                                {inst.rotulo}:
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold shrink-0 flex items-center gap-1 text-[11px] truncate">
+                                <span>{isFreteItem ? '🚚' : isDeposito ? '🏦' : '📄'}</span>
+                                <span className={isFreteItem ? 'text-sky-900 dark:text-sky-200' : isDeposito ? 'text-indigo-950 dark:text-indigo-200' : 'text-emerald-950 dark:text-emerald-200'}>
+                                  {inst.rotulo}
+                                </span>
                               </span>
-                            </span>
-                            {valorTotalPedido > 0 || isFreteItem ? (
-                              <span className={`font-extrabold font-mono shrink-0 ${
-                                isFreteItem
-                                  ? 'text-sky-700 dark:text-sky-300'
-                                  : isDeposito 
-                                  ? 'text-indigo-700 dark:text-indigo-300' 
-                                  : (inst.valor > LIMITE_MAXIMO_BOLETO) 
-                                  ? 'text-rose-600 dark:text-rose-400' 
-                                  : 'text-emerald-700 dark:text-emerald-300'
-                              }`}>
-                                R$ {inst.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            ) : null}
 
-                            {/* Data editável com ajuste automático em cascata */}
-                            <div className="flex items-center gap-1 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition shadow-2xs">
-                              <Calendar className="w-3 h-3 text-slate-400 shrink-0 pointer-events-none" />
-                              <input
-                                type="date"
-                                value={toIsoDate(inst.dataVencimento)}
-                                onChange={(e) => handleInstallmentDateChange(inst.numeroParcela, e.target.value, Boolean(isFreteItem))}
-                                className="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-[11px] font-bold outline-hidden cursor-pointer"
-                                title="Clique para editar a data (as datas seguintes serão ajustadas automaticamente)"
-                              />
+                              <div className="flex items-center gap-1 shrink-0">
+                                {isManual ? (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                    Manual
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                    Auto
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 items-center">
+                              {/* Campo de valor da parcela com auto-ajuste inteligente */}
+                              <div className="relative">
+                                <span className="absolute left-2.5 top-1.5 text-[11px] font-bold opacity-60">R$</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder="0,00"
+                                  disabled={isLocked}
+                                  value={displayVal}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.currentTarget.blur();
+                                      return;
+                                    }
+                                    if (e.key === '.') {
+                                      e.preventDefault();
+                                      const target = e.currentTarget;
+                                      const currentVal = target.value;
+                                      if (!currentVal.includes(',')) {
+                                        const selStart = target.selectionStart ?? currentVal.length;
+                                        const selEnd = target.selectionEnd ?? currentVal.length;
+                                        const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                                        const { formatted } = handleCurrencyInput(newVal, false);
+                                        setEditingParcelasMap(prev => ({ ...prev, [targetKey]: formatted }));
+                                      }
+                                      return;
+                                    }
+                                  }}
+                                  onFocus={(e) => {
+                                    setEditingParcelasMap(prev => ({
+                                      ...prev,
+                                      [targetKey]: inst.valor > 0 ? formatCurrency(inst.valor, false) : ''
+                                    }));
+                                    e.target.select();
+                                  }}
+                                  onBlur={(e) => {
+                                    setEditingParcelasMap(prev => {
+                                      const next = { ...prev };
+                                      delete next[targetKey];
+                                      return next;
+                                    });
+                                    const parsedVal = parseFloat((e.target.value || '').replace(/\./g, '').replace(',', '.')) || 0;
+                                    handleAutoAdjustParcelaValue(targetKey, parsedVal);
+                                  }}
+                                  onChange={(e) => {
+                                    const { formatted } = handleCurrencyInput(e.target.value, false);
+                                    setEditingParcelasMap(prev => ({ ...prev, [targetKey]: formatted }));
+                                  }}
+                                  className={`w-full pl-7 pr-2 py-1 rounded-lg border font-mono font-bold text-xs transition-colors focus:outline-hidden focus:ring-2 ${
+                                    isLocked
+                                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed border-slate-200 dark:border-slate-700'
+                                      : isFreteItem
+                                      ? 'bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-800 text-sky-950 dark:text-sky-100 focus:ring-sky-500'
+                                      : isDeposito
+                                      ? 'bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-800 text-indigo-950 dark:text-indigo-100 focus:ring-indigo-500'
+                                      : inst.valor > LIMITE_MAXIMO_BOLETO
+                                      ? 'bg-white dark:bg-slate-900 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 focus:ring-rose-500'
+                                      : 'bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-100 focus:ring-emerald-500'
+                                  }`}
+                                  title="Digite o valor acordado desta parcela (as demais parcelas se ajustam automaticamente)"
+                                />
+                              </div>
+
+                              {/* Campo de data editável */}
+                              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition shadow-2xs">
+                                <Calendar className="w-3 h-3 text-slate-400 shrink-0 pointer-events-none" />
+                                <input
+                                  type="date"
+                                  disabled={isLocked}
+                                  value={toIsoDate(inst.dataVencimento)}
+                                  onChange={(e) => handleInstallmentDateChange(inst.numeroParcela, e.target.value, Boolean(isFreteItem))}
+                                  className="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-[11px] font-bold outline-hidden cursor-pointer w-full disabled:cursor-not-allowed"
+                                  title="Clique para editar a data (as datas seguintes serão ajustadas automaticamente)"
+                                />
+                              </div>
                             </div>
                           </div>
                         );

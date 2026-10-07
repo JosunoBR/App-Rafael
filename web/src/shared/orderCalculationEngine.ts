@@ -34,6 +34,15 @@ export interface OrderTotalsResult {
   // Margem Geral Ponderada
   margemMediaPercentual: number;   // % de margem líquida média ponderada do pedido
   margemMediaValor: number;        // R$ de margem média líquida por peça
+
+  // Divergência de Recebimento na Doca & Rupturas
+  totalPecasOriginal: number;      // Total de peças solicitadas no pedido original
+  totalPecasRecebidas: number;     // Total de peças recebidas na conferência
+  valorLiquidoOriginal: number;    // Valor líquido original pretendido no pedido
+  valorLiquidoRecebido: number;    // Valor líquido efetivo correspondente à entrega
+  pecasDivergencia: number;        // Unidades faltantes (Ruptura original + parcial)
+  valorDivergencia: number;        // R$ a menor gerado por quebras/cortes de entrega
+  possuiDivergenciaRecebimento: boolean; // Flag indicando divergência entre pedido e entrega física
 }
 
 /**
@@ -85,6 +94,8 @@ export function calculateOrderTotals(
   let rupturasCount = 0;
   let totalVolumes = 0;
   let totalPecas = 0;
+  let totalPecasOriginal = 0;
+  let valorLiquidoOriginal = 0;
   let valorBruto = 0;
   let somaDescontoItens = 0;
   let totalIpi = 0;
@@ -97,28 +108,43 @@ export function calculateOrderTotals(
     if (isBlankItem(it)) return;
     validItemsCount++;
 
-    if (it.ruptura) {
-      rupturasCount++;
-      return;
-    }
-
     const pack = Number(it.qtdNoPacote) || Number(it.qtdPorPacote) || 1;
     const pacotes = Number(it.qtdPacotes) || 0;
-    const pecas = Number(it.qtdTotalUnidades) || (pacotes * pack) || 0;
+    const pecasOriginal = Number(it.qtdTotalUnidades) || (pacotes * pack) || 0;
     const precoUnit = Number(it.precoUnitario) || 0;
-    const bruto = Number(it.valorTotalBruto) || (pecas * precoUnit);
 
-    // Determinação do Desconto Comercial do Item
+    // Desconto Comercial padrão do Item
     const hasItemDesc = it.percentualDesconto !== undefined && it.percentualDesconto !== null && it.percentualDesconto > 0;
     const descPct = hasItemDesc
       ? Math.max(0, Math.min(100, Number(it.percentualDesconto)))
       : offGlobal;
 
-    const valorDesc = (it.valorDescontoItem !== undefined && it.valorDescontoItem !== null && it.valorDescontoItem > 0)
+    // Contabiliza na base solicitada original
+    totalPecasOriginal += pecasOriginal;
+    const brutoOriginal = pecasOriginal * precoUnit;
+    const descOriginal = descPct > 0 ? Number((brutoOriginal * (descPct / 100)).toFixed(2)) : 0;
+    valorLiquidoOriginal += Math.max(0, Number((brutoOriginal - descOriginal).toFixed(2)));
+
+    if (it.ruptura) {
+      rupturasCount++;
+      return;
+    }
+
+    // Se houve conferência e apontamento de quantidade recebida na doca
+    const hasQtdRecebida = it.qtdRecebida !== undefined && it.qtdRecebida !== null;
+    const pecas = hasQtdRecebida ? Math.max(0, Number(it.qtdRecebida)) : pecasOriginal;
+    const isRupturaParcial = hasQtdRecebida && pecas < pecasOriginal;
+    if (isRupturaParcial && pecas === 0) {
+      rupturasCount++;
+    }
+
+    const bruto = pecas * precoUnit;
+
+    const valorDesc = (it.valorDescontoItem !== undefined && it.valorDescontoItem !== null && it.valorDescontoItem > 0 && !isRupturaParcial)
       ? Number(it.valorDescontoItem)
       : (descPct > 0 ? Number((bruto * (descPct / 100)).toFixed(2)) : 0);
 
-    const liquidoItem = (it.valorTotalLiquido !== undefined && it.valorTotalLiquido !== null && hasItemDesc)
+    const liquidoItem = (it.valorTotalLiquido !== undefined && it.valorTotalLiquido !== null && hasItemDesc && !isRupturaParcial)
       ? Number(it.valorTotalLiquido)
       : Math.max(0, Number((bruto - valorDesc).toFixed(2)));
 
@@ -129,7 +155,7 @@ export function calculateOrderTotals(
           ? Number(it.fiscalOverride.ipiAliquota)
           : headerIpiPct);
 
-    const ipiVal = (it.valorIpi !== undefined && it.valorIpi !== null && Number(it.valorIpi) > 0)
+    const ipiVal = (it.valorIpi !== undefined && it.valorIpi !== null && Number(it.valorIpi) > 0 && !isRupturaParcial)
       ? Number(it.valorIpi)
       : (it.ipiUnitario !== undefined && it.ipiUnitario !== null && Number(it.ipiUnitario) > 0
           ? Number((Number(it.ipiUnitario) * pecas).toFixed(2))
@@ -140,7 +166,7 @@ export function calculateOrderTotals(
       ? Number(it.fiscalOverride.aliquotaSt)
       : headerStPct;
 
-    const stVal = (it.stUnitario !== undefined && it.stUnitario !== null && Number(it.stUnitario) > 0)
+    const stVal = (it.stUnitario !== undefined && it.stUnitario !== null && Number(it.stUnitario) > 0 && !isRupturaParcial)
       ? Number((Number(it.stUnitario) * pecas).toFixed(2))
       : (stAliq > 0 ? Number((liquidoItem * (stAliq / 100)).toFixed(2)) : 0);
 
@@ -154,7 +180,8 @@ export function calculateOrderTotals(
       pecasComPdv += pecas;
     }
 
-    totalVolumes += pacotes;
+    const pacotesEfetivos = (hasQtdRecebida && pack > 0) ? Number((pecas / pack).toFixed(1)) : pacotes;
+    totalVolumes += pacotesEfetivos;
     totalPecas += pecas;
     valorBruto += bruto;
     somaDescontoItens += valorDesc;
@@ -222,6 +249,10 @@ export function calculateOrderTotals(
     ? Number((somaMargemRealTotal / pecasComPdv).toFixed(2))
     : 0;
 
+  const pecasDivergencia = Math.max(0, totalPecasOriginal - totalPecas);
+  const valorDivergencia = Math.max(0, Number((valorLiquidoOriginal - valorLiquido).toFixed(2)));
+  const possuiDivergenciaRecebimento = pecasDivergencia > 0 || valorDivergencia > 0.01;
+
   return {
     validItemsCount,
     rupturasCount,
@@ -243,7 +274,14 @@ export function calculateOrderTotals(
     precoMedio,
     precoMedioComImpostos,
     margemMediaPercentual,
-    margemMediaValor
+    margemMediaValor,
+    totalPecasOriginal,
+    totalPecasRecebidas: totalPecas,
+    valorLiquidoOriginal: Number(valorLiquidoOriginal.toFixed(2)),
+    valorLiquidoRecebido: valorLiquido,
+    pecasDivergencia,
+    valorDivergencia,
+    possuiDivergenciaRecebimento
   };
 }
 

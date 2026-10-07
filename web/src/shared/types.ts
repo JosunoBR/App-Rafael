@@ -183,6 +183,8 @@ export interface OrderItem {
   separacaoManual?: boolean;    // Se foi editado manualmente
   qtdReservaEstoque?: number;   // Quantidade retida no Estoque Central / Matriz / CD
   ruptura?: boolean;            // Item em ruptura (não será entregue pelo fornecedor - descontado de todos os cálculos do pedido)
+  qtdRecebida?: number;         // Quantidade física/faturada recebida na doca (se menor que qtdTotalUnidades, gera ruptura parcial)
+  motivoRuptura?: string;       // Motivo da divergência/falta apontada na conferência de doca
   precoUnitarioOriginal?: number; // Preço unitário antes do Ajuste Fiscal (para permitir reversão)
   valorTotalBrutoOriginal?: number; // Total bruto antes do Ajuste Fiscal
 }
@@ -224,6 +226,7 @@ export interface OrderHeader {
   diaVencimentoPersonalizado?: string; // Data inicial ou dia base
   dataPrimeiroVencimento?: string;    // Data programada para o 1º vencimento (ex: 12/10/2026 para pedidos sazonais/importados)
   datasVencimentoPersonalizadas?: Record<string, string>; // Mapeamento de parcela/frete -> data YYYY-MM-DD customizada
+  valoresParcelasPersonalizados?: Record<string, number>; // Mapeamento de parcela/frete -> valor R$ customizado negociado
   
   // Negociação Mista: Depósito/PIX Parcelado + Saldo em Boleto Parcelado
   valorEntradaAVista?: number;       // Valor total em Depósito/PIX (R$)
@@ -251,6 +254,13 @@ export interface OrderHeader {
   ajusteFiscalDiferenca?: number;
   ajusteFiscalData?: string;
   ajusteFiscalUsuario?: string;
+
+  // Governança de Divergência de Faturamento & Ruptura de Doca
+  possuiDivergenciaFaturamento?: boolean; // true = doca apontou recebimento a menor que gerou divergência de faturamento
+  divergenciaResolvida?: boolean;         // true = financeiro conferiu e aprovou rebalanceamento dos boletos
+  divergenciaResolvidaPor?: string;       // Usuário financeiro que homologou
+  dataResolucaoDivergencia?: string;      // Timestamp da homologação financeira
+  tipoResolucaoDivergencia?: 'automatica' | 'manual'; // Estratégia de resolução escolhida pelo financeiro
 
   // Distribuição & Separação (Esteira Unificada)
   distribuicaoConcluida?: boolean;

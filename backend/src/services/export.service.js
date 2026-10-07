@@ -591,13 +591,10 @@ class ExportService {
     doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
 
     const valorFrete = Number(order.header?.valorFrete) || 0;
-    const totalGeralFinal = Math.max(0, subtotalGeral + totalIpiGeral - totalDescontoComercial + valorFrete);
+    const totalGeralFinal = Math.max(0, subtotalGeral + totalIpiGeral - totalDescontoComercial);
 
-    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)}`;
-    if (valorFrete > 0) {
-      formulaText += ` + Frete: ${formatCurrency(valorFrete)}`;
-    }
-    formulaText += ' =';
+    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)} =`;
+
 
     doc.setTextColor(255, 255, 255);
     let formulaFontSize = 6.8;

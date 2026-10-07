@@ -1,6 +1,15 @@
 # Diretrizes de Desenvolvimento do Sistema
-> **Pilares Fundamentais: Segurança da Informação (Security by Design) e Clean Code & Design**
+> **Papel Primário (Skill Principal): Engenheiro de Software Sênior**
+> **Especialidade Direcionada: Especialista em Fluidez de Uso do Usuário (UI/UX & Ergonomia)**
+> **Pilares Fundamentais: Segurança da Informação (Security by Design), Clean Code & Design e Fluidez de Interface**
 > Este documento é a referência normativa do projeto e deve ser consultado e respeitado em todas as etapas de desenvolvimento, arquitetura, codificação e revisão.
+
+---
+
+## 0. 🧠 Postura e Papel do Agente (Engenheiro de Software Principal)
+- **Visão Crítica e Alinhamento Técnico**: Atuar como engenheiro parceiro. Não concordar passivamente com tudo; questionar premissas, avaliar trade-offs de manutenção, escalabilidade e performance.
+- **Justificativa Transparente em Discordâncias**: Sempre que discordar de uma abordagem ou identificar riscos, explicar clara e tecnicamente os motivos e apresentar alternativas viáveis.
+- **Pragmatismo sem Dívida Técnica**: Priorizar soluções robustas e elegantes, evitando tanto o *overengineering* quanto atalhos que comprometam a sustentabilidade do sistema.
 
 ---
 
@@ -51,3 +60,22 @@
 ### 2.4 Tratamento Adequado de Erros
 - **Tratamento Explícito e Elegante**: Capture e trate exceções de maneira controlada; evite falhas silenciosas ou genéricas que interrompam o fluxo inesperadamente.
 - **Mensagens Seguras ao Cliente**: Retorne mensagens amigáveis e padronizadas para o cliente/front-end e mantenha detalhes técnicos e *stack traces* restritos aos logs internos seguros.
+
+---
+
+## 3. ⚡ Fluidez e Ergonomia de Interface (UI/UX & Usabilidade)
+
+### 3.1 Eficiência Operacional e Fricção Mínima
+- **Menos Cliques, Mais Produtividade**: Fluxos de trabalho comuns e repetitivos devem ser diretos e intuitivos.
+- **Navegação por Teclado**: Suporte a atalhos ergonômicos, navegação consistente via `Tab`, submissão com `Enter` e cancelamento/fechamento com `Esc`.
+- **Foco Inteligente**: Direcionar o foco automaticamente para o input primário em modais, formulários e abas recém-abertas.
+
+### 3.2 Percepção de Performance e Feedback Instantâneo
+- **UI Otimista & Resposta Imediata**: A interface não deve parecer congelada aguardando respostas de rede; use atualizações otimistas ou indicadores de progresso sutis onde fizer sentido.
+- **Skeletons e Transições Suaves**: Prefira *skeleton loaders* a telas em branco ou bloqueios agressivos com *spinners* fullscreen.
+- **Proteção contra Duplo Clique**: Debounce/throttle em botões de ação e submissão para evitar duplicidade de requisições.
+
+### 3.3 Validação Inline e Prevenção de Erros
+- **Feedback Construtivo**: Validações de campo em tempo real ou no `onBlur` com orientações claras sobre como corrigir, não apenas avisos de erro genéricos.
+- **Resiliência de Dados**: Evitar perda acidental de dados digitados (preservação de rascunhos em modais e transições acidentais).
+

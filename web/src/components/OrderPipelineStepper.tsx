@@ -13,7 +13,8 @@ import {
   ShieldCheck,
   User as UserIcon,
   Clock,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 import { PurchaseOrder, User, OrderStatus } from '../shared/types';
 import { OrderRollbackModal } from './OrderRollbackModal';
@@ -230,15 +231,25 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
           {/* AÇÃO ETAPA 4 (Faturamento): Confere e libera os boletos */}
           {currentIndex === 3 && (
             <div className="flex items-center gap-1.5">
-              {!order.header.boletosLiberados && onAuthorizeFinancial && (
-                <button
-                  onClick={() => onAuthorizeFinancial(order)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"
-                  title="Liberar os boletos no Contas a Pagar e finalizar o pedido"
+              {order.header.possuiDivergenciaFaturamento && !order.header.divergenciaResolvida ? (
+                <div 
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 shadow-2xs"
+                  title="A doca registrou falta de mercadorias. O Financeiro precisa conciliar os boletos no cabeçalho antes de finalizar."
                 >
-                  <CreditCard className="w-3.5 h-3.5" />
-                  <span>Liberar Boletos & Finalizar</span>
-                </button>
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>Divergência de Doca Pendente de Resolução</span>
+                </div>
+              ) : (
+                !order.header.boletosLiberados && onAuthorizeFinancial && (
+                  <button
+                    onClick={() => onAuthorizeFinancial(order)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"
+                    title="Liberar os boletos no Contas a Pagar e finalizar o pedido"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>Liberar Boletos & Finalizar</span>
+                  </button>
+                )
               )}
             </div>
           )}

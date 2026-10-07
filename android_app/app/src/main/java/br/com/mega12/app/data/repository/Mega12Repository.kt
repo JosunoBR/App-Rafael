@@ -276,6 +276,96 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
         }
     }
 
+    suspend fun getSeparationState(orderId: String): Result<SeparationStateResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getSeparationState(orderId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Erro ao carregar estado de separação (${response.code()})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateSeparationCheck(
+        orderId: String,
+        storeId: String,
+        itemId: String,
+        conferido: Boolean,
+        expectedVersion: Int?
+    ): Result<SeparationCheckResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.updateSeparationCheck(
+                orderId,
+                storeId,
+                itemId,
+                SeparationCheckRequest(conferido = conferido, expectedVersion = expectedVersion)
+            )
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else if (response.code() == 409) {
+                Result.failure(ConcurrencyConflictException("Conflito de versão: o pedido foi alterado por outro operador."))
+            } else if (response.code() == 403) {
+                Result.failure(Exception("Apenas quem conferiu ou a Diretoria pode desmarcar este item."))
+            } else {
+                val errBody = response.errorBody()?.string()
+                Result.failure(Exception(errBody ?: "Erro ao atualizar conferência (${response.code()})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addSeparationDamage(orderId: String, request: DamageCreateRequest): Result<DamageResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.addSeparationDamage(orderId, request)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else if (response.code() == 409) {
+                Result.failure(ConcurrencyConflictException("Conflito de versão: o pedido foi alterado por outro operador."))
+            } else {
+                val errBody = response.errorBody()?.string()
+                Result.failure(Exception(errBody ?: "Erro ao registrar avaria (${response.code()})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteSeparationDamage(orderId: String, damageId: String, expectedVersion: Int?): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.deleteSeparationDamage(orderId, damageId, expectedVersion)
+            if (response.isSuccessful) {
+                Result.success(true)
+            } else if (response.code() == 409) {
+                Result.failure(ConcurrencyConflictException("Conflito de versão: o pedido foi alterado por outro operador."))
+            } else {
+                val errBody = response.errorBody()?.string()
+                Result.failure(Exception(errBody ?: "Erro ao remover avaria (${response.code()})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun sendToFaturamento(orderId: String, expectedVersion: Int?): Result<SendToFaturamentoResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.sendToFaturamento(orderId, SendToFaturamentoRequest(expectedVersion = expectedVersion))
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else if (response.code() == 409) {
+                Result.failure(ConcurrencyConflictException("Conflito de versão: o pedido foi alterado por outro operador."))
+            } else {
+                val errBody = response.errorBody()?.string()
+                Result.failure(Exception(errBody ?: "Erro ao encaminhar para faturamento (${response.code()})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun getCurrentUser(): User? = preferencesManager.getUser()
 
     fun logout() {

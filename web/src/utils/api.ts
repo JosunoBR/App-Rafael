@@ -1,4 +1,4 @@
-import { PurchaseOrder, OrderStatus, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition, FinancialEntry, FinancialSummary, DistributionAuditLog, FinancialAuditLog } from '../shared/types';
+import { PurchaseOrder, OrderStatus, Supplier, FiscalConfig, FiscalPreset, StoreConfig, Product, User, CentralStockItem, SeparationPreset, PaymentCondition, FinancialEntry, FinancialSummary, DistributionAuditLog, FinancialAuditLog, AvariaRecord } from '../shared/types';
 import { API_BASE_URL } from './config';
 import { getNextOrderNumber } from './storage';
 
@@ -812,5 +812,51 @@ export async function fetchFinancialAuditLogs(params: { entryId?: string; orderI
   const qs = query.toString();
   const url = qs ? `/audit/financial?${qs}` : '/audit/financial';
   const res = await apiFetch(url);
+  return res.json();
+}
+
+// API ATÔMICA DE SEPARAÇÃO E DOCA
+export async function fetchSeparationState(orderId: string): Promise<any> {
+  const res = await apiFetch(`/orders/${encodeURIComponent(orderId)}/separation`);
+  return res.json();
+}
+
+export async function updateSeparationCheckApi(
+  orderId: string,
+  storeId: string,
+  itemId: string,
+  payload: { conferido: boolean; expectedVersion?: number }
+): Promise<{ success: boolean; check: any; version: number }> {
+  const res = await apiFetch(`/orders/${encodeURIComponent(orderId)}/separation/checks/${encodeURIComponent(storeId)}/${encodeURIComponent(itemId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+export async function addSeparationDamageApi(
+  orderId: string,
+  payload: { itemId: string; storeId?: string; lojaId?: string; quantidade: number; tipo?: string; motivo?: string; observacao?: string; expectedVersion?: number }
+): Promise<{ success: boolean; damage: AvariaRecord; version: number }> {
+  const res = await apiFetch(`/orders/${encodeURIComponent(orderId)}/separation/damages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+export async function deleteSeparationDamageApi(
+  orderId: string,
+  damageId: string,
+  expectedVersion?: number
+): Promise<{ success: boolean; version: number }> {
+  const url = expectedVersion !== undefined
+    ? `/orders/${encodeURIComponent(orderId)}/separation/damages/${encodeURIComponent(damageId)}?expectedVersion=${expectedVersion}`
+    : `/orders/${encodeURIComponent(orderId)}/separation/damages/${encodeURIComponent(damageId)}`;
+  const res = await apiFetch(url, {
+    method: 'DELETE'
+  });
   return res.json();
 }

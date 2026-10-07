@@ -139,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const userRole: UserRole = currentUser?.role || 'diretoria';
-  const canAccessOrders = canCreateOrEditOrders(userRole);
+  const canAccessOrders = canCreateOrEditOrders(currentUser);
 
   // Configurações de Título e Ícone da Página Ativa
   const getNavMeta = (tab: ActiveNavTab) => {

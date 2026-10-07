@@ -688,33 +688,16 @@ fun DocaSeparationScreen(
                                     }
                                 }
 
-                                // Botão de Conferência (Check)
+                                // Botão de Conferência (Check Atômico Otimista)
                                 Button(
                                     onClick = {
                                         view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                        val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
-                                        val updatedChecks = currentChecks.toMutableMap()
-
-                                        if (isChecked) {
-                                            updatedChecks.remove(checkKey)
-                                        } else {
-                                            updatedChecks[checkKey] = StoreItemCheck(
-                                                conferido = true,
-                                                conferenteId = currentUser?.id ?: "usr_doca",
-                                                conferenteNome = currentUser?.nome ?: "Conferente",
-                                                dataHora = now
-                                            )
-                                        }
-
-                                        val updatedOrder = activeOrder.copy(
-                                            inspection = (activeOrder.inspection ?: OrderInspection()).copy(
-                                                conferente = currentUser?.nome,
-                                                dataConferencia = now,
-                                                conferenciaLojas = updatedChecks
-                                            )
+                                        viewModel.toggleSeparationCheck(
+                                            orderId = activeOrder.finalId.ifBlank { activeOrder.id },
+                                            storeId = selectedStoreId,
+                                            itemId = item.id,
+                                            conferido = !isChecked
                                         )
-
-                                        viewModel.updateOrderInspection(updatedOrder)
                                     },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (isChecked) Emerald600 else Slate700,
@@ -734,6 +717,78 @@ fun DocaSeparationScreen(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp
                                     )
+                                }
+                            }
+                        }
+                    }
+
+                    // Card de Finalização e Envio para Faturamento (100% Conferido)
+                    item {
+                        val isAllStoresCompleted = completedStoresCount == stores.size && stores.isNotEmpty()
+                        val isReadyForFaturamento = isAllStoresCompleted && activeOrder.status != "Faturamento"
+
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isAllStoresCompleted) Emerald900.copy(alpha = 0.4f) else Slate800
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (isAllStoresCompleted) Emerald500 else Slate700
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isAllStoresCompleted) Icons.Default.CheckCircle else Icons.Default.HourglassTop,
+                                        contentDescription = null,
+                                        tint = if (isAllStoresCompleted) Emerald400 else Amber400,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = if (isAllStoresCompleted) "Separação 100% Concluída" else "Progresso da Separação Física",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        fontSize = 15.sp
+                                    )
+                                }
+
+                                Text(
+                                    text = if (isAllStoresCompleted) {
+                                        "Todas as 20 filiais foram conferidas com sucesso. Você pode encaminhar este pedido para a etapa de Faturamento."
+                                    } else {
+                                        "$completedStoresCount de ${stores.size} lojas concluídas. Conclua 100% das conferências para liberar o faturamento."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Slate300, fontSize = 12.sp)
+                                )
+
+                                if (isReadyForFaturamento) {
+                                    Button(
+                                        onClick = {
+                                            viewModel.sendOrderToFaturamento(activeOrder.finalId.ifBlank { activeOrder.id })
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Emerald500),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Send, contentDescription = null, tint = Slate900, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Encaminhar para Faturamento",
+                                            fontWeight = FontWeight.Bold,
+                                            color = Slate900,
+                                            fontSize = 13.sp
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -815,35 +870,16 @@ fun DocaSeparationScreen(
                 Button(
                     onClick = {
                         val qtd = avariaQtdStr.toIntOrNull() ?: 1
-                        val storeObj = stores.find { it.id == selectedStoreId }
-                        val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
-
-                        val newAvaria = AvariaRecord(
-                            id = "av_${System.currentTimeMillis()}",
+                        viewModel.addSeparationDamage(
+                            orderId = activeOrder.finalId.ifBlank { activeOrder.id },
                             itemId = selectedItemObj?.id ?: "",
-                            codigoProduto = selectedItemObj?.codigoInterno ?: "",
-                            descricaoProduto = selectedItemObj?.descricao ?: "",
                             storeId = selectedStoreId,
-                            nomeLoja = storeObj?.name ?: "",
                             quantidade = qtd,
                             unidadeMedida = avariaUnidade,
-                            custoUnitario = selectedItemObj?.precoCompraUnitario ?: 0.0,
-                            valorPrejuizoTotal = qtd * (selectedItemObj?.precoCompraUnitario ?: 0.0),
                             motivo = avariaMotivo,
-                            conferente = currentUser?.nome ?: "Conferente",
-                            dataRegistro = now
+                            observacao = avariaMotivo,
+                            onSuccess = { showAvariaDialog = false }
                         )
-
-                        val updatedAvarias = currentAvarias + newAvaria
-                        val updatedOrder = activeOrder.copy(
-                            inspection = (activeOrder.inspection ?: OrderInspection()).copy(
-                                possuiAvarias = true,
-                                avarias = updatedAvarias
-                            )
-                        )
-
-                        viewModel.updateOrderInspection(updatedOrder)
-                        showAvariaDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Amber500)
                 ) {

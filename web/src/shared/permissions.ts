@@ -157,7 +157,7 @@ export function canManageFaturamento(userOrRole?: UserLike): boolean {
  * Permite aprovar formalmente pedidos na esteira
  */
 export function canApproveOrder(userOrRole?: UserLike): boolean {
-  return true;
+  return hasPermission(userOrRole, 'orders:approve');
 }
 
 /**
@@ -188,7 +188,9 @@ export function getDefaultNavForRole(role?: UserRole | null): ActiveNavTab {
  * Permite confirmar o recebimento físico de um pedido na Matriz (entrega do fornecedor).
  */
 export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | null): boolean {
-  return true;
+  if (!hasPermission(userOrRole, 'pipeline:confirm_receipt')) return false;
+  if (!orderStatus) return true;
+  return orderStatus === 'Em Distribuição' || orderStatus === 'Em Separação' || orderStatus === 'Faturamento';
 }
 
 /**
@@ -196,6 +198,7 @@ export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | 
  * Conforme regra de negócio, o botão é liberado na Etapa 4 (Faturamento).
  */
 export function canAuthorizeFinancialRelease(userOrRole?: UserLike, orderStatus?: string | null): boolean {
+  if (!hasPermission(userOrRole, 'financial:authorize_release')) return false;
   if (!orderStatus) return true;
   return orderStatus === 'Faturamento';
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Building2, 
@@ -33,11 +33,16 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
   onDeleteSupplier,
   onSelectSupplierForOrder
 }) => {
-  if (!isOpen) return null;
-
   const [searchTerm, setSearchTerm] = useState('');
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(initialEditSupplier || null);
   const [isFormOpen, setIsFormOpen] = useState(!!initialEditSupplier);
+
+  useEffect(() => {
+    if (isOpen) {
+      setEditingSupplier(initialEditSupplier || null);
+      setIsFormOpen(!!initialEditSupplier);
+    }
+  }, [isOpen, initialEditSupplier]);
 
   const handleOpenNewForm = () => {
     setEditingSupplier(null);
@@ -62,6 +67,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     (s.nomeFantasia && s.nomeFantasia.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (s.vendedorPadrao && s.vendedorPadrao.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-xs animate-in fade-in duration-200">

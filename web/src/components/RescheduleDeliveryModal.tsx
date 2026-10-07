@@ -49,9 +49,7 @@ export const RescheduleDeliveryModal: React.FC<RescheduleDeliveryModalProps> = (
   onClose,
   onConfirm
 }) => {
-  if (!isOpen || !order) return null;
-
-  const currentDeliveryDate = order.header.dataEntregaPrevista || order.header.dataPedido || new Date().toISOString().split('T')[0];
+  const currentDeliveryDate = order?.header?.dataEntregaPrevista || order?.header?.dataPedido || new Date().toISOString().split('T')[0];
   const currentIso = toIsoDate(currentDeliveryDate);
 
   const [newDate, setNewDate] = useState<string>('');
@@ -79,7 +77,7 @@ export const RescheduleDeliveryModal: React.FC<RescheduleDeliveryModalProps> = (
 
   // Análise dos Boletos / Parcelas
   const installmentAnalysis = useMemo(() => {
-    const list = order.installments || [];
+    const list = order?.installments || [];
     const paidList: PaymentInstallment[] = [];
     const pendingList: Array<{
       original: PaymentInstallment;
@@ -119,6 +117,7 @@ export const RescheduleDeliveryModal: React.FC<RescheduleDeliveryModalProps> = (
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!order) return;
     if (!newDate) {
       setErrorMessage('Por favor, selecione uma data válida de entrega.');
       return;
@@ -135,6 +134,8 @@ export const RescheduleDeliveryModal: React.FC<RescheduleDeliveryModalProps> = (
       setIsSubmitting(false);
     }
   };
+
+  if (!isOpen || !order) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">

@@ -37,11 +37,9 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   onSaveSeparation,
   onSavePreset
 }) => {
-  if (!isOpen || !item) return null;
-
-  const [allocations, setAllocations] = useState<Record<string, number>>(item.separacaoLojas || {});
-  const [isManual, setIsManual] = useState<boolean>(item.separacaoManual || false);
-  const [reserveStock, setReserveStock] = useState<number>(item.qtdReservaEstoque || 0);
+  const [allocations, setAllocations] = useState<Record<string, number>>(item?.separacaoLojas || {});
+  const [isManual, setIsManual] = useState<boolean>(item?.separacaoManual || false);
+  const [reserveStock, setReserveStock] = useState<number>(item?.qtdReservaEstoque || 0);
 
   // Estados de Modelos/Presets de Separação
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
@@ -50,6 +48,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
 
   // Inicializar caso vazio
   useEffect(() => {
+    if (!item) return;
     if (!item.separacaoLojas || Object.keys(item.separacaoLojas).length === 0) {
       const sep = calculateAutomaticSeparation(item.qtdTotalUnidades, stores, item.qtdReservaEstoque || 0);
       setAllocations(sep.allocations);
@@ -63,7 +62,8 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
     }
   }, [item, stores]);
 
-  const validation = validateSeparation(allocations, item.qtdTotalUnidades, stores);
+  const totalUnidades = item?.qtdTotalUnidades || 0;
+  const validation = validateSeparation(allocations, totalUnidades, stores);
 
   const handleStoreUnitsChange = (storeId: string, rawUnits: number) => {
     setIsManual(true);
@@ -75,7 +75,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
     };
     setAllocations(newAllocations);
     const newSum = Object.values(newAllocations).reduce((a, b) => a + (Number(b) || 0), 0);
-    setReserveStock(Math.max(0, item.qtdTotalUnidades - newSum));
+    setReserveStock(Math.max(0, totalUnidades - newSum));
   };
 
   const handleStepStoreUnits = (storeId: string, delta: number) => {
@@ -89,10 +89,10 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   };
 
   const handleReservePercent = (percent: number) => {
-    const reserveUnits = Math.round((item.qtdTotalUnidades * percent) / 100);
+    const reserveUnits = Math.round((totalUnidades * percent) / 100);
     const targetPreset = presets.find(p => p.id === selectedPresetId);
     const currentItemState = {
-      qtdTotalUnidades: item.qtdTotalUnidades,
+      qtdTotalUnidades: totalUnidades,
       separacaoLojas: allocations,
       qtdReservaEstoque: reserveStock
     };
@@ -105,8 +105,8 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   const handleResetToAutomatic = () => {
     const targetPreset = presets.find(p => p.id === selectedPresetId);
     const sep = targetPreset
-      ? applySeparationPreset(item.qtdTotalUnidades, targetPreset, stores)
-      : calculateAutomaticSeparation(item.qtdTotalUnidades, stores, reserveStock);
+      ? applySeparationPreset(totalUnidades, targetPreset, stores)
+      : calculateAutomaticSeparation(totalUnidades, stores, reserveStock);
     setAllocations(sep.allocations);
     setReserveStock(sep.reserveStock);
     setIsManual(Boolean(targetPreset));
@@ -116,7 +116,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
     const emptyAllocations: Record<string, number> = {};
     stores.forEach(s => { emptyAllocations[s.id] = 0; });
     setAllocations(emptyAllocations);
-    setReserveStock(item.qtdTotalUnidades);
+    setReserveStock(totalUnidades);
     setIsManual(true);
   };
 
@@ -125,7 +125,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
     if (!presetId) return;
     const targetPreset = presets.find(p => p.id === presetId);
     if (targetPreset) {
-      const res = applySeparationPreset(item.qtdTotalUnidades, targetPreset, stores);
+      const res = applySeparationPreset(totalUnidades, targetPreset, stores);
       setAllocations(res.allocations);
       setReserveStock(res.reserveStock);
       setIsManual(true);
@@ -144,14 +144,14 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
 
     const { storeWeights, reserveStockPercent } = extractPresetFromAllocations(
       allocations,
-      item.qtdTotalUnidades,
+      totalUnidades,
       reserveStock,
       stores
     );
     const newPreset: SeparationPreset = {
       id: 'preset_' + Date.now(),
       name: trimmedName,
-      description: `Criado a partir de ${item.descricao}`,
+      description: `Criado a partir de ${item?.descricao || 'Produto'}`,
       storeWeights,
       reserveStockPercent,
       isDefault: false,
@@ -169,6 +169,7 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   };
 
   const handleSave = () => {
+    if (!item) return;
     const totalAlloc = Object.values(allocations).reduce((a, b) => a + (Number(b) || 0), 0);
     const calculatedReserve = Math.max(0, item.qtdTotalUnidades - totalAlloc);
     onSaveSeparation(item.id, allocations, isManual, calculatedReserve);
@@ -178,6 +179,8 @@ export const SeparationMatrixModal: React.FC<SeparationMatrixModalProps> = ({
   const clusterAStores = stores.filter(s => s.active && s.cluster === 'A');
   const clusterBStores = stores.filter(s => s.active && s.cluster === 'B');
   const clusterCStores = stores.filter(s => s.active && s.cluster === 'C');
+
+  if (!isOpen || !item) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">

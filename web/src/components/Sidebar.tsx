@@ -75,19 +75,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const userRole: UserRole = currentUser?.role || 'diretoria';
 
   // Configuração de visibilidade estrita por perfil (RBAC: Diretoria, Comprador, Depósito, Separação)
-  const canAccessHome = canAccessTab(userRole, 'home');
-  const canAccessOrders = canAccessTab(userRole, 'orders');
-  const canAccessStock = canAccessTab(userRole, 'stock');
-  const canAccessSeparation = canAccessTab(userRole, 'separation');
-  const canAccessFinancial = canAccessTab(userRole, 'financial');
-  const canAccessDashboard = canAccessTab(userRole, 'dashboard');
-  const canAccessBiProducts = canAccessTab(userRole, 'bi_products');
-  const canAccessHistory = canAccessTab(userRole, 'history');
-  const canAccessSeparationHistory = canAccessTab(userRole, 'separationHistory');
-  const canAccessProducts = canAccessTab(userRole, 'products');
-  const canAccessSuppliers = canAccessTab(userRole, 'suppliers');
-  const canAccessFiscal = canAccessTab(userRole, 'fiscal');
-  const canAccessUsers = canAccessTab(userRole, 'users');
+  const canAccessHome = canAccessTab(currentUser, 'home');
+  const canAccessOrders = canAccessTab(currentUser, 'orders');
+  const canAccessStock = canAccessTab(currentUser, 'stock');
+  const canAccessSeparation = canAccessTab(currentUser, 'separation');
+  const canAccessFinancial = canAccessTab(currentUser, 'financial');
+  const canAccessDashboard = canAccessTab(currentUser, 'dashboard');
+  const canAccessBiProducts = canAccessTab(currentUser, 'bi_products');
+  const canAccessHistory = canAccessTab(currentUser, 'history');
+  const canAccessSeparationHistory = canAccessTab(currentUser, 'separationHistory');
+  const canAccessProducts = canAccessTab(currentUser, 'products');
+  const canAccessSuppliers = canAccessTab(currentUser, 'suppliers');
+  const canAccessFiscal = canAccessTab(currentUser, 'fiscal');
+  const canAccessUsers = canAccessTab(currentUser, 'users');
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {

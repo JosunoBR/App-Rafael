@@ -174,6 +174,202 @@ class Mega12ViewModel : ViewModel() {
         }
     }
 
+    fun toggleSeparationCheck(orderId: String, storeId: String, itemId: String, conferido: Boolean) {
+        viewModelScope.launch {
+            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launch
+            val checkKey = "${storeId}_$itemId"
+            val currentChecks = order.inspection?.conferenciaLojas ?: emptyMap()
+            val oldCheck = currentChecks[checkKey]
+            val expectedVersion = order.version
+
+            // 1. Atualização Otimista Imediata
+            val optimisticChecks = currentChecks.toMutableMap()
+            if (conferido) {
+                optimisticChecks[checkKey] = StoreItemCheck(
+                    conferido = true,
+                    conferenteId = _currentUser.value?.id ?: "usr_app",
+                    conferenteNome = _currentUser.value?.nome ?: "Conferente",
+                    dataHora = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
+                )
+            } else {
+                optimisticChecks.remove(checkKey)
+            }
+
+            val updatedOrder = order.copy(
+                inspection = (order.inspection ?: OrderInspection()).copy(
+                    conferenciaLojas = optimisticChecks
+                )
+            )
+
+            val currentList = _orders.value.toMutableList()
+            val idx = currentList.indexOfFirst { it.id == order.id || it.finalId == order.finalId }
+            if (idx != -1) {
+                currentList[idx] = updatedOrder
+                _orders.value = currentList
+            }
+
+            // 2. Chamada Atômica à API
+            val result = repository.updateSeparationCheck(
+                orderId = order.id.ifBlank { order.finalId },
+                storeId = storeId,
+                itemId = itemId,
+                conferido = conferido,
+                expectedVersion = expectedVersion
+            )
+
+            result.onSuccess { response ->
+                // Aplica a nova versão confirmada pelo servidor
+                val confirmedList = _orders.value.toMutableList()
+                val orderIdx = confirmedList.indexOfFirst { it.id == order.id || it.finalId == order.finalId }
+                if (orderIdx != -1) {
+                    val finalChecks = (confirmedList[orderIdx].inspection?.conferenciaLojas ?: emptyMap()).toMutableMap()
+                    if (response.check.conferido) {
+                        finalChecks[checkKey] = response.check
+                    } else {
+                        finalChecks.remove(checkKey)
+                    }
+                    confirmedList[orderIdx] = confirmedList[orderIdx].copy(
+                        version = response.version,
+                        inspection = (confirmedList[orderIdx].inspection ?: OrderInspection()).copy(
+                            conferenciaLojas = finalChecks
+                        )
+                    )
+                    _orders.value = confirmedList
+                }
+            }.onFailure { err ->
+                // Rollback otimista em caso de erro
+                val rollbackList = _orders.value.toMutableList()
+                val rollIdx = rollbackList.indexOfFirst { it.id == order.id || it.finalId == order.finalId }
+                if (rollIdx != -1) {
+                    val rollChecks = (rollbackList[rollIdx].inspection?.conferenciaLojas ?: emptyMap()).toMutableMap()
+                    if (oldCheck != null) rollChecks[checkKey] = oldCheck else rollChecks.remove(checkKey)
+                    rollbackList[rollIdx] = rollbackList[rollIdx].copy(
+                        inspection = (rollbackList[rollIdx].inspection ?: OrderInspection()).copy(
+                            conferenciaLojas = rollChecks
+                        )
+                    )
+                    _orders.value = rollbackList
+                }
+
+                if (err is ConcurrencyConflictException) {
+                    _errorMessage.value = "Conflito de concorrência: o pedido foi alterado por outro operador na doca. Recarregando dados..."
+                    refreshData()
+                } else {
+                    _errorMessage.value = err.message ?: "Erro ao atualizar conferência"
+                }
+            }
+        }
+    }
+
+    fun addSeparationDamage(
+        orderId: String,
+        itemId: String,
+        storeId: String,
+        quantidade: Int,
+        unidadeMedida: String = "UN",
+        motivo: String,
+        observacao: String? = null,
+        onSuccess: (() -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launch
+            val expectedVersion = order.version
+
+            val req = DamageCreateRequest(
+                itemId = itemId,
+                storeId = storeId,
+                quantidade = quantidade,
+                unidadeMedida = unidadeMedida,
+                motivo = motivo,
+                observacao = observacao,
+                expectedVersion = expectedVersion
+            )
+
+            val result = repository.addSeparationDamage(order.id.ifBlank { order.finalId }, req)
+            result.onSuccess { res ->
+                val currentList = _orders.value.toMutableList()
+                val idx = currentList.indexOfFirst { it.id == order.id || it.finalId == order.finalId }
+                if (idx != -1 && res.damage != null) {
+                    val currentAvarias = (currentList[idx].inspection?.avarias ?: emptyList()) + res.damage
+                    currentList[idx] = currentList[idx].copy(
+                        version = res.version,
+                        inspection = (currentList[idx].inspection ?: OrderInspection()).copy(
+                            possuiAvarias = true,
+                            avarias = currentAvarias
+                        )
+                    )
+                    _orders.value = currentList
+                }
+                _successMessage.value = "Avaria registrada com sucesso!"
+                onSuccess?.invoke()
+            }.onFailure { err ->
+                if (err is ConcurrencyConflictException) {
+                    _errorMessage.value = "Conflito de versão: o pedido foi alterado na doca. Recarregando..."
+                    refreshData()
+                } else {
+                    _errorMessage.value = err.message ?: "Erro ao registrar avaria"
+                }
+            }
+        }
+    }
+
+    fun deleteSeparationDamage(orderId: String, damageId: String, onSuccess: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launch
+            val expectedVersion = order.version
+
+            val result = repository.deleteSeparationDamage(order.id.ifBlank { order.finalId }, damageId, expectedVersion)
+            result.onSuccess {
+                val currentList = _orders.value.toMutableList()
+                val idx = currentList.indexOfFirst { it.id == order.id || it.finalId == order.finalId }
+                if (idx != -1) {
+                    val currentAvarias = (currentList[idx].inspection?.avarias ?: emptyList()).filterNot { it.id == damageId }
+                    currentList[idx] = currentList[idx].copy(
+                        version = (currentList[idx].version ?: 1) + 1,
+                        inspection = (currentList[idx].inspection ?: OrderInspection()).copy(
+                            possuiAvarias = currentAvarias.isNotEmpty(),
+                            avarias = currentAvarias
+                        )
+                    )
+                    _orders.value = currentList
+                }
+                _successMessage.value = "Avaria excluída com sucesso!"
+                onSuccess?.invoke()
+            }.onFailure { err ->
+                if (err is ConcurrencyConflictException) {
+                    _errorMessage.value = "Conflito de versão. Recarregando..."
+                    refreshData()
+                } else {
+                    _errorMessage.value = err.message ?: "Erro ao excluir avaria"
+                }
+            }
+        }
+    }
+
+    fun sendOrderToFaturamento(orderId: String, onSuccess: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launch
+            val expectedVersion = order.version
+
+            _isLoading.value = true
+            val result = repository.sendToFaturamento(order.id.ifBlank { order.finalId }, expectedVersion)
+            _isLoading.value = false
+
+            result.onSuccess { res ->
+                _successMessage.value = res.message ?: "Pedido encaminhado para Faturamento!"
+                refreshData()
+                onSuccess?.invoke()
+            }.onFailure { err ->
+                if (err is ConcurrencyConflictException) {
+                    _errorMessage.value = "Conflito de versão: o pedido foi alterado. Recarregando..."
+                    refreshData()
+                } else {
+                    _errorMessage.value = err.message ?: "Erro ao encaminhar para faturamento"
+                }
+            }
+        }
+    }
+
     fun updateCalcInputs(
         precoCompraStr: String = _calcPrecoCompra.value,
         pdvAlvoStr: String = _calcPdvAlvo.value,

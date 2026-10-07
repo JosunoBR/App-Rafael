@@ -782,8 +782,126 @@ class OrderService {
   }
 
   /**
+   * Obtém o estado de separação/doca leve para web e mobile.
+   */
+  async getSeparationState(orderId, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const state = await orderRepository.getSeparationState(orderId);
+    if (!state) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+    return state;
+  }
+
+  /**
+   * Atualização atômica de check de separação por loja e item com concorrência otimista.
+   */
+  async updateSeparationCheck(orderId, storeId, itemId, payload = {}, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const role = currentUser.role?.toLowerCase();
+    const isAuthorized = role === 'comprador' || role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
+    if (!isAuthorized) {
+      const err = new Error('Perfil não autorizado a conferir itens de separação.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (typeof payload.conferido !== 'boolean') {
+      const err = new Error('Campo "conferido" (boolean) é obrigatório.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    return await orderRepository.updateSeparationCheck(
+      orderId,
+      storeId,
+      itemId,
+      { conferido: payload.conferido },
+      currentUser,
+      payload.expectedVersion
+    );
+  }
+
+  /**
+   * Registro atômico de avaria durante a separação/doca.
+   */
+  async addSeparationDamage(orderId, payload = {}, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const role = currentUser.role?.toLowerCase();
+    const isAuthorized = role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
+    if (!isAuthorized) {
+      const err = new Error('Perfil não autorizado a registrar avarias.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (!payload.itemId) {
+      const err = new Error('Identificador do item (itemId) é obrigatório.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const qtd = Number(payload.quantidade || payload.quantidadeUnidades || 0);
+    if (isNaN(qtd) || qtd <= 0) {
+      const err = new Error('Quantidade avariada deve ser maior que zero.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    return await orderRepository.addSeparationDamage(
+      orderId,
+      payload,
+      currentUser,
+      payload.expectedVersion
+    );
+  }
+
+  /**
+   * Exclusão atômica de registro de avaria.
+   */
+  async deleteSeparationDamage(orderId, damageId, payload = {}, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const role = currentUser.role?.toLowerCase();
+    const isAuthorized = role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
+    if (!isAuthorized) {
+      const err = new Error('Perfil não autorizado a excluir avarias.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    return await orderRepository.deleteSeparationDamage(
+      orderId,
+      damageId,
+      currentUser,
+      payload?.expectedVersion
+    );
+  }
+
+  /**
    * Conclui a conferência física/apontamento de avarias e encaminha o pedido para o Faturamento.
-   * Permitido: separacao, deposito, diretoria
+   * Permitido: separacao, deposito, diretoria, root, admin
    */
   async sendToFaturamento(orderId, payload = {}, currentUser) {
     if (!currentUser) {
@@ -792,10 +910,38 @@ class OrderService {
       throw err;
     }
 
+    const role = currentUser.role?.toLowerCase();
+    const isAuthorized = role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
+    if (!isAuthorized) {
+      const err = new Error('Perfil não autorizado a encaminhar pedidos para faturamento.');
+      err.statusCode = 403;
+      throw err;
+    }
+
     const order = await orderRepository.findById(orderId);
     if (!order) {
       const err = new Error('Pedido não encontrado.');
       err.statusCode = 404;
+      throw err;
+    }
+
+    // Validação de concorrência otimista (se enviada)
+    if (payload.expectedVersion !== undefined && payload.expectedVersion !== null) {
+      const currentVersion = Number(order.header.version || 1);
+      const expected = Number(payload.expectedVersion);
+      if (currentVersion !== expected) {
+        const err = new Error(`Conflito de concorrência: o pedido foi alterado por outro usuário (versão ${currentVersion} vs esperada ${expected}). Atualize os dados antes de prosseguir.`);
+        err.statusCode = 409;
+        err.code = 'CONCURRENCY_CONFLICT';
+        throw err;
+      }
+    }
+
+    const currentStatus = order.header?.status || 'Em Cotação';
+    const validStatuses = ['Em Separação', 'Em Distribuição', 'Aprovado'];
+    if (!validStatuses.includes(currentStatus)) {
+      const err = new Error(`Não é possível encaminhar para o Faturamento um pedido com status "${currentStatus}". O pedido deve estar em Separação.`);
+      err.statusCode = 400;
       throw err;
     }
 
@@ -807,6 +953,34 @@ class OrderService {
       const err = new Error('É obrigatório confirmar o recebimento físico da mercadoria na Matriz antes de encaminhar para o Faturamento. A confirmação deve ser solicitada e registrada.');
       err.statusCode = 400;
       err.code = 'RECEIPT_REQUIRED';
+      throw err;
+    }
+
+    // Trava de 100% conferido (todas as lojas com itens alocados devem estar conferidas)
+    const isDiretoriaOrRoot = role === 'diretoria' || role === 'root' || role === 'admin';
+    const conferenciaLojas = order.inspection?.conferenciaLojas || {};
+    let missingChecks = 0;
+    const items = Array.isArray(order.items) ? order.items : [];
+    items.forEach(item => {
+      if (item.ruptura) return;
+      const grade = item.grade || {};
+      Object.keys(grade).forEach(storeId => {
+        const qtdAlocada = Number(grade[storeId] || 0);
+        if (qtdAlocada > 0) {
+          const checkKey = `${storeId}_${item.id}`;
+          const isConferido = (conferenciaLojas[checkKey] && conferenciaLojas[checkKey].conferido === true) ||
+                              (item.checks && item.checks[storeId] && item.checks[storeId].conferido === true);
+          if (!isConferido) {
+            missingChecks++;
+          }
+        }
+      });
+    });
+
+    if (missingChecks > 0 && !(isDiretoriaOrRoot && payload.forceIncomplete === true)) {
+      const err = new Error(`Não é possível encaminhar para o Faturamento: existem ${missingChecks} alocações de lojas pendentes de conferência. Conclua 100% da separação ou solicite liberação pela Diretoria.`);
+      err.statusCode = 400;
+      err.code = 'INCOMPLETE_SEPARATION';
       throw err;
     }
 
@@ -833,14 +1007,19 @@ class OrderService {
       usuarioNome: currentUser.nome || 'Separação',
       usuarioRole: currentUser.role,
       acao: 'CONFERENCIA_SEPARACAO',
-      detalhesJson: { avarias: payload.avarias || [] },
+      detalhesJson: { 
+        avarias: payload.avarias || [],
+        missingChecks,
+        forced: missingChecks > 0 && isDiretoriaOrRoot && payload.forceIncomplete === true
+      },
       observacoes: payload.observacoes || 'Conferência física e separação concluídas, pedido encaminhado para Faturamento'
     }).catch(e => console.error('Erro ao registrar log de auditoria:', e));
 
     return {
       success: true,
       message: `Conferência concluída! Pedido ${saved.header.numeroPedido} encaminhado para Faturamento.`,
-      order: saved
+      order: saved,
+      version: saved.header.version
     };
   }
 

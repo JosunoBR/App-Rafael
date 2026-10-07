@@ -62,8 +62,6 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
   onSaveSupplier,
   onOrderImported
 }) => {
-  if (!isOpen) return null;
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -354,6 +352,8 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
     if (activeTab === 'existing') return item.status === 'existing';
     return true;
   }) || [];
+
+  if (!isOpen) return null;
 
   return (
     <div 

@@ -23,6 +23,12 @@ import {
 import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, User, StoreItemCheck } from '../shared/types';
 import { convertAvariaToUnits } from './SeparationPage';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
+import { 
+  updateSeparationCheckApi, 
+  addSeparationDamageApi, 
+  deleteSeparationDamageApi, 
+  sendOrderToFaturamentoApi 
+} from '../utils/api';
 
 interface MobileSeparationViewProps {
   order: PurchaseOrder;
@@ -200,45 +206,48 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
     };
   }, [activeStores, activeOrder.items, avariasMap, conferenciaLojas]);
 
-  // Ação de Conferência Concorrente (Vinculada ao usuário logado e persistida no SQLite)
+  // Ação de Conferência Concorrente (Vinculada ao usuário logado e persistida de forma atômica no SQLite)
   const handleToggleCheck = async (itemId: string) => {
     if (isSavingAction) return;
 
     const checkKey = `${selectedStoreId}_${itemId}`;
     const existingCheck = conferenciaLojas[checkKey];
 
-    // Se já conferido por OUTRO usuário, bloqueia alteração
-    if (existingCheck?.conferido && existingCheck.conferenteId && existingCheck.conferenteId !== currentUser?.id) {
-      alert(`Este produto foi conferido por ${existingCheck.conferenteNome}. Apenas quem conferiu pode alterar esta conferência.`);
+    // Se já conferido por OUTRO usuário, bloqueia alteração (exceto diretoria ou root)
+    const isDiretoriaOrRoot = currentUser?.role === 'diretoria' || (currentUser as any)?.role === 'root' || currentUser?.id === 'usr_root';
+    if (existingCheck?.conferido && existingCheck.conferenteId && existingCheck.conferenteId !== currentUser?.id && !isDiretoriaOrRoot) {
+      alert(`Este produto foi conferido por ${existingCheck.conferenteNome}. Apenas quem conferiu ou a Diretoria pode alterar esta conferência.`);
       return;
     }
 
     setIsSavingAction(true);
     try {
-      const now = new Date().toISOString();
-      const updatedConferencia = { ...conferenciaLojas };
+      const willCheck = !existingCheck?.conferido;
+      const res = await updateSeparationCheckApi(
+        activeOrder.header.id,
+        selectedStoreId,
+        itemId,
+        {
+          conferido: willCheck,
+          expectedVersion: (activeOrder.header as any)?.version
+        }
+      );
 
-      if (existingCheck?.conferido) {
-        // Desmarcar (apenas o próprio autor pode)
-        delete updatedConferencia[checkKey];
+      const updatedConferencia = { ...conferenciaLojas };
+      if (willCheck && res.check) {
+        updatedConferencia[checkKey] = res.check;
       } else {
-        // Marcar como conferido vinculado ao usuário logado
-        updatedConferencia[checkKey] = {
-          conferido: true,
-          conferenteId: currentUser?.id || 'usr_separador',
-          conferenteNome: currentUser?.nome || 'Conferente',
-          dataHora: now
-        };
+        delete updatedConferencia[checkKey];
       }
 
       const updatedOrder: PurchaseOrder = {
         ...activeOrder,
+        header: {
+          ...activeOrder.header,
+          version: res.version
+        },
         inspection: {
           ...activeOrder.inspection,
-          conferente: currentUser?.nome || activeOrder.inspection?.conferente || 'Conferente Doca',
-          dataConferencia: now,
-          possuiAvarias: avariasList.length > 0,
-          avarias: avariasList,
           conferenciaLojas: updatedConferencia
         }
       };
@@ -246,13 +255,17 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
       await onUpdateOrder(updatedOrder);
     } catch (err: any) {
       console.error('Erro ao atualizar conferência do item:', err);
-      alert(`Falha ao salvar conferência no banco: ${err.message || 'Erro de conexão'}`);
+      if (err.status === 409 || err.code === 'CONCURRENCY_CONFLICT') {
+        alert('Conflito de concorrência: o pedido foi alterado por outro conferente. A tela foi atualizada.');
+      } else {
+        alert(`Falha ao salvar conferência: ${err.message || 'Erro de conexão'}`);
+      }
     } finally {
       setIsSavingAction(false);
     }
   };
 
-  // Registrar Nova Avaria
+  // Registrar Nova Avaria de Forma Atômica
   const handleSaveAvaria = async () => {
     const targetItemId = avariaItemId || activeOrder.items[0]?.id;
     if (!targetItemId) {
@@ -272,71 +285,95 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
     const units = convertAvariaToUnits(avariaQtd, avariaUnidade, pack);
     const loss = units * custo;
 
-    const newAvaria: AvariaRecord = {
-      id: `av_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      itemId: targetItemId,
-      codigoProduto: itemRef?.codigo || itemRef?.codigoInterno || '',
-      descricaoProduto: itemRef?.descricao || '',
-      storeId: avariaStoreId,
-      nomeLoja: storeRef?.name || '',
-      quantidade: avariaQtd,
-      unidadeMedida: avariaUnidade,
-      custoUnitario: custo,
-      valorPrejuizoTotal: loss,
-      motivo: avariaMotivo + (avariaObs ? ` - ${avariaObs}` : ''),
-      conferente: currentUser?.nome || 'Conferente Doca',
-      dataRegistro: new Date().toISOString()
-    };
-
-    const updatedAvarias = [...avariasList, newAvaria];
-    const totalLoss = updatedAvarias.reduce((acc, a) => acc + (a.valorPrejuizoTotal || 0), 0);
-
-    const updatedOrder: PurchaseOrder = {
-      ...activeOrder,
-      inspection: {
-        ...activeOrder.inspection,
-        conferente: currentUser?.nome || activeOrder.inspection?.conferente || 'Conferente Doca',
-        dataConferencia: new Date().toISOString(),
-        possuiAvarias: true,
-        avarias: updatedAvarias,
-        totalPrejuizoAvarias: totalLoss,
-        conferenciaLojas
-      }
-    };
-
     setIsSavingAction(true);
     try {
+      const res = await addSeparationDamageApi(activeOrder.header.id, {
+        itemId: targetItemId,
+        storeId: avariaStoreId,
+        lojaId: avariaStoreId,
+        quantidade: avariaQtd,
+        tipo: avariaMotivo,
+        motivo: avariaMotivo + (avariaObs ? ` - ${avariaObs}` : ''),
+        observacao: avariaObs,
+        expectedVersion: (activeOrder.header as any)?.version
+      });
+
+      const updatedAvarias = [...avariasList, res.damage || {
+        id: `av_${Date.now()}`,
+        itemId: targetItemId,
+        codigoProduto: itemRef?.codigo || itemRef?.codigoInterno || '',
+        descricaoProduto: itemRef?.descricao || '',
+        storeId: avariaStoreId,
+        nomeLoja: storeRef?.name || '',
+        quantidade: avariaQtd,
+        unidadeMedida: avariaUnidade,
+        custoUnitario: custo,
+        valorPrejuizoTotal: loss,
+        motivo: avariaMotivo,
+        conferente: currentUser?.nome || 'Conferente Doca',
+        dataRegistro: new Date().toISOString()
+      }];
+
+      const totalLoss = updatedAvarias.reduce((acc, a) => acc + (a.valorPrejuizoTotal || 0), 0);
+
+      const updatedOrder: PurchaseOrder = {
+        ...activeOrder,
+        header: {
+          ...activeOrder.header,
+          version: res.version
+        },
+        inspection: {
+          ...activeOrder.inspection,
+          conferente: currentUser?.nome || activeOrder.inspection?.conferente || 'Conferente Doca',
+          dataConferencia: new Date().toISOString(),
+          possuiAvarias: true,
+          avarias: updatedAvarias,
+          totalPrejuizoAvarias: totalLoss,
+          conferenciaLojas
+        }
+      };
+
       await onUpdateOrder(updatedOrder);
       setShowAvariaForm(false);
       setAvariaObs('');
       setAvariaQtd(1);
     } catch (err: any) {
-      alert(`Erro ao salvar avaria no banco: ${err.message}`);
+      alert(`Erro ao salvar avaria: ${err.message}`);
     } finally {
       setIsSavingAction(false);
     }
   };
 
-  // Excluir Avaria
+  // Excluir Avaria de Forma Atômica
   const handleDeleteAvaria = async (avariaId: string) => {
     if (!window.confirm('Tem certeza que deseja remover este apontamento de avaria?')) return;
 
-    const updatedAvarias = avariasList.filter(a => a.id !== avariaId);
-    const totalLoss = updatedAvarias.reduce((acc, a) => acc + (a.valorPrejuizoTotal || 0), 0);
-
-    const updatedOrder: PurchaseOrder = {
-      ...activeOrder,
-      inspection: {
-        ...activeOrder.inspection,
-        possuiAvarias: updatedAvarias.length > 0,
-        avarias: updatedAvarias,
-        totalPrejuizoAvarias: totalLoss,
-        conferenciaLojas
-      }
-    };
-
     setIsSavingAction(true);
     try {
+      const res = await deleteSeparationDamageApi(
+        activeOrder.header.id,
+        avariaId,
+        (activeOrder.header as any)?.version
+      );
+
+      const updatedAvarias = avariasList.filter(a => a.id !== avariaId);
+      const totalLoss = updatedAvarias.reduce((acc, a) => acc + (a.valorPrejuizoTotal || 0), 0);
+
+      const updatedOrder: PurchaseOrder = {
+        ...activeOrder,
+        header: {
+          ...activeOrder.header,
+          version: res.version
+        },
+        inspection: {
+          ...activeOrder.inspection,
+          possuiAvarias: updatedAvarias.length > 0,
+          avarias: updatedAvarias,
+          totalPrejuizoAvarias: totalLoss,
+          conferenciaLojas
+        }
+      };
+
       await onUpdateOrder(updatedOrder);
     } catch (err: any) {
       alert(`Erro ao remover avaria: ${err.message}`);
@@ -345,44 +382,28 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
     }
   };
 
-  // Finalizar a separação do pedido
+  // Finalizar a separação do pedido de Forma Atômica e Segura
   const handleFinalize = async () => {
     if (!globalStats.isFullyChecked) {
       alert('Não é possível finalizar: todos os itens de todas as lojas precisam estar 100% conferidos.');
       return;
     }
 
-    const now = new Date().toISOString();
-    const finalizedOrder: PurchaseOrder = {
-      ...activeOrder,
-      header: {
-        ...activeOrder.header,
-        status: 'Faturamento',
-        separacaoConcluida: true,
-        separadoPor: currentUser?.nome || 'Time de Separação',
-        dataSeparacao: now,
-        updatedAt: now
-      },
-      inspection: {
-        conferente: currentUser?.nome || activeOrder.inspection?.conferente || 'Conferente Doca',
-        dataConferencia: now,
-        possuiAvarias: avariasList.length > 0,
-        observacoesDoca: activeOrder.inspection?.observacoesDoca || 'Separação concluída via Romaneio de Doca.',
-        avarias: avariasList,
-        totalPrejuizoAvarias: activeOrder.inspection?.totalPrejuizoAvarias || 0,
-        conferenciaLojas
-      }
-    };
-
     setIsSavingAction(true);
     try {
-      await onUpdateOrder(finalizedOrder);
+      const res = await sendOrderToFaturamentoApi(activeOrder.header.id, {
+        observacoes: activeOrder.inspection?.observacoesDoca || 'Separação física concluída na íntegra.',
+        expectedVersion: (activeOrder.header as any)?.version
+      });
+
       if (onFinalizeOrder) {
-        onFinalizeOrder(finalizedOrder);
+        onFinalizeOrder(res.order || activeOrder);
+      } else {
+        await onUpdateOrder(res.order || activeOrder);
       }
       setShowConfirmModal(false);
     } catch (err: any) {
-      alert(`Erro ao finalizar separação no banco: ${err.message}`);
+      alert(`Erro ao encaminhar para Faturamento: ${err.message || 'Falha de conexão'}`);
     } finally {
       setIsSavingAction(false);
     }

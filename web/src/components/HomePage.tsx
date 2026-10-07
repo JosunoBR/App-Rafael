@@ -57,8 +57,8 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [activeTab, setActiveTab] = useState<TabFilter>('todos');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  const canAccessOrders = canCreateOrEditOrders(currentUser.role);
-  const canAccessStock = canAccessTab(currentUser.role, 'stock');
+  const canAccessOrders = canCreateOrEditOrders(currentUser);
+  const canAccessStock = canAccessTab(currentUser, 'stock');
 
   // Saudação dinâmica por horário
   const getGreeting = () => {
@@ -224,7 +224,7 @@ export const HomePage: React.FC<HomePageProps> = ({
     if (status === 'Em Separação' || status === 'Em Distribuição' || status === 'Finalizado' || status === 'Aprovado') {
       return 'separation';
     }
-    return canAccessOrders && canAccessTab(currentUser?.role, 'orders') ? 'orders' : 'separation';
+    return canAccessOrders && canAccessTab(currentUser, 'orders') ? 'orders' : 'separation';
   };
 
   const handleSelectOrder = (ord: PurchaseOrder) => {
@@ -644,7 +644,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                         </td>
                         <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
-                            {!ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser?.role, ord.header.status) && (
+                            {!ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser, ord.header.status) && (
                               <button
                                 onClick={() => onConfirmReceipt(ord)}
                                 className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
@@ -654,7 +654,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                                 <span>Receber</span>
                               </button>
                             )}
-                            {!ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser?.role, ord.header.status) && (
+                            {!ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser, ord.header.status) && (
                               <button
                                 onClick={() => onAuthorizeFinancial(ord)}
                                 className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50/90 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
@@ -687,7 +687,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               Exibindo até 6 pedidos mais recentes • Total de {filteredOrders.length} pedido(s)
             </span>
             <button
-              onClick={() => onNavigate(canAccessTab(currentUser.role, 'history') ? 'history' : 'separationHistory')}
+              onClick={() => onNavigate(canAccessTab(currentUser, 'history') ? 'history' : 'separationHistory')}
               className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
             >
               <span>Acessar Arquivo & Histórico Completo</span>

@@ -808,7 +808,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
-            {canCreateOrEditOrders(currentUser?.role) && onNavigateToOrders && (
+            {canCreateOrEditOrders(currentUser) && onNavigateToOrders && (
               <button
                 onClick={onNavigateToOrders}
                 className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 transition flex items-center gap-2 cursor-pointer"
@@ -998,7 +998,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           </div>
 
           {/* Editar Pedido */}
-          {canCreateOrEditOrders(currentUser?.role) && (
+          {canCreateOrEditOrders(currentUser) && (
             <button
               onClick={onNavigateToOrders}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition cursor-pointer"

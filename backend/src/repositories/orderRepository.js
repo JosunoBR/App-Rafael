@@ -204,6 +204,7 @@ class OrderRepository {
           separacaoConcluida = ?, separadoPor = ?, dataSeparacao = ?, observacaoSeparacao = ?,
           finalizadoPor = ?, dataFinalizacao = ?,
           aprovadoPor = ?, dataAprovacao = ?,
+          version = COALESCE(version, 1) + 1,
           updatedAt = ?
         WHERE id = ?
       `;
@@ -294,6 +295,7 @@ class OrderRepository {
           separacaoConcluida, separadoPor, dataSeparacao, observacaoSeparacao,
           finalizadoPor, dataFinalizacao,
           aprovadoPor, dataAprovacao,
+          version,
           createdAt, updatedAt
         ) VALUES (
           ?, ?, ?, ?, ?,
@@ -312,6 +314,7 @@ class OrderRepository {
           ?, ?, ?, ?,
           ?, ?,
           ?, ?,
+          1,
           ?, ?
         )
       `;
@@ -391,7 +394,7 @@ class OrderRepository {
       await execute("DELETE FROM order_items WHERE orderId = ?", [targetId]);
       for (let idx = 0; idx < items.length; idx++) {
         const item = items[idx];
-        const itemId = `it_${targetId}_${idx}_${Math.random().toString(36).substring(2, 7)}`;
+        const itemId = item.id || `it_${targetId}_${idx}_${Math.random().toString(36).substring(2, 7)}`;
         const packVal = Number(item.qtdNoPacote !== undefined ? item.qtdNoPacote : (item.qtdPorPacote || 1)) || 1;
         await execute(`
           INSERT INTO order_items (
@@ -599,6 +602,8 @@ class OrderRepository {
             qtdReservaEstoque: it.qtdReservaEstoque,
             separacaoManual: it.separacaoManual === 1,
             separacaoLojas: it.separacaoLojasJson ? JSON.parse(it.separacaoLojasJson) : (jsonMatch?.separacaoLojas || {}),
+            grade: jsonMatch?.grade || (it.separacaoLojasJson ? JSON.parse(it.separacaoLojasJson) : (jsonMatch?.separacaoLojas || {})),
+            checks: jsonMatch?.checks || {},
             ruptura: it.ruptura === 1 || it.ruptura === true || jsonMatch?.ruptura === true
           };
         });
@@ -888,6 +893,7 @@ class OrderRepository {
         ajusteFiscalDiferenca: r.ajusteFiscalDiferenca !== undefined && r.ajusteFiscalDiferenca !== null && Math.abs(Number(r.ajusteFiscalDiferenca)) > 0.005 ? Number(r.ajusteFiscalDiferenca) : paymentConfig.ajusteFiscalDiferenca,
         ajusteFiscalData: r.ajusteFiscalData || paymentConfig.ajusteFiscalData,
         ajusteFiscalUsuario: r.ajusteFiscalUsuario || paymentConfig.ajusteFiscalUsuario,
+        version: r.version !== undefined && r.version !== null ? Number(r.version) : 1,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt
       },
@@ -895,7 +901,8 @@ class OrderRepository {
       items,
       installments,
       inspection,
-      separationDistribution
+      separationDistribution,
+      version: r.version !== undefined && r.version !== null ? Number(r.version) : 1
     };
   }
 
@@ -971,6 +978,257 @@ class OrderRepository {
     };
 
     return await this.save(duplicatedOrder);
+  }
+
+  async getSeparationState(orderId) {
+    const order = await this.findById(orderId);
+    if (!order) return null;
+
+    const row = await queryOne("SELECT version, inspectionJson FROM purchase_orders WHERE id = ?", [orderId]);
+    let inspection = null;
+    try {
+      if (row?.inspectionJson) inspection = JSON.parse(row.inspectionJson);
+    } catch {}
+
+    const dbAvarias = await queryAll("SELECT * FROM order_avarias WHERE orderId = ? ORDER BY createdAt DESC", [orderId]);
+
+    const checks = inspection?.conferenciaLojas || {};
+    const avarias = (dbAvarias && dbAvarias.length > 0) ? dbAvarias : (inspection?.avarias || []);
+
+    const version = row?.version !== undefined && row?.version !== null ? Number(row.version) : 1;
+    return {
+      orderId: order.header.id,
+      numeroPedido: order.header.numeroPedido,
+      fornecedor: order.header.fornecedor,
+      status: order.header.status,
+      version,
+      recebidoMatriz: Boolean(order.header.recebidoMatriz),
+      dataRecebimentoMatriz: order.header.dataRecebimentoMatriz,
+      numeroNotaFiscal: order.header.numeroNotaFiscal,
+      distribuicaoConcluida: Boolean(order.header.distribuicaoConcluida),
+      separacaoConcluida: Boolean(order.header.separacaoConcluida),
+      header: {
+        id: order.header.id,
+        numeroPedido: order.header.numeroPedido,
+        fornecedor: order.header.fornecedor,
+        status: order.header.status,
+        version,
+        recebidoMatriz: Boolean(order.header.recebidoMatriz),
+        dataRecebimentoMatriz: order.header.dataRecebimentoMatriz,
+        numeroNotaFiscal: order.header.numeroNotaFiscal,
+        distribuicaoConcluida: Boolean(order.header.distribuicaoConcluida),
+        separacaoConcluida: Boolean(order.header.separacaoConcluida)
+      },
+      items: order.items || [],
+      stores: order.storeConfigs || [],
+      checks,
+      avarias
+    };
+  }
+
+  async updateSeparationCheck(orderId, storeId, itemId, { conferido }, currentUser, expectedVersion) {
+    const row = await queryOne("SELECT version, inspectionJson FROM purchase_orders WHERE id = ?", [orderId]);
+    if (!row) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const currentVersion = row.version !== undefined && row.version !== null ? Number(row.version) : 1;
+    if (expectedVersion !== undefined && expectedVersion !== null && currentVersion !== Number(expectedVersion)) {
+      const err = new Error(`Conflito de versão (409): O pedido foi modificado por outro operador no servidor (versão atual: ${currentVersion}, esperada: ${expectedVersion}). Atualize os dados antes de prosseguir.`);
+      err.statusCode = 409;
+      err.code = 'CONCURRENCY_CONFLICT';
+      err.currentVersion = currentVersion;
+      throw err;
+    }
+
+    let inspection = {};
+    try {
+      if (row.inspectionJson) inspection = JSON.parse(row.inspectionJson) || {};
+    } catch {}
+
+    const conferenciaLojas = inspection.conferenciaLojas ? { ...inspection.conferenciaLojas } : {};
+    const checkKey = `${storeId}_${itemId}`;
+    const existingCheck = conferenciaLojas[checkKey];
+
+    if (!conferido) {
+      const isDiretoriaOrRoot = currentUser.role === 'diretoria' || currentUser.role === 'root' || currentUser.id === 'usr_root';
+      if (existingCheck && existingCheck.conferenteId && existingCheck.conferenteId !== currentUser.id && !isDiretoriaOrRoot) {
+        const err = new Error(`Apenas ${existingCheck.conferenteNome || 'o próprio operador'} que conferiu ou a Diretoria podem desfazer esta conferência.`);
+        err.statusCode = 403;
+        throw err;
+      }
+      delete conferenciaLojas[checkKey];
+    } else {
+      conferenciaLojas[checkKey] = {
+        conferido: true,
+        conferenteId: currentUser.id || 'usr_separador',
+        conferenteNome: currentUser.nome || 'Conferente',
+        dataHora: new Date().toISOString()
+      };
+    }
+
+    inspection.conferenciaLojas = conferenciaLojas;
+    inspection.conferente = currentUser.nome || inspection.conferente || 'Conferente';
+    inspection.dataConferencia = new Date().toISOString();
+
+    const newVersion = currentVersion + 1;
+    const now = new Date().toISOString();
+
+    await execute(
+      "UPDATE purchase_orders SET inspectionJson = ?, version = ?, updatedAt = ? WHERE id = ?",
+      [JSON.stringify(inspection), newVersion, now, orderId]
+    );
+
+    return {
+      success: true,
+      check: conferenciaLojas[checkKey] || { conferido: false, storeId, itemId },
+      version: newVersion
+    };
+  }
+
+  async addSeparationDamage(orderId, damagePayload, currentUser, expectedVersion) {
+    const row = await queryOne("SELECT version, inspectionJson FROM purchase_orders WHERE id = ?", [orderId]);
+    if (!row) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const currentVersion = row.version !== undefined && row.version !== null ? Number(row.version) : 1;
+    if (expectedVersion !== undefined && expectedVersion !== null && currentVersion !== Number(expectedVersion)) {
+      const err = new Error(`Conflito de versão (409): O pedido foi modificado por outro operador no servidor (versão atual: ${currentVersion}, esperada: ${expectedVersion}).`);
+      err.statusCode = 409;
+      err.code = 'CONCURRENCY_CONFLICT';
+      err.currentVersion = currentVersion;
+      throw err;
+    }
+
+    const damageId = damagePayload.id || `av_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const now = new Date().toISOString();
+
+    const damageRecord = {
+      id: damageId,
+      orderId,
+      itemId: damagePayload.itemId,
+      codigoProduto: damagePayload.codigoProduto || '',
+      descricaoProduto: damagePayload.descricaoProduto || '',
+      storeId: damagePayload.storeId || damagePayload.lojaId || null,
+      nomeLoja: damagePayload.nomeLoja || '',
+      quantidade: Number(damagePayload.quantidade) || 1,
+      unidadeMedida: damagePayload.unidadeMedida || 'UN',
+      quantidadeUnidades: Number(damagePayload.quantidadeUnidades) || Number(damagePayload.quantidade) || 1,
+      custoUnitario: Number(damagePayload.custoUnitario) || 0,
+      valorPrejuizoTotal: Number(damagePayload.valorPrejuizoTotal) || 0,
+      motivo: damagePayload.motivo || damagePayload.tipo || 'Avaria identificada na doca',
+      observacao: damagePayload.observacao || null,
+      conferente: currentUser.nome || 'Conferente',
+      dataRegistro: now,
+      createdAt: now
+    };
+
+    await execute(
+      `INSERT INTO order_avarias (
+        id, orderId, itemId, codigoProduto, descricaoProduto,
+        storeId, nomeLoja, quantidade, unidadeMedida, quantidadeUnidades,
+        custoUnitario, valorPrejuizoTotal, motivo, observacao, conferente,
+        dataRegistro, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        damageRecord.id, 
+        damageRecord.orderId, 
+        damageRecord.itemId, 
+        damageRecord.codigoProduto ?? '', 
+        damageRecord.descricaoProduto ?? '',
+        damageRecord.storeId ?? null, 
+        damageRecord.nomeLoja ?? '', 
+        damageRecord.quantidade ?? 1, 
+        damageRecord.unidadeMedida ?? 'UN', 
+        damageRecord.quantidadeUnidades ?? 1,
+        damageRecord.custoUnitario ?? 0, 
+        damageRecord.valorPrejuizoTotal ?? 0, 
+        damageRecord.motivo ?? '', 
+        damageRecord.observacao ?? null, 
+        damageRecord.conferente ?? 'Conferente',
+        damageRecord.dataRegistro ?? now, 
+        damageRecord.createdAt ?? now
+      ]
+    );
+
+    let inspection = {};
+    try {
+      if (row.inspectionJson) inspection = JSON.parse(row.inspectionJson) || {};
+    } catch {}
+
+    const avariasList = Array.isArray(inspection.avarias) ? [...inspection.avarias] : [];
+    avariasList.push(damageRecord);
+    inspection.avarias = avariasList;
+    inspection.possuiAvarias = true;
+
+    const newVersion = currentVersion + 1;
+    await execute(
+      "UPDATE purchase_orders SET inspectionJson = ?, version = ?, updatedAt = ? WHERE id = ?",
+      [JSON.stringify(inspection), newVersion, now, orderId]
+    );
+
+    return {
+      success: true,
+      damage: damageRecord,
+      version: newVersion
+    };
+  }
+
+  async deleteSeparationDamage(orderId, damageId, currentUser, expectedVersion) {
+    const row = await queryOne("SELECT version, inspectionJson FROM purchase_orders WHERE id = ?", [orderId]);
+    if (!row) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const currentVersion = row.version !== undefined && row.version !== null ? Number(row.version) : 1;
+    if (expectedVersion !== undefined && expectedVersion !== null && currentVersion !== Number(expectedVersion)) {
+      const err = new Error(`Conflito de versão (409): O pedido foi modificado por outro operador.`);
+      err.statusCode = 409;
+      err.code = 'CONCURRENCY_CONFLICT';
+      err.currentVersion = currentVersion;
+      throw err;
+    }
+
+    const existingDamage = await queryOne("SELECT * FROM order_avarias WHERE id = ? AND orderId = ?", [damageId, orderId]);
+    if (existingDamage) {
+      const isAuthor = existingDamage.conferente === currentUser.nome;
+      const isDiretoriaOrRoot = currentUser.role === 'diretoria' || currentUser.role === 'root' || currentUser.id === 'usr_root';
+      if (!isAuthor && !isDiretoriaOrRoot) {
+        const err = new Error('Apenas o autor do registro ou a Diretoria podem excluir esta avaria.');
+        err.statusCode = 403;
+        throw err;
+      }
+      await execute("DELETE FROM order_avarias WHERE id = ?", [damageId]);
+    }
+
+    let inspection = {};
+    try {
+      if (row.inspectionJson) inspection = JSON.parse(row.inspectionJson) || {};
+    } catch {}
+
+    if (Array.isArray(inspection.avarias)) {
+      inspection.avarias = inspection.avarias.filter(av => av.id !== damageId);
+      inspection.possuiAvarias = inspection.avarias.length > 0;
+    }
+
+    const newVersion = currentVersion + 1;
+    const now = new Date().toISOString();
+    await execute(
+      "UPDATE purchase_orders SET inspectionJson = ?, version = ?, updatedAt = ? WHERE id = ?",
+      [JSON.stringify(inspection), newVersion, now, orderId]
+    );
+
+    return {
+      success: true,
+      version: newVersion
+    };
   }
 }
 

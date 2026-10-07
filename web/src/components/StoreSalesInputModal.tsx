@@ -27,8 +27,6 @@ export const StoreSalesInputModal: React.FC<StoreSalesInputModalProps> = ({
   currentSales,
   onSaveSales
 }) => {
-  if (!isOpen) return null;
-
   const [salesMap, setSalesMap] = useState<Record<string, number>>({});
   const monthLabel = month !== 'all' ? MONTH_NAMES[month - 1] : 'Consolidado Anual';
 
@@ -62,6 +60,8 @@ export const StoreSalesInputModal: React.FC<StoreSalesInputModalProps> = ({
     onSaveSales(salesMap);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">

@@ -104,13 +104,20 @@ data class OrderItem(
     @SerializedName("separacaoLojas", alternate = ["storeDistribution"])
     val storeDistribution: Map<String, Int> = emptyMap(),
     val qtdPorCaixa: Int = 1,
-    val qtdPorPacote: Int = 1
+    val qtdPorPacote: Int = 1,
+    val qtdRecebida: Int? = null,
+    val motivoRuptura: String? = null,
+    val qtdReservaEstoque: Int = 0,
+    val embalagem: String? = null
 ) {
     val fotoUrl: String?
         get() = photoUrl
 
     val subtotalEfetivo: Double
         get() = if (subtotal > 0) subtotal else (totalPecas * precoCompraUnitario)
+
+    val pecasRecebidasEfetivas: Int
+        get() = qtdRecebida ?: totalPecas
 }
 
 // Estruturas de Doca e Conferência
@@ -129,10 +136,12 @@ data class AvariaRecord(
     val storeId: String = "",
     val nomeLoja: String = "",
     val quantidade: Int = 1,
-    val unidadeMedida: String = "UN", // "UN", "CX", "PCT"
+    val unidadeMedida: String = "UN", // "UN", "CX", "PCT", "JG", "PAR"
+    val quantidadeUnidades: Int = 1,
     val custoUnitario: Double = 0.0,
     val valorPrejuizoTotal: Double = 0.0,
     val motivo: String = "",
+    val observacao: String? = null,
     val conferente: String = "",
     val dataRegistro: String = ""
 )
@@ -196,6 +205,24 @@ data class OrderHeader(
     val aliquotaSt: Double = 0.0,
     val observacoes: String? = null,
     val recebidoMatriz: Boolean = false,
+    val recebidoPor: String? = null,
+    val dataRecebimentoMatriz: String? = null,
+    val numeroNotaFiscal: String? = null,
+    val distribuicaoConcluida: Boolean = false,
+    val distribuidoPor: String? = null,
+    val dataDistribuicao: String? = null,
+    val separacaoConcluida: Boolean = false,
+    val separadoPor: String? = null,
+    val dataSeparacao: String? = null,
+    val observacoesDoca: String? = null,
+    val possuiDivergenciaFaturamento: Boolean = false,
+    val divergenciaResolvida: Boolean = false,
+    val divergenciaResolvidaPor: String? = null,
+    val dataResolucaoDivergencia: String? = null,
+    val tipoResolucaoDivergencia: String? = null,
+    val boletosLiberados: Boolean = false,
+    val boletosLiberadosPor: String? = null,
+    val boletosLiberadosEm: String? = null,
     val status: String = "Em Cotação",
     val totalBruto: Double = 0.0,
     val totalIpi: Double = 0.0,
@@ -208,6 +235,7 @@ data class OrderHeader(
     val ajusteFiscalUsuario: String? = null,
     val totalPecas: Int = 0,
     val totalVolumes: Int = 0,
+    val version: Int = 1,
     val createdAt: String? = null
 )
 
@@ -218,6 +246,9 @@ data class PurchaseOrder(
     val items: List<OrderItem> = emptyList(),
     val installments: List<PaymentInstallment> = emptyList(),
     val inspection: OrderInspection? = null,
+    val storeConfigs: List<StoreConfig>? = null,
+    val fiscalConfig: FiscalConfig? = null,
+    val version: Int = 1,
     @SerializedName("status")
     val status: String = "Em Cotação",
     @SerializedName("separationStatus")
@@ -333,4 +364,66 @@ val DEFAULT_PAYMENT_CONDITIONS = listOf(
     PaymentCondition(id = "cond_30", descricao = "30 Dias (1x)", qtdParcelas = 1, parcelasDias = listOf(30), especie = "Boleto"),
     PaymentCondition(id = "cond_vista", descricao = "100% À Vista (TED/PIX)", qtdParcelas = 1, parcelasDias = listOf(0), especie = "Depósito")
 )
+
+// DTOs da API Atômica de Separação
+data class SeparationCheckRequest(
+    val conferido: Boolean,
+    val expectedVersion: Int? = null
+)
+
+data class SeparationCheckResponse(
+    val success: Boolean,
+    val check: StoreItemCheck,
+    val version: Int,
+    val message: String? = null
+)
+
+data class DamageCreateRequest(
+    val itemId: String,
+    val storeId: String,
+    val quantidade: Int,
+    val unidadeMedida: String = "UN",
+    val motivo: String,
+    val observacao: String? = null,
+    val expectedVersion: Int? = null
+)
+
+data class DamageResponse(
+    val success: Boolean,
+    val damage: AvariaRecord?,
+    val version: Int,
+    val message: String? = null
+)
+
+data class SendToFaturamentoRequest(
+    val expectedVersion: Int? = null
+)
+
+data class SendToFaturamentoResponse(
+    val success: Boolean,
+    val order: PurchaseOrder?,
+    val message: String? = null
+)
+
+data class SeparationStateResponse(
+    val orderId: String = "",
+    val numeroPedido: String = "",
+    val fornecedor: String = "",
+    val status: String = "",
+    val version: Int = 1,
+    val recebidoMatriz: Boolean = false,
+    val dataRecebimentoMatriz: String? = null,
+    val numeroNotaFiscal: String? = null,
+    val distribuicaoConcluida: Boolean = false,
+    val separacaoConcluida: Boolean = false,
+    val header: OrderHeader? = null,
+    val items: List<OrderItem> = emptyList(),
+    val stores: List<StoreConfig> = emptyList(),
+    val checks: Map<String, StoreItemCheck> = emptyMap(),
+    val avarias: List<AvariaRecord> = emptyList()
+)
+
+class ConcurrencyConflictException(message: String) : Exception(message)
+
+
 

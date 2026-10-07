@@ -5,6 +5,7 @@
   "scripts": {
     "install:all": "npm --prefix backend install && npm --prefix web install",
     "build": "npm --prefix backend install && npm --prefix web install && npm --prefix web run build",
+    "validate": "node scripts/validate_system.js",
     "start": "node backend/server.js",
     "dev": "node runner.js"
   },

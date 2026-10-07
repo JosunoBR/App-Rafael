@@ -121,6 +121,44 @@ class OrderController {
     }
   }
 
+  async getSeparation(req, res, next) {
+    try {
+      const result = await orderService.getSeparationState(req.params.id, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateSeparationCheck(req, res, next) {
+    try {
+      const { id, storeId, itemId } = req.params;
+      const result = await orderService.updateSeparationCheck(id, storeId, itemId, req.body, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async addSeparationDamage(req, res, next) {
+    try {
+      const result = await orderService.addSeparationDamage(req.params.id, req.body, req.user);
+      return res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async deleteSeparationDamage(req, res, next) {
+    try {
+      const { id, damageId } = req.params;
+      const result = await orderService.deleteSeparationDamage(id, damageId, req.body, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async sendToFaturamento(req, res, next) {
     try {
       const result = await orderService.sendToFaturamento(req.params.id, req.body, req.user);

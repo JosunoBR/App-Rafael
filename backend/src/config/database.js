@@ -483,7 +483,8 @@ async function getDatabase() {
         valorNotaFiscalEntregue: "REAL DEFAULT 0",
         ajusteFiscalDiferenca: "REAL DEFAULT 0",
         ajusteFiscalData: "TEXT",
-        ajusteFiscalUsuario: "TEXT"
+        ajusteFiscalUsuario: "TEXT",
+        version: "INTEGER DEFAULT 1"
       };
 
       Object.entries(requiredCols).forEach(([col, def]) => {
@@ -711,6 +712,20 @@ async function getDatabase() {
         const pcCols = pcTableInfo[0].values.map(v => v[1]);
         if (!pcCols.includes('configJson')) {
           try { dbInstance.run("ALTER TABLE payment_conditions ADD COLUMN configJson TEXT DEFAULT '{}'"); } catch (e) {}
+        }
+      }
+    } catch (e) {}
+
+    // Migração de observacao e quantidadeUnidades em order_avarias
+    try {
+      const avariasTableInfo = dbInstance.exec("PRAGMA table_info(order_avarias)");
+      if (avariasTableInfo[0]) {
+        const avCols = avariasTableInfo[0].values.map(v => v[1]);
+        if (!avCols.includes('observacao')) {
+          try { dbInstance.run("ALTER TABLE order_avarias ADD COLUMN observacao TEXT"); } catch (e) {}
+        }
+        if (!avCols.includes('quantidadeUnidades')) {
+          try { dbInstance.run("ALTER TABLE order_avarias ADD COLUMN quantidadeUnidades INTEGER DEFAULT 1"); } catch (e) {}
         }
       }
     } catch (e) {}

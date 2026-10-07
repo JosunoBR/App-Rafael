@@ -296,6 +296,8 @@ export interface OrderHeader {
   totalVolumes?: number;
   totalPecas?: number;
 
+  version?: number;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -360,9 +362,9 @@ export interface StoreItemCheck {
 export interface OrderInspection {
   conferente?: string;
   dataConferencia?: string;
-  possuiAvarias: boolean;
+  possuiAvarias?: boolean;
   observacoesDoca?: string;
-  avarias: AvariaRecord[];
+  avarias?: AvariaRecord[];
   totalPrejuizoAvarias?: number;
   conferenciaLojas?: Record<string, StoreItemCheck>; // Chave: `${storeId}_${itemId}`
 }

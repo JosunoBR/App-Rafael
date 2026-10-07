@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Settings, 
@@ -27,19 +27,28 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
   onClose,
   onSave
 }) => {
-  if (!isOpen) return null;
-
   const [activeTab, setActiveTab] = useState<'fiscal' | 'stores'>('fiscal');
 
   // Fiscal state
-  const [icms, setIcms] = useState(fiscalConfig.icmsAliquota * 100);
-  const [ipi, setIpi] = useState(fiscalConfig.ipiAliquota * 100);
-  const [pisCofins, setPisCofins] = useState(fiscalConfig.pisCofinsAliquota * 100);
-  const [custosFixos, setCustosFixos] = useState(fiscalConfig.custosFixos * 100);
-  const [creditoEntrada, setCreditoEntrada] = useState(fiscalConfig.creditoEntradaICMS * 100);
+  const [icms, setIcms] = useState((fiscalConfig?.icmsAliquota ?? DEFAULT_FISCAL_CONFIG.icmsAliquota) * 100);
+  const [ipi, setIpi] = useState((fiscalConfig?.ipiAliquota ?? DEFAULT_FISCAL_CONFIG.ipiAliquota) * 100);
+  const [pisCofins, setPisCofins] = useState((fiscalConfig?.pisCofinsAliquota ?? DEFAULT_FISCAL_CONFIG.pisCofinsAliquota) * 100);
+  const [custosFixos, setCustosFixos] = useState((fiscalConfig?.custosFixos ?? DEFAULT_FISCAL_CONFIG.custosFixos) * 100);
+  const [creditoEntrada, setCreditoEntrada] = useState((fiscalConfig?.creditoEntradaICMS ?? DEFAULT_FISCAL_CONFIG.creditoEntradaICMS) * 100);
 
   // Stores state
-  const [stores, setStores] = useState<StoreConfig[]>([...storeConfigs]);
+  const [stores, setStores] = useState<StoreConfig[]>(() => storeConfigs ? [...storeConfigs] : [...DEFAULT_STORES]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIcms((fiscalConfig?.icmsAliquota ?? DEFAULT_FISCAL_CONFIG.icmsAliquota) * 100);
+      setIpi((fiscalConfig?.ipiAliquota ?? DEFAULT_FISCAL_CONFIG.ipiAliquota) * 100);
+      setPisCofins((fiscalConfig?.pisCofinsAliquota ?? DEFAULT_FISCAL_CONFIG.pisCofinsAliquota) * 100);
+      setCustosFixos((fiscalConfig?.custosFixos ?? DEFAULT_FISCAL_CONFIG.custosFixos) * 100);
+      setCreditoEntrada((fiscalConfig?.creditoEntradaICMS ?? DEFAULT_FISCAL_CONFIG.creditoEntradaICMS) * 100);
+      setStores(storeConfigs ? [...storeConfigs] : [...DEFAULT_STORES]);
+    }
+  }, [isOpen, fiscalConfig, storeConfigs]);
 
   const handleSave = () => {
     const updatedFiscal: FiscalConfig = {
@@ -75,6 +84,8 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
 
   const totalDespesas = icms + ipi + pisCofins + custosFixos;
   const totalPontosAtivos = stores.filter(s => s.active).reduce((a, b) => a + b.defaultWeight, 0);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">

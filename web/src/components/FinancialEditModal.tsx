@@ -32,29 +32,27 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
   onSave,
   showToast
 }) => {
-  if (!isOpen || !entry) return null;
-
   // Estado do formulário isolado
-  const [descricao, setDescricao] = useState(entry.descricao || '');
-  const [fornecedor, setFornecedor] = useState(entry.fornecedor || '');
-  const [categoria, setCategoria] = useState<FinancialCategory>(entry.categoria || 'OUTROS');
-  const [lojaNome, setLojaNome] = useState(entry.lojaNome || entry.empresa || 'ALS');
-  const [empresa, setEmpresa] = useState(entry.empresa || 'ALS');
-  const [formaPagamento, setFormaPagamento] = useState<FinancialPaymentMethod>(entry.formaPagamento || 'BOLETO');
-  const [documentoRef, setDocumentoRef] = useState(entry.documentoRef || '');
-  const [statusPrevisao, setStatusPrevisao] = useState<'PREVISTO' | 'CONFIRMADO'>(entry.statusPrevisao || 'CONFIRMADO');
+  const [descricao, setDescricao] = useState(entry?.descricao || '');
+  const [fornecedor, setFornecedor] = useState(entry?.fornecedor || '');
+  const [categoria, setCategoria] = useState<FinancialCategory>(entry?.categoria || 'OUTROS');
+  const [lojaNome, setLojaNome] = useState(entry?.lojaNome || entry?.empresa || 'ALS');
+  const [empresa, setEmpresa] = useState(entry?.empresa || 'ALS');
+  const [formaPagamento, setFormaPagamento] = useState<FinancialPaymentMethod>(entry?.formaPagamento || 'BOLETO');
+  const [documentoRef, setDocumentoRef] = useState(entry?.documentoRef || '');
+  const [statusPrevisao, setStatusPrevisao] = useState<'PREVISTO' | 'CONFIRMADO'>(entry?.statusPrevisao || 'CONFIRMADO');
   
   // 1. Dados do Agendamento Original (Lançado)
-  const [dataVencimento, setDataVencimento] = useState(entry.dataVencimento ? entry.dataVencimento.substring(0, 10) : '');
-  const [valorLancado, setValorLancado] = useState<number>(Number(entry.valor) || 0);
+  const [dataVencimento, setDataVencimento] = useState(entry?.dataVencimento ? entry.dataVencimento.substring(0, 10) : '');
+  const [valorLancado, setValorLancado] = useState<number>(Number(entry?.valor) || 0);
 
   // 2. Dados da Liquidação (Pago)
-  const [status, setStatus] = useState<FinancialStatus>(entry.status || 'A Vencer');
-  const [dataPagamento, setDataPagamento] = useState(entry.dataPagamento ? entry.dataPagamento.substring(0, 10) : '');
+  const [status, setStatus] = useState<FinancialStatus>(entry?.status || 'A Vencer');
+  const [dataPagamento, setDataPagamento] = useState(entry?.dataPagamento ? entry.dataPagamento.substring(0, 10) : '');
   const [valorPago, setValorPago] = useState<number>(
-    entry.valorPago !== undefined && entry.valorPago !== null ? Number(entry.valorPago) : Number(entry.valor) || 0
+    entry?.valorPago !== undefined && entry?.valorPago !== null ? Number(entry.valorPago) : Number(entry?.valor) || 0
   );
-  const [observacao, setObservacao] = useState(entry.observacao || '');
+  const [observacao, setObservacao] = useState(entry?.observacao || '');
 
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -95,6 +93,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!entry) return;
     setErrorMsg(null);
 
     if (!descricao.trim()) {
@@ -154,6 +153,8 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
       setSaving(false);
     }
   };
+
+  if (!isOpen || !entry) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">

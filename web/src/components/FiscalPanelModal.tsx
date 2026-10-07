@@ -34,61 +34,59 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
   onClose,
   onApplyChanges
 }) => {
-  if (!isOpen || !item) return null;
-
   // Preço e PDV deste item
-  const [precoCompra, setPrecoCompra] = useState<number>(item.precoUnitario);
-  const [pdvAlvo, setPdvAlvo] = useState<number>(item.pdvAlvo || 0);
+  const [precoCompra, setPrecoCompra] = useState<number>(item?.precoUnitario || 0);
+  const [pdvAlvo, setPdvAlvo] = useState<number>(item?.pdvAlvo || 0);
 
   // Flag se este item usa configuração fiscal própria
-  const hasInitialCustom = Boolean(item.fiscalOverride?.useCustomFiscal);
+  const hasInitialCustom = Boolean(item?.fiscalOverride?.useCustomFiscal);
   const [useCustom, setUseCustom] = useState<boolean>(hasInitialCustom);
 
   // Alíquotas normalizadas em percentual (0 a 100)
   const [ipiPct, setIpiPct] = useState<number>(() => {
-    const val = item.fiscalOverride?.useCustomFiscal && item.fiscalOverride.ipiAliquota !== undefined
+    const val = item?.fiscalOverride?.useCustomFiscal && item?.fiscalOverride?.ipiAliquota !== undefined
       ? item.fiscalOverride.ipiAliquota
       : globalFiscal.ipiAliquota;
     return Number((normalizeRateToDecimal(val, 0) * 100).toFixed(2));
   });
 
   const [stPct, setStPct] = useState<number>(() => {
-    const val = item.fiscalOverride?.useCustomFiscal && item.fiscalOverride.aliquotaSt !== undefined
+    const val = item?.fiscalOverride?.useCustomFiscal && item?.fiscalOverride?.aliquotaSt !== undefined
       ? item.fiscalOverride.aliquotaSt
       : globalFiscal.aliquotaSt;
     return Number((normalizeRateToDecimal(val, 0) * 100).toFixed(2));
   });
 
   const [fretePct, setFretePct] = useState<number>(() => {
-    const val = item.fiscalOverride?.useCustomFiscal && item.fiscalOverride.freteAliquota !== undefined
+    const val = item?.fiscalOverride?.useCustomFiscal && item?.fiscalOverride?.freteAliquota !== undefined
       ? item.fiscalOverride.freteAliquota
       : globalFiscal.freteAliquota;
     return Number((normalizeRateToDecimal(val, 0) * 100).toFixed(2));
   });
 
   const [icmsEntradaPct, setIcmsEntradaPct] = useState<number>(() => {
-    const val = item.fiscalOverride?.useCustomFiscal && item.fiscalOverride.creditoEntradaICMS !== undefined
+    const val = item?.fiscalOverride?.useCustomFiscal && item?.fiscalOverride?.creditoEntradaICMS !== undefined
       ? item.fiscalOverride.creditoEntradaICMS
       : globalFiscal.creditoEntradaICMS;
     return Number((normalizeRateToDecimal(val, 0.12) * 100).toFixed(2));
   });
 
   const [custoFixoPct, setCustoFixoPct] = useState<number>(() => {
-    const val = item.fiscalOverride?.useCustomFiscal && item.fiscalOverride.custosFixos !== undefined
+    const val = item?.fiscalOverride?.useCustomFiscal && item?.fiscalOverride?.custosFixos !== undefined
       ? item.fiscalOverride.custosFixos
       : globalFiscal.custosFixos;
     return Number((normalizeRateToDecimal(val, 0.26) * 100).toFixed(2));
   });
 
   const [icmsSaidaPct, setIcmsSaidaPct] = useState<number>(() => {
-    const val = item.fiscalOverride?.useCustomFiscal && item.fiscalOverride.icmsAliquota !== undefined
+    const val = item?.fiscalOverride?.useCustomFiscal && item?.fiscalOverride?.icmsAliquota !== undefined
       ? item.fiscalOverride.icmsAliquota
       : globalFiscal.icmsAliquota;
     return Number((normalizeRateToDecimal(val, 0.195) * 100).toFixed(2));
   });
 
   const [pisCofinsPct, setPisCofinsPct] = useState<number>(() => {
-    const val = item.fiscalOverride?.useCustomFiscal && item.fiscalOverride.pisCofinsAliquota !== undefined
+    const val = item?.fiscalOverride?.useCustomFiscal && item?.fiscalOverride?.pisCofinsAliquota !== undefined
       ? item.fiscalOverride.pisCofinsAliquota
       : globalFiscal.pisCofinsAliquota;
     return Number((normalizeRateToDecimal(val, 0.06) * 100).toFixed(2));
@@ -163,7 +161,7 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
   }, [useCustom, ipiPct, stPct, fretePct, icmsEntradaPct, custoFixoPct, icmsSaidaPct, pisCofinsPct]);
 
   // Preço de compra efetivo considerando desconto comercial se houver
-  const descPct = item.percentualDesconto || 0;
+  const descPct = item?.percentualDesconto || 0;
   const precoCompraEfetivo = precoCompra * (1 - descPct / 100);
 
   // Cálculo da Engenharia Fiscal em Tempo Real
@@ -208,6 +206,7 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
 
   // Salvar no item
   const handleSave = () => {
+    if (!item) return;
     const valorBruto = precoCompra * item.qtdTotalUnidades;
     const valorDesc = valorBruto * (descPct / 100);
     const valorLiquido = valorBruto - valorDesc;
@@ -231,6 +230,8 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
 
     onClose();
   };
+
+  if (!isOpen || !item) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">

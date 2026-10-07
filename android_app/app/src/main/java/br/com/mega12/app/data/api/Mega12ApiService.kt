@@ -63,5 +63,36 @@ interface Mega12ApiService {
     // Condições de Pagamento
     @GET("payment-conditions")
     suspend fun getPaymentConditions(@Query("active") active: Boolean = true): Response<List<PaymentCondition>>
+
+    // Separação & Doca Atômica
+    @GET("orders/{id}/separation")
+    suspend fun getSeparationState(@Path("id") orderId: String): Response<SeparationStateResponse>
+
+    @PATCH("orders/{id}/separation/checks/{storeId}/{itemId}")
+    suspend fun updateSeparationCheck(
+        @Path("id") orderId: String,
+        @Path("storeId") storeId: String,
+        @Path("itemId") itemId: String,
+        @Body request: SeparationCheckRequest
+    ): Response<SeparationCheckResponse>
+
+    @POST("orders/{id}/separation/damages")
+    suspend fun addSeparationDamage(
+        @Path("id") orderId: String,
+        @Body request: DamageCreateRequest
+    ): Response<DamageResponse>
+
+    @DELETE("orders/{id}/separation/damages/{damageId}")
+    suspend fun deleteSeparationDamage(
+        @Path("id") orderId: String,
+        @Path("damageId") damageId: String,
+        @Query("expectedVersion") expectedVersion: Int? = null
+    ): Response<Map<String, Any>>
+
+    @POST("orders/{id}/send-to-faturamento")
+    suspend fun sendToFaturamento(
+        @Path("id") orderId: String,
+        @Body request: SendToFaturamentoRequest
+    ): Response<SendToFaturamentoResponse>
 }
 

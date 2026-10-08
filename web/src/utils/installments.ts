@@ -586,8 +586,8 @@ export function generateOrderInstallments(
       lastDepositDate = calculatedDueDate;
 
       const origVal = d === 1 ? Number((depBaseValue + depRemainder).toFixed(2)) : depBaseValue;
-      const customVal = customValues?.[String(d)];
-      const isDepManuallyOverridden = customVal !== undefined || (existingDep?.valor !== undefined && existingDep?.valorOriginal !== undefined && Math.abs(existingDep.valor - existingDep.valorOriginal) > 0.01);
+      const customVal = preserveExistingEdits ? customValues?.[String(d)] : undefined;
+      const isDepManuallyOverridden = preserveExistingEdits && (customVal !== undefined || (existingDep?.valor !== undefined && existingDep?.valorOriginal !== undefined && Math.abs(existingDep.valor - existingDep.valorOriginal) > 0.01));
       const valorFinal = customVal !== undefined ? customVal : (isDepManuallyOverridden && existingDep ? existingDep.valor : origVal);
       const rawDataVenc = customDepDate || calculatedDueDate;
       const dataVencFinal = addDaysToDate(rawDataVenc, 0);
@@ -641,9 +641,9 @@ export function generateOrderInstallments(
       }
 
       const originalProportionalVal = j === 1 ? Number((saldoBaseValue + saldoRemainder).toFixed(2)) : saldoBaseValue;
-      const customVal = customValues?.[String(numParcela)];
+      const customVal = preserveExistingEdits ? customValues?.[String(numParcela)] : undefined;
       const customSaldoDate = customDates?.[String(numParcela)];
-      const isManuallyOverridden = customVal !== undefined || (existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01);
+      const isManuallyOverridden = preserveExistingEdits && (customVal !== undefined || (existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01));
       const valorFinal = customVal !== undefined ? customVal : (isManuallyOverridden && existing ? existing.valor : originalProportionalVal);
       const rawDueDate = customSaldoDate || calculatedDueDate;
       const dataVencimentoFinal = addDaysToDate(rawDueDate, 0);

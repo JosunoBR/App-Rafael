@@ -40,7 +40,8 @@ fun OrderHistoryScreen(
 ) {
     val orders by viewModel.orders.collectAsState()
     val isRefreshing by viewModel.isLoading.collectAsState()
-    var selectedStatus by remember { mutableStateOf("TODOS") }
+    val initialFilter by viewModel.selectedStatusFilter.collectAsState()
+    var selectedStatus by remember(initialFilter) { mutableStateOf(initialFilter) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedOrderForDetail by remember { mutableStateOf<PurchaseOrder?>(null) }
     val context = LocalContext.current

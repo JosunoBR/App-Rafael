@@ -765,18 +765,6 @@ class OrderRepository {
       }
     }
 
-    if (!paymentConfig.valoresParcelasPersonalizados && Array.isArray(installments) && installments.length > 0) {
-      const customVals = {};
-      installments.forEach(inst => {
-        if (inst.numeroParcela && inst.valor !== undefined && inst.valorOriginal !== undefined && Math.abs(inst.valor - inst.valorOriginal) > 0.01) {
-          const key = inst.isBoletoFrete ? 'frete' : String(inst.numeroParcela);
-          customVals[key] = inst.valor;
-        }
-      });
-      if (Object.keys(customVals).length > 0) {
-        paymentConfig.valoresParcelasPersonalizados = customVals;
-      }
-    }
 
     let tipoFrete = r.tipoFrete || 'CIF';
     let valorFrete = Number(r.valorFrete) || 0;

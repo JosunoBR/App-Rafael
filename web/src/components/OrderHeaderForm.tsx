@@ -254,14 +254,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     (s.nomeFantasia && s.nomeFantasia.toLowerCase() === (header.fornecedor || '').toLowerCase())
   );
 
-  // Alíquota de ST e Percentual de Nota do cadastro do fornecedor ou do header
+  // Alíquota de ST e Percentual de OFF (Divisão da Condição) do cadastro do fornecedor
   const aliquotaStCadastrada = currentSupplier?.aliquotaStPadrao !== undefined 
     ? currentSupplier.aliquotaStPadrao 
     : (header.aliquotaSt ?? 0);
 
-  const notaCadastrada = currentSupplier?.percentualNotaPadrao !== undefined
+  const supplierOff = (currentSupplier?.percentualNotaPadrao !== undefined && currentSupplier.percentualNotaPadrao > 0 && currentSupplier.percentualNotaPadrao < 100)
     ? currentSupplier.percentualNotaPadrao
-    : (header.percentualNota ?? 100);
+    : ((currentSupplier?.descontoOffPadrao !== undefined && currentSupplier.descontoOffPadrao > 0 && currentSupplier.descontoOffPadrao < 100)
+        ? currentSupplier.descontoOffPadrao
+        : (currentSupplier?.percentualNotaPadrao ?? 100));
+
+  const notaCadastrada = supplierOff < 100 ? supplierOff : (header.percentualNota ?? 100);
 
   // Sincronizar ST, OFF e NOTA do pedido se o fornecedor cadastrado tiver valores definidos e o header ainda não tiver
   useEffect(() => {
@@ -280,15 +284,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       needsUpdate = true;
     }
 
-    if (header.percentualNota === undefined && currentSupplier.percentualNotaPadrao !== undefined) {
-      updatedHeader.percentualNota = currentSupplier.percentualNotaPadrao;
+    if ((header.percentualNota === undefined || header.percentualNota === 100) && supplierOff < 100) {
+      updatedHeader.percentualNota = supplierOff;
       needsUpdate = true;
     }
 
     if (needsUpdate) {
       onChange(updatedHeader);
     }
-  }, [currentSupplier, header.fornecedor]);
+  }, [currentSupplier, header.fornecedor, supplierOff]);
 
   // Limpar texto padrão legado caso o rascunho salvo ainda contenha texto fixo antigo
   useEffect(() => {
@@ -386,7 +390,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
           isEntradaProporcional: true,
           valorEntradaAVista: newValorEntrada,
           condicaoPagamento: newCondString,
-          datasVencimentoPersonalizadas: undefined
+          datasVencimentoPersonalizadas: undefined,
+          valoresParcelasPersonalizados: undefined
         });
         return;
       }
@@ -1322,12 +1327,12 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   // Percentual de OFF para cálculo e exibição
   const currentOffPct = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
     ? header.percentualNota
-    : (header.percentualDescontoOff !== undefined && header.percentualDescontoOff > 0 && header.percentualDescontoOff < 100
-        ? header.percentualDescontoOff
-        : (header.percentualNota || 0));
+    : (supplierOff < 100
+        ? supplierOff
+        : (header.percentualNota || 70));
 
   const handleSyncWithOff = (invertSplit: boolean = false) => {
-    const rawOff = Math.max(0, Math.min(100, Number(currentOffPct) || 0));
+    const rawOff = Math.max(0, Math.min(100, Number(currentOffPct) || 70));
     if (rawOff <= 0) return;
     // Padrão: Boleto = rawOff%, Depósito = (100 - rawOff)%
     // Invertido: Boleto = (100 - rawOff)%, Depósito = rawOff%
@@ -1356,12 +1361,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
     onChange({
       ...header,
+      percentualNota: pctBoleto,
       prazoDias: 'deposito_e_boleto',
       percentualEntrada: pctDeposito,
       isEntradaProporcional: true,
       valorEntradaAVista: newEntrada,
       condicaoPagamento: newCondString,
-      datasVencimentoPersonalizadas: newCustomDates
+      datasVencimentoPersonalizadas: newCustomDates,
+      valoresParcelasPersonalizados: undefined
     });
 
     const successMsg = baseParaCalculo > 0
@@ -2661,165 +2668,186 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
                 )}
 
-                {/* LINHA: FRETE E DESCONTOS COMERCIAIS */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                  {/* 4. Tipo de Frete */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                      Modalidade Frete
-                    </label>
-                    <select
-                      value={header.tipoFrete || (valorFreteNum > 0 ? 'FOB' : 'CIF')}
-                      onChange={(e) => handleFieldChange('tipoFrete', e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
-                    >
-                      {TIPO_FRETE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {/* SEÇÃO FRETE & TRANSPORTE E DESCONTO COMERCIAL SEPARADOS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {/* SUB-BLOCO: FRETE & TRANSPORTE */}
+                  <div className="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800">
+                    <span className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+                      <span>🚚</span>
+                      <span>Frete & Transporte</span>
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Tipo de Frete */}
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                          Modalidade
+                        </label>
+                        <select
+                          value={header.tipoFrete || (valorFreteNum > 0 ? 'FOB' : 'CIF')}
+                          onChange={(e) => handleFieldChange('tipoFrete', e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs"
+                        >
+                          {TIPO_FRETE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                  {/* 5. Valor do Frete */}
-                  <div>
-                    {(() => {
-                      const isCifModalidade = String(header.tipoFrete || (valorFreteNum > 0 ? 'FOB' : 'CIF')).toUpperCase().includes('CIF') && valorFreteNum <= 0;
-                      return (
-                        <>
-                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                            <span>Valor Frete (R$)</span>
-                            {isCifModalidade ? (
-                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                Incluso (Fornecedor)
-                              </span>
-                            ) : (
-                              valorFreteNum > 0 && valorBaseMercadoria > 0 && (
-                                <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400">
-                                  {((valorFreteNum / valorBaseMercadoria) * 100).toFixed(2)}% dos produtos
-                                </span>
-                              )
-                            )}
-                          </label>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            disabled={isCifModalidade}
-                            value={isCifModalidade ? '0,00' : (editingValorFrete !== null ? editingValorFrete : (valorFreteNum > 0 ? formatCurrency(valorFreteNum, false) : (header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : '')))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.currentTarget.blur();
-                                return;
-                              }
-                              if (e.key === '.') {
-                                e.preventDefault();
-                                const target = e.currentTarget;
-                                const currentVal = target.value;
-                                if (!currentVal.includes(',')) {
-                                  const selStart = target.selectionStart ?? currentVal.length;
-                                  const selEnd = target.selectionEnd ?? currentVal.length;
-                                  const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
-                                  const { formatted } = handleCurrencyInput(newVal, true);
+                      {/* Valor do Frete */}
+                      <div>
+                        {(() => {
+                          const isCifModalidade = String(header.tipoFrete || (valorFreteNum > 0 ? 'FOB' : 'CIF')).toUpperCase().includes('CIF') && valorFreteNum <= 0;
+                          return (
+                            <>
+                              <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
+                                <span>Valor Frete (R$)</span>
+                                {isCifModalidade ? (
+                                  <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                                    Incluso (CIF)
+                                  </span>
+                                ) : (
+                                  valorFreteNum > 0 && valorBaseMercadoria > 0 && (
+                                    <span className="text-[9px] font-mono font-bold text-sky-600 dark:text-sky-400">
+                                      {((valorFreteNum / valorBaseMercadoria) * 100).toFixed(1)}% merc.
+                                    </span>
+                                  )
+                                )}
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                disabled={isCifModalidade}
+                                value={isCifModalidade ? '0,00' : (editingValorFrete !== null ? editingValorFrete : (valorFreteNum > 0 ? formatCurrency(valorFreteNum, false) : (header.valorFrete !== undefined && header.valorFrete !== 0 ? formatCurrency(header.valorFrete, false) : '')))}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.currentTarget.blur();
+                                    return;
+                                  }
+                                  if (e.key === '.') {
+                                    e.preventDefault();
+                                    const target = e.currentTarget;
+                                    const currentVal = target.value;
+                                    if (!currentVal.includes(',')) {
+                                      const selStart = target.selectionStart ?? currentVal.length;
+                                      const selEnd = target.selectionEnd ?? currentVal.length;
+                                      const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                                      const { formatted } = handleCurrencyInput(newVal, true);
+                                      setEditingValorFrete(formatted);
+                                    }
+                                  }
+                                }}
+                                onFocus={(e) => {
+                                  const currentVal = valorFreteNum > 0 ? valorFreteNum : (header.valorFrete || 0);
+                                  setEditingValorFrete(currentVal > 0 ? formatCurrency(currentVal, false) : '');
+                                  e.target.select();
+                                }}
+                                onBlur={() => {
+                                  if (editingValorFrete !== null) {
+                                    const parsedVal = parseFloat(editingValorFrete.replace(/\./g, '').replace(',', '.')) || 0;
+                                    handleFieldChange('valorFrete', parsedVal);
+                                  }
+                                  setEditingValorFrete(null);
+                                }}
+                                onChange={(e) => {
+                                  const { formatted } = handleCurrencyInput(e.target.value, true);
                                   setEditingValorFrete(formatted);
-                                }
-                              }
-                            }}
-                            onFocus={(e) => {
-                              const currentVal = valorFreteNum > 0 ? valorFreteNum : (header.valorFrete || 0);
-                              setEditingValorFrete(currentVal > 0 ? formatCurrency(currentVal, false) : '');
-                              e.target.select();
-                            }}
-                            onBlur={() => {
-                              if (editingValorFrete !== null) {
-                                const parsedVal = parseFloat(editingValorFrete.replace(/\./g, '').replace(',', '.')) || 0;
-                                handleFieldChange('valorFrete', parsedVal);
-                              }
-                              setEditingValorFrete(null);
-                            }}
-                            onChange={(e) => {
-                              const { formatted } = handleCurrencyInput(e.target.value, true);
-                              setEditingValorFrete(formatted);
-                            }}
-                            placeholder="0,00"
-                            className={`w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 font-mono font-bold shadow-2xs ${
-                              isCifModalidade
-                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                                : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden'
-                            }`}
-                          />
-                          {!isCifModalidade && valorFreteNum > 0 && (
-                            <p className="text-[10px] text-sky-600 dark:text-sky-400 font-medium mt-1 flex items-center gap-1">
-                              <span>🚚 Boleto de frete gerado em {addDaysToDate(baseDate, 10).split('-').reverse().join('/')} (10d após entrega)</span>
-                            </p>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-
-                  {/* 6. Desconto Comercial (%) */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>Desconto comercial (%)</span>
-                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">% OFF</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
-                        value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => handleFieldChange('percentualDescontoOff', e.target.value)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs pr-8"
-                        placeholder="0"
-                      />
-                      <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 pointer-events-none">
-                        %
-                      </span>
+                                }}
+                                placeholder="0,00"
+                                className={`w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 font-mono font-bold shadow-2xs ${
+                                  isCifModalidade
+                                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                                    : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden'
+                                }`}
+                              />
+                            </>
+                          );
+                        })()}
+                      </div>
                     </div>
+                    {valorFreteNum > 0 && !String(header.tipoFrete || '').toUpperCase().includes('CIF') && (
+                      <p className="text-[10px] text-sky-600 dark:text-sky-400 font-medium mt-1.5 flex items-center gap-1">
+                        <span>🚚 Parcela de frete prevista para {addDaysToDate(baseDate, 10).split('-').reverse().join('/')} (10d após entrega)</span>
+                      </p>
+                    )}
                   </div>
 
-                  {/* 7. Desconto Comercial (R$) */}
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>Desconto comercial (R$)</span>
-                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">R$ OFF</span>
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={editingDescontoTotal !== null ? editingDescontoTotal : (header.descontoComercialTotal !== undefined && header.descontoComercialTotal !== 0 ? formatCurrency(header.descontoComercialTotal, false) : '')}
-                      onKeyDown={(e) => {
-                        if (e.key === '.') {
-                          e.preventDefault();
-                          const target = e.currentTarget;
-                          const currentVal = target.value;
-                          if (!currentVal.includes(',')) {
-                            const selStart = target.selectionStart ?? currentVal.length;
-                            const selEnd = target.selectionEnd ?? currentVal.length;
-                            const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
-                            const { formatted, value } = handleCurrencyInput(newVal, true);
+                  {/* SUB-BLOCO: DESCONTO COMERCIAL NOS PRODUTOS */}
+                  <div className="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800">
+                    <span className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <span>🏷️</span>
+                        <span>Desconto Comercial nos Produtos</span>
+                      </span>
+                      <span className="text-[9px] font-normal text-slate-400">Abate do preço dos itens</span>
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Desconto Comercial (%) */}
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
+                          <span>Desconto (%)</span>
+                          <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">% desc.</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => handleFieldChange('percentualDescontoOff', e.target.value)}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs pr-7"
+                            placeholder="0"
+                          />
+                          <span className="absolute right-2.5 top-1.5 text-xs font-bold text-slate-400 pointer-events-none">
+                            %
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Desconto Comercial (R$) */}
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
+                          <span>Desconto (R$)</span>
+                          <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">R$ desc.</span>
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={editingDescontoTotal !== null ? editingDescontoTotal : (header.descontoComercialTotal !== undefined && header.descontoComercialTotal !== 0 ? formatCurrency(header.descontoComercialTotal, false) : '')}
+                          onKeyDown={(e) => {
+                            if (e.key === '.') {
+                              e.preventDefault();
+                              const target = e.currentTarget;
+                              const currentVal = target.value;
+                              if (!currentVal.includes(',')) {
+                                const selStart = target.selectionStart ?? currentVal.length;
+                                const selEnd = target.selectionEnd ?? currentVal.length;
+                                const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                                const { formatted, value } = handleCurrencyInput(newVal, true);
+                                setEditingDescontoTotal(formatted);
+                                handleFieldChange('descontoComercialTotal', value);
+                              }
+                            }
+                          }}
+                          onFocus={(e) => {
+                            const currentVal = header.descontoComercialTotal || 0;
+                            setEditingDescontoTotal(currentVal > 0 ? formatCurrency(currentVal, false) : '');
+                            e.target.select();
+                          }}
+                          onBlur={() => setEditingDescontoTotal(null)}
+                          onChange={(e) => {
+                            const { formatted, value } = handleCurrencyInput(e.target.value, true);
                             setEditingDescontoTotal(formatted);
                             handleFieldChange('descontoComercialTotal', value);
-                          }
-                        }
-                      }}
-                      onFocus={(e) => {
-                        const currentVal = header.descontoComercialTotal || 0;
-                        setEditingDescontoTotal(currentVal > 0 ? formatCurrency(currentVal, false) : '');
-                        e.target.select();
-                      }}
-                      onBlur={() => setEditingDescontoTotal(null)}
-                      onChange={(e) => {
-                        const { formatted, value } = handleCurrencyInput(e.target.value, true);
-                        setEditingDescontoTotal(formatted);
-                        handleFieldChange('descontoComercialTotal', value);
-                      }}
-                      placeholder="0,00"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs"
-                    />
+                          }}
+                          placeholder="0,00"
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 

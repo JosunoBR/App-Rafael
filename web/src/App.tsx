@@ -2797,6 +2797,12 @@ export function App() {
       return;
     }
 
+    const supOff = (sup.percentualNotaPadrao !== undefined && sup.percentualNotaPadrao > 0 && sup.percentualNotaPadrao < 100)
+      ? sup.percentualNotaPadrao
+      : ((sup.descontoOffPadrao !== undefined && sup.descontoOffPadrao > 0 && sup.descontoOffPadrao < 100)
+          ? sup.descontoOffPadrao
+          : 100);
+
     setOrder(prev => ({
       ...prev,
       header: {
@@ -2808,7 +2814,7 @@ export function App() {
         condicaoPagamento: sup.condicaoPagamentoPadrao || prev.header.condicaoPagamento,
         aliquotaSt: sup.aliquotaStPadrao !== undefined ? sup.aliquotaStPadrao : prev.header.aliquotaSt,
         percentualDescontoOff: 0,
-        percentualNota: sup.percentualNotaPadrao !== undefined ? sup.percentualNotaPadrao : (prev.header.percentualNota ?? 100),
+        percentualNota: supOff < 100 ? supOff : (prev.header.percentualNota ?? 100),
         // A descrição do pedido é independente do fornecedor
         observacoesDescarga: prev.header.observacoesDescarga || prev.header.observacoes || '',
         observacoes: prev.header.observacoes || prev.header.observacoesDescarga || ''

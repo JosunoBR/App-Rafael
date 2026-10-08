@@ -390,21 +390,29 @@ fun DocaSeparationScreen(
             containerColor = Slate900
         ) { padding ->
             if (isLoading && orders.isEmpty()) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    repeat(4) { index ->
-                        Surface(
-                            color = if (index == 0) Slate700 else Slate800,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth().height(if (index == 0) 94.dp else 118.dp)
-                        ) {}
-                    }
+                Box(modifier = Modifier.padding(padding)) {
+                    br.com.mega12.app.ui.components.SeparationSkeletonScreen()
                 }
             } else if (activeOrder == null) {
                 Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("Nenhum pedido aguardando conferência na doca.", color = Slate400)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Inbox,
+                            contentDescription = null,
+                            tint = Slate500,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Text(
+                            text = "Nenhum pedido aguardando conferência na doca.",
+                            color = Slate400,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             } else {
                 LazyColumn(

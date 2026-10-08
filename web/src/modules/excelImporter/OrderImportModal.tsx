@@ -219,7 +219,13 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
       }
       parsed.header.numeroPedido = cleanNumero;
       setOrderNumberInput(cleanNumero);
-      setPercentualNotaInput(parsed.header.percentualNota !== undefined ? parsed.header.percentualNota : 100);
+      const supOff = (matchedSupplier.percentualNotaPadrao !== undefined && matchedSupplier.percentualNotaPadrao > 0 && matchedSupplier.percentualNotaPadrao < 100)
+        ? matchedSupplier.percentualNotaPadrao
+        : ((matchedSupplier.descontoOffPadrao !== undefined && matchedSupplier.descontoOffPadrao > 0 && matchedSupplier.descontoOffPadrao < 100)
+            ? matchedSupplier.descontoOffPadrao
+            : 100);
+      const initialNota = parsed.header.percentualNota !== undefined ? parsed.header.percentualNota : supOff;
+      setPercentualNotaInput(initialNota);
       setPercentualDescontoOffInput(parsed.header.percentualDescontoOff || 0);
       setObservacoesInput(parsed.header.observacoes || '');
       setTipoFreteInput(parsed.header.tipoFrete || 'CIF');

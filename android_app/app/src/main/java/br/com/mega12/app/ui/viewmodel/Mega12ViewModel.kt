@@ -58,6 +58,14 @@ class Mega12ViewModel : ViewModel() {
     private val _fiscalConfig = MutableStateFlow(FiscalEngine.DEFAULT_CONFIG)
     val fiscalConfig: StateFlow<FiscalConfig> = _fiscalConfig.asStateFlow()
 
+    // Filtro da Esteira de Pedidos (Paridade com Web)
+    private val _selectedStatusFilter = MutableStateFlow("TODOS")
+    val selectedStatusFilter: StateFlow<String> = _selectedStatusFilter.asStateFlow()
+
+    fun setOrderFilter(filter: String) {
+        _selectedStatusFilter.value = filter
+    }
+
 
     // Estado da Calculadora Rápida do Comprador
     private val _calcPrecoCompra = MutableStateFlow("")

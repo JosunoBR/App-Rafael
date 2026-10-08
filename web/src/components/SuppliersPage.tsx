@@ -396,7 +396,14 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
 
                     <td className="py-3.5 px-3 text-center">
                       <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                        {sup.percentualNotaPadrao !== undefined ? `${sup.percentualNotaPadrao}%` : '100%'}
+                        {(() => {
+                          const sOff = (sup.percentualNotaPadrao !== undefined && sup.percentualNotaPadrao > 0 && sup.percentualNotaPadrao < 100)
+                            ? sup.percentualNotaPadrao
+                            : ((sup.descontoOffPadrao !== undefined && sup.descontoOffPadrao > 0 && sup.descontoOffPadrao < 100)
+                                ? sup.descontoOffPadrao
+                                : (sup.percentualNotaPadrao ?? 100));
+                          return `${sOff}%`;
+                        })()}
                       </span>
                     </td>
 

@@ -42,10 +42,13 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
   const [condicaoPagamentoPadrao, setCondicaoPagamentoPadrao] = useState(initialSupplier?.condicaoPagamentoPadrao || '30/60/90 Dias');
   const [aliquotaStPadrao, setAliquotaStPadrao] = useState<number>(initialSupplier?.aliquotaStPadrao || 0);
   const [aliquotaIpiPadrao, setAliquotaIpiPadrao] = useState<number>(initialSupplier?.aliquotaIpiPadrao || 0);
-  const [descontoOffPadrao, setDescontoOffPadrao] = useState<number>(initialSupplier?.descontoOffPadrao || 0);
-  const [percentualNotaPadrao, setPercentualNotaPadrao] = useState<number>(
-    initialSupplier?.percentualNotaPadrao !== undefined ? initialSupplier.percentualNotaPadrao : 100
-  );
+  const initialOff = (initialSupplier?.percentualNotaPadrao !== undefined && initialSupplier.percentualNotaPadrao > 0 && initialSupplier.percentualNotaPadrao < 100)
+    ? initialSupplier.percentualNotaPadrao
+    : ((initialSupplier?.descontoOffPadrao !== undefined && initialSupplier.descontoOffPadrao > 0 && initialSupplier.descontoOffPadrao < 100)
+        ? initialSupplier.descontoOffPadrao
+        : (initialSupplier?.percentualNotaPadrao ?? 100));
+
+  const [percentualNotaPadrao, setPercentualNotaPadrao] = useState<number>(initialOff);
   const [observacoesDescarga, setObservacoesDescarga] = useState(initialSupplier?.observacoesDescarga || '');
   const [paymentConditions, setPaymentConditions] = useState<PaymentCondition[]>([]);
   const [isCustomPayment, setIsCustomPayment] = useState(false);
@@ -62,6 +65,12 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
 
   useEffect(() => {
     if (initialSupplier) {
+      const sOff = (initialSupplier.percentualNotaPadrao !== undefined && initialSupplier.percentualNotaPadrao > 0 && initialSupplier.percentualNotaPadrao < 100)
+        ? initialSupplier.percentualNotaPadrao
+        : ((initialSupplier.descontoOffPadrao !== undefined && initialSupplier.descontoOffPadrao > 0 && initialSupplier.descontoOffPadrao < 100)
+            ? initialSupplier.descontoOffPadrao
+            : (initialSupplier.percentualNotaPadrao ?? 100));
+
       setRazaoSocial(initialSupplier.razaoSocial || '');
       setNomeFantasia(initialSupplier.nomeFantasia || '');
       setCnpj(initialSupplier.cnpj || '');
@@ -74,8 +83,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
       setIsCustomPayment(false);
       setAliquotaStPadrao(initialSupplier.aliquotaStPadrao || 0);
       setAliquotaIpiPadrao(initialSupplier.aliquotaIpiPadrao || 0);
-      setDescontoOffPadrao(initialSupplier.descontoOffPadrao || 0);
-      setPercentualNotaPadrao(initialSupplier.percentualNotaPadrao !== undefined ? initialSupplier.percentualNotaPadrao : 100);
+      setPercentualNotaPadrao(sOff);
       setObservacoesDescarga(initialSupplier.observacoesDescarga || '');
     } else {
       setRazaoSocial('');
@@ -90,7 +98,6 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
       setIsCustomPayment(false);
       setAliquotaStPadrao(0);
       setAliquotaIpiPadrao(0);
-      setDescontoOffPadrao(0);
       setPercentualNotaPadrao(100);
       setObservacoesDescarga('');
     }
@@ -113,7 +120,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
       condicaoPagamentoPadrao: condicaoPagamentoPadrao.trim() || undefined,
       aliquotaStPadrao: Number(aliquotaStPadrao) || 0,
       aliquotaIpiPadrao: Number(aliquotaIpiPadrao) || 0,
-      descontoOffPadrao: Number(descontoOffPadrao) || 0,
+      descontoOffPadrao: percentualNotaPadrao !== undefined ? Number(percentualNotaPadrao) : 100,
       percentualNotaPadrao: percentualNotaPadrao !== undefined ? Number(percentualNotaPadrao) : 100,
       observacoesDescarga: observacoesDescarga.trim() || undefined,
       createdAt: initialSupplier?.createdAt || new Date().toISOString(),

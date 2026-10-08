@@ -50,6 +50,12 @@ class SupplierRepository {
       ? supplier.pedidoPadraoJson 
       : (supplier.pedidoPadrao ? JSON.stringify(supplier.pedidoPadrao) : (existing?.pedidoPadraoJson || null));
 
+    const resolvedOff = (supplier.percentualNotaPadrao !== undefined && Number(supplier.percentualNotaPadrao) > 0 && Number(supplier.percentualNotaPadrao) < 100)
+      ? Number(supplier.percentualNotaPadrao)
+      : ((supplier.descontoOffPadrao !== undefined && Number(supplier.descontoOffPadrao) > 0 && Number(supplier.descontoOffPadrao) < 100)
+          ? Number(supplier.descontoOffPadrao)
+          : (Number(supplier.percentualNotaPadrao) || Number(supplier.descontoOffPadrao) || 100));
+
     if (existing) {
       const sql = `
         UPDATE suppliers SET
@@ -69,8 +75,8 @@ class SupplierRepository {
         supplier.condicaoPagamentoPadrao || '30/60/90 Dias',
         Number(supplier.aliquotaStPadrao) || 0,
         Number(supplier.aliquotaIpiPadrao) || 0,
-        Number(supplier.descontoOffPadrao) || 0,
-        Number(supplier.percentualNotaPadrao) || 100,
+        resolvedOff,
+        resolvedOff,
         formatPhone(supplier.telefoneEmpresa),
         supplier.endereco || '',
         supplier.email || '',
@@ -98,8 +104,8 @@ class SupplierRepository {
         supplier.condicaoPagamentoPadrao || '30/60/90 Dias',
         Number(supplier.aliquotaStPadrao) || 0,
         Number(supplier.aliquotaIpiPadrao) || 0,
-        Number(supplier.descontoOffPadrao) || 0,
-        Number(supplier.percentualNotaPadrao) || 100,
+        resolvedOff,
+        resolvedOff,
         formatPhone(supplier.telefoneEmpresa),
         supplier.endereco || '',
         supplier.email || '',

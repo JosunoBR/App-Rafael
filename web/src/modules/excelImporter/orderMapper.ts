@@ -245,7 +245,11 @@ export function mapParsedExcelToOrder(
     percentualDescontoOff: parsed.header.percentualDescontoOff || 0,
     percentualNota: parsed.header.percentualNota !== undefined 
       ? parsed.header.percentualNota 
-      : (supplier.percentualNotaPadrao !== undefined ? supplier.percentualNotaPadrao : 100),
+      : ((supplier.percentualNotaPadrao !== undefined && supplier.percentualNotaPadrao > 0 && supplier.percentualNotaPadrao < 100)
+          ? supplier.percentualNotaPadrao
+          : ((supplier.descontoOffPadrao !== undefined && supplier.descontoOffPadrao > 0 && supplier.descontoOffPadrao < 100)
+              ? supplier.descontoOffPadrao
+              : 100)),
     tipoFrete: parsed.header.tipoFrete || 'CIF',
     valorFrete: 0,
     valorFreteGlobal: 0,

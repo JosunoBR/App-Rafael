@@ -6,6 +6,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
@@ -31,6 +32,12 @@ object ApiClient {
 
                 prefs.authToken?.let { token ->
                     requestBuilder.header("Authorization", "Bearer $token")
+                }
+
+                // Paridade Web: Proteção estrita contra duplicidade em métodos mutáveis
+                val method = original.method
+                if (method in listOf("POST", "PUT", "PATCH", "DELETE") && original.header("Idempotency-Key") == null) {
+                    requestBuilder.header("Idempotency-Key", "mobile_${UUID.randomUUID()}")
                 }
 
                 chain.proceed(requestBuilder.build())

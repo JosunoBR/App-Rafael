@@ -158,11 +158,21 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                             ({sup.nomeFantasia})
                           </span>
                         )}
-                        {sup.percentualNotaPadrao !== undefined && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                            OFF: {sup.percentualNotaPadrao}%
-                          </span>
-                        )}
+                        {(() => {
+                          const sOff = (sup.percentualNotaPadrao !== undefined && sup.percentualNotaPadrao > 0 && sup.percentualNotaPadrao < 100)
+                            ? sup.percentualNotaPadrao
+                            : ((sup.descontoOffPadrao !== undefined && sup.descontoOffPadrao > 0 && sup.descontoOffPadrao < 100)
+                                ? sup.descontoOffPadrao
+                                : (sup.percentualNotaPadrao ?? 100));
+                          if (sOff < 100) {
+                            return (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                OFF: {sOff}%
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
 
                       <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-3 mt-1">

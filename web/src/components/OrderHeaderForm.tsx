@@ -2745,9 +2745,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         </div>
                       </div>
 
-                      {/* PREVISÃO DAS PARCELAS DA 1ª CONDIÇÃO (DEPÓSITO / ENTRADA) */}
+                      {/* PREVISÃO DAS PARCELAS DA 1ª CONDIÇÃO */}
                       {renderInstallmentCardsGroup(
-                        previewInstallments.filter(inst => !inst.isFrete && (inst.isEntrada || (inst as any).metodoPagamento === 'Depósito')),
+                        previewInstallments.filter(inst => !inst.isFrete && Boolean(inst.isEntrada)),
                         `Parcelas da 1ª Condição (${depositoParcelas}x):`
                       )}
                     </div>
@@ -2831,9 +2831,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         </div>
                       </div>
 
-                      {/* PREVISÃO DAS PARCELAS DA 2ª CONDIÇÃO (SALDO BOLETO) */}
+                      {/* PREVISÃO DAS PARCELAS DA 2ª CONDIÇÃO */}
                       {renderInstallmentCardsGroup(
-                        previewInstallments.filter(inst => !inst.isFrete && !inst.isEntrada && (inst as any).metodoPagamento !== 'Depósito'),
+                        previewInstallments.filter(inst => !inst.isFrete && !inst.isEntrada),
                         `Parcelas da 2ª Condição (${saldoParcelas}x):`
                       )}
                     </div>

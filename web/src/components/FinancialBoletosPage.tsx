@@ -821,14 +821,20 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   }, [startDate, endDate, selectedMonth, selectedYear, selectedFormas, selectedStore, selectedCategory, selectedStatus, viewMode, searchQuery]);
 
   // Exportação Excel - Requer seleção prévia via checkbox conforme especificação
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (selectedIds.length === 0) {
       showToast('Selecione ao menos um boleto utilizando as caixas de seleção (checkbox) para exportar.', 'info');
       return;
     }
     const toExport = entries.filter(e => selectedIds.includes(e.id));
     const label = `${selectedIds.length} Itens Selecionados (${filtersDescription})`;
-    exportFinancialToExcel(toExport, label);
+    try {
+      await exportFinancialToExcel(toExport, label);
+      showToast('Planilha Excel (.xlsx) exportada com sucesso!', 'success');
+    } catch (err: any) {
+      console.error('Erro ao exportar planilha Excel:', err);
+      showToast('Erro ao exportar planilha Excel: ' + (err?.message || err), 'error');
+    }
   };
 
   // Exportação PDF - Requer seleção prévia via checkbox conforme especificação

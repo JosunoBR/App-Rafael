@@ -2157,6 +2157,153 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
             const LIMITE_MAXIMO_BOLETO = 9999;
             const valorMaximoBoletoCalculado = isEntradaMista ? valorPorParcelaSaldo : (valorTotalPedido > 0 && currentParcelas > 0 ? (valorTotalPedido / currentParcelas) : 0);
+
+            const renderInstallmentItem = (inst: any) => {
+              const isFreteItem = Boolean(inst.isFrete);
+              const isEntradaItem = Boolean(inst.isEntrada);
+              const metodo = inst.metodoPagamento || (isEntradaItem ? 'Depósito' : isFreteItem ? 'Boleto' : 'Boleto');
+              const isDeposito = metodo === 'Depósito' || isEntradaItem;
+              const targetKey = isFreteItem ? 'frete' : String(inst.numeroParcela);
+              const isManual = header.valoresParcelasPersonalizados?.[targetKey] !== undefined;
+
+              const isEditing = targetKey in editingParcelasMap;
+              const displayVal = isEditing
+                ? editingParcelasMap[targetKey]
+                : (inst.valor > 0 ? formatCurrency(inst.valor, false) : '');
+
+              return (
+                <div 
+                  key={targetKey}
+                  className={`p-2 rounded-xl border text-xs flex flex-col gap-1.5 shadow-2xs transition-all ${
+                    isFreteItem
+                      ? 'bg-sky-50/70 dark:bg-sky-950/40 border-sky-300/80 dark:border-sky-800'
+                      : isDeposito
+                      ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300/80 dark:border-indigo-800'
+                      : (inst.valor > LIMITE_MAXIMO_BOLETO)
+                      ? 'bg-rose-50/70 dark:bg-rose-950/40 border-rose-300/80 dark:border-rose-800'
+                      : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-300/80 dark:border-emerald-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="font-bold shrink-0 flex items-center gap-1 text-[11px] truncate">
+                      <span>{isFreteItem ? '🚚' : isDeposito ? '🏦' : '📄'}</span>
+                      <span className={isFreteItem ? 'text-sky-900 dark:text-sky-200' : isDeposito ? 'text-indigo-950 dark:text-indigo-200' : 'text-emerald-950 dark:text-emerald-200'}>
+                        {inst.rotulo}
+                      </span>
+                    </span>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isManual ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          Manual
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                          Auto
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 items-center">
+                    {/* Campo de valor da parcela com auto-ajuste inteligente */}
+                    <div className="relative">
+                      <span className="absolute left-2 top-1 text-[10px] font-bold opacity-60">R$</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        disabled={isLocked}
+                        value={displayVal}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.currentTarget.blur();
+                            return;
+                          }
+                          if (e.key === '.') {
+                            e.preventDefault();
+                            const target = e.currentTarget;
+                            const currentVal = target.value;
+                            if (!currentVal.includes(',')) {
+                              const selStart = target.selectionStart ?? currentVal.length;
+                              const selEnd = target.selectionEnd ?? currentVal.length;
+                              const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                              const { formatted } = handleCurrencyInput(newVal, false);
+                              setEditingParcelasMap(prev => ({ ...prev, [targetKey]: formatted }));
+                            }
+                            return;
+                          }
+                        }}
+                        onFocus={(e) => {
+                          setEditingParcelasMap(prev => ({
+                            ...prev,
+                            [targetKey]: inst.valor > 0 ? formatCurrency(inst.valor, false) : ''
+                          }));
+                          e.target.select();
+                        }}
+                        onBlur={(e) => {
+                          setEditingParcelasMap(prev => {
+                            const next = { ...prev };
+                            delete next[targetKey];
+                            return next;
+                          });
+                          const parsedVal = parseFloat((e.target.value || '').replace(/\./g, '').replace(',', '.')) || 0;
+                          handleAutoAdjustParcelaValue(targetKey, parsedVal);
+                        }}
+                        onChange={(e) => {
+                          const { formatted } = handleCurrencyInput(e.target.value, false);
+                          setEditingParcelasMap(prev => ({ ...prev, [targetKey]: formatted }));
+                        }}
+                        className={`w-full pl-6 pr-1.5 py-1 rounded-lg border font-mono font-bold text-xs transition-colors focus:outline-hidden focus:ring-2 ${
+                          isLocked
+                            ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed border-slate-200 dark:border-slate-700'
+                            : isFreteItem
+                            ? 'bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-800 text-sky-950 dark:text-sky-100 focus:ring-sky-500'
+                            : isDeposito
+                            ? 'bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-800 text-indigo-950 dark:text-indigo-100 focus:ring-indigo-500'
+                            : inst.valor > LIMITE_MAXIMO_BOLETO
+                            ? 'bg-white dark:bg-slate-900 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 focus:ring-rose-500'
+                            : 'bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-100 focus:ring-emerald-500'
+                        }`}
+                        title="Digite o valor desta parcela (as demais parcelas se ajustam automaticamente)"
+                      />
+                    </div>
+
+                    {/* Campo de data editável */}
+                    <div className="flex items-center gap-1 bg-white dark:bg-slate-900 px-1.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition shadow-2xs">
+                      <Calendar className="w-3 h-3 text-slate-400 shrink-0 pointer-events-none" />
+                      <input
+                        type="date"
+                        disabled={isLocked}
+                        value={toIsoDate(inst.dataVencimento)}
+                        onChange={(e) => handleInstallmentDateChange(inst.numeroParcela, e.target.value, Boolean(isFreteItem))}
+                        className="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-[10px] font-bold outline-hidden cursor-pointer w-full disabled:cursor-not-allowed"
+                        title="Clique para alterar o vencimento"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            };
+
+            const renderInstallmentCardsGroup = (items: typeof previewInstallments, labelTitle?: string) => {
+              if (!items || items.length === 0) return null;
+              return (
+                <div className="mt-2.5 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                  {labelTitle && (
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3 h-3 text-emerald-500" />
+                        <span>{labelTitle}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                    {items.map(renderInstallmentItem)}
+                  </div>
+                </div>
+              );
+            };
             
             return (
               <fieldset disabled={isLocked} className={isLocked ? 'opacity-85 pointer-events-none select-none border-none p-0 m-0' : 'border-none p-0 m-0'}>
@@ -2175,8 +2322,31 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </span>
                   </div>
 
-                  {/* Indicador de Limite de Boleto (R$ 9.999,00) & Botão de Gestão de Condições */}
+                  {/* Indicador de Limite de Boleto, Botões de Reset e Gestão de Condições */}
                   <div className="flex items-center gap-2 flex-wrap">
+                    {hasCustomValues && !isLocked && (
+                      <button
+                        type="button"
+                        onClick={handleResetParcelasValores}
+                        className="px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-700 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800 shadow-2xs flex items-center gap-1 transition cursor-pointer"
+                        title="Redistribui o valor total igualmente entre todas as parcelas"
+                      >
+                        <Repeat className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Dividir valores igualmente</span>
+                      </button>
+                    )}
+                    {hasCustomDates && !isLocked && (
+                      <button
+                        type="button"
+                        onClick={handleResetDates}
+                        className="px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-700 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800 shadow-2xs flex items-center gap-1 transition cursor-pointer"
+                        title="Restaurar datas automáticas calculadas pelo intervalo selecionado"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Redefinir prazos</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => setIsPaymentCondModalOpen(true)}
@@ -2409,7 +2579,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </div>
 
                     {/* BOTÃO PARA ADICIONAR FORMA DE PAGAMENTO */}
-                    <div className="flex items-center gap-2 mb-3.5">
+                    <div className="flex items-center gap-2 mb-2">
                       <button
                         type="button"
                         onClick={handleToggleSplitPayment}
@@ -2420,6 +2590,12 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         <span>Adicionar forma de pagamento</span>
                       </button>
                     </div>
+
+                    {/* PREVISÃO DAS PARCELAS DA CONDIÇÃO ÚNICA (DIRETAMENTE ABAIXO DE SUA CONDIÇÃO) */}
+                    {renderInstallmentCardsGroup(
+                      previewInstallments.filter(inst => !inst.isFrete),
+                      `Previsão das Parcelas (${previewInstallments.filter(inst => !inst.isFrete).length}x):`
+                    )}
                   </>
                 ) : (
                   /* MODO DUAS CONDIÇÕES / LINHAS COMBINADAS */
@@ -2568,6 +2744,12 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           />
                         </div>
                       </div>
+
+                      {/* PREVISÃO DAS PARCELAS DA 1ª CONDIÇÃO (DEPÓSITO / ENTRADA) */}
+                      {renderInstallmentCardsGroup(
+                        previewInstallments.filter(inst => !inst.isFrete && (inst.isEntrada || (inst as any).metodoPagamento === 'Depósito')),
+                        `Parcelas da 1ª Condição (${depositoParcelas}x):`
+                      )}
                     </div>
 
                     {/* LINHA 2 (2ª FORMA / SALDO BOLETO) */}
@@ -2648,6 +2830,12 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           />
                         </div>
                       </div>
+
+                      {/* PREVISÃO DAS PARCELAS DA 2ª CONDIÇÃO (SALDO BOLETO) */}
+                      {renderInstallmentCardsGroup(
+                        previewInstallments.filter(inst => !inst.isFrete && !inst.isEntrada && (inst as any).metodoPagamento !== 'Depósito'),
+                        `Parcelas da 2ª Condição (${saldoParcelas}x):`
+                      )}
                     </div>
                   </div>
                 )}
@@ -2767,9 +2955,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       </div>
                     </div>
                     {valorFreteNum > 0 && !String(header.tipoFrete || '').toUpperCase().includes('CIF') && (
-                      <p className="text-[10px] text-sky-600 dark:text-sky-400 font-medium mt-1.5 flex items-center gap-1">
-                        <span>🚚 Parcela de frete prevista para {addDaysToDate(baseDate, 10).split('-').reverse().join('/')} (10d após entrega)</span>
-                      </p>
+                      renderInstallmentCardsGroup(
+                        previewInstallments.filter(inst => Boolean(inst.isFrete)),
+                        'Parcela do Frete (10d após entrega):'
+                      )
                     )}
                   </div>
 
@@ -2850,171 +3039,6 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     </div>
                   </div>
                 </div>
-
-                {/* Prévia dos Boletos e Parcelas (Totalmente Editáveis - Padrão Novo Lançamento) */}
-                {previewInstallments.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-700">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-emerald-500" />
-                        <span>Previsão de Vencimento dos Títulos ({previewInstallments.length}x):</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {hasCustomValues && !isLocked && (
-                          <button
-                            type="button"
-                            onClick={handleResetParcelasValores}
-                            className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-bold flex items-center gap-1 cursor-pointer transition lowercase first-letter:uppercase"
-                            title="Redistribui o valor total igualmente entre todas as parcelas"
-                          >
-                            <Repeat className="w-3 h-3 text-amber-500" />
-                            <span>Dividir valores igualmente</span>
-                          </button>
-                        )}
-                        {hasCustomDates && !isLocked && (
-                          <button
-                            type="button"
-                            onClick={handleResetDates}
-                            className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-bold flex items-center gap-1 cursor-pointer transition lowercase first-letter:uppercase"
-                            title="Restaurar datas automáticas calculadas pelo intervalo selecionado"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            <span>Redefinir prazos padrão</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-                      {previewInstallments.map((inst) => {
-                        const isFreteItem = Boolean((inst as any).isFrete);
-                        const isEntradaItem = inst.isEntrada;
-                        const metodo = (inst as any).metodoPagamento || (isEntradaItem ? 'Depósito' : isFreteItem ? 'Boleto' : 'Boleto');
-                        const isDeposito = metodo === 'Depósito' || isEntradaItem;
-                        const targetKey = isFreteItem ? 'frete' : String(inst.numeroParcela);
-                        const isManual = header.valoresParcelasPersonalizados?.[targetKey] !== undefined;
-
-                        const isEditing = targetKey in editingParcelasMap;
-                        const displayVal = isEditing
-                          ? editingParcelasMap[targetKey]
-                          : (inst.valor > 0 ? formatCurrency(inst.valor, false) : '');
-
-                        return (
-                          <div 
-                            key={targetKey}
-                            className={`p-2.5 rounded-xl border text-xs flex flex-col gap-2 shadow-2xs transition-all ${
-                              isFreteItem
-                                ? 'bg-sky-50/70 dark:bg-sky-950/40 border-sky-300/80 dark:border-sky-800'
-                                : isDeposito
-                                ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300/80 dark:border-indigo-800'
-                                : (inst.valor > LIMITE_MAXIMO_BOLETO)
-                                ? 'bg-rose-50/70 dark:bg-rose-950/40 border-rose-300/80 dark:border-rose-800'
-                                : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-300/80 dark:border-emerald-800'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-bold shrink-0 flex items-center gap-1 text-[11px] truncate">
-                                <span>{isFreteItem ? '🚚' : isDeposito ? '🏦' : '📄'}</span>
-                                <span className={isFreteItem ? 'text-sky-900 dark:text-sky-200' : isDeposito ? 'text-indigo-950 dark:text-indigo-200' : 'text-emerald-950 dark:text-emerald-200'}>
-                                  {inst.rotulo}
-                                </span>
-                              </span>
-
-                              <div className="flex items-center gap-1 shrink-0">
-                                {isManual ? (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                                    Manual
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                                    Auto
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 items-center">
-                              {/* Campo de valor da parcela com auto-ajuste inteligente */}
-                              <div className="relative">
-                                <span className="absolute left-2.5 top-1.5 text-[11px] font-bold opacity-60">R$</span>
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  placeholder="0,00"
-                                  disabled={isLocked}
-                                  value={displayVal}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.currentTarget.blur();
-                                      return;
-                                    }
-                                    if (e.key === '.') {
-                                      e.preventDefault();
-                                      const target = e.currentTarget;
-                                      const currentVal = target.value;
-                                      if (!currentVal.includes(',')) {
-                                        const selStart = target.selectionStart ?? currentVal.length;
-                                        const selEnd = target.selectionEnd ?? currentVal.length;
-                                        const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
-                                        const { formatted } = handleCurrencyInput(newVal, false);
-                                        setEditingParcelasMap(prev => ({ ...prev, [targetKey]: formatted }));
-                                      }
-                                      return;
-                                    }
-                                  }}
-                                  onFocus={(e) => {
-                                    setEditingParcelasMap(prev => ({
-                                      ...prev,
-                                      [targetKey]: inst.valor > 0 ? formatCurrency(inst.valor, false) : ''
-                                    }));
-                                    e.target.select();
-                                  }}
-                                  onBlur={(e) => {
-                                    setEditingParcelasMap(prev => {
-                                      const next = { ...prev };
-                                      delete next[targetKey];
-                                      return next;
-                                    });
-                                    const parsedVal = parseFloat((e.target.value || '').replace(/\./g, '').replace(',', '.')) || 0;
-                                    handleAutoAdjustParcelaValue(targetKey, parsedVal);
-                                  }}
-                                  onChange={(e) => {
-                                    const { formatted } = handleCurrencyInput(e.target.value, false);
-                                    setEditingParcelasMap(prev => ({ ...prev, [targetKey]: formatted }));
-                                  }}
-                                  className={`w-full pl-7 pr-2 py-1 rounded-lg border font-mono font-bold text-xs transition-colors focus:outline-hidden focus:ring-2 ${
-                                    isLocked
-                                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed border-slate-200 dark:border-slate-700'
-                                      : isFreteItem
-                                      ? 'bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-800 text-sky-950 dark:text-sky-100 focus:ring-sky-500'
-                                      : isDeposito
-                                      ? 'bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-800 text-indigo-950 dark:text-indigo-100 focus:ring-indigo-500'
-                                      : inst.valor > LIMITE_MAXIMO_BOLETO
-                                      ? 'bg-white dark:bg-slate-900 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 focus:ring-rose-500'
-                                      : 'bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-100 focus:ring-emerald-500'
-                                  }`}
-                                  title="Digite o valor acordado desta parcela (as demais parcelas se ajustam automaticamente)"
-                                />
-                              </div>
-
-                              {/* Campo de data editável */}
-                              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition shadow-2xs">
-                                <Calendar className="w-3 h-3 text-slate-400 shrink-0 pointer-events-none" />
-                                <input
-                                  type="date"
-                                  disabled={isLocked}
-                                  value={toIsoDate(inst.dataVencimento)}
-                                  onChange={(e) => handleInstallmentDateChange(inst.numeroParcela, e.target.value, Boolean(isFreteItem))}
-                                  className="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-[11px] font-bold outline-hidden cursor-pointer w-full disabled:cursor-not-allowed"
-                                  title="Clique para editar a data (as datas seguintes serão ajustadas automaticamente)"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             </fieldset>
           );

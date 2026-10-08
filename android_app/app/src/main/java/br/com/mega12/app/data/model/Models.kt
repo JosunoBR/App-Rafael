@@ -264,9 +264,9 @@ data class PurchaseOrder(
 
     val statusEfetivo: String
         get() = when {
-            status.isNotBlank() && status != "Em Cotação" -> status
             header.status.isNotBlank() -> header.status
-            else -> status
+            status.isNotBlank() -> status
+            else -> "Em Cotação"
         }
 
     val totalLiquidoEfetivo: Double

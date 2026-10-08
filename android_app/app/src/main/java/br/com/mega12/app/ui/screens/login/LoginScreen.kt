@@ -31,8 +31,8 @@ fun LoginScreen(
     onLoginSuccess: (String) -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
-    var email by remember { mutableStateOf("compras@mega12.com.br") }
-    var password by remember { mutableStateOf("123456") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
 
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()

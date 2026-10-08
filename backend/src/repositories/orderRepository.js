@@ -842,6 +842,17 @@ class OrderRepository {
     }
 
     return {
+      id: r.id,
+      status: r.status || 'Em Cotação',
+      separationStatus: r.separationStatus || 'Pendente',
+      totalLiquido,
+      totalPecas,
+      totalVolumes,
+      totalBruto,
+      fornecedor: (r.fornecedor || '').replace('Depósito Central Mega 12', 'Depósito Central'),
+      numeroPedido: cleanNumeroPedido,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
       header: {
         id: r.id,
         numeroPedido: cleanNumeroPedido,

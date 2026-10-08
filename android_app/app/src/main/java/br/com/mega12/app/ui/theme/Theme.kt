@@ -80,19 +80,18 @@ fun Mega12AppTheme(
  */
 @Composable
 fun mega12TextFieldColors(
-    containerColor: Color = if (isSystemInDarkTheme()) Slate800 else Color.White
+    containerColor: Color = Slate800
 ): TextFieldColors {
-    val isDark = isSystemInDarkTheme()
     return OutlinedTextFieldDefaults.colors(
-        focusedTextColor = if (isDark) Color.White else Slate900,
-        unfocusedTextColor = if (isDark) Slate100 else Slate900,
-        focusedLabelColor = if (isDark) Emerald400 else Emerald600,
-        unfocusedLabelColor = if (isDark) Slate200 else Slate600,
-        focusedBorderColor = if (isDark) Emerald400 else Emerald600,
-        unfocusedBorderColor = if (isDark) Slate600 else Slate300,
-        focusedPlaceholderColor = if (isDark) Slate400 else Slate500,
-        unfocusedPlaceholderColor = if (isDark) Slate400 else Slate500,
-        cursorColor = if (isDark) Emerald400 else Emerald600,
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        focusedLabelColor = Emerald400,
+        unfocusedLabelColor = Slate300,
+        focusedBorderColor = Emerald400,
+        unfocusedBorderColor = Slate600,
+        focusedPlaceholderColor = Slate400,
+        unfocusedPlaceholderColor = Slate400,
+        cursorColor = Emerald400,
         focusedContainerColor = containerColor,
         unfocusedContainerColor = containerColor
     )

@@ -7,6 +7,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.rememberNavController
 import br.com.mega12.app.ui.navigation.NavGraph
 import br.com.mega12.app.ui.navigation.Screen
@@ -42,11 +55,40 @@ class MainActivity : ComponentActivity() {
                     Screen.Login.route
                 }
 
-                NavGraph(
-                    navController = navController,
-                    viewModel = viewModel,
-                    startDestination = startDestination
-                )
+                val errorMessage by viewModel.errorMessage.collectAsState()
+                val successMessage by viewModel.successMessage.collectAsState()
+                val snackbarHostState = remember { SnackbarHostState() }
+                val isError = errorMessage != null
+
+                LaunchedEffect(errorMessage, successMessage) {
+                    val message = errorMessage ?: successMessage
+                    if (!message.isNullOrBlank()) {
+                        snackbarHostState.currentSnackbarData?.dismiss()
+                        snackbarHostState.showSnackbar(message)
+                        viewModel.clearMessages()
+                    }
+                }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    NavGraph(
+                        navController = navController,
+                        viewModel = viewModel,
+                        startDestination = startDestination
+                    )
+                    SnackbarHost(
+                        hostState = snackbarHostState,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(16.dp)
+                    ) { data ->
+                        Snackbar(
+                            snackbarData = data,
+                            containerColor = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
             }
         }
     }

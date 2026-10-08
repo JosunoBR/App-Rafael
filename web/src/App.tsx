@@ -160,7 +160,6 @@ import {
   fetchStockFromDb,
   saveStockItemToDb,
   updateStockBalanceInDb,
-  deleteStockItemFromDb,
   clearAllStockFromDb,
   fetchSeparationPresetsFromDb,
   saveSeparationPresetToDb,
@@ -192,7 +191,7 @@ import { DEFAULT_FISCAL_CONFIG } from './shared/constants';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem, generateNextProductCode } from './utils/orderItemUtils';
 import { CheckCircle2, AlertCircle, Plus, Lock, ShieldCheck } from 'lucide-react';
-import { canAccessTab, canCreateOrEditOrders, getDefaultNavForRole, canEditSpecificOrder } from './shared/permissions';
+import { canAccessTab, canAuthorizeFinancialRelease, canCreateOrEditOrders, getDefaultNavForRole, canEditSpecificOrder } from './shared/permissions';
 import { 
   calculateOrderTotals, 
   distributeFiscalAdjustmentToItems, 
@@ -258,6 +257,15 @@ export function App() {
   const [products, setProducts] = useState<Product[]>(getProductsList);
   const [centralStock, setCentralStock] = useState<CentralStockItem[]>(() => loadCentralStock());
   const [savedOrders, setSavedOrders] = useState<PurchaseOrder[]>(loadSavedOrdersList);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [localSaveNotice, setLocalSaveNotice] = useState<{ orderNumber: string; savedAt: string } | null>(() => {
+    try {
+      const raw = localStorage.getItem('mega12_local_save_pending');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
   const [separationPresets, setSeparationPresets] = useState<SeparationPreset[]>(getInitialSeparationPresets);
   const [fiscalPresets, setFiscalPresets] = useState<FiscalPreset[]>(getInitialFiscalPresets);
 
@@ -349,6 +357,50 @@ export function App() {
     } else {
       triggerIOSBanner(message, type);
     }
+  };
+
+  const showPersistenceError = (err: any, action: string) => {
+    const status = Number(err?.status || 0);
+    const code = String(err?.code || '');
+    let title = 'Falha ao salvar no banco';
+    let guidance = 'Nenhuma alteração operacional foi confirmada. Revise os dados e tente novamente.';
+
+    if (status === 401) {
+      title = 'Sessão expirada';
+      guidance = 'Entre novamente no sistema antes de repetir a operação.';
+    } else if (status === 403) {
+      title = 'Operação recusada';
+      guidance = 'Seu usuário não possui permissão para concluir esta ação. A alteração não foi salva.';
+    } else if (status === 409 || code.includes('CONFLICT')) {
+      title = 'Dados atualizados por outra pessoa';
+      guidance = 'Atualize o pedido para carregar a versão mais recente antes de tentar novamente.';
+    } else if (isOfflineError(err)) {
+      title = 'Servidor indisponível';
+      guidance = 'Verifique a conexão. Etapas operacionais não são concluídas apenas no navegador.';
+    }
+
+    const shouldLoginAgain = status === 401;
+    triggerIOSAlert({
+      title,
+      message: `${action}: ${err?.message || 'o servidor recusou a gravação.'}\n\n${guidance}`,
+      type: 'error',
+      confirmText: 'Fechar',
+      actionText: shouldLoginAgain ? 'Entrar novamente' : 'Recarregar dados',
+      onAction: shouldLoginAgain
+        ? () => setCurrentUser(null)
+        : () => { void loadFromSqlite(); }
+    });
+  };
+
+  const markLocalSavePending = (orderNumber: string) => {
+    const notice = { orderNumber, savedAt: new Date().toISOString() };
+    localStorage.setItem('mega12_local_save_pending', JSON.stringify(notice));
+    setLocalSaveNotice(notice);
+  };
+
+  const clearLocalSavePending = () => {
+    localStorage.removeItem('mega12_local_save_pending');
+    setLocalSaveNotice(null);
   };
   
   // Carregar dados oficiais do banco de dados SQLite (prioridade máxima)
@@ -484,6 +536,8 @@ export function App() {
       }
     } catch (err: any) {
       console.warn('Usando armazenamento local de contingência:', err);
+    } finally {
+      setIsInitialLoading(false);
     }
   };
 
@@ -1713,6 +1767,7 @@ export function App() {
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
       setOrder(effectiveOrder);
+      clearLocalSavePending();
 
       if (isClosed) {
         const updaterRole = currentUser?.role === 'faturamento' ? 'pelo Faturamento' : 'pela Diretoria';
@@ -1768,13 +1823,20 @@ export function App() {
         return;
       }
       if (isOfflineError(err)) {
-        saveOrderToHistory(orderWithInstallments);
-        setSavedOrders(loadSavedOrdersList());
+        saveCurrentOrder(orderWithInstallments);
         setOrder({
           ...orderWithInstallments,
           items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
         });
-        triggerIOSBanner(`Você está sem conexão. Pedido ${order.header.numeroPedido} salvo localmente (contingência).`, 'info');
+        markLocalSavePending(order.header.numeroPedido);
+        triggerIOSAlert({
+          title: 'Salvo somente neste dispositivo',
+          message: `O rascunho ${order.header.numeroPedido} foi preservado localmente, mas NÃO foi salvo no banco de dados.\n\nData: ${new Date().toLocaleString('pt-BR')}`,
+          type: 'warning',
+          confirmText: 'Fechar',
+          actionText: 'Tentar enviar novamente',
+          onAction: () => { void handleSaveDraftOrder(); }
+        });
         return;
       }
       triggerIOSAlert({
@@ -1845,6 +1907,7 @@ export function App() {
       });
 
       triggerIOSBanner(`Pedido ${effectiveNum} FECHADO e gravado no Banco de Dados!`, 'success');
+      clearLocalSavePending();
     } catch (err: any) {
       console.error('Erro ao fechar pedido no servidor:', err);
       if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
@@ -1871,18 +1934,21 @@ export function App() {
         return;
       }
       if (isOfflineError(err)) {
-        saveOrderToHistory(orderWithInstallments);
-        setSavedOrders(loadSavedOrdersList());
-        clearCurrentDraft();
-
-        const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
-        const cleanOrder = createNewOrder(fiscalConfig, storeConfigs, nextNum);
-        setOrder({
-          ...cleanOrder,
-          items: ensureTrailingBlankItem(cleanOrder.items || [], fiscalConfig, storeConfigs)
+        const localDraft: PurchaseOrder = {
+          ...orderWithInstallments,
+          header: { ...orderWithInstallments.header, status: 'Em Cotação', isDraft: true }
+        };
+        saveCurrentOrder(localDraft);
+        setOrder(localDraft);
+        markLocalSavePending(targetOrderNumber);
+        triggerIOSAlert({
+          title: 'Fechamento não concluído',
+          message: `O pedido ${targetOrderNumber} foi mantido como rascunho somente neste dispositivo. Ele NÃO foi fechado nem salvo no banco de dados.`,
+          type: 'warning',
+          confirmText: 'Fechar',
+          actionText: 'Tentar fechar novamente',
+          onAction: () => { void executeCloseOrder(targetOrderNumber, validItems); }
         });
-
-        triggerIOSBanner(`Você está offline. Pedido ${targetOrderNumber} fechado localmente e será enviado ao reconectar.`, 'info');
         return;
       }
       triggerIOSAlert({
@@ -2054,113 +2120,30 @@ export function App() {
       confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
       showToast(`Pedido ${updated.header.numeroPedido} APROVADO! Enviado para distribuição do Depósito Central.`, 'success');
     } catch (err: any) {
-      saveOrderToHistory(updated);
-      setSavedOrders(loadSavedOrdersList());
-      setOrder(updated);
-      showToast(`Pedido ${updated.header.numeroPedido} aprovado localmente!`, 'info');
+      showPersistenceError(err, `Não foi possível aprovar o pedido ${updated.header.numeroPedido}`);
     }
   };
 
-  // Handler para Liberação da Distribuição para a Doca com Entrada Automática no Estoque Central
+  // Liberação transacional da distribuição para a doca. Estoque e status são confirmados pelo backend.
   const handleReleaseToSeparation = async (orderToRelease: PurchaseOrder) => {
-    // 1. Dar entrada automática no Estoque Central para itens com reserva no CD (qtdReservaEstoque > 0)
-    let totalPecasEstoqueEntrada = 0;
     try {
-      const currentStock = await fetchStockFromDb().catch(() => loadCentralStock());
-
-      for (const it of orderToRelease.items) {
-        const qtdEntrada = it.qtdReservaEstoque || 0;
-        if (qtdEntrada > 0 && it.descricao && it.descricao.trim().length > 0) {
-          totalPecasEstoqueEntrada += qtdEntrada;
-
-          // Verifica se o produto já existe no Estoque Central
-          const existingStock = currentStock.find(s => 
-            (s.codigo && it.codigo && s.codigo.trim().toLowerCase() === it.codigo.trim().toLowerCase()) ||
-            (s.codigoInterno && it.codigoInterno && s.codigoInterno.trim().toLowerCase() === it.codigoInterno.trim().toLowerCase()) ||
-            (s.descricao && it.descricao && s.descricao.trim().toLowerCase() === it.descricao.trim().toLowerCase()) ||
-            (s.productId && it.id && s.productId === it.id)
-          );
-
-          if (existingStock) {
-            // Incrementa o saldo no SQLite
-            try {
-              await updateStockBalanceInDb(existingStock.id, qtdEntrada);
-            } catch {
-              updateStockBalance(existingStock.id, qtdEntrada);
-            }
-          } else {
-            // Cria o novo item no Estoque Matriz
-            const pack = it.qtdPorPacote || it.qtdNoPacote || 1;
-            const newStockItem: CentralStockItem = {
-              id: 'stock_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-              productId: it.id,
-              codigoInterno: it.codigoInterno || it.codigo || '',
-              codigoFornecedor: it.codigoFornecedor || '',
-              codigoBarras: it.codigoBarras || '',
-              codigo: it.codigo || it.codigoInterno || '',
-              descricao: it.descricao.trim(),
-              categoria: 'Geral',
-              fotoUrl: it.fotoUrl || '',
-              qtdPorPacote: pack,
-              saldoUnidades: qtdEntrada,
-              saldoCaixas: Math.floor(qtdEntrada / pack),
-              precoUnitario: it.precoUnitario || 0,
-              pdvSugerido: it.pdvAlvo || 0,
-              localizacaoGalpao: `Entrada Pedido ${orderToRelease.header.numeroPedido}`,
-              fornecedorOrigem: orderToRelease.header.fornecedor || '',
-              dataUltimaEntrada: new Date().toISOString().split('T')[0],
-              updatedAt: new Date().toISOString()
-            };
-
-            try {
-              await saveStockItemToDb(newStockItem);
-            } catch {
-              const current = loadCentralStock();
-              saveCentralStock([newStockItem, ...current]);
-            }
-          }
-        }
-      }
-
-      // Atualiza o estado central de estoque imediatamente
-      const refreshedStock = await fetchStockFromDb().catch(() => loadCentralStock());
+      const res = await releaseOrderToSeparationApi(orderToRelease.header.id, {
+        observacoes: orderToRelease.header.observacaoDistribuicao || ''
+      });
+      const updated = res.order;
+      saveOrderToHistory(updated);
+      const [updatedOrders, refreshedStock] = await Promise.all([
+        fetchOrdersFromDb(),
+        fetchStockFromDb()
+      ]);
+      setSavedOrders(updatedOrders);
       setCentralStock(refreshedStock);
       saveCentralStock(refreshedStock);
-    } catch (stockErr) {
-      console.warn('Erro ao registrar entrada automática no estoque central:', stockErr);
-    }
-
-    // 2. Concluir distribuição definindo o status como 'Em Separação' e marcando distribuicaoConcluida = true
-    const updated: PurchaseOrder = {
-      ...orderToRelease,
-      header: {
-        ...orderToRelease.header,
-        status: 'Em Separação',
-        distribuicaoConcluida: true,
-        distribuidoPor: currentUser?.nome || 'Depósito Central',
-        dataDistribuicao: new Date().toISOString(),
-        liberadoPorDeposito: currentUser?.nome || 'Depósito Central',
-        dataLiberacaoSeparacao: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    };
-
-    try {
-      await saveOrderToDb(updated);
-      saveOrderToHistory(updated);
-      setSavedOrders(loadSavedOrdersList());
       setOrder(updated);
       confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
-      if (totalPecasEstoqueEntrada > 0) {
-        showToast(`Distribuição confirmada! Entrada de ${totalPecasEstoqueEntrada.toLocaleString('pt-BR')} un registrada no Estoque Matriz e romaneio liberado para Separação na Doca!`, 'success');
-      } else {
-        showToast(`Distribuição confirmada! Pedido ${updated.header.numeroPedido} liberado para separação na doca!`, 'success');
-      }
+      showToast(res.message || `Pedido ${updated.header.numeroPedido} liberado para separação na doca!`, 'success');
     } catch (err: any) {
-      saveOrderToHistory(updated);
-      setSavedOrders(loadSavedOrdersList());
-      setOrder(updated);
-      showToast(`Pedido ${updated.header.numeroPedido} liberado localmente!`, 'info');
+      showPersistenceError(err, `Não foi possível liberar o pedido ${orderToRelease.header.numeroPedido} para separação`);
     }
   };
 
@@ -2183,20 +2166,7 @@ export function App() {
       setOrder(updatedOrder);
       showToast(`Pedido ${updatedOrder.header.numeroPedido} enviado para a Distribuição das Lojas!`, 'success');
     } catch (err: any) {
-      const updatedOrder: PurchaseOrder = {
-        ...orderToSend,
-        header: {
-          ...orderToSend.header,
-          status: 'Em Distribuição' as any,
-          distribuicaoConcluida: false,
-          updatedAt: new Date().toISOString()
-        }
-      };
-      await saveOrderToDb(updatedOrder).catch(() => {});
-      saveOrderToHistory(updatedOrder);
-      setSavedOrders(loadSavedOrdersList());
-      setOrder(updatedOrder);
-      showToast(`Pedido ${updatedOrder.header.numeroPedido} enviado para Distribuição!`, 'success');
+      showPersistenceError(err, `Não foi possível enviar o pedido ${orderToSend.header.numeroPedido} para distribuição`);
     }
   };
 
@@ -2222,22 +2192,7 @@ export function App() {
       confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
       showToast(`Separação concluída! Pedido ${updatedOrder.header.numeroPedido} encaminhado para Faturamento.`, 'success');
     } catch (err: any) {
-      const updatedOrder: PurchaseOrder = {
-        ...orderToSend,
-        header: {
-          ...orderToSend.header,
-          status: 'Faturamento' as any,
-          separacaoConcluida: true,
-          separadoPor: currentUser?.nome || 'Separação',
-          dataSeparacao: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      };
-      await saveOrderToDb(updatedOrder).catch(() => {});
-      saveOrderToHistory(updatedOrder);
-      setSavedOrders(loadSavedOrdersList());
-      setOrder(updatedOrder);
-      showToast(`Pedido ${updatedOrder.header.numeroPedido} encaminhado para Faturamento!`, 'info');
+      showPersistenceError(err, `Não foi possível encaminhar o pedido ${orderToSend.header.numeroPedido} para faturamento`);
     }
   };
 
@@ -2339,26 +2294,26 @@ export function App() {
       }
     }
 
-    setSavedOrders(prev => {
-      const idx = prev.findIndex(o => o.header.id === updatedOrder.header.id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = updatedOrder;
-        return copy;
-      }
-      return [updatedOrder, ...prev];
-    });
-
-    if (order.header.id === updatedOrder.header.id) {
-      setOrder(updatedOrder);
-      saveCurrentOrder(updatedOrder);
-    }
-    saveOrderToHistory(updatedOrder);
-
     try {
-      await saveOrderToDb(updatedOrder);
-    } catch (err) {
-      console.warn('Erro ao salvar no SQLite:', err);
+      const result = await saveOrderToDb(updatedOrder);
+      const confirmedOrder = result.order || updatedOrder;
+      setSavedOrders(prev => {
+        const idx = prev.findIndex(o => o.header.id === confirmedOrder.header.id);
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = confirmedOrder;
+          return copy;
+        }
+        return [confirmedOrder, ...prev];
+      });
+      if (order.header.id === confirmedOrder.header.id) {
+        setOrder(confirmedOrder);
+        saveCurrentOrder(confirmedOrder);
+      }
+      saveOrderToHistory(confirmedOrder);
+    } catch (err: any) {
+      showPersistenceError(err, `Não foi possível salvar o pedido ${updatedOrder.header.numeroPedido}`);
+      throw err;
     }
   };
 
@@ -2370,47 +2325,22 @@ export function App() {
     reason?: string
   ) => {
     try {
-      const rescheduleRes = rescheduleOrderDelivery(targetOrder, {
-        newDeliveryDate: newDate,
-        adjustPendingInstallments: adjustBoletos,
-        reason,
-        userName: currentUser?.nome || currentUser?.email || 'Comprador'
+      const res = await rescheduleOrderDeliveryApi(targetOrder.header.id, {
+        novaDataEntregaPrevista: newDate,
+        ajustarBoletos: adjustBoletos,
+        motivo: reason
       });
-
-      const updatedOrder = rescheduleRes.updatedOrder;
-
-      // 1. Salva no histórico local de contingência
+      const updatedOrder = res.order;
       saveOrderToHistory(updatedOrder);
-
-      // 2. Se o pedido for o rascunho/pedido atualmente ativo em tela, atualiza o formulário
       if (order?.header?.id === updatedOrder.header.id) {
         setOrder(updatedOrder);
         saveCurrentOrder(updatedOrder);
       }
-
-      // 3. Atualiza a lista em memória de pedidos salvos
-      setSavedOrders(loadSavedOrdersList());
-
-      // 4. Sincroniza com a API do Backend
-      rescheduleOrderDeliveryApi(updatedOrder.header.id, {
-        novaDataEntregaPrevista: newDate,
-        ajustarBoletos: adjustBoletos,
-        motivo: reason
-      }).catch(err => {
-        console.warn('Aviso ao sincronizar reprogramação com o backend (mantido localmente):', err);
-      });
-
-      const daysText = rescheduleRes.diffDays !== 0
-        ? ` (${rescheduleRes.diffDays > 0 ? '+' : ''}${rescheduleRes.diffDays} dias)`
-        : '';
-      const boletosMsg = rescheduleRes.installmentsAdjustedCount > 0
-        ? ` ${rescheduleRes.installmentsAdjustedCount} boleto(s) em aberto atualizado(s)!`
-        : '';
-
-      showToast(`Previsão de entrega reprogramada para ${toBrDate(newDate)}${daysText}!${boletosMsg}`, 'success');
+      setSavedOrders(prev => prev.map(item => item.header.id === updatedOrder.header.id ? updatedOrder : item));
+      showToast(res.message || `Previsão de entrega reprogramada para ${toBrDate(newDate)}.`, 'success');
       setRescheduleModalOrder(null);
     } catch (err: any) {
-      showToast(err.message || 'Erro ao reprogramar a entrega do pedido.', 'error');
+      showPersistenceError(err, `Não foi possível reprogramar a entrega do pedido ${targetOrder.header.numeroPedido}`);
       throw err;
     }
   };
@@ -2426,56 +2356,26 @@ export function App() {
     const targetOrder = receiptModalOrder;
 
     try {
-      // 1. Persistir no backend SQLite
       const res = await confirmReceiptInDb(targetOrder.header.id, payload);
-
-      // 2. Atualizar cabeçalho localmente com campos de recebimento e liberação
-      const updatedHeader = {
-        ...targetOrder.header,
-        recebidoMatriz: true,
-        dataRecebimentoMatriz: payload.dataRecebimento,
-        recebidoPor: payload.recebidoPor,
-        numeroNotaFiscal: payload.numeroNotaFiscal || targetOrder.header.numeroNotaFiscal,
-        ...(payload.autorizarBoletos && currentUser?.role === 'diretoria' ? {
-          boletosLiberados: true,
-          boletosLiberadosPor: currentUser?.nome || 'Diretoria',
-          boletosLiberadosEm: new Date().toISOString()
-        } : {}),
-        updatedAt: new Date().toISOString()
-      };
-
-      const intermediateOrder: PurchaseOrder = {
-        ...targetOrder,
-        header: updatedHeader
-      };
-
-      // 3. Recalcular datas de vencimento com base na data de recebimento real na Matriz
-      const updatedOrderWithInstallments: PurchaseOrder = {
-        ...intermediateOrder,
-        installments: generateOrderInstallments(intermediateOrder, undefined, undefined, true)
-      };
-
-      // 4. Salvar versão com parcelas recalculadas
-      await saveOrderToDb(updatedOrderWithInstallments).catch(() => {});
-      saveOrderToHistory(updatedOrderWithInstallments);
-      const refreshedList = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
-      setSavedOrders(refreshedList);
+      const updatedOrder = res.order;
+      saveOrderToHistory(updatedOrder);
+      setSavedOrders(prev => prev.map(item => item.header.id === updatedOrder.header.id ? updatedOrder : item));
 
       if (order.header.id === targetOrder.header.id) {
-        setOrder(updatedOrderWithInstallments);
+        setOrder(updatedOrder);
       }
 
       setReceiptModalOrder(null);
       confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
       showToast(res?.message || `Recebimento do pedido ${targetOrder.header.numeroPedido} confirmado na Matriz!`, 'success');
     } catch (err: any) {
-      showToast(`Erro ao confirmar recebimento: ${err.message || 'Falha de comunicação'}`, 'error');
+      showPersistenceError(err, `Não foi possível confirmar o recebimento do pedido ${targetOrder.header.numeroPedido}`);
     }
   };
 
   // Handler para liberação de boletos pelo Faturamento / Diretoria
   const handleAuthorizeFinancial = async (targetOrder: PurchaseOrder) => {
-    if (currentUser?.role !== 'diretoria' && currentUser?.role !== 'faturamento') {
+    if (!canAuthorizeFinancialRelease(currentUser, targetOrder.header.status)) {
       showToast('Apenas o Faturamento ou a Diretoria podem autorizar a liberação de boletos.', 'error');
       return;
     }
@@ -2488,19 +2388,7 @@ export function App() {
     try {
       const res = await authorizeFinancialInDb(targetOrder.header.id);
 
-      const updated: PurchaseOrder = {
-        ...targetOrder,
-        header: {
-          ...targetOrder.header,
-          boletosLiberados: true,
-          boletosLiberadosPor: currentUser?.nome || 'Faturamento',
-          boletosLiberadosEm: new Date().toISOString(),
-          status: 'Finalizado',
-          finalizadoPor: currentUser?.nome || 'Faturamento',
-          dataFinalizacao: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      };
+      const updated: PurchaseOrder = res.order;
 
       saveOrderToHistory(updated);
       const refreshedList = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
@@ -2513,7 +2401,7 @@ export function App() {
       confetti({ particleCount: 50, spread: 50, origin: { y: 0.6 } });
       showToast(res?.message || `Boletos do pedido ${targetOrder.header.numeroPedido} liberados e pedido finalizado com sucesso!`, 'success');
     } catch (err: any) {
-      showToast(`Erro ao liberar boletos: ${err.message || 'Falha de comunicação'}`, 'error');
+      showPersistenceError(err, `Não foi possível liberar os boletos do pedido ${targetOrder.header.numeroPedido}`);
     }
   };
 
@@ -2525,10 +2413,8 @@ export function App() {
       setCentralStock(updatedList);
       saveCentralStock(updatedList);
       showToast('Saldo de estoque do depósito atualizado no SQLite!', 'success');
-    } catch {
-      const updated = updateStockBalance(stockId, deltaUnidades, newLocation);
-      setCentralStock([...updated]);
-      showToast('Saldo de estoque do depósito atualizado localmente!', 'info');
+    } catch (err: any) {
+      showPersistenceError(err, 'Não foi possível atualizar o saldo do estoque');
     }
   };
 
@@ -2539,42 +2425,8 @@ export function App() {
       setCentralStock(updatedList);
       saveCentralStock(updatedList);
       showToast(`Produto ${item.descricao} gravado no estoque do CD (SQLite)!`, 'success');
-    } catch {
-      const current = loadCentralStock();
-      const existingIdx = current.findIndex(s => s.id === item.id || (item.productId && s.productId === item.productId));
-      let updated: CentralStockItem[];
-      if (existingIdx >= 0) {
-        current[existingIdx] = { 
-          ...current[existingIdx], 
-          ...item, 
-          saldoUnidades: (current[existingIdx].saldoUnidades || 0) + (item.saldoUnidades || 0)
-        };
-        updated = current;
-      } else {
-        updated = [item, ...current];
-      }
-      saveCentralStock(updated);
-      setCentralStock([...updated]);
-      showToast(`Produto ${item.descricao} salvo localmente!`, 'info');
-    }
-  };
-
-  const handleDeleteStockItem = async (stockId: string) => {
-    // Atualização otimista imediata na UI e storage local
-    setCentralStock(prev => {
-      const updated = prev.filter(s => s.id !== stockId);
-      saveCentralStock(updated);
-      return updated;
-    });
-
-    try {
-      await deleteStockItemFromDb(stockId);
-      const updatedList = await fetchStockFromDb();
-      setCentralStock(updatedList);
-      saveCentralStock(updatedList);
-      showToast('Item excluído do estoque central!', 'success');
-    } catch {
-      showToast('Item excluído localmente.', 'info');
+    } catch (err: any) {
+      showPersistenceError(err, `Não foi possível salvar ${item.descricao} no estoque`);
     }
   };
 
@@ -2584,20 +2436,16 @@ export function App() {
       setCentralStock([]);
       saveCentralStock([]);
       showToast('Todo o estoque da matriz foi limpo com sucesso!', 'success');
-    } catch {
-      saveCentralStock([]);
-      setCentralStock([]);
-      showToast('Estoque limpo localmente.', 'info');
+    } catch (err: any) {
+      showPersistenceError(err, 'Não foi possível limpar o estoque da matriz');
     }
   };
 
   const handleGenerateStockSeparation = async (itemsToTransfer: StockTransferPayloadItem[]) => {
     try {
       const transfOrder = createStockTransferOrder(itemsToTransfer, storeConfigs, fiscalConfig);
-      await saveOrderToDb(transfOrder).catch(err => {
-        console.warn('Aviso ao salvar romaneio no SQLite:', err);
-      });
-      saveOrderToHistory(transfOrder);
+      const { order: persistedOrder } = await saveOrderToDb(transfOrder);
+      saveOrderToHistory(persistedOrder);
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
       // Garante que a cotação comercial permaneça limpa e nunca seja poluída com romaneio de transferência interna
@@ -2618,29 +2466,27 @@ export function App() {
       showToast(`Romaneio ${transfOrder.header.numeroPedido} despachado com sucesso para a Doca!`, 'success');
     } catch (err: any) {
       console.error('Erro ao gerar romaneio de transferência:', err);
-      showToast('Erro ao despachar romaneio: ' + (err.message || 'Falha inesperada'), 'error');
+      showPersistenceError(err, 'Não foi possível despachar o romaneio');
     }
   };
 
-  const handleFinalizeSeparation = async (finalizedOrder: PurchaseOrder) => {
+  const handleFinalizeSeparation = async (finalizedOrder: PurchaseOrder, alreadyPersisted = false) => {
     try {
-      // Se for transferência do estoque central, realiza a baixa do estoque do CD no SQLite
-      if (finalizedOrder.header.supplierId === 'cd_matriz') {
-        for (const it of finalizedOrder.items) {
-          const match = centralStock.find(s => s.codigo === it.codigo || s.descricao === it.descricao || (s.productId && s.productId === it.id));
-          if (match) {
-            await updateStockBalanceInDb(match.id, -(it.qtdTotalUnidades || 0)).catch(() => {});
-          }
-        }
-        const refreshedStock = await fetchStockFromDb().catch(() => null);
-        if (refreshedStock) setCentralStock(refreshedStock);
-      }
-
-      await saveOrderToDb(finalizedOrder);
-      saveOrderToHistory(finalizedOrder);
-      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      const response = alreadyPersisted
+        ? { order: finalizedOrder, message: `Separação do pedido ${finalizedOrder.header.numeroPedido} finalizada e enviada ao Faturamento.` }
+        : await sendOrderToFaturamentoApi(finalizedOrder.header.id, {
+            avarias: finalizedOrder.header.avariasApontadas,
+            observacoes: finalizedOrder.header.observacaoSeparacao,
+            expectedVersion: finalizedOrder.header.version
+          });
+      const persistedOrder: PurchaseOrder = response.order;
+      saveOrderToHistory(persistedOrder);
+      const updatedOrders = await fetchOrdersFromDb();
       setSavedOrders(updatedOrders);
-      setOrder(finalizedOrder);
+      setOrder(persistedOrder);
+      const refreshedStock = await fetchStockFromDb();
+      setCentralStock(refreshedStock);
+      saveCentralStock(refreshedStock);
       
       confetti({
         particleCount: 80,
@@ -2648,25 +2494,10 @@ export function App() {
         origin: { y: 0.7 }
       });
       
-      showToast(`Separação do pedido ${finalizedOrder.header.numeroPedido} FINALIZADA! Arquivado no SQLite.`, 'success');
+      showToast(response.message || `Separação do pedido ${finalizedOrder.header.numeroPedido} finalizada e enviada ao Faturamento.`, 'success');
       setActiveNav('separationHistory');
     } catch (err: any) {
-      if (finalizedOrder.header.supplierId === 'cd_matriz') {
-        finalizedOrder.items.forEach(it => {
-          const stock = loadCentralStock();
-          const match = stock.find(s => s.codigo === it.codigo || s.descricao === it.descricao);
-          if (match) {
-            updateStockBalance(match.id, -(it.qtdTotalUnidades || 0));
-          }
-        });
-        setCentralStock(loadCentralStock());
-      }
-
-      saveOrderToHistory(finalizedOrder);
-      setSavedOrders(loadSavedOrdersList());
-      setOrder(finalizedOrder);
-      showToast(`Finalizado localmente: ${err.message}`, 'info');
-      setActiveNav('separationHistory');
+      showPersistenceError(err, `Não foi possível finalizar a separação do pedido ${finalizedOrder.header.numeroPedido}`);
     }
   };
 
@@ -2688,12 +2519,7 @@ export function App() {
       }
       showToast(`Status do pedido ${ord.header.numeroPedido} alterado para "${newStatus}"!`, 'success');
     } catch (err: any) {
-      saveOrderToHistory(updated);
-      setSavedOrders(loadSavedOrdersList());
-      if (order.header.numeroPedido === ord.header.numeroPedido || (order.header.id && order.header.id === ord.header.id)) {
-        setOrder(updated);
-      }
-      showToast(`Status atualizado para "${newStatus}"!`);
+      showPersistenceError(err, `Não foi possível alterar o status do pedido ${ord.header.numeroPedido}`);
     }
   };
 
@@ -3363,6 +3189,9 @@ export function App() {
                   savedOrders={savedOrders}
                   draftOrder={hasActiveDraft ? order : null}
                   centralStock={centralStock}
+                  isLoading={isInitialLoading}
+                  localSaveNotice={localSaveNotice}
+                  onRetryLocalSave={() => { void handleSaveDraftOrder(); }}
                   onNavigate={(tab) => {
                     if (canAccessTab(currentUser, tab)) {
                       setActiveNav(tab);
@@ -3537,7 +3366,6 @@ export function App() {
                   onSaveNewStockItem={handleSaveNewStockItem}
                   onGenerateStockSeparation={handleGenerateStockSeparation}
                   onNavigateToSeparation={() => setActiveNav('separation')}
-                  onDeleteStockItem={handleDeleteStockItem}
                 />
               )}
 

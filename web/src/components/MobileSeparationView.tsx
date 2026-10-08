@@ -36,7 +36,7 @@ interface MobileSeparationViewProps {
   currentUser?: User | null;
   onSelectOrder?: (order: PurchaseOrder) => void;
   onUpdateOrder: (order: PurchaseOrder) => Promise<void> | void;
-  onFinalizeOrder?: (order: PurchaseOrder) => void;
+  onFinalizeOrder?: (order: PurchaseOrder, alreadyPersisted?: boolean) => void;
 }
 
 export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
@@ -397,7 +397,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
       });
 
       if (onFinalizeOrder) {
-        onFinalizeOrder(res.order || activeOrder);
+        onFinalizeOrder(res.order || activeOrder, true);
       } else {
         await onUpdateOrder(res.order || activeOrder);
       }
@@ -884,7 +884,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
           {globalStats.isFullyChecked ? (
             <>
               <CheckCircle2 className="w-5 h-5 text-white" />
-              <span>Salvar & Liberar para Faturamento (100% Conferido)</span>
+              <span>Concluir separação</span>
             </>
           ) : (
             <>
@@ -953,7 +953,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
                 className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Check className="w-4 h-4" />
-                <span>Confirmar</span>
+                <span>Concluir separação</span>
               </button>
             </div>
           </div>

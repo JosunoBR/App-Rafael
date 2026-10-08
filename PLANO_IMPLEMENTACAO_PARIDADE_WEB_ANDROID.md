@@ -997,3 +997,90 @@ Piloto e implantação
 Um separador deve conseguir conferir um pedido completo no Android, com dois dispositivos simultâneos, registrar avarias e liberar para faturamento sem perda ou sobrescrita de dados.
 
 Depois dessa garantia, a modernização visual pode avançar com segurança.
+
+---
+
+## Registro de implementação — consistência operacional e alertas
+
+Data da validação: 07/10/2026.
+
+### 1. Permissões e perfis
+
+- A Diretoria permanece com acesso irrestrito no backend e no frontend, inclusive quando existir uma negação granular cadastrada por engano.
+- Compras pode enviar para distribuição, liberar para separação, confirmar recebimento e encaminhar a separação concluída ao faturamento.
+- A liberação para separação aceita os estados `Aprovado` e `Em Distribuição`, preservando o fluxo direto usado pela operação e o fluxo detalhado da interface.
+- A liberação financeira continua restrita ao Faturamento e à Diretoria.
+- O frontend passou a avaliar o usuário completo, incluindo permissões individuais, em vez de considerar somente o nome do perfil.
+
+**Motivo:** impedir o cenário em que o usuário visualiza uma ação, mas o servidor recusa o salvamento por usar uma regra diferente.
+
+### 2. Operações atômicas da esteira
+
+- A entrada da reserva no estoque e a liberação para separação agora fazem parte da mesma transação SQLite.
+- A baixa de estoque de transferências internas e o envio ao faturamento também formam uma única transação.
+- Retentativas de uma etapa já concluída retornam conflito e não repetem a movimentação de estoque.
+- Transferências com saldo insuficiente são recusadas antes da mudança de status.
+- A finalização iniciada pela tela mobile web não envia mais a mesma requisição duas vezes.
+
+**Motivo:** eliminar efeitos dominó, como estoque alterado com pedido não salvo, baixa duplicada em duplo clique ou etapa avançada somente no navegador.
+
+### 3. Salvamento confirmado pelo servidor
+
+- Aprovação, distribuição, separação, faturamento, recebimento, reprogramação e operações de estoque só atualizam a interface depois da confirmação do backend.
+- Foram removidos os falsos sucessos do tipo "salvo localmente" em operações oficiais quando o banco recusou a gravação.
+- A interface permanece na etapa atual quando ocorre erro, permitindo correção e nova tentativa segura.
+
+**Motivo:** o usuário precisa saber com certeza se a operação entrou no banco, especialmente na doca e no estoque.
+
+### 4. Sistema de alertas
+
+- O web exibe alerta persistente e contextual para sessão expirada, falta de permissão, conflito de versão, falta de conexão e recusa de salvamento.
+- As mensagens deixam explícito quando nenhuma alteração foi salva.
+- O Android agora possui uma `Snackbar` global, visível em qualquer tela, inclusive no fluxo de separação.
+- O Android extrai a mensagem amigável retornada pelo backend em vez de mostrar JSON bruto ou apenas uma falha genérica.
+
+**Motivo:** recuperar o mecanismo de alerta operacional e reduzir dúvidas, repetições e correções manuais.
+
+### 5. Validação executada apó os ajustes
+
+| Verificação | Resultado |
+|---|---|
+| Lint web com Oxlint | Aprovado |
+| Build web com TypeScript e Vite | Aprovado |
+| Esteira oficial de 5 etapas | 15 de 15 testes aprovados |
+| Integridade financeira | 25 de 25 testes aprovados |
+| Governança de doca e ruptura | Aprovado |
+| Build Android `assembleDebug` | Aprovado |
+
+### Pendências técnicas não bloqueantes
+
+- O bundle principal do web ainda está acima de 500 kB e deve ser dividido por rotas em uma otimização futura.
+- O Android compila com avisos de opções Gradle obsoletas; isso não impede o APK atual, mas deve ser tratado antes de uma futura atualização maior do Android Gradle Plugin.
+- A suíte Android ainda não possui testes unitários Kotlin detectáveis; o build foi aprovado, mas a automação de testes de interface e ViewModel continua recomendada.
+
+### 6. Sincronização entre separadores
+
+- O perfil `separacao`/`conferente` recebe da API somente pedidos no status `Em Separação`.
+- O Android deixou de carregar catálogo, fornecedores, financeiro e configurações operacionais para esse perfil.
+- A fila e os checks são atualizados silenciosamente a cada 2,5 segundos enquanto a tela da doca estiver aberta.
+- Uma conferência confirmada aparece automaticamente para os demais separadores conectados.
+- Checks simultâneos são serializados no backend e preservam as alterações dos dois operadores, mesmo quando ambos partiram da mesma versão do pedido.
+- Um item conferido por outro operador permanece marcado e não pode ser desmarcado acidentalmente pelo segundo operador.
+- Conflitos residuais provocam recarga silenciosa, sem alerta de concorrência para o fluxo normal.
+- A ação final foi simplificada para `Concluir separação`.
+- Foi incluído o teste automatizado `validate_concurrent_separation.js` na validação unificada.
+
+**Motivo:** transformar a conferência em um estado compartilhado da doca, evitando mensagens que obrigam o operador a entender concorrência técnica ou recarregar a tela manualmente.
+
+### 7. Melhorias web priorizadas pela operação
+
+- A Home recebeu um resumo clicável de aprovações, recebimentos, separações e faturamentos pendentes; cada indicador filtra a fila existente.
+- Alertas de persistência passaram a oferecer ações como `Recarregar dados`, `Entrar novamente` e `Tentar enviar novamente`.
+- Rascunhos gravados sem conexão são identificados como `Salvo somente neste dispositivo`, com data, pedido e aviso de que não estão no banco.
+- Um pedido não pode mais ser considerado fechado apenas localmente: sem servidor, permanece como rascunho.
+- A Home e a fila de separação Android receberam skeletons para evitar telas vazias durante a carga inicial.
+- O Android preserva a identidade visual do web por meio da paleta compartilhada conceitualmente: verde esmeralda, tons slate, cartões arredondados, estados em âmbar/vermelho e hierarquia de botões equivalente.
+- Requisições mutáveis do web agora recebem `Idempotency-Key`; o backend persiste a primeira resposta e impede execução duplicada ou reutilização da chave com conteúdo diferente.
+- A idempotência possui teste automatizado dedicado em `scripts/validate_idempotency.js`.
+
+**Motivo:** tornar o estado operacional inequívoco para o usuário e proteger o banco contra duplo clique, timeout e reenvio da mesma operação.

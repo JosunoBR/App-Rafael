@@ -35,6 +35,9 @@ interface HomePageProps {
   onConfirmReceipt?: (order: PurchaseOrder) => void;
   onAuthorizeFinancial?: (order: PurchaseOrder) => void;
   onRescheduleOrder?: (order: PurchaseOrder) => void;
+  isLoading?: boolean;
+  localSaveNotice?: { orderNumber: string; savedAt: string } | null;
+  onRetryLocalSave?: () => void;
 }
 
 type TabFilter = 'todos' | 'Em Cotação' | 'Aprovado' | 'Em Separação' | 'Faturamento' | 'Finalizado';
@@ -52,9 +55,13 @@ export const HomePage: React.FC<HomePageProps> = ({
   onSwitchViewMode: _onSwitchViewMode,
   onConfirmReceipt,
   onAuthorizeFinancial,
-  onRescheduleOrder
+  onRescheduleOrder,
+  isLoading = false,
+  localSaveNotice,
+  onRetryLocalSave
 }) => {
   const [activeTab, setActiveTab] = useState<TabFilter>('todos');
+  const [operationalFilter, setOperationalFilter] = useState<'all' | 'approval' | 'receipt' | 'separation' | 'billing'>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   const canAccessOrders = canCreateOrEditOrders(currentUser);
@@ -154,6 +161,13 @@ export const HomePage: React.FC<HomePageProps> = ({
     };
   }, [savedOrders, currentUser?.role]);
 
+  const pendingSummary = useMemo(() => ({
+    approval: savedOrders.filter(order => ['Em Cotação', 'Rascunho'].includes(order.header.status || 'Em Cotação')).length,
+    receipt: savedOrders.filter(order => ['Em Distribuição', 'Em Separação', 'Faturamento'].includes(order.header.status) && !order.header.recebidoMatriz).length,
+    separation: savedOrders.filter(order => order.header.status === 'Em Separação').length,
+    billing: savedOrders.filter(order => order.header.status === 'Faturamento' && !order.header.boletosLiberados).length
+  }), [savedOrders]);
+
   // Filtragem da Fila de Pedidos
   const filteredOrders = useMemo(() => {
     let list = [...savedOrders];
@@ -181,6 +195,16 @@ export const HomePage: React.FC<HomePageProps> = ({
       }
     }
 
+    if (operationalFilter === 'approval') {
+      list = list.filter(order => ['Em Cotação', 'Rascunho'].includes(order.header.status || 'Em Cotação'));
+    } else if (operationalFilter === 'receipt') {
+      list = list.filter(order => ['Em Distribuição', 'Em Separação', 'Faturamento'].includes(order.header.status) && !order.header.recebidoMatriz);
+    } else if (operationalFilter === 'separation') {
+      list = list.filter(order => order.header.status === 'Em Separação');
+    } else if (operationalFilter === 'billing') {
+      list = list.filter(order => order.header.status === 'Faturamento' && !order.header.boletosLiberados);
+    }
+
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       list = list.filter(o => 
@@ -190,7 +214,21 @@ export const HomePage: React.FC<HomePageProps> = ({
     }
 
     return list;
-  }, [savedOrders, canAccessOrders, currentUser?.role, activeTab, searchTerm]);
+  }, [savedOrders, canAccessOrders, currentUser?.role, activeTab, operationalFilter, searchTerm]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6" aria-label="Carregando resumo operacional">
+        <div className="h-40 rounded-3xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map(item => (
+            <div key={item} className="h-28 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+        <div className="h-64 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+      </div>
+    );
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -311,6 +349,60 @@ export const HomePage: React.FC<HomePageProps> = ({
           onRescheduleOrder={onRescheduleOrder}
         />
       )}
+
+      {localSaveNotice && (
+        <div className="rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-black text-amber-900 dark:text-amber-200">Salvo somente neste dispositivo</p>
+            <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+              O rascunho {localSaveNotice.orderNumber} ainda não foi registrado no banco de dados. Cópia local de {new Date(localSaveNotice.savedAt).toLocaleString('pt-BR')}.
+            </p>
+          </div>
+          <button type="button" onClick={onRetryLocalSave} className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-black whitespace-nowrap">
+            Tentar enviar novamente
+          </button>
+        </div>
+      )}
+
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <h2 className="text-sm font-black text-slate-900 dark:text-white">Resumo de pendências</h2>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Selecione uma categoria para filtrar a fila abaixo.</p>
+          </div>
+          {operationalFilter !== 'all' && (
+            <button type="button" onClick={() => { setOperationalFilter('all'); setActiveTab('todos'); }} className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              Limpar filtro
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { key: 'approval', label: 'Aguardando aprovação', count: pendingSummary.approval, icon: FileEdit, color: 'amber' },
+            { key: 'receipt', label: 'Recebimento pendente', count: pendingSummary.receipt, icon: Truck, color: 'blue' },
+            { key: 'separation', label: 'Em separação', count: pendingSummary.separation, icon: PackageCheck, color: 'purple' },
+            { key: 'billing', label: 'Aguardando faturamento', count: pendingSummary.billing, icon: CreditCard, color: 'emerald' }
+          ].map(item => {
+            const Icon = item.icon;
+            const selected = operationalFilter === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => { setOperationalFilter(item.key as typeof operationalFilter); setActiveTab('todos'); }}
+                className={`text-left rounded-xl border p-3 transition ${selected ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-700 hover:border-emerald-400'} bg-slate-50 dark:bg-slate-800`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Icon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+                <div className="mt-2 text-xl font-black text-slate-900 dark:text-white font-mono">{item.count}</div>
+                <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{item.label}</div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {/* 2. Barra Executiva de KPIs (Pulse Indicators) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -476,7 +568,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             <div className="flex flex-wrap items-center gap-2 pt-1 overflow-x-auto pb-1">
               <button
                 type="button"
-                onClick={() => setActiveTab('todos')}
+                onClick={() => { setActiveTab('todos'); setOperationalFilter('all'); }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'todos'
                     ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
@@ -491,7 +583,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('Em Cotação')}
+                onClick={() => { setActiveTab('Em Cotação'); setOperationalFilter('all'); }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'Em Cotação'
                     ? 'bg-amber-500 text-white shadow-xs'
@@ -506,7 +598,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('Aprovado')}
+                onClick={() => { setActiveTab('Aprovado'); setOperationalFilter('all'); }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'Aprovado'
                     ? 'bg-blue-600 text-white shadow-xs'
@@ -521,7 +613,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('Em Separação')}
+                onClick={() => { setActiveTab('Em Separação'); setOperationalFilter('all'); }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'Em Separação'
                     ? 'bg-purple-600 text-white shadow-xs'
@@ -536,7 +628,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('Faturamento')}
+                onClick={() => { setActiveTab('Faturamento'); setOperationalFilter('all'); }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'Faturamento'
                     ? 'bg-amber-600 text-white shadow-xs'
@@ -551,7 +643,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('Finalizado')}
+                onClick={() => { setActiveTab('Finalizado'); setOperationalFilter('all'); }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'Finalizado'
                     ? 'bg-emerald-600 text-white shadow-xs'

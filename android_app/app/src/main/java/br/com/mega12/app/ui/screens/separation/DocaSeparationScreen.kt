@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +34,7 @@ import br.com.mega12.app.domain.SeparationEngine
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -44,18 +46,30 @@ fun DocaSeparationScreen(
 ) {
     val orders by viewModel.orders.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     val view = LocalView.current
 
-    // Filtra pedidos elegíveis para separação física ou todos os pedidos recentes
-    val separationOrders = remember(orders) {
-        val eligible = orders.filter { 
-            it.status == "Em Separação" || it.status == "Em Distribuição" || it.status == "Aprovado" 
+    LaunchedEffect(Unit) {
+        while (true) {
+            viewModel.refreshSeparationOrdersSilently()
+            delay(2_500)
         }
-        if (eligible.isNotEmpty()) eligible else orders
     }
 
-    var selectedOrderId by remember(separationOrders) {
-        mutableStateOf(separationOrders.firstOrNull()?.finalId ?: "")
+    // O perfil operacional visualiza exclusivamente pedidos liberados para separação.
+    val separationOrders = remember(orders) {
+        orders.filter { it.status == "Em Separação" }
+    }
+
+    var selectedOrderId by rememberSaveable {
+        mutableStateOf("")
+    }
+
+    LaunchedEffect(separationOrders) {
+        val selectionStillExists = separationOrders.any { it.finalId == selectedOrderId || it.id == selectedOrderId }
+        if (!selectionStillExists) {
+            selectedOrderId = separationOrders.firstOrNull()?.let { it.finalId.ifBlank { it.id } } ?: ""
+        }
     }
 
     val activeOrder = remember(orders, selectedOrderId) {
@@ -375,7 +389,20 @@ fun DocaSeparationScreen(
             },
             containerColor = Slate900
         ) { padding ->
-            if (activeOrder == null) {
+            if (isLoading && orders.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    repeat(4) { index ->
+                        Surface(
+                            color = if (index == 0) Slate700 else Slate800,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth().height(if (index == 0) 94.dp else 118.dp)
+                        ) {}
+                    }
+                }
+            } else if (activeOrder == null) {
                 Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     Text("Nenhum pedido aguardando conferência na doca.", color = Slate400)
                 }
@@ -699,9 +726,12 @@ fun DocaSeparationScreen(
                                             conferido = !isChecked
                                         )
                                     },
+                                    enabled = !isChecked || checkRecord?.conferenteId == currentUser?.id,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (isChecked) Emerald600 else Slate700,
-                                        contentColor = Color.White
+                                        contentColor = Color.White,
+                                        disabledContainerColor = Emerald600,
+                                        disabledContentColor = Color.White
                                     ),
                                     shape = RoundedCornerShape(10.dp),
                                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
@@ -783,7 +813,7 @@ fun DocaSeparationScreen(
                                         Icon(Icons.Default.Send, contentDescription = null, tint = Slate900, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Encaminhar para Faturamento",
+                                            text = "Concluir separação",
                                             fontWeight = FontWeight.Bold,
                                             color = Slate900,
                                             fontSize = 13.sp

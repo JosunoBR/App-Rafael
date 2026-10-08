@@ -63,11 +63,23 @@ async function main() {
     path.join(ROOT_DIR, 'backend')
   );
 
+  results['Testes Backend (Concorrência da Separação)'] = runStep(
+    '6. Testes Backend - Conferência simultânea da Separação',
+    'node scripts/validate_concurrent_separation.js',
+    ROOT_DIR
+  );
+
+  results['Testes Backend (Idempotência)'] = runStep(
+    '7. Testes Backend - Idempotência de operações críticas',
+    'node scripts/validate_idempotency.js',
+    ROOT_DIR
+  );
+
   // 4. Build Android
   const isWindows = process.platform === 'win32';
   const gradlewCmd = isWindows ? '.\\gradlew.bat assembleDebug' : './gradlew assembleDebug';
   results['Build Android (assembleDebug)'] = runStep(
-    '6. Build Android (assembleDebug)',
+    '8. Build Android (assembleDebug)',
     gradlewCmd,
     path.join(ROOT_DIR, 'android_app')
   );

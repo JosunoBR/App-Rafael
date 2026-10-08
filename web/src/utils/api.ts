@@ -100,11 +100,44 @@ function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<strin
   return headers;
 }
 
+const mutationRequestsInFlight = new Map<string, Promise<Response>>();
+const recentMutationKeys = new Map<string, { key: string; expiresAt: number }>();
+
+function simpleHash(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function getMutationKey(signature: string): string {
+  const now = Date.now();
+  const recent = recentMutationKeys.get(signature);
+  if (recent && recent.expiresAt > now) return recent.key;
+
+  const key = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `op_${now}_${Math.random().toString(36).slice(2)}`;
+  recentMutationKeys.set(signature, { key, expiresAt: now + 60_000 });
+  return key;
+}
+
 async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   const headers = getAuthHeaders(options.headers as Record<string, string> || {});
+  const method = String(options.method || 'GET').toUpperCase();
+  const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  const mutationSignature = isMutation ? `${method}:${url}:${simpleHash(String(options.body || ''))}` : '';
+
+  if (isMutation) {
+    headers['Idempotency-Key'] = headers['Idempotency-Key'] || getMutationKey(mutationSignature);
+    const pending = mutationRequestsInFlight.get(mutationSignature);
+    if (pending) return (await pending).clone();
+  }
   
-  try {
+  const performRequest = async (): Promise<Response> => {
     const res = await fetch(url, { ...options, headers });
     if (!res.ok) {
       let errorMessage = `Erro HTTP ${res.status}`;
@@ -130,6 +163,14 @@ async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Re
       });
     }
     return res;
+  };
+
+  const requestPromise = performRequest();
+  if (isMutation) mutationRequestsInFlight.set(mutationSignature, requestPromise);
+
+  try {
+    const response = await requestPromise;
+    return isMutation ? response.clone() : response;
   } catch (err: any) {
     if (err instanceof ApiError) {
       throw err;
@@ -139,6 +180,8 @@ async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Re
       0,
       true
     );
+  } finally {
+    if (isMutation) mutationRequestsInFlight.delete(mutationSignature);
   }
 }
 

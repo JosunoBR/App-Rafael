@@ -13,7 +13,6 @@ import {
   Sparkles, 
   Eye, 
   Edit3, 
-  Trash2, 
   CheckCircle2, 
   AlertCircle, 
   MapPin, 
@@ -42,7 +41,6 @@ interface CentralStockPageProps {
   onSaveNewStockItem: (item: CentralStockItem) => void;
   onGenerateStockSeparation: (itemsToTransfer: StockTransferPayloadItem[]) => void;
   onNavigateToSeparation: () => void;
-  onDeleteStockItem?: (stockId: string) => void;
 }
 
 export const CentralStockPage: React.FC<CentralStockPageProps> = ({
@@ -55,8 +53,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   onUpdateStockBalance,
   onSaveNewStockItem,
   onGenerateStockSeparation,
-  onNavigateToSeparation,
-  onDeleteStockItem
+  onNavigateToSeparation
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -648,24 +645,9 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                         R$ {valorTotalItem.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
 
-                      {/* Ações com coluna Sticky e botão de exclusão em destaque */}
+                      {/* Ações com coluna Sticky */}
                       <td className="py-3 px-3 text-center whitespace-nowrap sticky right-0 bg-white dark:bg-slate-900 shadow-sm border-l border-slate-200/80 dark:border-slate-800 z-10">
                         <div className="flex items-center justify-center gap-1.5">
-                          {onDeleteStockItem && (
-                            <button
-                              onClick={() => {
-                                const nome = item.descricao || item.codigo || item.codigoInterno || 'este item';
-                                if (window.confirm(`⚠️ Deseja realmente excluir o item "${nome}" do estoque da matriz?`)) {
-                                  onDeleteStockItem(item.id);
-                                }
-                              }}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 shadow-sm transition flex items-center gap-1 cursor-pointer"
-                              title="Excluir este item do estoque"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                              <span>Excluir</span>
-                            </button>
-                          )}
 
                           <button
                             onClick={() => {
@@ -1224,40 +1206,21 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
               />
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-              {onDeleteStockItem && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nome = editingStockItem.descricao || editingStockItem.codigo || 'este item';
-                    if (window.confirm(`⚠️ Deseja realmente excluir permanentemente "${nome}" do estoque?`)) {
-                      onDeleteStockItem(editingStockItem.id);
-                      setEditingStockItem(null);
-                    }
-                  }}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Excluir do Estoque</span>
-                </button>
-              )}
-
-              <div className="flex items-center gap-2 ml-auto">
-                <button
-                  type="button"
-                  onClick={() => setEditingStockItem(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveStockAdjustment}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition cursor-pointer"
-                >
-                  Salvar Ajuste
-                </button>
-              </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingStockItem(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveStockAdjustment}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition cursor-pointer"
+              >
+                Salvar Ajuste
+              </button>
             </div>
           </div>
         </div>

@@ -5,10 +5,24 @@ import br.com.mega12.app.data.local.PreferencesManager
 import br.com.mega12.app.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import retrofit2.Response
 
 class Mega12Repository(private val preferencesManager: PreferencesManager) {
 
     private val api get() = ApiClient.getService()
+
+    private fun apiErrorMessage(response: Response<*>, fallback: String): String {
+        val rawBody = runCatching { response.errorBody()?.string() }.getOrNull()
+        val serverMessage = rawBody?.let { body ->
+            runCatching {
+                val json = JSONObject(body)
+                json.optString("error").ifBlank { json.optString("message") }
+            }.getOrNull()
+        }
+        return serverMessage?.takeIf { it.isNotBlank() }
+            ?: "$fallback (código ${response.code()}). Nenhuma alteração foi salva."
+    }
 
     suspend fun checkHealth(): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -157,7 +171,7 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             if (response.isSuccessful) {
                 Result.success(true)
             } else {
-                Result.failure(Exception("Erro ao salvar pedido no servidor"))
+                Result.failure(Exception(apiErrorMessage(response, "O servidor recusou o salvamento do pedido")))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -310,8 +324,7 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             } else if (response.code() == 403) {
                 Result.failure(Exception("Apenas quem conferiu ou a Diretoria pode desmarcar este item."))
             } else {
-                val errBody = response.errorBody()?.string()
-                Result.failure(Exception(errBody ?: "Erro ao atualizar conferência (${response.code()})"))
+                Result.failure(Exception(apiErrorMessage(response, "O servidor recusou a atualização da conferência")))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -326,8 +339,7 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             } else if (response.code() == 409) {
                 Result.failure(ConcurrencyConflictException("Conflito de versão: o pedido foi alterado por outro operador."))
             } else {
-                val errBody = response.errorBody()?.string()
-                Result.failure(Exception(errBody ?: "Erro ao registrar avaria (${response.code()})"))
+                Result.failure(Exception(apiErrorMessage(response, "O servidor recusou o registro da avaria")))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -342,8 +354,7 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             } else if (response.code() == 409) {
                 Result.failure(ConcurrencyConflictException("Conflito de versão: o pedido foi alterado por outro operador."))
             } else {
-                val errBody = response.errorBody()?.string()
-                Result.failure(Exception(errBody ?: "Erro ao remover avaria (${response.code()})"))
+                Result.failure(Exception(apiErrorMessage(response, "O servidor recusou a exclusão da avaria")))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -358,8 +369,7 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             } else if (response.code() == 409) {
                 Result.failure(ConcurrencyConflictException("Conflito de versão: o pedido foi alterado por outro operador."))
             } else {
-                val errBody = response.errorBody()?.string()
-                Result.failure(Exception(errBody ?: "Erro ao encaminhar para faturamento (${response.code()})"))
+                Result.failure(Exception(apiErrorMessage(response, "O servidor recusou o envio para faturamento")))
             }
         } catch (e: Exception) {
             Result.failure(e)

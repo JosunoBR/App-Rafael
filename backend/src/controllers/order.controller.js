@@ -3,7 +3,7 @@ const orderService = require('../services/order.service');
 class OrderController {
   async list(req, res, next) {
     try {
-      const orders = await orderService.listOrders();
+      const orders = await orderService.listOrders(req.user);
       return res.json(orders);
     } catch (err) {
       next(err);
@@ -12,7 +12,7 @@ class OrderController {
 
   async getById(req, res, next) {
     try {
-      const order = await orderService.getOrder(req.params.id);
+      const order = await orderService.getOrder(req.params.id, req.user);
       return res.json(order);
     } catch (err) {
       next(err);

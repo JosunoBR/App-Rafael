@@ -1,6 +1,10 @@
 const { queryAll, queryOne, execute } = require('../config/database');
 
 class OrderRepository {
+  constructor() {
+    this.separationCheckQueue = Promise.resolve();
+  }
+
   async findAll() {
     const rows = await queryAll("SELECT * FROM purchase_orders ORDER BY createdAt DESC");
     if (!rows || rows.length === 0) return [];
@@ -1027,6 +1031,13 @@ class OrderRepository {
   }
 
   async updateSeparationCheck(orderId, storeId, itemId, { conferido }, currentUser, expectedVersion) {
+    const mutation = () => this._updateSeparationCheck(orderId, storeId, itemId, { conferido }, currentUser, expectedVersion);
+    const result = this.separationCheckQueue.then(mutation, mutation);
+    this.separationCheckQueue = result.catch(() => undefined);
+    return result;
+  }
+
+  async _updateSeparationCheck(orderId, storeId, itemId, { conferido }, currentUser, expectedVersion) {
     const row = await queryOne("SELECT version, inspectionJson FROM purchase_orders WHERE id = ?", [orderId]);
     if (!row) {
       const err = new Error('Pedido não encontrado.');
@@ -1035,13 +1046,9 @@ class OrderRepository {
     }
 
     const currentVersion = row.version !== undefined && row.version !== null ? Number(row.version) : 1;
-    if (expectedVersion !== undefined && expectedVersion !== null && currentVersion !== Number(expectedVersion)) {
-      const err = new Error(`Conflito de versão (409): O pedido foi modificado por outro operador no servidor (versão atual: ${currentVersion}, esperada: ${expectedVersion}). Atualize os dados antes de prosseguir.`);
-      err.statusCode = 409;
-      err.code = 'CONCURRENCY_CONFLICT';
-      err.currentVersion = currentVersion;
-      throw err;
-    }
+    // Checks são serializados por item no servidor. Uma versão antiga não deve
+    // interromper a doca: sempre partimos do estado mais recente e preservamos os
+    // checks realizados pelos demais separadores.
 
     let inspection = {};
     try {

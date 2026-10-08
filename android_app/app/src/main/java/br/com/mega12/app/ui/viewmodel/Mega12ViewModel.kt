@@ -124,6 +124,15 @@ class Mega12ViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
 
+            val role = _currentUser.value?.role?.lowercase()
+            if (role == "separacao" || role == "conferente") {
+                repository.getOrders().onSuccess { orders ->
+                    _orders.value = orders.filter { it.status == "Em Separação" }
+                }
+                _isLoading.value = false
+                return@launch
+            }
+
             // Carregar Configurações Fiscais
             val fiscalRes = repository.getFiscalConfig()
             fiscalRes.onSuccess { _fiscalConfig.value = it }
@@ -153,6 +162,14 @@ class Mega12ViewModel : ViewModel() {
             }
 
             _isLoading.value = false
+        }
+    }
+
+    fun refreshSeparationOrdersSilently() {
+        viewModelScope.launch {
+            repository.getOrders().onSuccess { orders ->
+                _orders.value = orders.filter { it.status == "Em Separação" }
+            }
         }
     }
 
@@ -252,8 +269,7 @@ class Mega12ViewModel : ViewModel() {
                 }
 
                 if (err is ConcurrencyConflictException) {
-                    _errorMessage.value = "Conflito de concorrência: o pedido foi alterado por outro operador na doca. Recarregando dados..."
-                    refreshData()
+                    refreshSeparationOrdersSilently()
                 } else {
                     _errorMessage.value = err.message ?: "Erro ao atualizar conferência"
                 }
@@ -304,8 +320,7 @@ class Mega12ViewModel : ViewModel() {
                 onSuccess?.invoke()
             }.onFailure { err ->
                 if (err is ConcurrencyConflictException) {
-                    _errorMessage.value = "Conflito de versão: o pedido foi alterado na doca. Recarregando..."
-                    refreshData()
+                    refreshSeparationOrdersSilently()
                 } else {
                     _errorMessage.value = err.message ?: "Erro ao registrar avaria"
                 }
@@ -337,8 +352,7 @@ class Mega12ViewModel : ViewModel() {
                 onSuccess?.invoke()
             }.onFailure { err ->
                 if (err is ConcurrencyConflictException) {
-                    _errorMessage.value = "Conflito de versão. Recarregando..."
-                    refreshData()
+                    refreshSeparationOrdersSilently()
                 } else {
                     _errorMessage.value = err.message ?: "Erro ao excluir avaria"
                 }
@@ -361,8 +375,7 @@ class Mega12ViewModel : ViewModel() {
                 onSuccess?.invoke()
             }.onFailure { err ->
                 if (err is ConcurrencyConflictException) {
-                    _errorMessage.value = "Conflito de versão: o pedido foi alterado. Recarregando..."
-                    refreshData()
+                    refreshSeparationOrdersSilently()
                 } else {
                     _errorMessage.value = err.message ?: "Erro ao encaminhar para faturamento"
                 }

@@ -278,6 +278,17 @@ async function getDatabase() {
       createdAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS idempotency_records (
+      idempotencyKey TEXT PRIMARY KEY,
+      requestFingerprint TEXT NOT NULL,
+      responseStatus INTEGER NOT NULL,
+      responseJson TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_idempotency_created
+      ON idempotency_records(createdAt);
+
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
       codigo TEXT NOT NULL UNIQUE,

@@ -1,17 +1,30 @@
 const orderRepository = require('../repositories/orderRepository');
 const fiscalRepository = require('../repositories/fiscalRepository');
 const distributionAuditRepo = require('../repositories/distributionAuditRepository');
+const stockRepository = require('../repositories/stockRepository');
+const { getDatabase, scheduleDatabaseSave } = require('../config/database');
 
 class OrderService {
-  async listOrders() {
-    return await orderRepository.findAll();
+  async listOrders(currentUser) {
+    const orders = await orderRepository.findAll();
+    const role = String(currentUser?.role || '').toLowerCase();
+    if (role === 'separacao' || role === 'conferente') {
+      return orders.filter(order => order.header?.status === 'Em Separação');
+    }
+    return orders;
   }
 
-  async getOrder(id) {
+  async getOrder(id, currentUser) {
     const order = await orderRepository.findById(id);
     if (!order) {
       const err = new Error('Pedido não encontrado.');
       err.statusCode = 404;
+      throw err;
+    }
+    const role = String(currentUser?.role || '').toLowerCase();
+    if ((role === 'separacao' || role === 'conferente') && order.header?.status !== 'Em Separação') {
+      const err = new Error('Pedido não disponível para separação.');
+      err.statusCode = 403;
       throw err;
     }
     return order;
@@ -82,8 +95,42 @@ class OrderService {
     // Validação de Permissão: Pedidos fechados / em esteira
     let isEditingClosed = false;
     const currentId = orderData.header.id;
+    const existingForAuthorization = currentId ? await orderRepository.findById(currentId) : null;
+    const role = currentUser?.role;
+    const isUnrestricted = currentUser && (
+      role === 'diretoria' || role === 'root' || currentUser.id === 'usr_root' ||
+      currentUser.email?.toLowerCase() === 'root' || currentUser.nome?.toLowerCase() === 'root'
+    );
+    const hasOperationPermission = (code, defaultRoles) => {
+      if (isUnrestricted) return true;
+      if (!currentUser) return false;
+      if (currentUser.permissions?.[code] === false) return false;
+      if (currentUser.permissions?.[code] === true) return true;
+      return defaultRoles.includes(role);
+    };
+
+    const existingStatusForAuthorization = existingForAuthorization?.header?.status || null;
+    const isExistingClosed = Boolean(
+      existingForAuthorization &&
+      existingStatusForAuthorization !== 'Em Cotação' &&
+      existingStatusForAuthorization !== 'Rascunho'
+    );
+    const permissionCode = isExistingClosed
+      ? 'orders:edit_closed'
+      : existingForAuthorization
+        ? 'orders:edit_draft'
+        : 'orders:create';
+    const defaultRoles = isExistingClosed ? ['comprador', 'faturamento'] : ['comprador'];
+
+    if (!hasOperationPermission(permissionCode, defaultRoles)) {
+      const err = new Error(`Seu perfil (${role || 'não identificado'}) não possui a permissão "${permissionCode}" para salvar este pedido.`);
+      err.statusCode = 403;
+      err.code = 'ORDER_SAVE_FORBIDDEN';
+      throw err;
+    }
+
     if (currentId) {
-      const existing = await orderRepository.findById(currentId);
+      const existing = existingForAuthorization;
       if (existing && existing.header) {
         const existingStatus = existing.header.status || 'Em Cotação';
         const isClosed = existingStatus !== 'Em Cotação' && existingStatus !== 'Rascunho';
@@ -620,6 +667,14 @@ class OrderService {
     order.header.numeroNotaFiscal = numeroNotaFiscal || order.header.numeroNotaFiscal || '';
     order.header.updatedAt = new Date().toISOString();
 
+    const receiptRole = String(currentUser.role || '').toLowerCase();
+    const canAuthorizeWithReceipt = ['diretoria', 'root', 'admin'].includes(receiptRole);
+    if (autorizarBoletos === true && canAuthorizeWithReceipt) {
+      order.header.boletosLiberados = true;
+      order.header.boletosLiberadosPor = currentUser.nome || 'Diretoria';
+      order.header.boletosLiberadosEm = new Date().toISOString();
+    }
+
     // Recalcular as datas de vencimento das parcelas a partir da data de recebimento na Matriz
     const dataRecebimentoEfetiva = order.header.dataRecebimentoMatriz;
     if (dataRecebimentoEfetiva && Array.isArray(order.installments) && order.installments.length > 0) {
@@ -669,7 +724,7 @@ class OrderService {
 
     return {
       success: true,
-      message: `Recebimento do pedido ${saved.header.numeroPedido} confirmado na Matriz!${autorizarBoletos && currentUser.role === 'diretoria' ? ' Boletos liberados para o Financeiro.' : ''}`,
+      message: `Recebimento do pedido ${saved.header.numeroPedido} confirmado na Matriz!${autorizarBoletos && canAuthorizeWithReceipt ? ' Boletos liberados para o Financeiro.' : ''}`,
       order: saved
     };
   }
@@ -733,13 +788,22 @@ class OrderService {
       throw err;
     }
 
+    const validReleaseStatuses = ['Aprovado', 'Em Distribuição'];
+    if (!validReleaseStatuses.includes(order.header.status) || order.header.distribuicaoConcluida) {
+      const err = new Error(`O pedido não pode ser liberado para separação no status "${order.header.status}". Atualize a lista antes de tentar novamente.`);
+      err.statusCode = 409;
+      err.code = 'INVALID_PIPELINE_STATE';
+      throw err;
+    }
+
     // Calcular estatísticas de lojas afetadas e peças totais
     let totalPecas = 0;
     const lojasSet = new Set();
     if (Array.isArray(order.items)) {
       order.items.forEach(item => {
-        if (item.gradeDistribucao && typeof item.gradeDistribucao === 'object') {
-          Object.entries(item.gradeDistribucao).forEach(([loja, q]) => {
+        const grade = item.grade || item.separacaoLojas || item.gradeDistribucao || {};
+        if (grade && typeof grade === 'object') {
+          Object.entries(grade).forEach(([loja, q]) => {
             const qtd = Number(q) || 0;
             if (qtd > 0) {
               lojasSet.add(loja);
@@ -750,16 +814,68 @@ class OrderService {
       });
     }
 
-    order.header.status = 'Em Separação';
-    order.header.distribuicaoConcluida = true;
-    order.header.distribuidoPor = currentUser.nome || 'Depósito';
-    order.header.dataDistribuicao = new Date().toISOString();
-    order.header.updatedAt = new Date().toISOString();
-    if (payload.observacoes) {
-      order.header.observacaoDistribuicao = payload.observacoes;
-    }
+    const db = await getDatabase();
+    let saved;
+    let totalPecasEstoqueEntrada = 0;
+    db.run('BEGIN TRANSACTION');
+    try {
+      const currentStock = await stockRepository.findAll();
+      for (const item of order.items || []) {
+        const qtdEntrada = Number(item.qtdReservaEstoque || 0);
+        if (qtdEntrada <= 0 || !String(item.descricao || '').trim()) continue;
 
-    const saved = await orderRepository.save(order);
+        const normalizedCode = String(item.codigo || item.codigoInterno || '').trim().toLowerCase();
+        const normalizedDescription = String(item.descricao || '').trim().toLowerCase();
+        const existingStock = currentStock.find(stock =>
+          (item.id && stock.productId === item.id) ||
+          (normalizedCode && [stock.codigo, stock.codigoInterno].some(value => String(value || '').trim().toLowerCase() === normalizedCode)) ||
+          String(stock.descricao || '').trim().toLowerCase() === normalizedDescription
+        );
+
+        if (existingStock) {
+          await stockRepository.updateBalance(existingStock.id, qtdEntrada);
+          existingStock.saldoUnidades = Number(existingStock.saldoUnidades || 0) + qtdEntrada;
+        } else {
+          const now = new Date().toISOString();
+          const newStockItem = {
+            id: `stock_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            productId: item.id || null,
+            codigoInterno: item.codigoInterno || item.codigo || '',
+            codigoFornecedor: item.codigoFornecedor || '',
+            codigoBarras: item.codigoBarras || item.eanBarcode || '',
+            codigo: item.codigo || item.codigoInterno || '',
+            descricao: String(item.descricao).trim(),
+            categoria: 'Geral',
+            fotoUrl: item.fotoUrl || '',
+            saldoUnidades: qtdEntrada,
+            precoUnitario: Number(item.precoUnitario || 0),
+            pdvSugerido: Number(item.pdvAlvo || 0),
+            localizacaoGalpao: `Entrada Pedido ${order.header.numeroPedido}`,
+            fornecedorOrigem: order.header.fornecedor || '',
+            dataUltimaEntrada: now.slice(0, 10),
+            createdAt: now,
+            updatedAt: now
+          };
+          await stockRepository.save(newStockItem);
+          currentStock.push(newStockItem);
+        }
+        totalPecasEstoqueEntrada += qtdEntrada;
+      }
+
+      order.header.status = 'Em Separação';
+      order.header.distribuicaoConcluida = true;
+      order.header.distribuidoPor = currentUser.nome || 'Depósito';
+      order.header.dataDistribuicao = new Date().toISOString();
+      order.header.updatedAt = new Date().toISOString();
+      if (payload.observacoes) order.header.observacaoDistribuicao = payload.observacoes;
+
+      saved = await orderRepository.save(order);
+      db.run('COMMIT');
+      scheduleDatabaseSave(0);
+    } catch (error) {
+      try { db.run('ROLLBACK'); } catch (_) { /* transação já encerrada */ }
+      throw error;
+    }
 
     await distributionAuditRepo.create({
       orderId: saved.header.id,
@@ -776,8 +892,9 @@ class OrderService {
 
     return {
       success: true,
-      message: `Distribuição concluída! Pedido ${saved.header.numeroPedido} liberado para a equipe de Separação.`,
-      order: saved
+      message: `Distribuição concluída! Pedido ${saved.header.numeroPedido} liberado para a equipe de Separação.${totalPecasEstoqueEntrada > 0 ? ` Entrada de ${totalPecasEstoqueEntrada} unidade(s) registrada no estoque.` : ''}`,
+      order: saved,
+      totalPecasEstoqueEntrada
     };
   }
 
@@ -795,6 +912,12 @@ class OrderService {
     if (!state) {
       const err = new Error('Pedido não encontrado.');
       err.statusCode = 404;
+      throw err;
+    }
+    const role = String(currentUser?.role || '').toLowerCase();
+    if ((role === 'separacao' || role === 'conferente') && state.status !== 'Em Separação') {
+      const err = new Error('Pedido não disponível para separação.');
+      err.statusCode = 403;
       throw err;
     }
     return state;
@@ -845,7 +968,7 @@ class OrderService {
     }
 
     const role = currentUser.role?.toLowerCase();
-    const isAuthorized = role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
+    const isAuthorized = role === 'comprador' || role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
     if (!isAuthorized) {
       const err = new Error('Perfil não autorizado a registrar avarias.');
       err.statusCode = 403;
@@ -884,7 +1007,7 @@ class OrderService {
     }
 
     const role = currentUser.role?.toLowerCase();
-    const isAuthorized = role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
+    const isAuthorized = role === 'comprador' || role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
     if (!isAuthorized) {
       const err = new Error('Perfil não autorizado a excluir avarias.');
       err.statusCode = 403;
@@ -901,7 +1024,7 @@ class OrderService {
 
   /**
    * Conclui a conferência física/apontamento de avarias e encaminha o pedido para o Faturamento.
-   * Permitido: separacao, deposito, diretoria, root, admin
+   * Permitido: comprador, separacao, deposito, diretoria, root, admin
    */
   async sendToFaturamento(orderId, payload = {}, currentUser) {
     if (!currentUser) {
@@ -911,7 +1034,7 @@ class OrderService {
     }
 
     const role = currentUser.role?.toLowerCase();
-    const isAuthorized = role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
+    const isAuthorized = role === 'comprador' || role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
     if (!isAuthorized) {
       const err = new Error('Perfil não autorizado a encaminhar pedidos para faturamento.');
       err.statusCode = 403;
@@ -938,7 +1061,7 @@ class OrderService {
     }
 
     const currentStatus = order.header?.status || 'Em Cotação';
-    const validStatuses = ['Em Separação', 'Em Distribuição', 'Aprovado'];
+    const validStatuses = ['Em Separação'];
     if (!validStatuses.includes(currentStatus)) {
       const err = new Error(`Não é possível encaminhar para o Faturamento um pedido com status "${currentStatus}". O pedido deve estar em Separação.`);
       err.statusCode = 400;
@@ -984,20 +1107,52 @@ class OrderService {
       throw err;
     }
 
-    order.header.status = 'Faturamento';
-    order.header.separacaoConcluida = true;
-    order.header.separadoPor = currentUser.nome || 'Conferente Separação';
-    order.header.dataSeparacao = new Date().toISOString();
-    order.header.updatedAt = new Date().toISOString();
+    const db = await getDatabase();
+    let saved;
+    db.run('BEGIN TRANSACTION');
+    try {
+      // Transferências internas entram na separação a partir do estoque da Matriz.
+      // A baixa e a mudança de etapa precisam ser uma única operação para impedir saldo duplicado em retentativas.
+      if (isTransfer) {
+        const currentStock = await stockRepository.findAll();
+        for (const item of items) {
+          if (item.ruptura) continue;
+          const quantidade = Number(item.qtdTotalUnidades || 0);
+          if (quantidade <= 0) continue;
+          const code = String(item.codigo || item.codigoInterno || '').trim().toLowerCase();
+          const description = String(item.descricao || '').trim().toLowerCase();
+          const stockItem = currentStock.find(stock =>
+            (item.id && stock.productId === item.id) ||
+            (code && [stock.codigo, stock.codigoInterno].some(value => String(value || '').trim().toLowerCase() === code)) ||
+            String(stock.descricao || '').trim().toLowerCase() === description
+          );
+          if (!stockItem || Number(stockItem.saldoUnidades || 0) < quantidade) {
+            const err = new Error(`Saldo insuficiente no estoque da Matriz para "${item.descricao}". Disponível: ${Number(stockItem?.saldoUnidades || 0)}, necessário: ${quantidade}.`);
+            err.statusCode = 409;
+            err.code = 'INSUFFICIENT_STOCK';
+            throw err;
+          }
+          await stockRepository.updateBalance(stockItem.id, -quantidade);
+          stockItem.saldoUnidades = Number(stockItem.saldoUnidades) - quantidade;
+        }
+      }
 
-    if (payload.avarias) {
-      order.header.avariasApontadas = payload.avarias;
-    }
-    if (payload.observacoes) {
-      order.header.observacaoSeparacao = payload.observacoes;
-    }
+      order.header.status = 'Faturamento';
+      order.header.separacaoConcluida = true;
+      order.header.separadoPor = currentUser.nome || 'Conferente Separação';
+      order.header.dataSeparacao = new Date().toISOString();
+      order.header.updatedAt = new Date().toISOString();
 
-    const saved = await orderRepository.save(order);
+      if (payload.avarias) order.header.avariasApontadas = payload.avarias;
+      if (payload.observacoes) order.header.observacaoSeparacao = payload.observacoes;
+
+      saved = await orderRepository.save(order);
+      db.run('COMMIT');
+      scheduleDatabaseSave(0);
+    } catch (error) {
+      try { db.run('ROLLBACK'); } catch (_) { /* transação já encerrada */ }
+      throw error;
+    }
 
     await distributionAuditRepo.create({
       orderId: saved.header.id,

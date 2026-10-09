@@ -28,6 +28,15 @@ class OrderController {
     }
   }
 
+  async importPackage(req, res, next) {
+    try {
+      const result = await orderService.importOrderPackage(req.body, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async updateInstallment(req, res, next) {
     try {
       const result = await orderService.updateInstallment(req.params.id, req.body);

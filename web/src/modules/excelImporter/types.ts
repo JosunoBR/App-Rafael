@@ -1,4 +1,4 @@
-import { PurchaseOrder, OrderItem, Product, Supplier, StoreConfig } from '../../shared/types';
+import { PurchaseOrder, Product, Supplier } from '../../shared/types';
 
 export interface ExcelImportHeader {
   numeroPedido?: string;

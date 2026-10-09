@@ -212,6 +212,8 @@ export interface OrderHeader {
   dataEmissao?: string;
   dataEntregaPrevista: string;
   percentualDescontoOff: number; // % OFF negociado
+  aplicarDescontoOff?: boolean;   // false quando o preço importado já é líquido e o OFF é apenas histórico
+  importadoDePlanilha?: boolean;  // preserva ausências relevantes da origem (ex.: datas sem fallback)
   percentualNota?: number;       // % NOTA (Percentual faturado em Nota Fiscal para média histórica)
   observacoesDescarga?: string;
   observacoes?: string;

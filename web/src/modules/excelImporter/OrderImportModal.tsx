@@ -4,16 +4,13 @@ import {
   FileSpreadsheet, 
   CheckCircle2, 
   AlertCircle, 
-  ArrowRight, 
   X, 
   Package, 
   Building2, 
   Calendar, 
-  CreditCard, 
   Percent, 
   ShoppingBag, 
   Info,
-  Layers,
   Sparkles,
   Loader2,
   RefreshCw,
@@ -31,9 +28,9 @@ import {
   PurchaseOrder
 } from '../../shared/types';
 import { parseOrderExcelFile } from './orderExcelParser';
-import { analyzeCatalogProducts, persistImportedCatalogProducts } from './catalogSyncService';
+import { analyzeCatalogProducts, mergeCatalogProducts } from './catalogSyncService';
 import { mapParsedExcelToOrder } from './orderMapper';
-import { ParsedExcelOrder, CatalogProductStatus } from './types';
+import { ParsedExcelOrder } from './types';
 import { formatISODateToBR } from './excelDateHelper';
 import { downloadModelTemplate } from './modelTemplateGenerator';
 import { getNextOrderNumber } from '../../utils/storage';
@@ -47,8 +44,10 @@ interface OrderImportModalProps {
   stores: StoreConfig[];
   existingOrders?: PurchaseOrder[];
   fiscalConfig?: FiscalConfig;
-  onSaveSupplier?: (supplier: Supplier) => Promise<any> | void;
-  onOrderImported: (order: PurchaseOrder, updatedProducts: Product[]) => void;
+  onOrderImported: (
+    order: PurchaseOrder,
+    context: { supplier: Supplier; productsToSave: Product[]; updatedProducts: Product[] }
+  ) => Promise<void>;
 }
 
 export const OrderImportModal: React.FC<OrderImportModalProps> = ({
@@ -59,7 +58,6 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
   stores,
   existingOrders = [],
   fiscalConfig,
-  onSaveSupplier,
   onOrderImported
 }) => {
   const [loading, setLoading] = useState(false);
@@ -135,8 +133,6 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
       let matchedSupplier = suppliers.find(s => {
         // Ignora fornecedor caso possua dados da própria empresa compradora
         if (s.cnpj && s.cnpj.replace(/\D/g, '') === '37144240000170') return false;
-        if (s.razaoSocial && s.razaoSocial.toUpperCase() === 'CONECTA') return false;
-
         if (parsed.header.cnpj && s.cnpj) {
           const clean1 = s.cnpj.replace(/\D/g, '');
           const clean2 = parsed.header.cnpj.replace(/\D/g, '');
@@ -291,49 +287,28 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
     setError(null);
 
     try {
-      // 1. Sempre salva/atualiza o fornecedor no cadastro (backend SQLite e localStorage)
-      let currentSupplier = selectedSupplier;
-      if (onSaveSupplier) {
-        try {
-          const saved = await onSaveSupplier(selectedSupplier);
-          if (saved) currentSupplier = saved;
-        } catch (supErr) {
-          console.warn('Aviso ao persistir fornecedor na importação:', supErr);
-        }
-      }
+      const currentSupplier = selectedSupplier;
+      // Produtos explicitamente identificados por código interno podem pertencer a
+      // outro fornecedor; o catálogo não deve ser transferido silenciosamente.
+      const allProductsToSave: Product[] = catalogAnalysis.allOrderProducts;
 
-      const supplierName = currentSupplier.razaoSocial || currentSupplier.nomeFantasia || '';
-
-      // 2. REGRA DE NEGÓCIO CRÍTICA:
-      // Todo produto do pedido (novo OU já cadastrado no catálogo) DEVE receber o fornecedor atual.
-      // Produtos nunca podem ficar sem fornecedor.
-      const allProductsToSave: Product[] = [
-        ...catalogAnalysis.newProducts.map(p => ({
-          ...p,
-          supplierId: currentSupplier.id,
-          nomeFornecedor: supplierName || p.nomeFornecedor
-        })),
-        ...catalogAnalysis.existingToUpdate.map(p => ({
-          ...p,
-          supplierId: currentSupplier.id,
-          nomeFornecedor: supplierName || p.nomeFornecedor
-        }))
-      ];
-
-      let updatedProducts = products;
-      if (allProductsToSave.length > 0) {
-        updatedProducts = await persistImportedCatalogProducts(allProductsToSave, products);
-      }
+      const updatedProducts = mergeCatalogProducts(products, allProductsToSave);
 
       // 3. Mapear o pedido completo (com status 'Em Cotação' e isDraft: true)
-      parsedData.header.numeroPedido = finalNum;
-      parsedData.header.percentualNota = percentualNotaInput;
-      parsedData.header.percentualDescontoOff = percentualDescontoOffInput;
-      parsedData.header.observacoes = observacoesInput.trim();
-      parsedData.header.tipoFrete = tipoFreteInput;
+      const parsedForMapping: ParsedExcelOrder = {
+        ...parsedData,
+        header: {
+          ...parsedData.header,
+          numeroPedido: finalNum,
+          percentualNota: percentualNotaInput,
+          percentualDescontoOff: percentualDescontoOffInput,
+          observacoes: observacoesInput.trim(),
+          tipoFrete: tipoFreteInput
+        }
+      };
 
       const order = mapParsedExcelToOrder(
-        parsedData,
+        parsedForMapping,
         currentSupplier,
         catalogAnalysis.statusList,
         stores,
@@ -342,7 +317,11 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
       );
 
       // 4. Concluir importação
-      onOrderImported(order, updatedProducts);
+      await onOrderImported(order, {
+        supplier: currentSupplier,
+        productsToSave: allProductsToSave,
+        updatedProducts
+      });
       onClose();
     } catch (err: any) {
       console.error('Erro ao concluir importação do pedido:', err);
@@ -606,6 +585,22 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                 </div>
               </div>
 
+              {(!parsedData.header.dataPedido || !parsedData.header.dataEntregaPrevista) && (
+                <div className="flex items-start gap-2.5 p-3 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200">
+                  <Calendar className="w-4 h-4 mt-0.5 shrink-0" />
+                  <div className="text-xs">
+                    <strong>Data não informada na planilha.</strong>{' '}
+                    O pedido será importado sem parcelas automáticas para evitar vencimentos inventados.
+                    Preencha a data do pedido ou da entrega na cotação para gerar as parcelas.
+                    {(parsedData.header.dataPedido || parsedData.header.dataEntregaPrevista) && (
+                      <span className="block mt-1 text-[11px] opacity-80">
+                        Data localizada: {formatISODateToBR(parsedData.header.dataEntregaPrevista || parsedData.header.dataPedido)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Informações do Cabeçalho Extraído & Fornecedor */}
               <div className="p-4.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700/60 pb-2.5">
@@ -718,11 +713,7 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                     <input
                       type="text"
                       value={orderNumberInput}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setOrderNumberInput(val);
-                        if (parsedData) parsedData.header.numeroPedido = val;
-                      }}
+                      onChange={(e) => setOrderNumberInput(e.target.value)}
                       placeholder="ex: PED-0001"
                       className={`w-full font-mono font-bold text-xs px-2 py-1 rounded border outline-none mt-0.5 ${
                         isInputDuplicate
@@ -788,7 +779,9 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                       />
                       <span className="text-xs font-bold text-slate-600 dark:text-slate-400">%</span>
                     </div>
-                    <span className="block text-[10px] text-slate-400 mt-0.5">{percentualDescontoOffInput > 0 ? 'Abatimento direto' : 'Sem desc. OFF'}</span>
+                    <span className="block text-[10px] text-slate-400 mt-0.5">
+                      {percentualDescontoOffInput > 0 ? 'Referência histórica; preço já líquido' : 'Sem desc. OFF'}
+                    </span>
                   </div>
                 </div>
 

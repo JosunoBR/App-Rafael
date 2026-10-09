@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test:order-import": "node scripts/test-order-import.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

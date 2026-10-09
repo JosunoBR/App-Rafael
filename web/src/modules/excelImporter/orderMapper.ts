@@ -2,9 +2,8 @@ import {
   PurchaseOrder, 
   OrderItem, 
   Supplier, 
-  StoreConfig, 
-  FiscalConfig,
-  PaymentInstallment 
+  StoreConfig,
+  FiscalConfig
 } from '../../shared/types';
 import { ParsedExcelOrder, CatalogProductStatus } from './types';
 import { calculateItemFiscal } from '../../shared/fiscalEngine';
@@ -81,35 +80,36 @@ export function mapParsedExcelToOrder(
   // 1. Configurações Fiscais consolidadas
   const aliquotaIpi = parsed.fiscalParams?.ipiAliquota !== undefined 
     ? parsed.fiscalParams.ipiAliquota * 100 
-    : (supplier.aliquotaIpiPadrao || 0);
+    : (supplier.aliquotaIpiPadrao ?? (fiscalConfig?.ipiAliquota !== undefined ? fiscalConfig.ipiAliquota * 100 : 0));
 
   const aliquotaSt = parsed.fiscalParams?.aliquotaSt !== undefined 
     ? parsed.fiscalParams.aliquotaSt * 100 
-    : (supplier.aliquotaStPadrao || 0);
+    : (supplier.aliquotaStPadrao ?? (fiscalConfig?.aliquotaSt !== undefined ? fiscalConfig.aliquotaSt * 100 : 0));
 
-  const aliquotaIcmsEntrada = parsed.fiscalParams?.icmsAliquota !== undefined 
-    ? parsed.fiscalParams.icmsAliquota * 100 
-    : 11.0;
+  const aliquotaIcmsEntrada = parsed.fiscalParams?.creditoEntradaICMS !== undefined
+    ? parsed.fiscalParams.creditoEntradaICMS * 100
+    : (fiscalConfig?.creditoEntradaICMS !== undefined ? fiscalConfig.creditoEntradaICMS * 100 : 11.0);
 
   const aliquotaCustoFixo = parsed.fiscalParams?.custosFixos !== undefined 
     ? parsed.fiscalParams.custosFixos * 100 
-    : 26.0;
+    : (fiscalConfig?.custosFixos !== undefined ? fiscalConfig.custosFixos * 100 : 26.0);
 
-  const aliquotaIcmsSaida = parsed.fiscalParams?.creditoEntradaICMS !== undefined 
-    ? parsed.fiscalParams.creditoEntradaICMS * 100 
-    : 19.5;
+  const aliquotaIcmsSaida = parsed.fiscalParams?.icmsAliquota !== undefined
+    ? parsed.fiscalParams.icmsAliquota * 100
+    : (fiscalConfig?.icmsAliquota !== undefined ? fiscalConfig.icmsAliquota * 100 : 19.5);
 
   const aliquotaPisCofinsIr = parsed.fiscalParams?.pisCofinsAliquota !== undefined 
     ? parsed.fiscalParams.pisCofinsAliquota * 100 
-    : 3.0;
+    : (fiscalConfig?.pisCofinsAliquota !== undefined ? fiscalConfig.pisCofinsAliquota * 100 : 3.0);
 
-  const currentFiscalConfig: FiscalConfig = fiscalConfig || {
-    icmsAliquota: aliquotaIcmsEntrada / 100,
+  const currentFiscalConfig: FiscalConfig = {
+    ...(fiscalConfig || {}),
+    icmsAliquota: aliquotaIcmsSaida / 100,
     ipiAliquota: aliquotaIpi / 100,
     aliquotaSt: aliquotaSt / 100,
     pisCofinsAliquota: aliquotaPisCofinsIr / 100,
     custosFixos: aliquotaCustoFixo / 100,
-    creditoEntradaICMS: aliquotaIcmsSaida / 100
+    creditoEntradaICMS: aliquotaIcmsEntrada / 100
   };
 
   // 2. Mapeamento dos Itens
@@ -147,9 +147,24 @@ export function mapParsedExcelToOrder(
     if (parsed.storeAllocations) {
       const itemAllocations: Record<string, number> = {};
       let allocCount = 0;
+      let explicitReserve = 0;
       for (const [storeName, itemsMap] of Object.entries(parsed.storeAllocations)) {
-        const qty = itemsMap[rawItem.codigo] || itemsMap[finalCode] || 0;
+        const qty = itemsMap[rawItem.codigoFornecedor || ''] || itemsMap[rawItem.codigo] || itemsMap[finalCode] || 0;
         if (qty > 0) {
+          const normalizedStoreName = storeName
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase()
+            .trim();
+          const isCentralReserve = normalizedStoreName === 'RESERVA CD' ||
+            normalizedStoreName === 'CD' ||
+            normalizedStoreName.includes('ESTOQUE CENTRAL') ||
+            normalizedStoreName.includes('RESERVA ESTOQUE');
+          if (isCentralReserve) {
+            explicitReserve += qty;
+            allocCount += qty;
+            continue;
+          }
           // Tenta associar com o id da loja cadastrada no sistema (por ID, nome completo ou nome abreviado da coluna)
           const matchedStore = findMatchingStore(storeName, storeConfigs);
           const storeKey = matchedStore ? matchedStore.id : storeName;
@@ -159,7 +174,7 @@ export function mapParsedExcelToOrder(
       }
       if (allocCount > 0) {
         separacaoLojas = itemAllocations;
-        qtdReservaEstoque = Math.max(0, qtdTotalUnidades - allocCount);
+        qtdReservaEstoque = explicitReserve + Math.max(0, qtdTotalUnidades - allocCount);
         hasSpreadsheetSeparation = true;
       }
     }
@@ -243,6 +258,8 @@ export function mapParsedExcelToOrder(
     dataPedido: parsed.header.dataPedido,
     dataEntregaPrevista: parsed.header.dataEntregaPrevista,
     percentualDescontoOff: parsed.header.percentualDescontoOff || 0,
+    aplicarDescontoOff: false,
+    importadoDePlanilha: true,
     percentualNota: parsed.header.percentualNota !== undefined 
       ? parsed.header.percentualNota 
       : ((supplier.percentualNotaPadrao !== undefined && supplier.percentualNotaPadrao > 0 && supplier.percentualNotaPadrao < 100)
@@ -254,7 +271,7 @@ export function mapParsedExcelToOrder(
     valorFrete: 0,
     valorFreteGlobal: 0,
     valorOutrasDespesasGlobal: 0,
-    descontoComercialTotal: parsed.header.percentualDescontoOff || 0,
+    descontoComercialTotal: 0,
     descontoComercialTipo: '%' as const,
     // Descrição do Pedido: exclusiva do pedido/planilha, independente do fornecedor
     observacoes: parsed.header.observacoes || '',
@@ -286,12 +303,14 @@ export function mapParsedExcelToOrder(
   };
 
   // 4. Gerar parcelas financeiras
-  try {
-    const installments = generateOrderInstallments(initialOrder);
-    initialOrder.installments = installments;
-  } catch (err) {
-    console.warn('Não foi possível autogerar parcelas na importação:', err);
-    initialOrder.installments = [];
+  if (parsed.header.dataEntregaPrevista || parsed.header.dataPedido) {
+    try {
+      const installments = generateOrderInstallments(initialOrder);
+      initialOrder.installments = installments;
+    } catch (err) {
+      console.warn('Não foi possível autogerar parcelas na importação:', err);
+      initialOrder.installments = [];
+    }
   }
 
   return initialOrder;

@@ -132,7 +132,9 @@ class OrderRepository {
       divergenciaResolvida: order.header.divergenciaResolvida,
       divergenciaResolvidaPor: order.header.divergenciaResolvidaPor,
       dataResolucaoDivergencia: order.header.dataResolucaoDivergencia,
-      tipoResolucaoDivergencia: order.header.tipoResolucaoDivergencia
+      tipoResolucaoDivergencia: order.header.tipoResolucaoDivergencia,
+      aplicarDescontoOff: order.header.aplicarDescontoOff,
+      importadoDePlanilha: order.header.importadoDePlanilha
     };
     const paymentConfigJson = JSON.stringify(paymentConfig);
 
@@ -186,8 +188,9 @@ class OrderRepository {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    const dataPedido = order.header.dataPedido || order.header.dataEmissao || today;
-    const dataEmissao = order.header.dataEmissao || order.header.dataPedido || today;
+    const preserveMissingDates = order.header.importadoDePlanilha === true;
+    const dataPedido = order.header.dataPedido || order.header.dataEmissao || (preserveMissingDates ? '' : today);
+    const dataEmissao = order.header.dataEmissao || order.header.dataPedido || (preserveMissingDates ? '' : today);
 
     if (existing) {
       const sql = `
@@ -857,10 +860,12 @@ class OrderRepository {
         descontoComercialTotal: r.descontoComercialTotal || 0,
         descontoComercialTipo: r.descontoComercialTipo || '%',
         isDraft: r.isDraft === 1,
-        dataPedido: r.dataPedido || r.dataEmissao || (r.createdAt ? r.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
-        dataEmissao: r.dataEmissao || r.dataPedido || (r.createdAt ? r.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+        dataPedido: r.dataPedido || r.dataEmissao || (paymentConfig.importadoDePlanilha ? '' : (r.createdAt ? r.createdAt.split('T')[0] : new Date().toISOString().split('T')[0])),
+        dataEmissao: r.dataEmissao || r.dataPedido || (paymentConfig.importadoDePlanilha ? '' : (r.createdAt ? r.createdAt.split('T')[0] : new Date().toISOString().split('T')[0])),
         dataEntregaPrevista: r.dataEntregaPrevista,
         percentualDescontoOff: r.percentualDescontoOff,
+        aplicarDescontoOff: paymentConfig.aplicarDescontoOff !== false,
+        importadoDePlanilha: paymentConfig.importadoDePlanilha === true,
         percentualNota: r.percentualNota !== undefined ? r.percentualNota : 100,
         observacoes: r.observacoes,
         status: r.status || 'Em Cotação',

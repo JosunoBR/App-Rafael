@@ -2,7 +2,9 @@ const orderRepository = require('../repositories/orderRepository');
 const fiscalRepository = require('../repositories/fiscalRepository');
 const distributionAuditRepo = require('../repositories/distributionAuditRepository');
 const stockRepository = require('../repositories/stockRepository');
-const { getDatabase, scheduleDatabaseSave } = require('../config/database');
+const { getDatabase, scheduleDatabaseSave, withTransaction } = require('../config/database');
+const supplierService = require('./supplier.service');
+const productService = require('./product.service');
 
 class OrderService {
   async listOrders(currentUser) {
@@ -85,7 +87,7 @@ class OrderService {
     }
   }
 
-  async saveOrder(orderData, currentUser) {
+  async saveOrder(orderData, currentUser, options = {}) {
     if (!orderData || !orderData.header || !orderData.header.numeroPedido) {
       const err = new Error('Dados do pedido inválidos: número do pedido é obrigatório.');
       err.statusCode = 400;
@@ -246,6 +248,7 @@ class OrderService {
       const financialService = require('./financialService');
       await financialService.syncSingleOrder(saved);
     } catch (finErr) {
+      if (options.strictFinancial === true) throw finErr;
       console.error('Erro ao sincronizar pedido com o financeiro:', finErr);
     }
 
@@ -259,6 +262,57 @@ class OrderService {
       originalNumber: saved._originalNumber,
       newNumber: saved.header.numeroPedido
     };
+  }
+
+  async importOrderPackage(payload, currentUser) {
+    const { order, supplier, products } = payload || {};
+    if (!order?.header || !supplier || !Array.isArray(products)) {
+      const err = new Error('Pacote de importação inválido: pedido, fornecedor e produtos são obrigatórios.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    return withTransaction(async () => {
+      const supplierResult = await supplierService.saveSupplier(supplier);
+      const savedSupplier = supplierResult.supplier;
+      const normalizedProducts = products.map(product => {
+        if (product.supplierId && product.supplierId !== savedSupplier.id) {
+          const err = new Error(`O produto "${product.codigo || product.descricao || 'sem código'}" não pertence ao fornecedor importado.`);
+          err.statusCode = 400;
+          throw err;
+        }
+        return {
+          ...product,
+          supplierId: savedSupplier.id,
+          nomeFornecedor: savedSupplier.razaoSocial || savedSupplier.nomeFantasia || product.nomeFornecedor || ''
+        };
+      });
+      const productResult = await productService.saveBatchProducts(normalizedProducts, { strict: true });
+      if (productResult.count !== normalizedProducts.length) {
+        const err = new Error('Nem todos os produtos da planilha puderam ser salvos. A importação foi cancelada.');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const normalizedOrder = {
+        ...order,
+        header: {
+          ...order.header,
+          supplierId: savedSupplier.id,
+          fornecedor: savedSupplier.razaoSocial || savedSupplier.nomeFantasia || order.header.fornecedor,
+          cnpj: savedSupplier.cnpj || order.header.cnpj || ''
+        }
+      };
+      const orderResult = await this.saveOrder(normalizedOrder, currentUser, { strictFinancial: true });
+      return {
+        success: true,
+        message: orderResult.message,
+        supplier: savedSupplier,
+        products: productResult.products,
+        order: orderResult.order,
+        numberReassigned: orderResult.numberReassigned
+      };
+    });
   }
 
   async updateInstallment(orderId, updatedInstallment) {

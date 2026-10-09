@@ -69,22 +69,48 @@ export function parseOrderExcelFile(
  * Encontra a aba comercial do pedido (ignora abas acessórias como SEPARACAO, CALCULADORA, LIMITE DE PRECO).
  */
 function findCommercialSheet(workbook: XLSX.WorkBook): string {
-  const ignoredNames = ['SEPARACAO', 'SEPARAÇÃO', 'LIMITE DE PRECO', 'LIMITE DE PREÇO', 'CALCULADORA', 'GRAFICO', 'RESUMO'];
-  
-  // Se tiver apenas 1 aba
-  if (workbook.SheetNames.length === 1) {
-    return workbook.SheetNames[0];
-  }
+  if (workbook.SheetNames.length === 1) return workbook.SheetNames[0];
 
-  // Procura primeira aba que não esteja na lista de ignoradas
-  for (const name of workbook.SheetNames) {
-    const upper = name.trim().toUpperCase();
-    if (!ignoredNames.includes(upper)) {
-      return name;
-    }
-  }
+  const accessorySheetTokens = [
+    'SEPARACAO', 'SEPARAÇÃO', 'LIMITE DE PRECO', 'LIMITE DE PREÇO',
+    'PARAMETRO', 'PARÂMETRO', 'INSTRUCO', 'CALCULADORA', 'GRAFICO',
+    'GRÁFICO', 'RESUMO'
+  ];
 
-  return workbook.SheetNames[0];
+  const candidates = workbook.SheetNames
+    .filter(name => !accessorySheetTokens.some(token => name.trim().toUpperCase().includes(token)))
+    .map(name => {
+      const worksheet = workbook.Sheets[name];
+      const matrix: any[][] = worksheet
+        ? XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: '' })
+        : [];
+      const headerIndex = matrix
+        .slice(0, 25)
+        .findIndex(row => isLikelyItemHeaderRow(row || []));
+      return { name, score: headerIndex >= 0 ? 100 - headerIndex : 0 };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return candidates[0]?.name || workbook.SheetNames[0];
+}
+
+function normalizeLabel(value: any): string {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .trim();
+}
+
+function isLikelyItemHeaderRow(row: any[]): boolean {
+  const labels = row.map(normalizeLabel);
+  const hasDescription = labels.some(label => label.includes('DESCRICAO') || label === 'PRODUTO' || label === 'ITEM');
+  const hasCode = labels.some(label => label.includes('CODIGO') || label.includes('REFER'));
+  const hasQuantityOrPrice = labels.some(label =>
+    label.includes('QTD') || label.includes('QUANT') || label.includes('TOTAL PEC') ||
+    label.includes('PRECO') || label.includes('VALOR') || label === 'R$'
+  );
+  return (hasDescription && (hasCode || hasQuantityOrPrice)) || (hasCode && hasQuantityOrPrice);
 }
 
 /**
@@ -144,8 +170,7 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
   let tableHeaderRowIndex = -1;
   for (let r = 0; r < Math.min(matrix.length, 25); r++) {
     const row = matrix[r] || [];
-    const rowText = row.map(c => String(c).toUpperCase().trim());
-    if (rowText.some(t => t.includes('CODIGO') || t.includes('CÓDIGO') || t.includes('DESCRICAO') || t.includes('DESCRIÇÃO') || t.includes('REFER'))) {
+    if (isLikelyItemHeaderRow(row)) {
       tableHeaderRowIndex = r;
       break;
     }
@@ -392,7 +417,10 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
         upper.startsWith('OBS:') || upper.startsWith('OBS.') ||
         upper.startsWith('DESCRIÇÃO DO PEDIDO') || upper.startsWith('DESCRICAO DO PEDIDO')
       ) {
-        let obsText = cellVal.replace(/^(?:OBSERVA[ÇC][ÕO0]ES?|OBS\.?|DESCRI[ÇC][ÃA0]O DO PEDIDO)\s*:?\s*/i, '').trim();
+        let obsText = cellVal.replace(
+          /^(?:OBSERVAÇÕES?|OBSERVACOES?|OBSERVAÇÃO|OBSERVACAO|OBS\.?|DESCRIÇÃO DO PEDIDO|DESCRICAO DO PEDIDO)\s*:?\s*/i,
+          ''
+        ).trim();
         if (!obsText && nextCellVal) obsText = nextCellVal;
         if (obsText && !isBuyerCompanyData(obsText) && !observacoesList.includes(obsText)) {
           observacoesList.push(obsText);
@@ -402,8 +430,8 @@ function extractHeaderFromMatrix(matrix: any[][]): ExcelImportHeader {
   }
 
   // Fallbacks e formatações de dados
-  const dataPedido = parseExcelDate(dataPedidoVal, 0);
-  const dataEntregaPrevista = parseExcelDate(dataEntregaVal, 15);
+  const dataPedido = parseExcelDate(dataPedidoVal);
+  const dataEntregaPrevista = parseExcelDate(dataEntregaVal);
 
   telefoneContato = telefoneEmpresa || telefoneVendedor || '';
   const contatoVendedor = telefoneVendedor || telefoneContato || email || '';
@@ -438,9 +466,7 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
   // Procurar a linha onde estão as colunas (CODIGO, DESCRICAO, VALOR TOTAL...)
   for (let r = 0; r < Math.min(matrix.length, 25); r++) {
     const row = matrix[r] || [];
-    const rowText = row.map(c => String(c).toUpperCase().trim());
-    
-    if (rowText.some(t => t.includes('CODIGO') || t.includes('CÓDIGO') || t.includes('DESCRICAO') || t.includes('DESCRIÇÃO') || t.includes('REFER'))) {
+    if (isLikelyItemHeaderRow(row)) {
       headerRowIndex = r;
       row.forEach((cell, c) => {
         const clean = String(cell).toUpperCase().trim();
@@ -641,6 +667,17 @@ function extractItemsFromMatrix(matrix: any[][]): ExcelImportRawItem[] {
       break;
     }
 
+    // Descrição é obrigatória no modelo. Isso elimina rodapés e controles de
+    // planilhas legadas (ex.: CONFERENTE, ASSINATURA, instruções de faturamento)
+    // sem descartar itens de rascunho que possuem descrição e quantidade zero.
+    if (!descRaw) continue;
+
+    const controlRowPattern = /^(CONFERENTE|ASSINATURA|APROVADO POR|OBSERVACAO|PEDIDO FATURAR|MANDAR |REGRAS? (DE|MANDATORIAS))/;
+    const normalizedProductText = normalizeLabel(`${codigoRaw} ${descRaw}`);
+    if (controlRowPattern.test(normalizeLabel(descRaw)) || controlRowPattern.test(normalizedProductText)) {
+      continue;
+    }
+
     // Leitura das colunas identificadas (sem fallbacks arbitrários de índices deslocados)
     const qtdNoPacote = (colMap['embalagem'] !== undefined ? parseNumber(row[colMap['embalagem']]) : 0) || 1;
     let qtdPacotes = colMap['pacotes'] !== undefined ? parseNumber(row[colMap['pacotes']]) : 0;
@@ -750,21 +787,47 @@ function extractFiscalParams(workbook: XLSX.WorkBook): ExcelImportFiscalParams |
   const matrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: '' });
   const params: ExcelImportFiscalParams = {};
 
+  const toDecimalRate = (value: any): number | undefined => {
+    if (value === null || value === undefined || value === '') return undefined;
+    if (typeof value !== 'number' && !/[-+]?\d/.test(String(value))) return undefined;
+    const parsed = parseNumber(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+    return parsed <= 1 ? parsed : parsed / 100;
+  };
+
+  const readAdjacentRate = (row: any[], labelColumn: number): number | undefined => {
+    for (let offset = 1; offset <= 3; offset++) {
+      const rawValue = row[labelColumn + offset];
+      if (rawValue === null || rawValue === undefined || rawValue === '') continue;
+      const numeric = toDecimalRate(rawValue);
+      if (numeric !== undefined) return numeric;
+      break;
+    }
+    return undefined;
+  };
+
   for (const row of matrix) {
     for (let c = 0; c < row.length; c++) {
-      const cell = String(row[c] || '').toUpperCase().trim();
-      const val = parseNumber(row[c + 1]);
+      const label = normalizeLabel(row[c]);
+      if (!label) continue;
 
-      if (cell.includes('ICMS') && !cell.includes('CREDITO') && !cell.includes('CRÉDITO')) {
-        params.icmsAliquota = val <= 1 ? val : val / 100;
-      } else if (cell.includes('IPI')) {
-        params.ipiAliquota = val <= 1 ? val : val / 100;
-      } else if (cell.includes('PIS') || cell.includes('COFINS')) {
-        params.pisCofinsAliquota = val <= 1 ? val : val / 100;
-      } else if (cell.includes('FIXOS') || cell.includes('CUSTOS FIXOS')) {
-        params.custosFixos = val <= 1 ? val : val / 100;
-      } else if (cell.includes('CREDITO') || cell.includes('CRÉDITO')) {
-        params.creditoEntradaICMS = val <= 1 ? val : val / 100;
+      const rate = readAdjacentRate(row, c);
+      if (rate === undefined) continue;
+
+      // O rótulo precisa identificar explicitamente o parâmetro. Antes, qualquer
+      // descrição contendo "ICMS" ou "IPI" podia sobrescrever o valor correto com zero.
+      if ((label.includes('ICMS') && label.includes('ENTRADA')) || label.includes('CREDITO ICMS')) {
+        params.creditoEntradaICMS = rate;
+      } else if (label.includes('ICMS') && (label.includes('SAIDA') || label === 'ICMS')) {
+        params.icmsAliquota = rate;
+      } else if (label.includes('SUBSTITUICAO TRIBUTARIA') || /(^|\s)ST($|\s)/.test(label)) {
+        params.aliquotaSt = rate;
+      } else if (label.includes('IPI')) {
+        params.ipiAliquota = rate;
+      } else if (label.includes('PIS') || label.includes('COFINS')) {
+        params.pisCofinsAliquota = rate;
+      } else if (label.includes('CUSTO FIXO') || label.includes('CUSTOS FIXOS')) {
+        params.custosFixos = rate;
       }
     }
   }
@@ -807,6 +870,8 @@ function extractStoreSeparation(workbook: XLSX.WorkBook): Record<string, Record<
       const up = txt.toUpperCase();
       if (up.includes('CODIGO') || up.includes('CÓDIGO')) {
         codCol = c;
+      } else if (normalizeLabel(txt).includes('RESERVA CD')) {
+        storesFound.push({ name: txt, col: c });
       } else if (c >= 5 && txt && !up.includes('TOTAL') && !up.includes('CONFER') && !up.includes('STATUS') && !up.includes('AUDITORIA')) {
         storesFound.push({ name: txt, col: c });
       } else if (up.includes('LOJA') || up.startsWith('LJ') || /^\d{2}\s*-\s*[A-Z]+/.test(txt)) {

@@ -309,7 +309,7 @@ class ExportService {
     } else if (totalDescontoItens > 0 && totalBrutoMercadorias > 0) {
       totalDescontoComercial = totalDescontoItens;
       descontoComercialPercent = (totalDescontoItens / totalBrutoMercadorias) * 100;
-    } else if (offValue > 0) {
+    } else if (offValue > 0 && order.header?.aplicarDescontoOff !== false) {
       descontoComercialPercent = offValue;
       totalDescontoComercial = Number(((totalBrutoMercadorias * offValue) / 100).toFixed(2));
     }

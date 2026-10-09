@@ -271,6 +271,28 @@ export interface SaveOrderResult {
   newNumber?: string;
 }
 
+export interface ImportOrderPackageResult extends SaveOrderResult {
+  supplier: Supplier;
+  products: Product[];
+}
+
+export async function importOrderPackageToDb(
+  order: PurchaseOrder,
+  supplier: Supplier,
+  products: Product[]
+): Promise<ImportOrderPackageResult> {
+  const res = await apiFetch('/orders/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order, supplier, products })
+  });
+  const data = await res.json();
+  if (!data?.order || !data?.supplier || !Array.isArray(data?.products)) {
+    throw new Error('O servidor retornou uma resposta incompleta para a importação.');
+  }
+  return data as ImportOrderPackageResult;
+}
+
 export async function saveOrderToDb(
   order: PurchaseOrder, 
   options: { autoAssignNextOnConflict?: boolean } = { autoAssignNextOnConflict: true }

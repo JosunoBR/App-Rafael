@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "test:transaction": "node scripts/testDatabaseTransaction.js",
     "migrate-images": "node scripts/migrateProductImagesToDisk.js"
   },
   "dependencies": {

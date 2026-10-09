@@ -180,6 +180,7 @@ import {
   sendOrderToFaturamentoApi,
   finalizeOrderPipelineApi,
   checkOrderNumberInDb,
+  importOrderPackageToDb,
   rescheduleOrderDeliveryApi
 } from './utils/api';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
@@ -941,6 +942,7 @@ export function App() {
       const newOff = updatedHeader.percentualDescontoOff ?? 0;
 
       if (newOff !== oldOff) {
+        updatedHeader = { ...updatedHeader, aplicarDescontoOff: true };
         const descPct = Math.max(0, Math.min(100, newOff));
         updatedItems = (prev.items || []).map(it => {
           if (!it.descricao && !it.codigo && !it.precoUnitario) return it;
@@ -980,7 +982,9 @@ export function App() {
         };
       }
 
-      let nextInstallments = generateOrderInstallments({ ...prev, header: updatedHeader, items: updatedItems }, undefined, undefined, true);
+      let nextInstallments = updatedHeader.importadoDePlanilha && !updatedHeader.dataPedido && !updatedHeader.dataEntregaPrevista
+        ? []
+        : generateOrderInstallments({ ...prev, header: updatedHeader, items: updatedItems }, undefined, undefined, true);
       if (isCif) {
         nextInstallments = nextInstallments.filter(inst => !inst.isBoletoFrete && inst.tipoTitulo !== 'frete' && !inst.observacao?.toLowerCase().includes('frete'));
       }
@@ -2523,9 +2527,10 @@ export function App() {
     }
   };
 
-  const handleOrderImported = async (importedOrder: PurchaseOrder, updatedProducts: Product[]) => {
-    setProducts(updatedProducts);
-    
+  const handleOrderImported = async (
+    importedOrder: PurchaseOrder,
+    context: { supplier: Supplier; productsToSave: Product[]; updatedProducts: Product[] }
+  ) => {
     // Salvaguarda definitiva: garante que o número do pedido nunca contenha textos espúrios ou colida com existentes
     let finalOrderNum = (importedOrder.header.numeroPedido || '').trim();
     const isBogus = !finalOrderNum || finalOrderNum.toUpperCase().includes('FORNECEDOR') || finalOrderNum.toUpperCase().includes('IMPORTADO') || finalOrderNum.toUpperCase().includes('FORNEC');
@@ -2542,26 +2547,30 @@ export function App() {
       }
     };
 
-    // Salva o pedido como ativo e em cotação (rascunho ativo, nunca fechado)
-    setOrder(cleanOrder);
-    saveCurrentOrder(cleanOrder);
-    saveOrderToHistory(cleanOrder);
-
     try {
-      const saveRes = await saveOrderToDb(cleanOrder);
-      const effectiveOrder = saveRes?.order || {
-        ...cleanOrder,
-        header: {
-          ...cleanOrder.header,
-          numeroPedido: saveRes?.newNumber || cleanOrder.header.numeroPedido
-        }
-      };
+      const saveRes = await importOrderPackageToDb(cleanOrder, context.supplier, context.productsToSave);
+      const effectiveOrder = saveRes.order;
+      const savedProductsById = new Map(saveRes.products.map(product => [product.id, product]));
+      const effectiveProducts = context.updatedProducts.map(product => savedProductsById.get(product.id) || product);
+      const effectiveSuppliers = [
+        saveRes.supplier,
+        ...suppliers.filter(supplier => supplier.id !== saveRes.supplier.id)
+      ];
 
+      setProducts(effectiveProducts);
+      saveProductsList(effectiveProducts);
+      setSuppliers(effectiveSuppliers);
+      saveSuppliersList(effectiveSuppliers);
       setOrder(effectiveOrder);
       saveCurrentOrder(effectiveOrder);
       saveOrderToHistory(effectiveOrder);
 
-      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      // A importação já foi confirmada atomicamente pelo servidor. Uma falha no
+      // refresh subsequente não pode transformar sucesso real em pedido de nova tentativa.
+      const updatedOrders = await fetchOrdersFromDb().catch(() => {
+        const remaining = savedOrders.filter(saved => saved.header.id !== effectiveOrder.header.id);
+        return [effectiveOrder, ...remaining];
+      });
       setSavedOrders(updatedOrders);
 
       setActiveNav('orders');
@@ -2573,15 +2582,9 @@ export function App() {
       } else {
         showToast(`Pedido ${effectiveOrder.header.numeroPedido} importado com sucesso! (Salvo em cotação)`, 'success');
       }
-    } catch {
-      setSavedOrders(prev => {
-        const filtered = prev.filter(o => o.header.id !== cleanOrder.header.id && o.header.numeroPedido !== cleanOrder.header.numeroPedido);
-        return [cleanOrder, ...filtered];
-      });
-      setActiveNav('orders');
-      setViewMode('desktop');
-      confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
-      showToast(`Pedido ${cleanOrder.header.numeroPedido} importado com sucesso! (Salvo em cotação)`, 'success');
+    } catch (err: any) {
+      showPersistenceError(err, `Não foi possível importar o pedido ${cleanOrder.header.numeroPedido}`);
+      throw err;
     }
   };
 
@@ -3332,7 +3335,7 @@ export function App() {
                         suppliers={suppliers}
                         currentSupplierName={order.header.fornecedor}
                         currentSupplierId={order.header.supplierId}
-                        percentualDescontoOff={order.header.percentualDescontoOff}
+                        percentualDescontoOff={order.header.aplicarDescontoOff === false ? 0 : order.header.percentualDescontoOff}
                         onUpdateItem={handleUpdateItem}
                         onAddItem={handleAddItem}
                         onDuplicateItem={handleDuplicateItem}
@@ -3623,7 +3626,6 @@ export function App() {
           stores={storeConfigs}
           existingOrders={savedOrders}
           fiscalConfig={fiscalConfig}
-          onSaveSupplier={handleSaveSupplier}
           onOrderImported={handleOrderImported}
         />
       )}

@@ -142,7 +142,8 @@ class ProductService {
     return { success: true, message: 'Produto removido com sucesso.' };
   }
 
-  async saveBatchProducts(productsList) {
+  async saveBatchProducts(productsList, options = {}) {
+    const strict = options.strict === true;
     if (!Array.isArray(productsList) || productsList.length === 0) {
       return { success: true, count: 0, products: [] };
     }
@@ -152,9 +153,23 @@ class ProductService {
 
     const savedList = [];
     for (const prod of productsList) {
-      if (!prod || !prod.descricao || prod.descricao.trim().length === 0) continue;
+      if (!prod || !prod.descricao || prod.descricao.trim().length === 0) {
+        if (strict) {
+          const err = new Error('Todo produto importado deve possuir descrição.');
+          err.statusCode = 400;
+          throw err;
+        }
+        continue;
+      }
       const cod = (prod.codigoInterno || prod.codigo || '').trim().toUpperCase();
-      if (!cod) continue;
+      if (!cod) {
+        if (strict) {
+          const err = new Error(`O produto "${prod.descricao.trim()}" está sem código interno.`);
+          err.statusCode = 400;
+          throw err;
+        }
+        continue;
+      }
 
       let supplierId = (prod.supplierId || prod.fornecedorPadraoId || '').trim();
       let nomeFornecedor = (prod.nomeFornecedor || prod.fornecedorPadraoNome || '').trim();
@@ -190,6 +205,7 @@ class ProductService {
         const saved = await productRepository.upsert(payload);
         if (saved) savedList.push(saved);
       } catch (err) {
+        if (strict) throw err;
         console.error('Erro ao salvar produto em lote:', err.message);
       }
     }

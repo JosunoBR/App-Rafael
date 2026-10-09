@@ -2,11 +2,9 @@
  * Utilitários para conversão e tratamento robusto de datas do Excel (números seriais e strings).
  */
 
-export function parseExcelDate(value: any, fallbackDaysOffset = 15): string {
+export function parseExcelDate(value: any): string {
   if (value === null || value === undefined || value === '' || value === 0 || value === '0') {
-    const fallback = new Date();
-    fallback.setDate(fallback.getDate() + fallbackDaysOffset);
-    return formatDateToBR(fallback);
+    return '';
   }
 
   // Se já for um Date do JS
@@ -33,7 +31,7 @@ export function parseExcelDate(value: any, fallbackDaysOffset = 15): string {
     const trimmed = value.trim();
 
     // Já está no formato DD/MM/YYYY ou DD/MM/YY
-    const brMatch = trimmed.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
+    const brMatch = trimmed.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
     if (brMatch) {
       const day = brMatch[1].padStart(2, '0');
       const month = brMatch[2].padStart(2, '0');
@@ -57,10 +55,9 @@ export function parseExcelDate(value: any, fallbackDaysOffset = 15): string {
     }
   }
 
-  // Fallback padrão
-  const defaultDate = new Date();
-  defaultDate.setDate(defaultDate.getDate() + fallbackDaysOffset);
-  return formatDateToBR(defaultDate);
+  // Datas ausentes ou inválidas devem continuar explícitas. Inventar uma data
+  // altera vencimentos financeiros e torna a mesma planilha não determinística.
+  return '';
 }
 
 export function formatDateToBR(d: Date): string {

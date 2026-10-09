@@ -1,6 +1,7 @@
 const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
+const { AsyncLocalStorage } = require('async_hooks');
 const config = require('./environment');
 
 const dbDir = process.env.DB_DIR || path.resolve(__dirname, '../../data');
@@ -876,8 +877,15 @@ async function getDatabase() {
 let saveTimeout = null;
 let isWritingDisk = false;
 let pendingDiskSave = false;
+const transactionContext = new AsyncLocalStorage();
+let transactionBarrier = Promise.resolve();
+let transactionDirty = false;
 
 function scheduleDatabaseSave(delayMs = 2000) {
+  if (transactionContext.getStore()) {
+    transactionDirty = true;
+    return;
+  }
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
     saveDatabaseToDiskAsync();
@@ -930,6 +938,10 @@ function saveDatabaseToDisk() {
 }
 
 function flushDatabaseToDisk() {
+  if (transactionContext.getStore()) {
+    transactionDirty = true;
+    return;
+  }
   saveDatabaseToDisk();
 }
 
@@ -943,6 +955,7 @@ process.on('SIGINT', () => {
 
 // Helpers de Execução de Queries
 async function queryAll(sql, params = []) {
+  if (!transactionContext.getStore()) await transactionBarrier;
   const db = await getDatabase();
   const res = db.exec(sql, params);
   if (!res[0]) return [];
@@ -960,10 +973,50 @@ async function queryOne(sql, params = []) {
 }
 
 async function execute(sql, params = []) {
+  if (!transactionContext.getStore()) await transactionBarrier;
   const db = await getDatabase();
   db.run(sql, params);
   // Operação em memória concluída instantaneamente; disco é persistido em segundo plano com debounce
   scheduleDatabaseSave(2000);
+}
+
+async function withTransaction(work) {
+  if (typeof work !== 'function') throw new TypeError('A transação exige uma função de trabalho.');
+
+  // Uma transação aninhada participa da transação já aberta.
+  if (transactionContext.getStore()) {
+    return work(await getDatabase());
+  }
+
+  let releaseBarrier;
+  const previousBarrier = transactionBarrier;
+  transactionBarrier = new Promise(resolve => { releaseBarrier = resolve; });
+  await previousBarrier;
+
+  let db;
+  try {
+    db = await getDatabase();
+    db.run('BEGIN IMMEDIATE TRANSACTION');
+    transactionDirty = false;
+    const result = await transactionContext.run({ active: true }, () => work(db));
+    db.run('COMMIT');
+    const mustSave = transactionDirty;
+    transactionDirty = false;
+    releaseBarrier();
+    if (mustSave) {
+      // Se outra transação já estiver na fila, só exporta o banco depois dela.
+      // Exportar o sql.js no meio de uma transação poderia persistir estado parcial.
+      transactionBarrier.then(() => scheduleDatabaseSave(0));
+    }
+    return result;
+  } catch (error) {
+    if (db) {
+      try { db.run('ROLLBACK'); } catch (_) {}
+    }
+    transactionDirty = false;
+    releaseBarrier();
+    throw error;
+  }
 }
 
 module.exports = {
@@ -974,5 +1027,6 @@ module.exports = {
   dbPath,
   queryAll,
   queryOne,
-  execute
+  execute,
+  withTransaction
 };

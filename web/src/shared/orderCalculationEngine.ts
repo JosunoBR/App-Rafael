@@ -80,7 +80,9 @@ export function calculateOrderTotals(
     fiscal = orderOrItems.fiscalConfig || optionalFiscal;
   }
 
-  const offGlobal = Math.max(0, Math.min(100, Number(header?.percentualDescontoOff) || 0));
+  const offGlobal = header?.aplicarDescontoOff === false
+    ? 0
+    : Math.max(0, Math.min(100, Number(header?.percentualDescontoOff) || 0));
   const defaultGlobalIpiPct = normalizeRateToDecimal(fiscal?.ipiAliquota) * 100;
   const defaultGlobalStPct = normalizeRateToDecimal(fiscal?.aliquotaSt) * 100;
   const headerIpiPct = header?.aliquotaIpi !== undefined && header.aliquotaIpi !== null && Number(header.aliquotaIpi) > 0

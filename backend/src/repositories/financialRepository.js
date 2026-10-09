@@ -215,18 +215,28 @@ class FinancialRepository {
   }
 
   async createBatch(entries) {
-    const results = [];
-    for (const entry of entries) {
-      const created = await this.create(entry);
-      results.push(created);
+    if (!entries || entries.length === 0) return [];
+    const db = await getDatabase();
+    db.run("BEGIN TRANSACTION;");
+    try {
+      const results = [];
+      for (const entry of entries) {
+        const created = await this.create(entry);
+        results.push(created);
+      }
+      db.run("COMMIT;");
+      flushDatabaseToDisk();
+      return results;
+    } catch (err) {
+      try { db.run("ROLLBACK;"); } catch (_) {}
+      throw err;
     }
-    return results;
   }
 
   /**
    * Verifica se já existe um boleto/lançamento idêntico no sistema para evitar boletos duplicados
    */
-  async findDuplicate({ descricao, valor, dataVencimento, lojaNome, documentoRef, excludeId = null }) {
+  async findDuplicate({ descricao, valor, dataVencimento, lojaNome, documentoRef, excludeId = null, checkParcelPattern = false }) {
     const val = parseFloat(valor) || 0;
     const normalizedVenc = toBrDate(dataVencimento);
     const cleanDesc = String(descricao || '').trim().toUpperCase();
@@ -261,11 +271,16 @@ class FinancialRepository {
       let sql = `
         SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, status
         FROM financial_entries
-        WHERE UPPER(TRIM(descricao)) = ?
+        WHERE (UPPER(TRIM(descricao)) = ? ${checkParcelPattern ? 'OR UPPER(TRIM(descricao)) LIKE ?' : ''})
           AND (dataVencimento = ? OR dataVencimento LIKE ?)
           AND ROUND(valor, 2) = ROUND(?, 2)
       `;
-      const params = [cleanDesc, normalizedVenc, `%${normalizedVenc}%`, val];
+      const params = [cleanDesc];
+      if (checkParcelPattern) {
+        params.push(`${cleanDesc} (%`);
+      }
+      params.push(normalizedVenc, `%${normalizedVenc}%`, val);
+
       if (cleanLoja) {
         sql += ' AND (UPPER(TRIM(lojaNome)) = ? OR UPPER(TRIM(storeId)) = ?)';
         params.push(cleanLoja, cleanLoja.toLowerCase());

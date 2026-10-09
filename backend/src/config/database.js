@@ -405,6 +405,12 @@ async function getDatabase() {
     CREATE INDEX IF NOT EXISTS idx_fin_categoria ON financial_entries(categoria);
     CREATE INDEX IF NOT EXISTS idx_fin_loja ON financial_entries(lojaNome);
     CREATE INDEX IF NOT EXISTS idx_fin_order ON financial_entries(orderId);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_fin_unique_order_inst 
+      ON financial_entries(orderId, installmentId) 
+      WHERE orderId IS NOT NULL AND installmentId IS NOT NULL AND installmentId != '';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_fin_unique_order_parc 
+      ON financial_entries(orderId, parcelaNumero) 
+      WHERE orderId IS NOT NULL AND parcelaNumero IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS order_deletion_logs (
       id TEXT PRIMARY KEY,
@@ -696,6 +702,16 @@ async function getDatabase() {
       try {
         dbInstance.run("CREATE INDEX IF NOT EXISTS idx_fin_status_previsao ON financial_entries(statusPrevisao)");
         dbInstance.run("CREATE INDEX IF NOT EXISTS idx_fin_recorrencia ON financial_entries(recorrenciaId)");
+        dbInstance.run(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_fin_unique_order_inst 
+            ON financial_entries(orderId, installmentId) 
+            WHERE orderId IS NOT NULL AND installmentId IS NOT NULL AND installmentId != '';
+        `);
+        dbInstance.run(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_fin_unique_order_parc 
+            ON financial_entries(orderId, parcelaNumero) 
+            WHERE orderId IS NOT NULL AND parcelaNumero IS NOT NULL;
+        `);
       } catch (e) {}
     } catch (e) {}
     // Sanitização de nomes de fornecedores de transferência e remoção de títulos indevidos

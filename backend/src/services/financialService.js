@@ -272,31 +272,31 @@ class FinancialService {
     const rawDataBase = primeiroVencimento || dataVencimento || new Date().toISOString().substring(0, 10);
     const dataBase = toBrDate(rawDataBase);
 
-    // 🛡️ Trava Anti-Duplicidade de Boletos e Lançamentos Manuais
-    const duplicate = await financialRepo.findDuplicate({
-      descricao,
-      valor: montanteTotal,
-      dataVencimento: dataBase,
-      lojaNome: lojaNome || storeId || 'ALS',
-      documentoRef
-    });
-
-    if (duplicate) {
-      const valorFmt = Number(duplicate.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-      const docInfo = duplicate.documentoRef ? ` (Doc: ${duplicate.documentoRef})` : '';
-      const err = new Error(
-        `Trava de Segurança: Já existe um boleto/lançamento registrado no sistema para "${duplicate.descricao}" no valor de R$ ${valorFmt} com vencimento em ${duplicate.dataVencimento}${docInfo} (Loja: ${duplicate.lojaNome || 'Geral'}). Operação bloqueada para evitar pagamento duplicado.`
-      );
-      err.code = 'DUPLICATE_ENTRY';
-      err.conflictEntry = duplicate;
-      throw err;
-    }
-
     // Se for Despesa Fixa Recorrente (Projeção Automática de 6 meses à frente)
     if (Boolean(recorrente)) {
+      // 🛡️ Trava Anti-Duplicidade para Recorrentes
+      const duplicate = await financialRepo.findDuplicate({
+        descricao,
+        valor: montanteTotal,
+        dataVencimento: dataBase,
+        lojaNome: lojaNome || storeId || 'ALS',
+        documentoRef
+      });
+
+      if (duplicate) {
+        const valorFmt = Number(duplicate.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const docInfo = duplicate.documentoRef ? ` (Doc: ${duplicate.documentoRef})` : '';
+        const err = new Error(
+          `Trava de Segurança: Já existe um boleto/lançamento registrado no sistema para "${duplicate.descricao}" no valor de R$ ${valorFmt} com vencimento em ${duplicate.dataVencimento}${docInfo} (Loja: ${duplicate.lojaNome || 'Geral'}). Operação bloqueada para evitar pagamento duplicado.`
+        );
+        err.code = 'DUPLICATE_ENTRY';
+        err.conflictEntry = duplicate;
+        throw err;
+      }
+
       const recId = data.recorrenciaId || ('rec_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
       const horizonMonths = Math.max(6, parseInt(data.mesesProjecao, 10) || 6);
-      const createdList = [];
+      const plannedList = [];
 
       // Extrai dia base do vencimento original (ex: dia 22)
       let baseDay = 1;
@@ -328,7 +328,7 @@ class FinancialService {
         const anoAbrev = String(y).slice(-2);
         const parcelaDesc = `Recorrente ${mesAbrev}/${anoAbrev}`;
 
-        const entry = await financialRepo.create({
+        plannedList.push({
           tipo,
           descricao: descricao.trim(),
           categoria,
@@ -350,14 +350,34 @@ class FinancialService {
           recorrenciaId: recId,
           statusPrevisao: (statusPrevisao || 'CONFIRMADO').toUpperCase()
         });
-        createdList.push(entry);
       }
 
-      return createdList[0];
+      const created = await financialRepo.createBatch(plannedList);
+      return created[0];
     }
 
     // Se for parcela única (1x)
     if (totalQtd === 1) {
+      // 🛡️ Trava Anti-Duplicidade para Parcela Única
+      const duplicate = await financialRepo.findDuplicate({
+        descricao,
+        valor: montanteTotal,
+        dataVencimento: dataBase,
+        lojaNome: lojaNome || storeId || 'ALS',
+        documentoRef
+      });
+
+      if (duplicate) {
+        const valorFmt = Number(duplicate.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const docInfo = duplicate.documentoRef ? ` (Doc: ${duplicate.documentoRef})` : '';
+        const err = new Error(
+          `Trava de Segurança: Já existe um boleto/lançamento registrado no sistema para "${duplicate.descricao}" no valor de R$ ${valorFmt} com vencimento em ${duplicate.dataVencimento}${docInfo} (Loja: ${duplicate.lojaNome || 'Geral'}). Operação bloqueada para evitar pagamento duplicado.`
+        );
+        err.code = 'DUPLICATE_ENTRY';
+        err.conflictEntry = duplicate;
+        throw err;
+      }
+
       return await financialRepo.create({
         tipo,
         descricao: descricao.trim(),
@@ -387,7 +407,7 @@ class FinancialService {
     const baseCentavos = Math.floor(totalCentavos / totalQtd);
     const restoCentavos = totalCentavos - (baseCentavos * totalQtd);
 
-    const createdEntries = [];
+    const plannedEntries = [];
     let baseDateObj;
     if (dataBase.includes('/')) {
       const [d, m, y] = dataBase.split('/');
@@ -397,7 +417,6 @@ class FinancialService {
     }
 
     for (let i = 1; i <= totalQtd; i++) {
-      // Ajusta os centavos restantes na 1ª parcela por padrão ou usa valor customizado enviado
       let valorItem = (i === 1) ? ((baseCentavos + restoCentavos) / 100) : (baseCentavos / 100);
       if (Array.isArray(valoresCustomizados) && valoresCustomizados[i - 1] !== undefined) {
         const parsedCustom = parseCurrencyNumber(valoresCustomizados[i - 1]);
@@ -415,7 +434,7 @@ class FinancialService {
         dueBr = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
       }
 
-      const entry = await financialRepo.create({
+      plannedEntries.push({
         tipo,
         descricao: `${descricao.trim()} (${i}/${totalQtd})`,
         categoria,
@@ -436,11 +455,53 @@ class FinancialService {
         recorrente: Boolean(recorrente),
         statusPrevisao: (statusPrevisao || 'CONFIRMADO').toUpperCase()
       });
-
-      createdEntries.push(entry);
     }
 
-    return createdEntries;
+    // 🛡️ Trava Anti-Duplicidade de Parcelas
+    // 1. Verifica se já existe um lançamento com o valor total e descrição base
+    const dupTotal = await financialRepo.findDuplicate({
+      descricao,
+      valor: montanteTotal,
+      dataVencimento: dataBase,
+      lojaNome: lojaNome || storeId || 'ALS',
+      documentoRef
+    });
+    if (dupTotal) {
+      const valorFmt = Number(dupTotal.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      const docInfo = dupTotal.documentoRef ? ` (Doc: ${dupTotal.documentoRef})` : '';
+      const err = new Error(
+        `Trava de Segurança: Já existe um lançamento registrado para "${dupTotal.descricao}" no valor de R$ ${valorFmt} com vencimento em ${dupTotal.dataVencimento}${docInfo} (Loja: ${dupTotal.lojaNome || 'Geral'}). Operação bloqueada.`
+      );
+      err.code = 'DUPLICATE_ENTRY';
+      err.conflictEntry = dupTotal;
+      throw err;
+    }
+
+    // 2. Verifica se a primeira parcela planejada (ou qualquer parcela) já existe
+    for (const p of plannedEntries) {
+      const dupP = await financialRepo.findDuplicate({
+        descricao: p.descricao,
+        valor: p.valor,
+        dataVencimento: p.dataVencimento,
+        lojaNome: lojaNome || storeId || 'ALS',
+        documentoRef: p.documentoRef,
+        checkParcelPattern: true
+      });
+      if (dupP) {
+        const valorFmt = Number(dupP.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const docInfo = dupP.documentoRef ? ` (Doc: ${dupP.documentoRef})` : '';
+        const err = new Error(
+          `Trava de Segurança: A parcela "${dupP.descricao}" no valor de R$ ${valorFmt} com vencimento em ${dupP.dataVencimento}${docInfo} (Loja: ${dupP.lojaNome || 'Geral'}) já existe no sistema. Operação bloqueada para evitar parcelas duplicadas.`
+        );
+        err.code = 'DUPLICATE_ENTRY';
+        err.conflictEntry = dupP;
+        throw err;
+      }
+    }
+
+    // Grava todas as parcelas atomicamente em lote via transação
+    return await financialRepo.createBatch(plannedEntries);
+
   }
 
   async updateEntry(id, data, currentUser = null) {
@@ -1025,6 +1086,18 @@ class FinancialService {
       const descricao = String(descRaw || '').trim() || `Pagamento ${cat}`;
       const loja = String(lojaRaw || '').trim() || 'ALS';
 
+      // 🛡️ Trava Anti-Duplicidade na Importação
+      const exists = await financialRepo.findDuplicate({
+        descricao,
+        valor: val,
+        dataVencimento: toBrDate(dataVencimento),
+        lojaNome: loja,
+        documentoRef: String(nfRaw || '')
+      });
+      if (exists) {
+        continue;
+      }
+
       await financialRepo.create({
         tipo: cat === 'PRODUTOS' ? 'pedido_parcela' : 'despesa',
         descricao: descricao,
@@ -1130,6 +1203,7 @@ class FinancialService {
           lastYearMonth = maxY * 12 + maxM;
         }
 
+        let seriesAddedCount = 0;
         // Se o último vencimento cadastrado estiver antes do final da janela de 6 meses
         while (lastYearMonth < targetYearMonth) {
           lastYearMonth++;

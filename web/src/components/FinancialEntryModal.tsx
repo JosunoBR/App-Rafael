@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Plus,
@@ -84,11 +84,13 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   const [isRecorrente, setIsRecorrente] = useState<boolean>(false);
 
   const [saving, setSaving] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Limpar formulário ao abrir
   useEffect(() => {
     if (isOpen) {
+      isSubmittingRef.current = false;
       setDescricao('');
       setFornecedor('');
       setCategoria('FIXO');
@@ -295,6 +297,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving || isSubmittingRef.current) return;
     setErrorMsg(null);
 
     if (!descricao.trim()) {
@@ -322,6 +325,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
       }
     }
 
+    isSubmittingRef.current = true;
     setSaving(true);
     try {
       const payload = {
@@ -359,6 +363,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
       setErrorMsg(err.message || 'Erro ao registrar lançamento.');
       showToast(err.message || 'Erro ao salvar lançamento.', 'error');
     } finally {
+      isSubmittingRef.current = false;
       setSaving(false);
     }
   };

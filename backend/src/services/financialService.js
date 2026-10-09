@@ -588,6 +588,14 @@ class FinancialService {
       throw new Error('Lançamento não encontrado para baixa.');
     }
 
+    // Validação de Integridade: valor pago deve ser positivo
+    if (paymentData.valorPago !== undefined && paymentData.valorPago !== null && paymentData.valorPago !== '') {
+      const vPago = Number(paymentData.valorPago);
+      if (isNaN(vPago) || vPago <= 0) {
+        throw new Error('O valor pago informado para a baixa deve ser um número positivo maior que zero.');
+      }
+    }
+
     // Regra de Governança Financeira / Compliance:
     // Boletos com status "PREVISTO" aguardam recebimento físico na Matriz e liberação na esteira
     const isPrevisto = (before.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO';

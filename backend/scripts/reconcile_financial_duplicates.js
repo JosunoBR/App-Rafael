@@ -95,9 +95,13 @@ async function reconcile() {
 
       const sameDoc = (String(keeper.documentoRef || '').trim().toUpperCase() === String(candidate.documentoRef || '').trim().toUpperCase());
       const bothNoDoc = (!keeper.documentoRef && !candidate.documentoRef);
+      const sameParcela = (
+        (parseInt(keeper.parcelaNumero, 10) || 1) === (parseInt(candidate.parcelaNumero, 10) || 1) &&
+        String(keeper.parcelaDesc || '').trim().toUpperCase() === String(candidate.parcelaDesc || '').trim().toUpperCase()
+      );
 
-      // Se foi criado com menos de 120s de diferença e tem o mesmo documento ou ambos sem doc
-      if ((diffSecs <= 120 || isNaN(diffSecs)) && (sameDoc || bothNoDoc)) {
+      // Se foi criado com menos de 120s de diferença, tem o mesmo documento E é exatamente a mesma parcela
+      if ((diffSecs <= 120 || isNaN(diffSecs)) && (sameDoc || bothNoDoc) && sameParcela) {
         confirmedClonesToRemove.push({
           removeId: candidate.id,
           keepId: keeper.id,
@@ -108,13 +112,23 @@ async function reconcile() {
           diffSecs: Math.round(diffSecs),
           candidateCreatedAt: candidate.createdAt,
           keeperCreatedAt: keeper.createdAt,
-          status: candidate.status
+          status: candidate.status,
+          parcela: candidate.parcelaDesc
         });
       } else {
+        let reason = '';
+        if (!sameParcela) {
+          reason = `Parcelas distintas da mesma nota/contrato (${keeper.parcelaDesc || keeper.parcelaNumero} vs ${candidate.parcelaDesc || candidate.parcelaNumero}) - Vencimento coincidente ou prorrogação de data.`;
+        } else if (!sameDoc && !bothNoDoc) {
+          reason = `Documentos diferentes (${keeper.documentoRef || 'S/N'} vs ${candidate.documentoRef || 'S/N'})`;
+        } else {
+          reason = `Diferença temporal alta entre os cadastros (${Math.round(diffSecs)}s)`;
+        }
+
         manualReviewGroups.push({
           keeper,
           candidate,
-          reason: `Documentos diferentes (${keeper.documentoRef || 'S/N'} vs ${candidate.documentoRef || 'S/N'}) ou diferença temporal alta (${Math.round(diffSecs)}s)`
+          reason
         });
       }
     }

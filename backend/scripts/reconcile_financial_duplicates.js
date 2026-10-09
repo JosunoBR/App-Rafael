@@ -136,11 +136,14 @@ async function reconcile() {
   }
 
   if (manualReviewGroups.length > 0) {
-    console.log(`⚠️ CASOS MANTIDOS (NÃO REMOVIDOS AUTOMATICAMENTE):`);
+    console.log(`⚠️ CASOS MANTIDOS PARA REVISÃO MANUAL (NÃO REMOVIDOS AUTOMATICAMENTE):`);
     manualReviewGroups.forEach((m, idx) => {
-      console.log(`  [${idx + 1}] Chave: "${m.keeper.descricao}" | R$ ${m.keeper.valor} | Venc: ${m.keeper.dataVencimento}`);
-      console.log(`      IDs: ${m.keeper.id} vs ${m.candidate.id}`);
-      console.log(`      Motivo da Preservação: ${m.reason}\n`);
+      console.log(`  [${idx + 1}] Chave: "${m.keeper.descricao}" | R$ ${Number(m.keeper.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | Venc: ${m.keeper.dataVencimento} | Loja: ${m.keeper.lojaNome || 'ALS'}`);
+      console.log(`      • Registro A (Mantido): ID ${m.keeper.id}`);
+      console.log(`        Doc: "${m.keeper.documentoRef || 'S/N'}" | Status: ${m.keeper.status} | Parcela: ${m.keeper.parcelaDesc || 'Única'} | Criado: ${m.keeper.createdAt}`);
+      console.log(`      • Registro B (Candidato): ID ${m.candidate.id}`);
+      console.log(`        Doc: "${m.candidate.documentoRef || 'S/N'}" | Status: ${m.candidate.status} | Parcela: ${m.candidate.parcelaDesc || 'Única'} | Criado: ${m.candidate.createdAt}`);
+      console.log(`      👉 Motivo da Preservação: ${m.reason}\n`);
     });
   }
 

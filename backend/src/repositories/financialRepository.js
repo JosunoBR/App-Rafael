@@ -236,19 +236,20 @@ class FinancialRepository {
   /**
    * Verifica se já existe um boleto/lançamento idêntico no sistema para evitar boletos duplicados
    */
-  async findDuplicate({ descricao, valor, dataVencimento, lojaNome, documentoRef, excludeId = null, checkParcelPattern = false }) {
+  async findDuplicate({ descricao, valor, dataVencimento, lojaNome, documentoRef, parcelaDesc = null, parcelaNumero = null, formaPagamento = null, excludeId = null, checkParcelPattern = false }) {
     const val = parseFloat(valor) || 0;
     const normalizedVenc = toBrDate(dataVencimento);
     const cleanDesc = String(descricao || '').trim().toUpperCase();
     const cleanLoja = String(lojaNome || '').trim().toUpperCase();
     const cleanDoc = String(documentoRef || '').trim().toUpperCase();
+    const cleanParc = parcelaDesc ? String(parcelaDesc).trim().toUpperCase() : null;
 
     // 1. Verificação por número de documento (NF, Boleto, Linha digitável) se informado
     // Nota: Parcelas de um mesmo pedido possuem o mesmo documentoRef e podem ter o mesmo valor,
     // mas com vencimentos diferentes. Portanto, para ser duplicidade real, o vencimento também deve coincidir.
     if (cleanDoc && cleanDoc.length >= 3 && !['S/N', 'SEM NOTA', 'BOLETO', 'DEPOSITO', 'PIX', 'DINHEIRO', 'ÚNICA', 'UNICA'].includes(cleanDoc)) {
       let docSql = `
-        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, status
+        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, parcelaDesc, parcelaNumero, status
         FROM financial_entries
         WHERE UPPER(TRIM(documentoRef)) = ?
           AND ROUND(valor, 2) = ROUND(?, 2)
@@ -257,6 +258,13 @@ class FinancialRepository {
       if (normalizedVenc) {
         docSql += ' AND (dataVencimento = ? OR dataVencimento LIKE ?)';
         docParams.push(normalizedVenc, `%${normalizedVenc}%`);
+      }
+      if (cleanParc) {
+        docSql += ' AND UPPER(TRIM(COALESCE(parcelaDesc, \'\'))) = ?';
+        docParams.push(cleanParc);
+      } else if (parcelaNumero) {
+        docSql += ' AND parcelaNumero = ?';
+        docParams.push(parseInt(parcelaNumero, 10));
       }
       if (excludeId) {
         docSql += ' AND id != ?';
@@ -269,7 +277,7 @@ class FinancialRepository {
     // 2. Verificação por Descrição + Valor + Vencimento (+ Loja)
     if (cleanDesc && val > 0 && normalizedVenc) {
       let sql = `
-        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, status
+        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, parcelaDesc, parcelaNumero, status
         FROM financial_entries
         WHERE (UPPER(TRIM(descricao)) = ? ${checkParcelPattern ? 'OR UPPER(TRIM(descricao)) LIKE ?' : ''})
           AND (dataVencimento = ? OR dataVencimento LIKE ?)
@@ -284,6 +292,13 @@ class FinancialRepository {
       if (cleanLoja) {
         sql += ' AND (UPPER(TRIM(lojaNome)) = ? OR UPPER(TRIM(storeId)) = ?)';
         params.push(cleanLoja, cleanLoja.toLowerCase());
+      }
+      if (cleanParc) {
+        sql += ' AND UPPER(TRIM(COALESCE(parcelaDesc, \'\'))) = ?';
+        params.push(cleanParc);
+      } else if (parcelaNumero) {
+        sql += ' AND parcelaNumero = ?';
+        params.push(parseInt(parcelaNumero, 10));
       }
       if (excludeId) {
         sql += ' AND id != ?';
@@ -310,31 +325,52 @@ class FinancialRepository {
         const formattedMonth = String(targetMonth).padStart(2, '0');
         existingEntries = await this.findAll({ year: targetYear, month: formattedMonth });
       } else {
-        existingEntries = await queryAll('SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef FROM financial_entries');
+        existingEntries = await queryAll(`
+          SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, parcelaDesc, parcelaNumero, parcelaTotal, formaPagamento 
+          FROM financial_entries
+        `);
       }
     }
 
     const existingKeys = new Set();
     const normalizeStr = (s) => String(s || '').trim().toUpperCase();
+    const normalizeParc = (parc, num, tot) => {
+      const p = normalizeStr(parc);
+      if (p && p !== 'ÚNICA' && p !== 'UNICA') return p;
+      if (num) return `${num}/${tot || 1}`;
+      return '1/1';
+    };
+    const normalizeForma = (f) => {
+      const s = normalizeStr(f);
+      if (s.includes('DEP')) return 'DEPOSITO';
+      if (s.includes('PIX') || s.includes('DINHEIRO')) return 'DINHEIRO';
+      if (s.includes('CHEQUE')) return 'CHEQUE';
+      if (s.includes('BOLETO')) return 'BOLETO';
+      return s || 'BOLETO';
+    };
 
-    const makeEntryKey = (desc, valor, venc, loja) => {
+    const makeEntryKey = (desc, valor, venc, loja, parc, forma) => {
       const d = normalizeStr(desc);
       const v = (parseFloat(valor) || 0).toFixed(2);
       const dt = toBrDate(venc);
       const l = normalizeStr(loja);
-      return `${d}|${v}|${dt}|${l}`;
+      const p = normalizeParc(parc);
+      const f = normalizeForma(forma);
+      return `${d}|${v}|${dt}|${l}|${p}|${f}`;
     };
 
-    const makeDocKey = (doc, valor) => {
+    const makeDocKey = (doc, parc, valor) => {
       const d = normalizeStr(doc);
       if (!d || d.length < 3 || ['S/N', 'SEM NOTA', 'BOLETO', 'DEPOSITO', 'PIX', 'DINHEIRO', 'ÚNICA', 'UNICA'].includes(d)) return null;
+      const p = normalizeParc(parc);
       const v = (parseFloat(valor) || 0).toFixed(2);
-      return `DOC:${d}|${v}`;
+      return `DOC:${d}|${p}|${v}`;
     };
 
     for (const ex of existingEntries) {
-      existingKeys.add(makeEntryKey(ex.descricao, ex.valor, ex.dataVencimento, ex.lojaNome));
-      const docK = makeDocKey(ex.documentoRef, ex.valor);
+      const parcRef = ex.parcelaDesc || (ex.parcelaNumero ? `${ex.parcelaNumero}/${ex.parcelaTotal || 1}` : '1/1');
+      existingKeys.add(makeEntryKey(ex.descricao, ex.valor, ex.dataVencimento, ex.lojaNome, parcRef, ex.formaPagamento));
+      const docK = makeDocKey(ex.documentoRef, parcRef, ex.valor);
       if (docK) existingKeys.add(docK);
     }
 
@@ -377,11 +413,12 @@ class FinancialRepository {
         const normalizedPagamento = entry.dataPagamento ? toBrDate(entry.dataPagamento) : null;
         const status = entry.status || (entry.valorPago && entry.valorPago >= val ? 'Pago' : 'A Vencer');
         const lojaNome = String(entry.lojaNome || entry.empresa || 'ALS').trim();
+        const parcRef = entry.parcelaDesc || (entry.parcelaNumero ? `${entry.parcelaNumero}/${entry.parcelaTotal || 1}` : '1/1');
 
         // 🛡️ Validação da Trava Anti-Duplicidade no Modo Append
         if (mode !== 'replace_month') {
-          const entryKey = makeEntryKey(entry.descricao, val, normalizedVencimento, lojaNome);
-          const docKey = makeDocKey(entry.documentoRef, val);
+          const entryKey = makeEntryKey(entry.descricao, val, normalizedVencimento, lojaNome, parcRef, entry.formaPagamento);
+          const docKey = makeDocKey(entry.documentoRef, parcRef, val);
 
           if (existingKeys.has(entryKey) || (docKey && existingKeys.has(docKey))) {
             skippedCount++;

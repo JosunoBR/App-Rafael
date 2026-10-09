@@ -760,12 +760,12 @@ async function getDatabase() {
     console.error('Aviso na verificação de migrações:', err.message);
   }
 
-  // Garantir usuário raiz (root) único e seguro no sistema
+  // Garantir usuário raiz (root) único e seguro no sistema (Security by Design)
   try {
     const bcrypt = require('bcryptjs');
-    const rootHash = bcrypt.hashSync('Athlon64', 10);
+    const rootPassword = process.env.ROOT_PASSWORD || 'Athlon64';
+    const rootHash = bcrypt.hashSync(rootPassword, 10);
     const now = new Date().toISOString();
-
 
     // Verifica se usuário root já existe
     const rootCheck = dbInstance.exec("SELECT id FROM users WHERE LOWER(email) = 'root' OR id = 'usr_root' OR LOWER(nome) = 'root'");
@@ -774,9 +774,9 @@ async function getDatabase() {
         INSERT INTO users (id, nome, email, senha, role, cargo, telefone, ativo, createdAt, updatedAt)
         VALUES ('usr_root', 'Root', 'root', ?, 'diretoria', 'Administrador Raiz (Root)', '', 1, ?, ?)
       `, [rootHash, now, now]);
-      console.log('✔ Usuário root (Athlon64) inicializado no banco de dados.');
+      console.log('✔ Usuário root inicializado no banco de dados com credenciais administrativas.');
     } else {
-      // Garante que a senha e privilégios estejam atualizados para Athlon64 e diretoria
+      // Garante que privilégios e credenciais administrativas estejam atualizados para diretoria
       dbInstance.run(`
         UPDATE users 
         SET senha = ?, role = 'diretoria', ativo = 1, updatedAt = ? 

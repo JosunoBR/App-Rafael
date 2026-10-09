@@ -911,7 +911,13 @@ class FinancialService {
       if (ent.installmentId) {
         existingMap.set(String(ent.installmentId), ent);
       }
-      if (ent.parcelaNumero !== undefined && ent.parcelaNumero !== null) {
+      const isFreteEnt = ent.categoria === 'FRETE' || 
+                         (ent.installmentId && String(ent.installmentId).includes('frete')) ||
+                         String(ent.documentoRef || '').toUpperCase().includes('FRETE');
+      if (isFreteEnt) {
+        existingMap.set('frete', ent);
+      } else if (ent.parcelaNumero !== undefined && ent.parcelaNumero !== null) {
+        existingMap.set(`merc_${ent.parcelaNumero}`, ent);
         existingMap.set(String(ent.parcelaNumero), ent);
         existingMap.set(Number(ent.parcelaNumero), ent);
       }
@@ -929,7 +935,12 @@ class FinancialService {
     const processedEntryIds = new Set();
 
     for (const inst of installments) {
+      const isFrete = inst.isBoletoFrete === true || 
+                      inst.tipoTitulo === 'frete' || 
+                      String(inst.documentoRef || '').toUpperCase().includes('FRETE');
+
       const existing = (inst.id && existingMap.get(String(inst.id))) ||
+                       (isFrete ? existingMap.get('frete') : existingMap.get(`merc_${inst.numeroParcela}`)) ||
                        existingMap.get(String(inst.numeroParcela)) ||
                        existingMap.get(Number(inst.numeroParcela));
 
@@ -950,22 +961,26 @@ class FinancialService {
         ? toBrDate(existing.dataVencimento)
         : toBrDate(inst.dataVencimento || inst.vencimento || existing?.dataVencimento);
 
+      const stableInstId = inst.id || (isFrete ? `inst_frete_${orderId}` : (existing ? existing.installmentId : `inst_${orderId}_${inst.numeroParcela}`));
+
       const entryPayload = {
         tipo: 'pedido_parcela',
         orderId: orderId,
-        installmentId: inst.id || (existing ? existing.installmentId : null),
-        descricao: `${fornecedor} - Pedido ${numPedido} (${inst.numeroParcela}/${inst.totalParcelas})`,
-        categoria: 'PRODUTOS',
+        installmentId: stableInstId,
+        descricao: isFrete
+          ? `${fornecedor} - Pedido ${numPedido} (Frete)`
+          : `${fornecedor} - Pedido ${numPedido} (${inst.numeroParcela}/${inst.totalParcelas})`,
+        categoria: isFrete ? 'FRETE' : 'PRODUTOS',
         fornecedor: fornecedor,
         storeId: existing?.storeId || 'matriz',
         lojaNome: existing?.lojaNome || 'Depósito Central / Matriz',
         empresa: existing?.empresa || 'ALS',
         formaPagamento: normalizeFormaPagamento(inst.metodoPagamento || formaPgto || existing?.formaPagamento || 'BOLETO'),
         bancoConta: existing?.bancoConta || '',
-        documentoRef: existing?.documentoRef || inst.documentoRef || numPedido,
+        documentoRef: existing?.documentoRef || inst.documentoRef || (isFrete ? 'Boleto Frete' : numPedido),
         parcelaNumero: inst.numeroParcela,
         parcelaTotal: inst.totalParcelas,
-        parcelaDesc: `${inst.numeroParcela}/${inst.totalParcelas}`,
+        parcelaDesc: isFrete ? 'Frete' : `${inst.numeroParcela}/${inst.totalParcelas}`,
         dataVencimento: vencimentoFinal,
         valor: (isPaid && existing?.valor) ? existing.valor : inst.valor,
         status: isPaid ? 'Pago' : 'A Vencer',
@@ -1092,7 +1107,10 @@ class FinancialService {
         valor: val,
         dataVencimento: toBrDate(dataVencimento),
         lojaNome: loja,
-        documentoRef: String(nfRaw || '')
+        documentoRef: String(nfRaw || ''),
+        parcelaDesc: parcStr || 'Única',
+        parcelaNumero: parcelaNum,
+        formaPagamento: forma
       });
       if (exists) {
         continue;

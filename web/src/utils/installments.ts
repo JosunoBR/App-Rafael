@@ -548,8 +548,8 @@ export function generateOrderInstallments(
     const targetPctDep = order.header.percentualEntrada !== undefined 
       ? order.header.percentualEntrada 
       : ((order.header.percentualNota !== undefined && order.header.percentualNota > 0 && order.header.percentualNota < 100)
-          ? Math.max(0, 100 - order.header.percentualNota)
-          : (prazo === 'deposito_e_boleto' ? 50 : 30));
+          ? order.header.percentualNota
+          : (prazo === 'deposito_e_boleto' ? 70 : 30));
     const valorTotalDeposito = isProporcional && valorBaseMercadoria > 0
       ? Number((valorBaseMercadoria * (targetPctDep / 100)).toFixed(2))
       : Math.min(valorBaseMercadoria, Math.max(0, order.header.valorEntradaAVista || 0));

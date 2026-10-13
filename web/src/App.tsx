@@ -3286,6 +3286,12 @@ export function App() {
                         currentUser?.role === ('root' as any) ||
                         !order.header.recebidoMatriz
                       )}
+                      canEditPaymentDates={Boolean(
+                        currentUser?.role === 'diretoria' ||
+                        currentUser?.role === 'faturamento' ||
+                        currentUser?.role === ('root' as any) ||
+                        canEditSpecificOrder(currentUser, order.header.status)
+                      )}
                     />
 
                     {/* 2. Engenharia Fiscal e Grade de Itens */}

@@ -74,6 +74,7 @@ interface OrderHeaderFormProps {
   showToast?: (msg: string, type?: 'success' | 'info' | 'error') => void;
   isLocked?: boolean;
   canEditDeliveryDate?: boolean;
+  canEditPaymentDates?: boolean;
 }
 
 export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({ 
@@ -89,12 +90,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   supplierTemplateItemsCount = 0,
   showToast,
   isLocked = false,
-  canEditDeliveryDate
+  canEditDeliveryDate,
+  canEditPaymentDates
 }) => {
   const isReceiptConfirmed = Boolean(header.recebidoMatriz);
   const isDeliveryDateEditable = canEditDeliveryDate !== undefined 
     ? canEditDeliveryDate 
     : (!isReceiptConfirmed || !isLocked);
+
+  // Ponto 3: Datas de pagamento livremente editáveis para o perfil financeiro/faturamento
+  const isPaymentDatesEditable = canEditPaymentDates !== undefined
+    ? canEditPaymentDates
+    : (!isLocked || !isReceiptConfirmed);
 
   const [isExpanded, setIsExpanded] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -181,10 +188,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       // O frete é um valor à parte; as parcelas dos produtos cobrem 100% do total da mercadoria
       const baseMercadoria = Math.max(0, totalPed);
 
-      const pctBoleto = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
+      const pctDeposito = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
         ? header.percentualNota
-        : 70;
-      const pctDeposito = cond.percentualEntradaPadrao ?? Math.max(0, 100 - pctBoleto);
+        : (cond.percentualEntradaPadrao ?? 70);
+      const pctBoleto = Math.max(0, 100 - pctDeposito);
       const calculatedEntrada = baseMercadoria > 0 ? Number((baseMercadoria * (pctDeposito / 100)).toFixed(2)) : (header.valorEntradaAVista || 0);
 
       const depPrazo = cond.depositoPrazoDias || (cond.parcelasDias?.[0] === 0 ? 'vista' : '30');
@@ -368,8 +375,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     if (field === 'percentualNota') {
       const pctVal = parseFloat(value) || 0;
       if (isEntradaMista && pctVal > 0 && pctVal <= 100) {
-        const isCurrentlyInverted = header.percentualEntrada !== undefined && header.percentualEntrada === (header.percentualNota || 0);
-        const newPctDeposito = isCurrentlyInverted ? pctVal : Math.max(0, 100 - pctVal);
+        // Ponto 1: Quando é informado o OFF, ex: 70%, a 1ª condição (Depósito) é 70%, a 2ª (Boleto) é 30%
+        const newPctDeposito = pctVal;
         const newValorEntrada = valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (newPctDeposito / 100)).toFixed(2)) : 0;
         const newCondString = formatPaymentConditionString(
           depositoParcelas + saldoParcelas,
@@ -430,10 +437,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     }
 
     if (field === 'formaPagamento' && (value === 'Boleto / Depósito' || value === 'Boleto / Cheque')) {
-      const pctBoleto = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
+      const pctDeposito = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
         ? header.percentualNota
         : 70;
-      const pctDeposito = Math.max(0, 100 - pctBoleto);
+      const pctBoleto = Math.max(0, 100 - pctDeposito);
       const initEntrada = valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (pctDeposito / 100)).toFixed(2)) : 0;
       const initDepParc = header.depositoParcelasCount || 2;
       const initDepPrazo = header.depositoPrazoDias || '30';
@@ -524,8 +531,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const valorBaseMercadoria = Math.max(0, valorTotalPedido);
 
   const hasCustomOff = header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100;
-  const pctBoletoFromOff = hasCustomOff ? header.percentualNota! : (isDepositoEBoleto ? 70 : 70);
-  const pctDepositoFromOff = Math.max(0, 100 - pctBoletoFromOff);
+  // Ponto 1: Quando é informado o OFF, ex: 70%, a 1ª condição (Depósito) é 70%, a 2ª (Boleto) é 30%
+  const pctDepositoFromOff = hasCustomOff ? header.percentualNota! : (isDepositoEBoleto ? 70 : 70);
+  const pctBoletoFromOff = Math.max(0, 100 - pctDepositoFromOff);
 
   const isProporcional = header.isEntradaProporcional !== false;
   const targetPctDeposito = header.percentualEntrada !== undefined
@@ -709,10 +717,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
   const handlePaymentPrazoChange = (newPrazo: string) => {
     if (newPrazo === 'deposito_e_boleto') {
-      const pctBoleto = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
+      const pctDeposito = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
         ? header.percentualNota
         : 70;
-      const pctDeposito = Math.max(0, 100 - pctBoleto);
+      const pctBoleto = Math.max(0, 100 - pctDeposito);
       const initEntrada = valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (pctDeposito / 100)).toFixed(2)) : 0;
       const initDepParc = header.depositoParcelasCount || 2;
       const initDepPrazo = header.depositoPrazoDias || '30';
@@ -746,10 +754,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     } 
     
     if (newPrazo === 'entrada_com_parcelamento') {
-      const pctBoleto = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
+      const pctDeposito = (header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100)
         ? header.percentualNota
         : 70;
-      const pctDeposito = Math.max(0, 100 - pctBoleto);
+      const pctBoleto = Math.max(0, 100 - pctDeposito);
       const initEntrada = valorBaseMercadoria > 0 ? Number((valorBaseMercadoria * (pctDeposito / 100)).toFixed(2)) : 0;
       const initDepParc = 1;
       const initDepPrazo = 'vista';
@@ -1334,10 +1342,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const handleSyncWithOff = (invertSplit: boolean = false) => {
     const rawOff = Math.max(0, Math.min(100, Number(currentOffPct) || 70));
     if (rawOff <= 0) return;
-    // Padrão: Boleto = rawOff%, Depósito = (100 - rawOff)%
-    // Invertido: Boleto = (100 - rawOff)%, Depósito = rawOff%
-    const pctBoleto = invertSplit ? (100 - rawOff) : rawOff;
-    const pctDeposito = 100 - pctBoleto;
+    // Ponto 1: Padrão: 1ª Condição (Depósito) = rawOff%, 2ª Condição (Boleto) = (100 - rawOff)%
+    // Invertido: 1ª Condição (Depósito) = (100 - rawOff)%, 2ª Condição (Boleto) = rawOff%
+    const pctDeposito = invertSplit ? (100 - rawOff) : rawOff;
+    const pctBoleto = 100 - pctDeposito;
 
     // Base de cálculo: usa estritamente o valor real das mercadorias do pedido (sem inventar base de 1.000)
     const baseParaCalculo = valorBaseMercadoria > 0 ? valorBaseMercadoria : 0;
@@ -1359,9 +1367,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       header.saldoFormaPagamento || 'Boleto'
     );
 
+    // Ponto 4: O percentual informado no OFF (header.percentualNota) NÃO deve ser alterado por nenhuma circunstância!
     onChange({
       ...header,
-      percentualNota: pctBoleto,
       prazoDias: 'deposito_e_boleto',
       percentualEntrada: pctDeposito,
       isEntradaProporcional: true,
@@ -1372,8 +1380,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     });
 
     const successMsg = baseParaCalculo > 0
-      ? `✨ Sincronizado: ${pctBoleto}% Boleto (R$ ${newSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) + ${pctDeposito}% Depósito (R$ ${newEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
-      : `✨ Proporção ajustada: ${pctBoleto}% Boleto + ${pctDeposito}% Depósito (Total do pedido zerado)`;
+      ? `✨ Sincronizado: ${pctDeposito}% Depósito (R$ ${newEntrada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) + ${pctBoleto}% Boleto (R$ ${newSaldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`
+      : `✨ Proporção ajustada: ${pctDeposito}% Depósito + ${pctBoleto}% Boleto`;
     setSyncFeedback({ message: successMsg, type: 'success' });
     showToast?.(successMsg, 'success');
     setTimeout(() => setSyncFeedback(null), 5000);
@@ -1506,7 +1514,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const hasCustomDates = Boolean(customDates && Object.keys(customDates).length > 0);
   const hasCustomValues = Boolean(customValues && Object.keys(customValues).length > 0);
 
-  // Altera a data de uma parcela e recalcula automaticamente todas as parcelas subsequentes
+  // Altera a data de uma parcela e ajusta em cascata as parcelas subsequentes da mesma condição
   const handleInstallmentDateChange = (numeroParcela: number, newDate: string, isFrete: boolean) => {
     if (!newDate) return;
 
@@ -1531,13 +1539,19 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
     updatedCustomDates[targetKey] = isoNewDate;
 
-    // Se NÃO for frete, ajusta automaticamente todas as parcelas seguintes
+    // Se NÃO for frete, ajusta automaticamente todas as parcelas seguintes da mesma condição
     if (!isFrete) {
+      const targetInst = previewInstallments.find(i => !i.isFrete && i.numeroParcela === numeroParcela);
+      const isTargetEntrada = targetInst ? Boolean(targetInst.isEntrada) : false;
+
       previewInstallments.forEach(item => {
         if (!item.isFrete && item.numeroParcela > numeroParcela) {
-          const key = String(item.numeroParcela);
-          const curD = currentMap[key] || toIsoDate(item.dataVencimento);
-          updatedCustomDates[key] = addDaysToDate(curD, diffDays);
+          const isSameGroup = !isEntradaMista || (Boolean(item.isEntrada) === isTargetEntrada);
+          if (isSameGroup) {
+            const key = String(item.numeroParcela);
+            const curD = currentMap[key] || toIsoDate(item.dataVencimento);
+            updatedCustomDates[key] = addDaysToDate(curD, diffDays);
+          }
         }
       });
     }
@@ -1555,7 +1569,9 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     });
   };
 
-  // ⚡ Ajuste Inteligente Automático de Valores: ao editar qualquer parcela, redistribui o saldo restante entre as demais
+  // ⚡ Ajuste Inteligente de Valores por Condição:
+  // Ponto 2: cada condição de pagamento é individual (ajuste na condição 1 não afeta a condição 2, e vice-versa)
+  // Ponto 5: o valor das parcelas tem como referência o valor da respectiva condição
   const handleAutoAdjustParcelaValue = (targetKey: string, newValor: number) => {
     const isFreteKey = targetKey === 'frete' || previewInstallments.find(i => (i as any).isFrete && String(i.numeroParcela) === targetKey);
     if (isFreteKey) {
@@ -1583,8 +1599,21 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       return;
     }
 
-    const mercInstallments = previewInstallments.filter(i => !(i as any).isFrete);
-    if (mercInstallments.length <= 1) {
+    // Identifica se a parcela alvo pertence à 1ª Condição (Depósito / Entrada) ou à 2ª Condição (Saldo Boleto)
+    const targetInst = previewInstallments.find(i => !i.isFrete && String(i.numeroParcela) === targetKey);
+    const isGrupoEntrada = targetInst ? Boolean(targetInst.isEntrada) : false;
+
+    // Se for condição combinada/mista, isola estritamente as parcelas do grupo da condição alvo
+    const groupInstallments = isEntradaMista
+      ? previewInstallments.filter(i => !i.isFrete && (isGrupoEntrada ? Boolean(i.isEntrada) : !i.isEntrada))
+      : previewInstallments.filter(i => !i.isFrete);
+
+    // Base de valor: EXCLUSIVAMENTE o valor da condição à qual a parcela pertence
+    const baseGroupValor = isEntradaMista
+      ? (isGrupoEntrada ? valorEntrada : saldoRestante)
+      : valorBaseMercadoria;
+
+    if (groupInstallments.length <= 1) {
       onChange({
         ...header,
         valoresParcelasPersonalizados: {
@@ -1595,24 +1624,24 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       return;
     }
 
-    const allKeys = mercInstallments.map(i => String(i.numeroParcela));
+    const groupKeys = groupInstallments.map(i => String(i.numeroParcela));
     const nextCustomValues: Record<string, number> = { ...(header.valoresParcelasPersonalizados || {}) };
 
     let finalVal = Math.max(0, newValor);
-    if (finalVal > valorBaseMercadoria) {
-      finalVal = valorBaseMercadoria;
+    if (baseGroupValor > 0 && finalVal > baseGroupValor) {
+      finalVal = baseGroupValor;
     }
     nextCustomValues[targetKey] = finalVal;
 
-    // Detecta parcelas automáticas que ainda podem absorver o saldo
-    let unlocked = allKeys.filter(k => k !== targetKey && header.valoresParcelasPersonalizados?.[k] === undefined);
+    // Detecta parcelas automáticas que ainda podem absorver o saldo DENTRO DESTE GRUPO ESPECÍFICO
+    let unlocked = groupKeys.filter(k => k !== targetKey && header.valoresParcelasPersonalizados?.[k] === undefined);
     if (unlocked.length === 0) {
-      unlocked = allKeys.filter(k => k !== targetKey);
+      unlocked = groupKeys.filter(k => k !== targetKey);
     }
 
-    const totalCentavos = Math.round(valorBaseMercadoria * 100);
+    const totalCentavos = Math.round(baseGroupValor * 100);
     let lockedSumCentavos = 0;
-    allKeys.forEach(k => {
+    groupKeys.forEach(k => {
       if (!unlocked.includes(k)) {
         lockedSumCentavos += Math.round((nextCustomValues[k] || 0) * 100);
       }
@@ -1627,6 +1656,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       nextCustomValues[uKey] = centavos / 100;
     });
 
+    // Ponto 2 e 5: Salva sem tocar nas parcelas do outro grupo!
     onChange({
       ...header,
       valoresParcelasPersonalizados: nextCustomValues
@@ -2274,11 +2304,13 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       <Calendar className="w-3 h-3 text-slate-400 shrink-0 pointer-events-none" />
                       <input
                         type="date"
-                        disabled={isLocked}
+                        disabled={!isPaymentDatesEditable}
                         value={toIsoDate(inst.dataVencimento)}
                         onChange={(e) => handleInstallmentDateChange(inst.numeroParcela, e.target.value, Boolean(isFreteItem))}
-                        className="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-[10px] font-bold outline-hidden cursor-pointer w-full disabled:cursor-not-allowed"
-                        title="Clique para alterar o vencimento"
+                        className={`bg-transparent text-slate-800 dark:text-slate-200 font-mono text-[10px] font-bold outline-hidden w-full ${
+                          !isPaymentDatesEditable ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                        }`}
+                        title={isPaymentDatesEditable ? "Clique para alterar livremente o vencimento" : "Vencimento da parcela"}
                       />
                     </div>
                   </div>
@@ -2306,7 +2338,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
             };
             
             return (
-              <fieldset disabled={isLocked} className={isLocked ? 'opacity-85 pointer-events-none select-none border-none p-0 m-0' : 'border-none p-0 m-0'}>
+              <fieldset 
+                disabled={isLocked && !isPaymentDatesEditable} 
+                className={(isLocked && !isPaymentDatesEditable) ? 'opacity-85 pointer-events-none select-none border-none p-0 m-0' : 'border-none p-0 m-0'}
+              >
                 <div className={`p-4 rounded-2xl border transition-all ${
                   (valorMaximoBoletoCalculado > LIMITE_MAXIMO_BOLETO) 
                     ? 'bg-rose-50/60 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800/80 shadow-xs' 
@@ -2324,18 +2359,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
                   {/* Indicador de Limite de Boleto, Botões de Reset e Gestão de Condições */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    {hasCustomValues && !isLocked && (
+                    {hasCustomValues && isPaymentDatesEditable && (
                       <button
                         type="button"
                         onClick={handleResetParcelasValores}
                         className="px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-700 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800 shadow-2xs flex items-center gap-1 transition cursor-pointer"
-                        title="Redistribui o valor total igualmente entre todas as parcelas"
+                        title="Redistribui o valor de referência igualmente entre as parcelas de cada condição"
                       >
                         <Repeat className="w-3.5 h-3.5 text-amber-500" />
                         <span>Dividir valores igualmente</span>
                       </button>
                     )}
-                    {hasCustomDates && !isLocked && (
+                    {hasCustomDates && isPaymentDatesEditable && (
                       <button
                         type="button"
                         onClick={handleResetDates}
@@ -2615,7 +2650,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           type="button"
                           onClick={() => handleSyncWithOff(false)}
                           className="px-2.5 py-1 text-xs rounded-lg font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
-                          title={`Calcular divisão do pedido aplicando ${currentOffPct}% para Boleto e ${100 - currentOffPct}% para Depósito`}
+                          title={`Calcular divisão do pedido aplicando ${currentOffPct}% para Depósito (1ª Condição) e ${100 - currentOffPct}% para Boleto (2ª Condição)`}
                         >
                           <Sparkles className="w-3 h-3 text-amber-500" />
                           <span>Sincronizar OFF ({currentOffPct}%)</span>
@@ -2624,7 +2659,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           type="button"
                           onClick={() => handleSyncWithOff(true)}
                           className="px-2.5 py-1 text-xs rounded-lg font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
-                          title={`Inverter proporção: ${100 - currentOffPct}% para Boleto e ${currentOffPct}% para Depósito`}
+                          title={`Inverter proporção: ${100 - currentOffPct}% para Depósito e ${currentOffPct}% para Boleto`}
                         >
                           <ArrowRightLeft className="w-3 h-3 text-slate-500 dark:text-slate-400" />
                           <span>Inverter</span>

@@ -20,7 +20,8 @@ import {
 import { FiscalConfig, FiscalPreset } from '../shared/types';
 import { DEFAULT_FISCAL_CONFIG, DEFAULT_FISCAL_PRESETS } from '../shared/constants';
 import { calculateItemFiscal, normalizeRateToDecimal } from '../shared/fiscalEngine';
-import { formatCurrency, handleCurrencyInput, handleOneDecimalInput } from '../utils/masks';
+import { formatCurrency } from '../utils/masks';
+import { NumericInput } from './NumericInput';
 
 interface OrderFiscalCardProps {
   fiscalConfig: FiscalConfig;
@@ -70,37 +71,16 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
     ? valorFreteHeader
     : (totalMercadorias > 0 && fretePct > 0 ? Number((totalMercadorias * (fretePct / 100)).toFixed(2)) : 0);
 
-  // Controle de edição com limpeza instantânea ao clicar/focar
-  const [activeField, setActiveField] = useState<string | null>(null);
-  const [activeInputText, setActiveInputText] = useState<string>('');
   const [presetInputValue, setPresetInputValue] = useState<string>('Padrão Rede (Supermercado)');
   const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState(false);
 
-  const [activeSimPreco, setActiveSimPreco] = useState(false);
-  const [tempSimPreco, setTempSimPreco] = useState('');
-
-  const handleFieldFocus = (fieldKey: string) => {
-    setActiveField(fieldKey);
-    setActiveInputText(''); // Limpa a caixa de texto ao clicar/focar para digitar livremente
-  };
-
-  const handleFieldBlur = () => {
-    setActiveField(null);
-    setActiveInputText('');
-  };
-
-  const handleFieldInputChange = (
+  // Atualiza alíquota em percentual para o objeto global FiscalConfig de forma limpa e fluida
+  const handleAliquotaChange = (
     field: keyof FiscalConfig,
-    rawText: string,
+    pctVal: number,
     isST: boolean = false
   ) => {
-    // Permite digitação livre de números, vírgula e ponto
-    const sanitized = rawText.replace(/[^0-9,\.]/g, '');
-    setActiveInputText(sanitized);
-
-    const parsedNum = parseFloat(sanitized.replace(',', '.')) || 0;
-    const decimalValue = Number((parsedNum / 100).toFixed(4));
-
+    const decimalValue = Number((pctVal / 100).toFixed(4));
     const updated: FiscalConfig = {
       ...fiscalConfig,
       [field]: decimalValue
@@ -108,33 +88,12 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
 
     if (isST) {
       updated.aliquotaSt = decimalValue;
+      if (onUpdateHeaderSt) {
+        onUpdateHeaderSt(pctVal);
+      }
     }
 
     onChangeFiscalConfig(updated);
-  };
-
-  const getDisplayValue = (fieldKey: string, currentPct: number) => {
-    if (activeField === fieldKey) {
-      return activeInputText;
-    }
-    return currentPct > 0 ? currentPct.toFixed(1).replace('.', ',') : '0,0';
-  };
-
-  const handleSimPrecoFocus = () => {
-    setActiveSimPreco(true);
-    setTempSimPreco(''); // Limpa o campo de simulação ao clicar
-  };
-
-  const handleSimPrecoChange = (raw: string) => {
-    const sanitized = raw.replace(/[^0-9,\.]/g, '');
-    setTempSimPreco(sanitized);
-    const parsed = parseFloat(sanitized.replace(',', '.')) || 0;
-    setSimPreco(parsed);
-  };
-
-  const handleSimPrecoBlur = () => {
-    setActiveSimPreco(false);
-    setTempSimPreco('');
   };
 
   // Cálculo da simulação em tempo real
@@ -200,8 +159,6 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
     setSelectedPresetId(targetPreset.id);
     setPresetInputValue(targetPreset.name);
     setIsPresetDropdownOpen(false);
-    setActiveField(null);
-    setActiveInputText('');
     showFeedback(`Modelo fiscal "${targetPreset.name}" aplicado ao pedido!`, 'success');
   };
 
@@ -487,24 +444,21 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 </span>
               </div>
 
-              {/* INPUTS DE ENTRADA (Limpam automaticamente ao clicar) */}
+              {/* INPUTS DE ENTRADA */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     IPI (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={getDisplayValue('ipiAliquota', ipiPct)}
-                      onFocus={() => handleFieldFocus('ipiAliquota')}
-                      onClick={() => handleFieldFocus('ipiAliquota')}
-                      onBlur={handleFieldBlur}
-                      onChange={(e) => handleFieldInputChange('ipiAliquota', e.target.value)}
+                    <NumericInput
+                      value={ipiPct}
+                      onChange={(v) => handleAliquotaChange('ipiAliquota', v)}
+                      decimals={1}
                       placeholder="0,0"
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                 </div>
 
@@ -513,17 +467,14 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                     ST (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={getDisplayValue('aliquotaSt', stPct)}
-                      onFocus={() => handleFieldFocus('aliquotaSt')}
-                      onClick={() => handleFieldFocus('aliquotaSt')}
-                      onBlur={handleFieldBlur}
-                      onChange={(e) => handleFieldInputChange('aliquotaSt', e.target.value, true)}
+                    <NumericInput
+                      value={stPct}
+                      onChange={(v) => handleAliquotaChange('aliquotaSt', v, true)}
+                      decimals={1}
                       placeholder="0,0"
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                 </div>
 
@@ -539,17 +490,14 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                     )}
                   </div>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={getDisplayValue('freteAliquota', fretePct)}
-                      onFocus={() => handleFieldFocus('freteAliquota')}
-                      onClick={() => handleFieldFocus('freteAliquota')}
-                      onBlur={handleFieldBlur}
-                      onChange={(e) => handleFieldInputChange('freteAliquota', e.target.value)}
+                    <NumericInput
+                      value={fretePct}
+                      onChange={(v) => handleAliquotaChange('freteAliquota', v)}
+                      decimals={1}
                       placeholder="0,0"
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                     Gera boleto frete 10d após entrega
@@ -563,13 +511,10 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <span>SIMULAÇÃO ENTRADA</span>
                   <div className="flex items-center gap-1 font-mono text-[11px]">
                     <span className="text-slate-500">VALOR PRODUTO:</span>
-                    <input
-                      type="text"
-                      value={activeSimPreco ? tempSimPreco : (simPreco > 0 ? simPreco.toFixed(2).replace('.', ',') : '0,00')}
-                      onFocus={handleSimPrecoFocus}
-                      onClick={handleSimPrecoFocus}
-                      onBlur={handleSimPrecoBlur}
-                      onChange={(e) => handleSimPrecoChange(e.target.value)}
+                    <NumericInput
+                      value={simPreco}
+                      onChange={setSimPreco}
+                      decimals={2}
                       placeholder="0,00"
                       className="w-16 px-1 py-0.5 text-right font-bold text-emerald-600 bg-slate-50 dark:bg-slate-800 border rounded outline-hidden"
                     />
@@ -628,24 +573,21 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                 </span>
               </div>
 
-              {/* INPUTS DE SAÍDA (Limpam automaticamente ao clicar) */}
+              {/* INPUTS DE SAÍDA */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1" title="Crédito de ICMS de Entrada a descontar do produto">
                     ICMS Entrada (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={getDisplayValue('creditoEntradaICMS', icmsEntradaPct)}
-                      onFocus={() => handleFieldFocus('creditoEntradaICMS')}
-                      onClick={() => handleFieldFocus('creditoEntradaICMS')}
-                      onBlur={handleFieldBlur}
-                      onChange={(e) => handleFieldInputChange('creditoEntradaICMS', e.target.value)}
+                    <NumericInput
+                      value={icmsEntradaPct}
+                      onChange={(v) => handleAliquotaChange('creditoEntradaICMS', v)}
+                      decimals={1}
                       placeholder="0,0"
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                   <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
                     Desconta do item
@@ -657,17 +599,14 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                     Custo Fixo (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={getDisplayValue('custosFixos', custoFixoPct)}
-                      onFocus={() => handleFieldFocus('custosFixos')}
-                      onClick={() => handleFieldFocus('custosFixos')}
-                      onBlur={handleFieldBlur}
-                      onChange={(e) => handleFieldInputChange('custosFixos', e.target.value)}
+                    <NumericInput
+                      value={custoFixoPct}
+                      onChange={(v) => handleAliquotaChange('custosFixos', v)}
+                      decimals={1}
                       placeholder="0,0"
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                     s/ PDV
@@ -679,17 +618,14 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                     ICMS Saída (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={getDisplayValue('icmsAliquota', icmsSaidaPct)}
-                      onFocus={() => handleFieldFocus('icmsAliquota')}
-                      onClick={() => handleFieldFocus('icmsAliquota')}
-                      onBlur={handleFieldBlur}
-                      onChange={(e) => handleFieldInputChange('icmsAliquota', e.target.value)}
+                    <NumericInput
+                      value={icmsSaidaPct}
+                      onChange={(v) => handleAliquotaChange('icmsAliquota', v)}
+                      decimals={1}
                       placeholder="0,0"
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                     s/ PDV
@@ -701,17 +637,14 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                     PIS/COF/IR (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={getDisplayValue('pisCofinsAliquota', pisCofinsPct)}
-                      onFocus={() => handleFieldFocus('pisCofinsAliquota')}
-                      onClick={() => handleFieldFocus('pisCofinsAliquota')}
-                      onBlur={handleFieldBlur}
-                      onChange={(e) => handleFieldInputChange('pisCofinsAliquota', e.target.value)}
+                    <NumericInput
+                      value={pisCofinsPct}
+                      onChange={(v) => handleAliquotaChange('pisCofinsAliquota', v)}
+                      decimals={1}
                       placeholder="0,0"
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                     s/ PDV
@@ -725,12 +658,12 @@ export const OrderFiscalCard: React.FC<OrderFiscalCardProps> = ({
                   <span>SIMULAÇÃO CUSTO LOJA</span>
                   <div className="flex items-center gap-1 font-mono text-[11px]">
                     <span className="text-slate-500">PDV ALVO:</span>
-                    <input
-                      type="number"
-                      step="0.50"
+                    <NumericInput
                       value={simPdv}
-                      onChange={(e) => setSimPdv(parseFloat(e.target.value) || 0)}
-                      className="w-16 px-1 py-0.5 text-right font-bold text-blue-600 bg-slate-50 dark:bg-slate-800 border rounded"
+                      onChange={setSimPdv}
+                      decimals={2}
+                      placeholder="0,00"
+                      className="w-16 px-1 py-0.5 text-right font-bold text-blue-600 bg-slate-50 dark:bg-slate-800 border rounded outline-hidden"
                     />
                   </div>
                 </div>

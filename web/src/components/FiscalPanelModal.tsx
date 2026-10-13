@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { OrderItem, FiscalConfig, OrderItemFiscalOverride } from '../shared/types';
 import { calculateItemFiscal, normalizeRateToDecimal, calculateMaxPurchasePrice } from '../shared/fiscalEngine';
-import { formatCurrency, handleCurrencyInput } from '../utils/masks';
+import { formatCurrency } from '../utils/masks';
+import { NumericInput } from './NumericInput';
 
 interface FiscalPanelModalProps {
   item: OrderItem | null;
@@ -137,11 +138,21 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
     }
   }, [item?.id, isOpen]);
 
-  // Handler para campos de porcentagem com máscara de 2 casas
-  const handleRateInput = (setter: (val: number) => void, rawVal: string) => {
-    const { value } = handleCurrencyInput(rawVal);
-    setter(value);
-    // Ao alterar qualquer valor, ativa automaticamente a personalização deste item
+  // Atalho do teclado: fechar com a tecla ESC
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Handler para atualizar alíquotas numéricas em tempo real e ativar override individual
+  const handleRateChange = (setter: React.Dispatch<React.SetStateAction<number>>, val: number) => {
+    setter(val);
     setUseCustom(true);
   };
 
@@ -289,15 +300,12 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                   Preço Compra (R$)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-bold">R$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={precoCompra === 0 ? '' : precoCompra}
-                    placeholder="0.00"
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setPrecoCompra(parseFloat(e.target.value) || 0)}
+                  <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-bold z-10 pointer-events-none">R$</span>
+                  <NumericInput
+                    value={precoCompra}
+                    onChange={setPrecoCompra}
+                    decimals={2}
+                    placeholder="0,00"
                     className="w-28 pl-8 pr-2 py-1.5 text-sm font-bold rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-emerald-500 outline-hidden"
                   />
                 </div>
@@ -308,15 +316,12 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                   PDV Alvo (R$)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-2.5 top-1.5 text-xs text-blue-500 font-bold">R$</span>
-                  <input
-                    type="number"
-                    step="0.10"
-                    min="0"
-                    value={pdvAlvo === 0 ? '' : pdvAlvo}
-                    placeholder="0.00"
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setPdvAlvo(parseFloat(e.target.value) || 0)}
+                  <span className="absolute left-2.5 top-1.5 text-xs text-blue-500 font-bold z-10 pointer-events-none">R$</span>
+                  <NumericInput
+                    value={pdvAlvo}
+                    onChange={setPdvAlvo}
+                    decimals={2}
+                    placeholder="0,00"
                     className="w-28 pl-8 pr-2 py-1.5 text-sm font-bold rounded-xl border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-mono focus:ring-2 focus:ring-blue-500 outline-hidden"
                   />
                 </div>
@@ -395,13 +400,14 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                     IPI (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={ipiPct > 0 ? ipiPct.toFixed(2).replace('.', ',') : '0,00'}
-                      onChange={(e) => handleRateInput(setIpiPct, e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                    <NumericInput
+                      value={ipiPct}
+                      onChange={(val) => handleRateChange(setIpiPct, val)}
+                      decimals={2}
+                      placeholder="0,00"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                 </div>
 
@@ -410,13 +416,14 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                     ST (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={stPct > 0 ? stPct.toFixed(2).replace('.', ',') : '0,00'}
-                      onChange={(e) => handleRateInput(setStPct, e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                    <NumericInput
+                      value={stPct}
+                      onChange={(val) => handleRateChange(setStPct, val)}
+                      decimals={2}
+                      placeholder="0,00"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                 </div>
 
@@ -425,13 +432,14 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                     FRETE (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={fretePct > 0 ? fretePct.toFixed(2).replace('.', ',') : '0,00'}
-                      onChange={(e) => handleRateInput(setFretePct, e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                    <NumericInput
+                      value={fretePct}
+                      onChange={(val) => handleRateChange(setFretePct, val)}
+                      decimals={2}
+                      placeholder="0,00"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-emerald-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                 </div>
               </div>
@@ -505,13 +513,14 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                     ICMS Entrada (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={icmsEntradaPct > 0 ? icmsEntradaPct.toFixed(2).replace('.', ',') : '0,00'}
-                      onChange={(e) => handleRateInput(setIcmsEntradaPct, e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                    <NumericInput
+                      value={icmsEntradaPct}
+                      onChange={(val) => handleRateChange(setIcmsEntradaPct, val)}
+                      decimals={2}
+                      placeholder="0,00"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                   <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
                     Desconta do item
@@ -523,13 +532,14 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                     Custo Fixo (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={custoFixoPct > 0 ? custoFixoPct.toFixed(2).replace('.', ',') : '0,00'}
-                      onChange={(e) => handleRateInput(setCustoFixoPct, e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                    <NumericInput
+                      value={custoFixoPct}
+                      onChange={(val) => handleRateChange(setCustoFixoPct, val)}
+                      decimals={2}
+                      placeholder="0,00"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                     s/ PDV
@@ -541,13 +551,14 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                     ICMS Saída (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={icmsSaidaPct > 0 ? icmsSaidaPct.toFixed(2).replace('.', ',') : '0,00'}
-                      onChange={(e) => handleRateInput(setIcmsSaidaPct, e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                    <NumericInput
+                      value={icmsSaidaPct}
+                      onChange={(val) => handleRateChange(setIcmsSaidaPct, val)}
+                      decimals={2}
+                      placeholder="0,00"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                     s/ PDV
@@ -559,13 +570,14 @@ export const FiscalPanelModal: React.FC<FiscalPanelModalProps> = ({
                     PIS/COF/IR (%)
                   </label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={pisCofinsPct > 0 ? pisCofinsPct.toFixed(2).replace('.', ',') : '0,00'}
-                      onChange={(e) => handleRateInput(setPisCofinsPct, e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
+                    <NumericInput
+                      value={pisCofinsPct}
+                      onChange={(val) => handleRateChange(setPisCofinsPct, val)}
+                      decimals={2}
+                      placeholder="0,00"
+                      className="w-full pl-2.5 pr-6 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-medium focus:ring-2 focus:ring-blue-500 outline-hidden"
                     />
-                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400">%</span>
+                    <span className="absolute right-2 top-1.5 text-[11px] text-slate-400 pointer-events-none">%</span>
                   </div>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                     s/ PDV

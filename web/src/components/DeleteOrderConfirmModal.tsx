@@ -41,7 +41,7 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
 
   useEffect(() => {
     if (isOpen) {
-      setDirectorEmail(isDirector ? (currentUser?.email || '') : '');
+      setDirectorEmail(isDirector ? (currentUser?.email || '') : 'rafael@mega12.com.br');
       setDirectorPassword('');
       setShowPassword(false);
       setSelectedReason('Erro de digitação ou ajuste de quantidades');
@@ -211,19 +211,22 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
             {!isDirector && (
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                  E-mail do Diretor Autorizador:
+                  Diretor Supervisor Autorizador:
                 </label>
                 <div className="relative">
                   <Mail className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
                   <input
                     type="email"
                     required
-                    placeholder="diretoria@mega12.com.br"
+                    placeholder="rafael@mega12.com.br"
                     value={directorEmail}
                     onChange={(e) => setDirectorEmail(e.target.value)}
                     className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
                   />
                 </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  E-mail do diretor responsável pela autorização (ex: rafael@mega12.com.br)
+                </p>
               </div>
             )}
 

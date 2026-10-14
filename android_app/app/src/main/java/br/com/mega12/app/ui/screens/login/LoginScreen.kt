@@ -193,32 +193,6 @@ fun LoginScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Atalhos Rápidos de Demonstração
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    TextButton(onClick = { 
-                        email = "compras@mega12.com.br"
-                        password = "123456" 
-                    }) {
-                        Text("Comprador", color = Slate400, fontSize = 12.sp)
-                    }
-                    TextButton(onClick = { 
-                        email = "separacao@mega12.com.br"
-                        password = "123456" 
-                    }) {
-                        Text("Conferente Doca", color = Slate400, fontSize = 12.sp)
-                    }
-                    TextButton(onClick = { 
-                        email = "diretoria@mega12.com.br"
-                        password = "123456" 
-                    }) {
-                        Text("Diretoria", color = Slate400, fontSize = 12.sp)
-                    }
-                }
             }
         }
     }

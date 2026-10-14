@@ -154,16 +154,19 @@ Você pode alterar essa URL dentro do próprio app acessando:
 
 ---
 
-## 🔑 6. Credenciais e Perfis de Acesso Padrão (RBAC)
+## 🔑 6. Perfis de Acesso e Governança (RBAC)
 
-O sistema possui 4 níveis de permissão estritamente isolados:
+O sistema opera sob o modelo de controle de acesso baseado em funções (Role-Based Access Control - RBAC), garantindo o princípio do menor privilégio. Os usuários devem ser criados e gerenciados exclusivamente pela Diretoria através da tela de **Gestão de Usuários**:
 
-| Perfil / Cargo | E-mail Padrão | Senha Padrão | Acesso e Permissões |
-| :--- | :--- | :--- | :--- |
-| **👑 Diretoria / Admin** | `diretoria@mega12.com.br` | `123456` | **Acesso Total:** Todas as páginas, margens de lucro, BI, financeiro, fiscal e gestão de usuários. |
-| **🛒 Comprador** | `compras@mega12.com.br` | `123456` | **Compras & Cotações:** Cotações, catálogo, fornecedores, histórico e app de viagens. |
-| **📦 Conferente de Doca** | `separacao@mega12.com.br` | `123456` | **Doca & Romaneios:** Rateio das 20 lojas, conferência de caixas e registro de avarias *(sem acesso a margens/custos)*. |
-| **🏭 Depósito / CD** | `deposito@mega12.com.br` | `123456` | **Estoque CD:** Posição do galpão, ajuste de saldo e ordens de transferência para lojas. |
+| Perfil / Papel | Escopo de Acesso e Responsabilidades |
+| :--- | :--- |
+| **👑 Diretoria** | **Acesso Total:** Todas as páginas, margens de lucro, BI, financeiro, fiscal, gestão de usuários, autorização de exclusões e retrocesso de status. |
+| **🛒 Comprador** | **Compras & Cotações:** Cotações, catálogo de produtos, fornecedores, histórico de pedidos e aplicativo móvel de viagens. |
+| **📦 Conferente de Doca (Separação)** | **Doca & Romaneios:** Rateio das lojas, conferência física de caixas e registro de avarias *(sem acesso a margens/custos comerciais)*. |
+| **🏭 Depósito / CD** | **Estoque CD:** Posição física do galpão central, ajuste de saldo e ordens de transferência entre depósito e lojas. |
+| **💰 Faturamento / Financeiro** | **Contas a Pagar & Conciliação:** Fluxo de caixa, autorização de boletos, quitações e auditoria financeira. |
+
+> **Nota de Segurança:** O sistema não utiliza credenciais padrão fixas. Todas as senhas são criptografadas com `bcrypt` (fator de custo 10) e protegidas com autenticação JWT.
 
 ---
 

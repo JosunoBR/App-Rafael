@@ -37,7 +37,7 @@ Aplicativo Android Nativo construído em **Kotlin** com **Jetpack Compose (Mater
 3. Clique no botão verde de **Play / Run ▶️ (Shift + F10)**.
 
 ### Passo 3: Login no Aplicativo
-Utilize os usuários do sistema:
-- **Comprador:** `compras@mega12.com.br` | Senha: `123456`
-- **Conferente de Doca:** `separacao@mega12.com.br` | Senha: `123456`
-- **Diretoria:** `diretoria@mega12.com.br` | Senha: `123456`
+Utilize as credenciais corporativas do usuário cadastradas no sistema (módulo de Gestão de Usuários):
+- **Comprador** (Acesso a cotações e catálogo)
+- **Conferente de Doca** (Acesso à doca, separação e conferência)
+- **Diretoria** (Acesso irrestrito a todas as operações)

@@ -1395,7 +1395,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             <button
                               onClick={() => setOrderToDelete(ord)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
-                              title="Excluir este pedido com senha de Diretoria"
+                              title="Excluir este pedido"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>

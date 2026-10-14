@@ -13,6 +13,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { PurchaseOrder, User } from '../shared/types';
+import { canDeleteOrder } from '../shared/permissions';
 
 interface DeleteOrderConfirmModalProps {
   isOpen: boolean;
@@ -37,11 +38,11 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const isDirector = currentUser?.role === 'diretoria';
+  const canSelfAuthorize = canDeleteOrder(currentUser);
 
   useEffect(() => {
     if (isOpen) {
-      setDirectorEmail(isDirector ? (currentUser?.email || '') : 'rafael@mega12.com.br');
+      setDirectorEmail(canSelfAuthorize ? (currentUser?.email || '') : 'rafael@mega12.com.br');
       setDirectorPassword('');
       setShowPassword(false);
       setSelectedReason('Erro de digitação ou ajuste de quantidades');
@@ -49,7 +50,7 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
       setErrorMsg(null);
       setIsLoading(false);
     }
-  }, [isOpen, currentUser, isDirector]);
+  }, [isOpen, currentUser, canSelfAuthorize]);
 
   if (!isOpen || !order) return null;
 
@@ -67,11 +68,11 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
     setErrorMsg(null);
 
     if (!directorPassword || directorPassword.trim().length === 0) {
-      setErrorMsg('Digite a senha de Diretoria para autorizar.');
+      setErrorMsg(canSelfAuthorize ? 'Digite sua senha para confirmar a exclusão.' : 'Digite a senha do Diretor supervisor para autorizar.');
       return;
     }
 
-    if (!isDirector && (!directorEmail || directorEmail.trim().length === 0)) {
+    if (!canSelfAuthorize && (!directorEmail || directorEmail.trim().length === 0)) {
       setErrorMsg('Informe o e-mail de um Diretor para autorização de supervisor.');
       return;
     }
@@ -83,7 +84,7 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
     try {
       setIsLoading(true);
       await onConfirm({
-        directorEmail: isDirector ? currentUser?.email : directorEmail.trim(),
+        directorEmail: canSelfAuthorize ? currentUser?.email : directorEmail.trim(),
         directorPassword: directorPassword.trim(),
         reason: finalReason
       });
@@ -116,7 +117,9 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Operação crítica protegida por senha de perfil Diretoria
+                {canSelfAuthorize 
+                  ? 'Operação protegida por confirmação de senha pessoal do usuário' 
+                  : 'Operação crítica protegida por senha de perfil Diretoria'}
               </p>
             </div>
           </div>
@@ -197,18 +200,18 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
             />
           </div>
 
-          {/* Box de Credenciais de Diretoria */}
+          {/* Box de Credenciais */}
           <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2.5">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
               <Lock className="w-3.5 h-3.5 text-rose-500 shrink-0" />
               <span>
-                {isDirector 
-                  ? `Confirmação de Segurança (${currentUser?.nome || 'Diretoria'})` 
+                {canSelfAuthorize 
+                  ? `Confirmação de Segurança (${currentUser?.nome || 'Usuário'})` 
                   : 'Autorização de Supervisor (Diretoria)'}
               </span>
             </div>
 
-            {!isDirector && (
+            {!canSelfAuthorize && (
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                   Diretor Supervisor Autorizador:
@@ -232,7 +235,7 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
 
             <div className="space-y-1">
               <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                {isDirector ? 'Digite sua senha para confirmar:' : 'Senha do Diretor:'}
+                {canSelfAuthorize ? 'Digite sua senha para confirmar:' : 'Senha do Diretor:'}
               </label>
               <div className="relative">
                 <Lock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
@@ -287,7 +290,7 @@ export const DeleteOrderConfirmModal: React.FC<DeleteOrderConfirmModalProps> = (
               ) : (
                 <>
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Autorizar e Excluir Pedido</span>
+                  <span>{canSelfAuthorize ? 'Confirmar e Excluir Pedido' : 'Autorizar e Excluir Pedido'}</span>
                 </>
               )}
             </button>

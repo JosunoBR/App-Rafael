@@ -389,33 +389,53 @@ class OrderService {
     const { directorEmail, directorPassword, reason } = authData || {};
 
     if (!directorPassword || String(directorPassword).trim().length === 0) {
-      const err = new Error('A senha de Diretoria é obrigatória para autorizar a exclusão.');
+      const err = new Error('A senha de confirmação é obrigatória para autorizar a exclusão.');
       err.statusCode = 400;
       throw err;
     }
 
+    // Busca usuário atualizado do banco para obter permissões efetivas
+    const dbCurrentUser = currentUser?.id 
+      ? await userRepository.findById(currentUser.id) 
+      : (currentUser?.email ? await userRepository.findByEmailOrAlias(currentUser.email) : null);
+
+    const effectivePermissions = dbCurrentUser?.permissions || currentUser?.permissions || {};
+    const parsedPermissions = typeof effectivePermissions === 'string'
+      ? (() => { try { return JSON.parse(effectivePermissions); } catch { return {}; } })()
+      : effectivePermissions;
+
+    const isDiretoriaOrRoot = (
+      currentUser?.role === 'diretoria' || 
+      currentUser?.role === 'root' || 
+      currentUser?.id === 'usr_root' ||
+      dbCurrentUser?.role === 'diretoria' ||
+      dbCurrentUser?.id === 'usr_root'
+    );
+
+    const hasDeletePermission = isDiretoriaOrRoot || Boolean(parsedPermissions && parsedPermissions['orders:delete']);
+
     let authorizingDirector = null;
 
-    // Cenário 1: O usuário logado já possui perfil de Diretoria (Sudo Mode)
-    if (currentUser && currentUser.role === 'diretoria') {
-      const dbUser = await userRepository.findById(currentUser.id) || await userRepository.findByEmailOrAlias(currentUser.email);
+    // Cenário 1: O usuário possui permissão direta para excluir (Diretoria ou orders:delete ativa) -> Sudo Mode com a própria senha
+    if (hasDeletePermission) {
+      const dbUser = dbCurrentUser || await userRepository.findById(currentUser?.id) || await userRepository.findByEmailOrAlias(currentUser?.email);
       if (!dbUser) {
-        const err = new Error('Usuário de diretoria não encontrado no sistema.');
+        const err = new Error('Usuário autenticado não encontrado no sistema.');
         err.statusCode = 401;
         throw err;
       }
       const isPasswordValid = await bcrypt.compare(directorPassword, dbUser.senha);
       if (!isPasswordValid) {
-        const err = new Error('Senha de Diretoria incorreta.');
+        const err = new Error('Sua senha de acesso está incorreta.');
         err.statusCode = 403;
         throw err;
       }
       authorizingDirector = dbUser;
     } else {
-      // Cenário 2: Usuário logado não é Diretoria (Comprador, Depósito, etc.) -> Exige autorização de supervisor
+      // Cenário 2: Usuário logado não possui permissão de exclusão -> Exige autorização presencial de supervisor Diretoria
       const targetEmail = (directorEmail || '').trim().toLowerCase();
       if (!targetEmail) {
-        const err = new Error('O e-mail de um Diretor é obrigatório para autorizar a exclusão.');
+        const err = new Error('O e-mail de um Diretor supervisor é obrigatório para autorizar a exclusão.');
         err.statusCode = 400;
         throw err;
       }

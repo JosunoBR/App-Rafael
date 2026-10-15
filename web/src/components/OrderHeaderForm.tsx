@@ -67,6 +67,7 @@ interface OrderHeaderFormProps {
   onChange: (updatedHeader: OrderHeader) => void;
   onOpenSupplierModal: (supplierToEdit?: Supplier | null) => void;
   orderTotal?: number;
+  orderGrossTotal?: number;
   onSaveAsSupplierTemplate?: () => void;
   onLoadSupplierTemplate?: (supplierId?: string) => void;
   hasSupplierTemplate?: boolean;
@@ -84,6 +85,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   onChange,
   onOpenSupplierModal,
   orderTotal,
+  orderGrossTotal,
   onSaveAsSupplierTemplate,
   onLoadSupplierTemplate,
   hasSupplierTemplate = false,
@@ -530,6 +532,15 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const valorFreteNum = Number(header.valorFrete ?? header.valorFreteGlobal) || 0;
   // O frete é um valor à parte; as parcelas dos produtos cobrem 100% do total da mercadoria
   const valorBaseMercadoria = Math.max(0, valorTotalPedido);
+
+  // Totais sem desconto e com desconto para exibição não-redundante no bloco comercial
+  const valorTotalSemDesconto = orderGrossTotal !== undefined && orderGrossTotal > 0
+    ? orderGrossTotal
+    : (header.percentualDescontoOff && header.percentualDescontoOff > 0 && valorTotalPedido > 0
+      ? Number((valorTotalPedido / (1 - header.percentualDescontoOff / 100)).toFixed(2))
+      : valorTotalPedido);
+  const valorTotalComDesconto = valorTotalPedido;
+  const economiaDescontoR$ = Math.max(0, Number((valorTotalSemDesconto - valorTotalComDesconto).toFixed(2)));
 
   const hasCustomOff = header.percentualNota !== undefined && header.percentualNota > 0 && header.percentualNota < 100;
   // Ponto 1: Quando é informado o OFF, ex: 70%, a 1ª condição (Depósito) é 70%, a 2ª (Boleto) é 30%
@@ -3040,78 +3051,76 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                   </div>
 
                   {/* SUB-BLOCO: DESCONTO COMERCIAL NOS PRODUTOS */}
-                  <div className="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800">
-                    <span className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <span>🏷️</span>
-                        <span>Desconto Comercial nos Produtos</span>
+                  <div className="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
+                    <div>
+                      <span className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <span>🏷️</span>
+                          <span>Desconto Comercial nos Produtos</span>
+                        </span>
+                        <span className="text-[9px] font-normal text-slate-400">Abate do preço dos itens</span>
                       </span>
-                      <span className="text-[9px] font-normal text-slate-400">Abate do preço dos itens</span>
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* Desconto Comercial (%) */}
-                      <div>
-                        <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-                          <span>Desconto (%)</span>
-                          <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">% desc.</span>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="100"
-                            value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
-                            onFocus={(e) => e.target.select()}
-                            onChange={(e) => handleFieldChange('percentualDescontoOff', e.target.value)}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs pr-7"
-                            placeholder="0"
-                          />
-                          <span className="absolute right-2.5 top-1.5 text-xs font-bold text-slate-400 pointer-events-none">
-                            %
-                          </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* 1. Desconto (%) Editável */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
+                            <span>Desconto (%)</span>
+                            <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">% desc.</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                              value={header.percentualDescontoOff === 0 ? '' : (header.percentualDescontoOff ?? '')}
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => handleFieldChange('percentualDescontoOff', e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs pr-7"
+                              placeholder="0"
+                            />
+                            <span className="absolute right-2.5 top-1.5 text-xs font-bold text-slate-400 pointer-events-none">
+                              %
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 2. Total do Pedido Sem Desconto */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
+                            <span>Total sem Desconto</span>
+                            <span className="text-[9px] font-mono text-slate-400">Bruto</span>
+                          </label>
+                          <div className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-bold shadow-2xs truncate select-none">
+                            R$ {valorTotalSemDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
                         </div>
                       </div>
+                    </div>
 
-                      {/* Desconto Comercial (R$) */}
-                      <div>
-                        <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-                          <span>Desconto (R$)</span>
-                          <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">R$ desc.</span>
-                        </label>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={editingDescontoTotal !== null ? editingDescontoTotal : (header.descontoComercialTotal !== undefined && header.descontoComercialTotal !== 0 ? formatCurrency(header.descontoComercialTotal, false) : '')}
-                          onKeyDown={(e) => {
-                            if (e.key === '.') {
-                              e.preventDefault();
-                              const target = e.currentTarget;
-                              const currentVal = target.value;
-                              if (!currentVal.includes(',')) {
-                                const selStart = target.selectionStart ?? currentVal.length;
-                                const selEnd = target.selectionEnd ?? currentVal.length;
-                                const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
-                                const { formatted, value } = handleCurrencyInput(newVal, true);
-                                setEditingDescontoTotal(formatted);
-                                handleFieldChange('descontoComercialTotal', value);
-                              }
-                            }
-                          }}
-                          onFocus={(e) => {
-                            const currentVal = header.descontoComercialTotal || 0;
-                            setEditingDescontoTotal(currentVal > 0 ? formatCurrency(currentVal, false) : '');
-                            e.target.select();
-                          }}
-                          onBlur={() => setEditingDescontoTotal(null)}
-                          onChange={(e) => {
-                            const { formatted, value } = handleCurrencyInput(e.target.value, true);
-                            setEditingDescontoTotal(formatted);
-                            handleFieldChange('descontoComercialTotal', value);
-                          }}
-                          placeholder="0,00"
-                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold text-emerald-600 dark:text-emerald-400 font-mono shadow-2xs"
-                        />
+                    {/* SEÇÃO INFERIOR: TOTAL COM DESCONTO (Alinhado com a Parcela de Frete ao lado) */}
+                    <div className="mt-2.5 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                        <span>Total do Pedido com Desconto:</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-2 rounded-xl border border-emerald-300/80 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/40 text-xs flex items-center justify-between shadow-2xs">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-sm shrink-0">💰</span>
+                            <div className="min-w-0">
+                              <span className="block text-[9px] font-bold uppercase text-emerald-700 dark:text-emerald-400 truncate">Valor Líquido</span>
+                              <span className="font-mono font-extrabold text-xs text-emerald-950 dark:text-emerald-100 truncate block">
+                                R$ {valorTotalComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                          {economiaDescontoR$ > 0 && (
+                            <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 shrink-0 ml-1">
+                              -R$ {economiaDescontoR$.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

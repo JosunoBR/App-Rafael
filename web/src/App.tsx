@@ -3282,6 +3282,7 @@ export function App() {
                         setIsSupplierModalOpen(true);
                       }}
                       orderTotal={calculateOrderNetTotal(order)}
+                      orderGrossTotal={calculateOrderTotals(order).valorBruto}
                       onSaveAsSupplierTemplate={handleSaveAsSupplierTemplate}
                       onLoadSupplierTemplate={handleLoadSupplierTemplate}
                       hasSupplierTemplate={Boolean(activeSupplierTemplate)}

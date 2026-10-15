@@ -5,6 +5,7 @@ import { DEFAULT_STORES } from '../shared/constants';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 import { QUICK_PAYMENT_PRESETS, formatPaymentConditionString } from './installments';
 import { calculateOrderTotals, calculateItemIpi } from '../shared/orderCalculationEngine';
+import { toBrDate } from './masks';
 
 function formatCurrency(val: number | string): string {
   const num = Number(val) || 0;
@@ -230,8 +231,8 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
     const numeroPedido = String(rawNum).replace(/[^a-zA-Z0-9_-]/g, '');
     const cleanFornecedor = (order.header?.fornecedor || 'Fornecedor').replace(/[^a-zA-Z0-9_-]/g, '_');
     const status = order.header?.status || 'Aprovado';
-    const dataEmissao = order.header?.dataEmissao || new Date().toLocaleDateString('pt-BR');
-    const dataEntrega = order.header?.dataEntregaPrevista || 'A Combinar';
+    const dataEmissao = toBrDate(order.header?.dataEmissao) || new Date().toLocaleDateString('pt-BR');
+    const dataEntrega = toBrDate(order.header?.dataEntregaPrevista) || 'A Combinar';
     const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
@@ -748,8 +749,8 @@ export function exportRomaneioPDF(
     });
 
     const status = order.header?.status || 'Aprovado';
-    const dataEmissao = order.header?.dataEmissao || new Date().toLocaleDateString('pt-BR');
-    const dataEntrega = order.header?.dataEntregaPrevista || 'A Combinar';
+    const dataEmissao = toBrDate(order.header?.dataEmissao) || new Date().toLocaleDateString('pt-BR');
+    const dataEntrega = toBrDate(order.header?.dataEntregaPrevista) || 'A Combinar';
     const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
     const vendedor = order.header?.vendedor || 'N/A';
     const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';

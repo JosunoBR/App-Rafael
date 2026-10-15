@@ -28,6 +28,7 @@ import { PurchaseOrder, StoreConfig, AvariaRecord } from '../shared/types';
 import { exportOrderToExcel } from '../utils/excelExporter';
 import { exportRomaneioPDF } from '../utils/pdfExporter';
 import { convertAvariaToUnits } from './SeparationPage';
+import { toBrDate } from '../utils/masks';
 
 interface SeparationHistoryPageProps {
   orders: PurchaseOrder[];
@@ -428,7 +429,7 @@ export const SeparationHistoryPage: React.FC<SeparationHistoryPageProps> = ({
                           <span className="truncate max-w-[180px]">{orderItem.header.fornecedor}</span>
                         </div>
                         <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          Entrega: {orderItem.header.dataEntregaPrevista || 'A definir'} • {orderItem.items.length} itens
+                          Entrega: {toBrDate(orderItem.header.dataEntregaPrevista) || 'A definir'} • {orderItem.items.length} itens
                         </div>
                       </td>
 

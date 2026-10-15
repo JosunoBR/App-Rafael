@@ -189,9 +189,6 @@ class OrderRepository {
 
     const today = new Date().toISOString().split('T')[0];
     const preserveMissingDates = order.header.importadoDePlanilha === true;
-    const dataPedido = order.header.dataPedido || order.header.dataEmissao || (preserveMissingDates ? '' : today);
-    const dataEmissao = order.header.dataEmissao || order.header.dataPedido || (preserveMissingDates ? '' : today);
-
     const normalizeDateToIso = (val) => {
       if (!val) return '';
       const s = String(val).trim();
@@ -202,6 +199,8 @@ class OrderRepository {
       }
       return s;
     };
+    const dataPedido = normalizeDateToIso(order.header.dataPedido || order.header.dataEmissao || (preserveMissingDates ? '' : today));
+    const dataEmissao = normalizeDateToIso(order.header.dataEmissao || order.header.dataPedido || (preserveMissingDates ? '' : today));
     const dataEntregaPrevista = normalizeDateToIso(order.header.dataEntregaPrevista);
 
     if (existing) {

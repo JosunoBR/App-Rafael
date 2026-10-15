@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { PurchaseOrder, StoreConfig, FiscalConfig } from '../shared/types';
 import { formatPaymentConditionDisplay, cleanPaymentFormDisplay, resolveOrderPaymentCondition } from './pdfExporter';
 import { calculateOrderTotals, calculateItemIpi } from '../shared/orderCalculationEngine';
+import { toBrDate } from './masks';
 
 function formatCurrency(val: number): string {
   return `R$ ${Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -14,8 +15,8 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   const filename = `Proposta_Comercial_${numeroPedido}_${cleanFornecedor}.xlsx`;
 
   const status = order.header?.status || 'Aprovado';
-  const dataEmissao = order.header?.dataEmissao || new Date().toLocaleDateString('pt-BR');
-  const dataEntrega = order.header?.dataEntregaPrevista || 'A Combinar';
+  const dataEmissao = toBrDate(order.header?.dataEmissao) || new Date().toLocaleDateString('pt-BR');
+  const dataEntrega = toBrDate(order.header?.dataEntregaPrevista) || 'A Combinar';
   const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
   const vendedor = order.header?.vendedor || 'N/A';
   const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';

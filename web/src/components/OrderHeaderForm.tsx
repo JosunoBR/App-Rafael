@@ -3034,7 +3034,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       renderInstallmentCardsGroup(
                         previewInstallments.filter(inst => Boolean(inst.isFrete)),
                         'Parcela do Frete (10d após entrega):',
-                        'flex flex-wrap gap-2 [&>*]:w-[230px]'
+                        'grid grid-cols-1 sm:grid-cols-2 gap-3'
                       )
                     )}
                   </div>

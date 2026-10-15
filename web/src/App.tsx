@@ -1714,16 +1714,19 @@ export function App() {
       order.header.status !== 'Rascunho'
     );
 
-    // 🛡️ Se o pedido já foi fechado, compradores não podem alterar pedidos em esteira sem liberação da Diretoria ou Faturamento
+    // 🛡️ Regra Oficial de Negócio: Enquanto o pedido NÃO tiver recebimento físico confirmado na Matriz (!recebidoMatriz),
+    // a alteração da previsão de entrega e ajustes operacionais são plenamente autorizados na esteira.
+    const isReceiptConfirmed = Boolean(order.header.recebidoMatriz);
     const canSaveThisClosedOrder = currentUser?.role === 'diretoria' || 
                                    currentUser?.role === 'faturamento' || 
                                    (currentUser?.role as any) === 'root' || 
+                                   !isReceiptConfirmed ||
                                    canEditSpecificOrder(currentUser, order.header.status);
 
-    if (isClosed && !canSaveThisClosedOrder) {
+    if (isClosed && isReceiptConfirmed && !canSaveThisClosedOrder) {
       triggerIOSAlert({
         title: 'Pedido Bloqueado na Esteira',
-        message: 'Este pedido já foi aprovado e está na esteira operacional. Para efetuar alterações comerciais ou de quantidades, solicite a liberação à Diretoria ou ao Faturamento.',
+        message: 'Este pedido já teve o recebimento físico confirmado na Matriz. Alterações nesta fase são restritas à Diretoria e Faturamento.',
         type: 'error',
         confirmText: 'OK'
       });

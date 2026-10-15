@@ -269,6 +269,7 @@ export interface SaveOrderResult {
   numberReassigned?: boolean;
   originalNumber?: string;
   newNumber?: string;
+  warnings?: any[];
 }
 
 export interface ImportOrderPackageResult extends SaveOrderResult {

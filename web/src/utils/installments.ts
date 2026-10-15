@@ -522,7 +522,7 @@ export function generateOrderInstallments(
 
   // Detecta se já existe uma parcela de frete previamente salva nas parcelas
   const existingFrete = Array.isArray(order.installments)
-    ? order.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
+    ? order.installments.find(inst => inst.isBoletoFrete === true || inst.tipoTitulo === 'frete')
     : undefined;
 
   const isExplicitCif = String(order.header?.tipoFrete || '').toUpperCase() === 'CIF';
@@ -752,8 +752,13 @@ export function generateOrderInstallments(
     const dataVencFrete = addDaysToDate(rawFreteDate, 0);
     const statusFrete = existingFrete?.status || getInstallmentStatus(dataVencFrete, existingFrete?.dataPagamento);
 
+    // Garante ID estritamente exclusivo para o frete, evitando colisão com parcelas de mercadorias
+    const freteId = (existingFrete?.id && !list.some(i => i.id === existingFrete.id))
+      ? existingFrete.id
+      : `inst_frete_${order.header.id || 'ord'}_${Date.now()}`;
+
     list.push({
-      id: existingFrete?.id || `inst_frete_${order.header.id || 'ord'}_${Date.now()}`,
+      id: freteId,
       orderId: order.header.id,
       numeroPedido: order.header.numeroPedido,
       fornecedor: order.header.fornecedor ? `${order.header.fornecedor} (Frete)` : 'Transportadora / Frete',
@@ -771,6 +776,15 @@ export function generateOrderInstallments(
       updatedAt: new Date().toISOString()
     });
   }
+
+  // 🛡️ Blindagem de Unicidade: assegura que nunca haverá IDs duplicados em list
+  const seenIds = new Set<string>();
+  list.forEach((item, idx) => {
+    if (!item.id || seenIds.has(item.id)) {
+      item.id = `${item.isBoletoFrete ? 'inst_frete_' : 'inst_'}${order.header.id || 'ord'}_${item.numeroParcela}_${Date.now()}_${idx}`;
+    }
+    seenIds.add(item.id);
+  });
 
   return list;
 }

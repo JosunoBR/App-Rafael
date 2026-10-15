@@ -37,11 +37,16 @@ class OrderService {
    */
   _validateInstallmentsIntegrity(orderData) {
     const installments = orderData.installments;
+    const warnings = [];
     if (!Array.isArray(installments) || installments.length === 0) {
-      return;
+      return warnings;
     }
 
-    let sumInstallments = 0;
+    let sumMercadorias = 0;
+    let sumFrete = 0;
+    const seenIds = new Set();
+    let hasDuplicateIds = false;
+
     installments.forEach((inst, index) => {
       const valor = Number(inst.valor);
       if (isNaN(valor) || valor < 0) {
@@ -54,8 +59,28 @@ class OrderService {
         err.statusCode = 400;
         throw err;
       }
-      sumInstallments += valor;
+
+      if (inst.id) {
+        if (seenIds.has(inst.id)) {
+          hasDuplicateIds = true;
+        } else {
+          seenIds.add(inst.id);
+        }
+      }
+
+      if (inst.isBoletoFrete || inst.tipoTitulo === 'frete') {
+        sumFrete += valor;
+      } else {
+        sumMercadorias += valor;
+      }
     });
+
+    if (hasDuplicateIds) {
+      warnings.push({
+        code: 'DUPLICATE_INSTALLMENT_IDS',
+        message: 'Aviso: Foram identificadas parcelas com chaves duplicadas no pedido. Elas foram normalizadas automaticamente com identificadores exclusivos.'
+      });
+    }
 
     // Se houver total de mercadorias / itens e o pedido não for um rascunho
     if (!orderData.header?.isDraft && Array.isArray(orderData.items) && orderData.items.length > 0) {
@@ -77,14 +102,35 @@ class OrderService {
       // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Geral
       const expectedTotal = Number(Math.max(0, brutoSum + ipiSum - totalDesconto).toFixed(2));
 
-      // Se ambas as somas forem expressivas (> 1 real) e a discrepância for superior a 5 reais (além de centavos)
-      if (sumInstallments > 1 && expectedTotal > 1) {
-        const diff = Math.abs(sumInstallments - expectedTotal);
-        if (diff > 5.0 && !orderData.header.percentualDescontoOff && !orderData.header.descontoComercialTotal) {
-          console.warn(`[Auditoria Financeira] Divergência no pedido ${orderData.header.numeroPedido}: Soma parcelas (R$ ${sumInstallments.toFixed(2)}) vs Total Calculado (R$ ${expectedTotal.toFixed(2)})`);
+      // Se ambas as somas forem expressivas (> 1 real) e a discrepância for superior a 1 real
+      if (sumMercadorias > 1 && expectedTotal > 1) {
+        const diff = Math.abs(sumMercadorias - expectedTotal);
+        if (diff > 1.0 && !orderData.header.percentualDescontoOff && !orderData.header.descontoComercialTotal) {
+          const warnMsg = `Divergência Financeira: A soma das parcelas de produtos (R$ ${sumMercadorias.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) difere do total calculado do pedido (R$ ${expectedTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Diferença de R$ ${diff.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`;
+          console.warn(`[Auditoria Financeira] Divergência no pedido ${orderData.header.numeroPedido}: ${warnMsg}`);
+          warnings.push({
+            code: 'FINANCIAL_DIVERGENCE',
+            message: warnMsg,
+            sumInstallments: sumMercadorias,
+            expectedTotal: expectedTotal,
+            difference: diff
+          });
         }
       }
+
+      // Validação de frete destacado
+      const freteEsperado = Number(orderData.header.valorFrete) || 0;
+      const isCif = String(orderData.header.tipoFrete || '').toUpperCase() === 'CIF';
+      if (!isCif && freteEsperado > 0 && sumFrete > 0 && Math.abs(sumFrete - freteEsperado) > 1.0) {
+        const freteWarn = `Divergência de Frete: O valor da parcela de frete (R$ ${sumFrete.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) difere do valor de frete cadastrado no cabeçalho (R$ ${freteEsperado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`;
+        warnings.push({
+          code: 'FREIGHT_DIVERGENCE',
+          message: freteWarn
+        });
+      }
     }
+
+    return warnings;
   }
 
   async saveOrder(orderData, currentUser, options = {}) {
@@ -225,7 +271,7 @@ class OrderService {
     }
 
     // Validação de integridade financeira antes de salvar
-    this._validateInstallmentsIntegrity(orderData);
+    const warnings = this._validateInstallmentsIntegrity(orderData) || [];
 
     const saved = await orderRepository.save(orderData);
 
@@ -260,7 +306,8 @@ class OrderService {
       order: saved,
       numberReassigned: Boolean(saved._numberReassigned),
       originalNumber: saved._originalNumber,
-      newNumber: saved.header.numeroPedido
+      newNumber: saved.header.numeroPedido,
+      warnings
     };
   }
 

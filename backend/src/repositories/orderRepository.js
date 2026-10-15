@@ -192,6 +192,18 @@ class OrderRepository {
     const dataPedido = order.header.dataPedido || order.header.dataEmissao || (preserveMissingDates ? '' : today);
     const dataEmissao = order.header.dataEmissao || order.header.dataPedido || (preserveMissingDates ? '' : today);
 
+    const normalizeDateToIso = (val) => {
+      if (!val) return '';
+      const s = String(val).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.split('T')[0];
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+        const [d, m, y] = s.split('/');
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+      return s;
+    };
+    const dataEntregaPrevista = normalizeDateToIso(order.header.dataEntregaPrevista);
+
     if (existing) {
       const sql = `
         UPDATE purchase_orders SET
@@ -232,7 +244,7 @@ class OrderRepository {
         order.header.isDraft ? 1 : 0,
         dataPedido,
         dataEmissao,
-        order.header.dataEntregaPrevista || '',
+        dataEntregaPrevista,
         Number(order.header.percentualDescontoOff) || 0,
         order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
         order.header.observacoes || '',
@@ -343,7 +355,7 @@ class OrderRepository {
         order.header.isDraft ? 1 : 0,
         dataPedido,
         dataEmissao,
-        order.header.dataEntregaPrevista || '',
+        dataEntregaPrevista,
         Number(order.header.percentualDescontoOff) || 0,
         order.header.percentualNota !== undefined ? Number(order.header.percentualNota) : 100,
         order.header.observacoes || '',
@@ -447,9 +459,15 @@ class OrderRepository {
       }
 
       await execute("DELETE FROM order_installments WHERE orderId = ?", [targetId]);
+      const seenInstIds = new Set();
       for (let instIdx = 0; instIdx < installments.length; instIdx++) {
         const inst = installments[instIdx];
-        const instId = inst.id || `inst_${targetId}_${instIdx}_${Math.random().toString(36).substring(2, 7)}`;
+        let instId = inst.id;
+        if (!instId || seenInstIds.has(instId)) {
+          instId = `${inst.isBoletoFrete ? 'inst_frete_' : 'inst_'}${targetId}_${instIdx}_${Math.random().toString(36).substring(2, 7)}`;
+          inst.id = instId;
+        }
+        seenInstIds.add(instId);
         await execute(`
           INSERT INTO order_installments (
             id, orderId, numeroParcela, totalParcelas, dataVencimento, valor,
@@ -525,18 +543,27 @@ class OrderRepository {
 
     try {
       await execute("DELETE FROM order_installments WHERE orderId = ?", [orderId]);
-      for (const inst of (installments || [])) {
-        const instId = inst.id || `inst_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const seenInstIds = new Set();
+      const instList = installments || [];
+      for (let instIdx = 0; instIdx < instList.length; instIdx++) {
+        const inst = instList[instIdx];
+        let instId = inst.id;
+        if (!instId || seenInstIds.has(instId)) {
+          instId = `${inst.isBoletoFrete ? 'inst_frete_' : 'inst_'}${orderId}_${instIdx}_${Math.random().toString(36).substring(2, 7)}`;
+          inst.id = instId;
+        }
+        seenInstIds.add(instId);
         await execute(`
           INSERT INTO order_installments (
             id, orderId, numeroParcela, totalParcelas, dataVencimento, valor,
-            valorOriginal, status, dataPagamento, observacao, documentoRef, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            valorOriginal, status, dataPagamento, observacao, documentoRef,
+            isBoletoFrete, tipoTitulo, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           instId,
           orderId,
-          Number(inst.numeroParcela) || 1,
-          Number(inst.totalParcelas) || 1,
+          Number(inst.numeroParcela) || (instIdx + 1),
+          Number(inst.totalParcelas) || instList.length,
           inst.dataVencimento || '',
           Number(inst.valor) || 0,
           Number(inst.valorOriginal) || Number(inst.valor) || 0,
@@ -544,6 +571,8 @@ class OrderRepository {
           inst.dataPagamento || null,
           inst.observacao || '',
           inst.documentoRef || '',
+          inst.isBoletoFrete ? 1 : 0,
+          inst.tipoTitulo || (inst.isBoletoFrete ? 'frete' : 'mercadoria'),
           inst.createdAt || now,
           now
         ]);

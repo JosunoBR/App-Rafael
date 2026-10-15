@@ -428,9 +428,10 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       return;
     }
     if (field === 'dataEntregaPrevista' || field === 'dataPedido') {
+      const normalizedDate = toIsoDate(value) || value;
       onChange({
         ...header,
-        [field]: value,
+        [field]: normalizedDate,
         datasVencimentoPersonalizadas: undefined
       });
       return;
@@ -1514,6 +1515,18 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const hasCustomDates = Boolean(customDates && Object.keys(customDates).length > 0);
   const hasCustomValues = Boolean(customValues && Object.keys(customValues).length > 0);
 
+  const sumMercadoriasPreview = useMemo(() => {
+    return previewInstallments
+      .filter((i) => !i.isFrete)
+      .reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+  }, [previewInstallments]);
+
+  const divergenciaMercadorias = useMemo(() => {
+    if (valorBaseMercadoria <= 0 || sumMercadoriasPreview <= 0) return 0;
+    const diff = Number((sumMercadoriasPreview - valorBaseMercadoria).toFixed(2));
+    return Math.abs(diff) > 0.5 ? diff : 0;
+  }, [sumMercadoriasPreview, valorBaseMercadoria]);
+
   // Altera a data de uma parcela e ajusta em cascata as parcelas subsequentes da mesma condição
   const handleInstallmentDateChange = (numeroParcela: number, newDate: string, isFrete: boolean) => {
     if (!newDate) return;
@@ -2343,10 +2356,38 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                 className={(isLocked && !isPaymentDatesEditable) ? 'opacity-85 pointer-events-none select-none border-none p-0 m-0' : 'border-none p-0 m-0'}
               >
                 <div className={`p-4 rounded-2xl border transition-all ${
-                  (valorMaximoBoletoCalculado > LIMITE_MAXIMO_BOLETO) 
+                  divergenciaMercadorias !== 0
+                    ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-400 dark:border-amber-800 shadow-md ring-1 ring-amber-400/40'
+                    : (valorMaximoBoletoCalculado > LIMITE_MAXIMO_BOLETO) 
                     ? 'bg-rose-50/60 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800/80 shadow-xs' 
                     : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/90 dark:border-slate-700'
                 }`}>
+                  {divergenciaMercadorias !== 0 && (
+                    <div className="mb-3.5 p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start sm:items-center gap-2.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+                        <div className="text-xs">
+                          <span className="font-bold">Aviso de Auditoria Financeira:</span>
+                          <span className="ml-1 text-slate-800 dark:text-slate-200">
+                            A soma das parcelas de produtos (<strong>R$ {sumMercadoriasPreview.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>)
+                            está {divergenciaMercadorias > 0 ? `R$ ${Math.abs(divergenciaMercadorias).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} acima` : `R$ ${Math.abs(divergenciaMercadorias).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} abaixo`} do valor total do pedido (<strong>R$ {valorBaseMercadoria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>).
+                          </span>
+                        </div>
+                      </div>
+                      {isPaymentDatesEditable && (
+                        <button
+                          type="button"
+                          onClick={handleResetParcelasValores}
+                          className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white shadow-2xs shrink-0 flex items-center gap-1.5 transition self-start sm:self-auto cursor-pointer"
+                          title="Dividir e recalibrar parcelas para bater exatamente com o valor total"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Recalibrar Valores</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">

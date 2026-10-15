@@ -1779,6 +1779,16 @@ export function App() {
       } else {
         triggerIOSBanner(`Pedido ${effectiveOrder.header.numeroPedido} salvo com sucesso em espera!`, 'success');
       }
+
+      if (saveRes?.warnings && Array.isArray(saveRes.warnings) && saveRes.warnings.length > 0) {
+        const warningLines = saveRes.warnings.map((w: any) => typeof w === 'string' ? w : (w.message || w.code)).join('\n\n');
+        triggerIOSAlert({
+          title: 'Aviso de Auditoria Financeira',
+          message: `O pedido foi salvo, mas foram identificados alertas que necessitam de conferência:\n\n${warningLines}`,
+          type: 'warning',
+          confirmText: 'Entendido'
+        });
+      }
     } catch (err: any) {
       console.error('Erro ao salvar pedido no servidor:', err);
       if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {

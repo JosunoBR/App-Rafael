@@ -2217,7 +2217,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               return (
                 <div 
                   key={targetKey}
-                  className={`p-2 rounded-xl border text-xs flex flex-col gap-1.5 shadow-2xs transition-all ${
+                  className={`p-2.5 rounded-xl border text-xs flex flex-col gap-1.5 shadow-2xs transition-all min-w-[210px] ${
                     isFreteItem
                       ? 'bg-sky-50/70 dark:bg-sky-950/40 border-sky-300/80 dark:border-sky-800'
                       : isDeposito
@@ -2331,7 +2331,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
               );
             };
 
-            const renderInstallmentCardsGroup = (items: typeof previewInstallments, labelTitle?: string) => {
+            const renderInstallmentCardsGroup = (items: typeof previewInstallments, labelTitle?: string, customGridClass?: string) => {
               if (!items || items.length === 0) return null;
               return (
                 <div className="mt-2.5 pt-2 border-t border-slate-200/80 dark:border-slate-800">
@@ -2343,7 +2343,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       </div>
                     </div>
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                  <div className={customGridClass || "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2"}>
                     {items.map(renderInstallmentItem)}
                   </div>
                 </div>
@@ -2672,6 +2672,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                       previewInstallments.filter(inst => !inst.isFrete),
                       `Previsão das Parcelas (${previewInstallments.filter(inst => !inst.isFrete).length}x):`
                     )}
+
+                    {/* PREVISÃO DA PARCELA DO FRETE (PADRONIZADA COM AS DEMAIS PARCELAS) */}
+                    {valorFreteNum > 0 && !String(header.tipoFrete || '').toUpperCase().includes('CIF') && (
+                      renderInstallmentCardsGroup(
+                        previewInstallments.filter(inst => Boolean(inst.isFrete)),
+                        'Parcela do Frete (10d após entrega):'
+                      )
+                    )}
                   </>
                 ) : (
                   /* MODO DUAS CONDIÇÕES / LINHAS COMBINADAS */
@@ -2912,6 +2920,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         previewInstallments.filter(inst => !inst.isFrete && !inst.isEntrada),
                         `Parcelas da 2ª Condição (${saldoParcelas}x):`
                       )}
+
+                      {/* PREVISÃO DA PARCELA DO FRETE (PADRONIZADA COM AS DEMAIS PARCELAS) */}
+                      {valorFreteNum > 0 && !String(header.tipoFrete || '').toUpperCase().includes('CIF') && (
+                        renderInstallmentCardsGroup(
+                          previewInstallments.filter(inst => Boolean(inst.isFrete)),
+                          'Parcela do Frete (10d após entrega):'
+                        )
+                      )}
                     </div>
                   </div>
                 )}
@@ -3033,7 +3049,8 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                     {valorFreteNum > 0 && !String(header.tipoFrete || '').toUpperCase().includes('CIF') && (
                       renderInstallmentCardsGroup(
                         previewInstallments.filter(inst => Boolean(inst.isFrete)),
-                        'Parcela do Frete (10d após entrega):'
+                        'Parcela do Frete (10d após entrega):',
+                        'grid grid-cols-1 gap-2 w-full max-w-sm'
                       )
                     )}
                   </div>

@@ -200,6 +200,7 @@ async function getDatabase() {
       dataPagamento TEXT,
       observacao TEXT,
       documentoRef TEXT,
+      metodoPagamento TEXT DEFAULT 'Boleto',
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (orderId) REFERENCES purchase_orders(id) ON DELETE CASCADE
@@ -609,6 +610,7 @@ async function getDatabase() {
       const requiredInstCols = {
         isBoletoFrete: "INTEGER DEFAULT 0",
         tipoTitulo: "TEXT DEFAULT 'mercadoria'",
+        metodoPagamento: "TEXT DEFAULT 'Boleto'",
         createdAt: "TEXT",
         updatedAt: "TEXT"
       };

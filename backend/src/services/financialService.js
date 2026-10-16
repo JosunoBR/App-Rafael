@@ -40,10 +40,14 @@ function parseCurrencyNumber(val) {
 function normalizeFormaPagamento(val) {
   if (!val) return 'BOLETO';
   const clean = String(val).trim().toUpperCase();
-  if (clean.includes('DEP')) return 'DEPOSITO';
+  if (clean === 'BOLETO') return 'BOLETO';
+  if (clean === 'DEP' || clean === 'DEPOSITO' || clean === 'DEPÓSITO') return 'DEPOSITO';
   if (clean.includes('PIX') || clean.includes('DINHEIRO')) return 'DINHEIRO_PIX';
   if (clean.includes('CHEQUE')) return 'CHEQUE';
+  if (clean.includes('BOLETO') && !clean.includes('DEP')) return 'BOLETO';
+  if (clean.includes('DEP') && !clean.includes('BOLETO')) return 'DEPOSITO';
   if (clean.includes('BOLETO')) return 'BOLETO';
+  if (clean.includes('DEP')) return 'DEPOSITO';
   return clean;
 }
 
@@ -957,8 +961,11 @@ class FinancialService {
       const valorPago = isPaid ? (existing?.valorPago || inst.valorPago || inst.valor) : 0;
 
       // Limpar tags antigas de previsão/confirmação para evitar duplicação
-      const rawObs = existing?.observacao || inst.observacao || (condicao ? `Condição: ${condicao}` : '');
-      const cleanObs = rawObs.replace(/\[(PREVISÃO|CONFIRMADO)[^\]]*\]/gi, '').trim();
+      const isAutoOldObs = existing?.observacao && /(dep[oó]sito|boleto)\s+\d+\/\d+/i.test(existing.observacao);
+      const chosenObs = (inst.observacao && (isAutoOldObs || !existing?.observacao))
+        ? inst.observacao
+        : (existing?.observacao || inst.observacao || (condicao ? `Condição: ${condicao}` : ''));
+      const cleanObs = chosenObs.replace(/\[(PREVISÃO|CONFIRMADO)[^\]]*\]/gi, '').trim();
 
       const obsStatus = isConfirmado
         ? '[CONFIRMADO - Autorizado pela Diretoria]'
@@ -970,6 +977,32 @@ class FinancialService {
         : toBrDate(inst.dataVencimento || inst.vencimento || existing?.dataVencimento);
 
       const stableInstId = inst.id || (isFrete ? `inst_frete_${orderId}` : (existing ? existing.installmentId : `inst_${orderId}_${inst.numeroParcela}`));
+
+      // 🛡️ Resolução precisa da forma de pagamento da parcela:
+      let parcelaMetodo = inst.metodoPagamento;
+      if (!parcelaMetodo && isFrete) {
+        parcelaMetodo = 'BOLETO';
+      }
+      if (!parcelaMetodo && inst.observacao) {
+        if (/\bboleto\b/i.test(inst.observacao)) parcelaMetodo = 'BOLETO';
+        else if (/\b(dep[oó]sito|pix)\b/i.test(inst.observacao)) parcelaMetodo = 'DEPOSITO';
+      }
+      if (!parcelaMetodo && (formaPgto.includes('/') || formaPgto.includes('+'))) {
+        try {
+          const pConfig = typeof order.header?.paymentConfigJson === 'string'
+            ? JSON.parse(order.header.paymentConfigJson)
+            : (order.header?.paymentConfigJson || {});
+          const depCount = Number(pConfig.depositoParcelasCount) || 0;
+          if (depCount > 0 && Number(inst.numeroParcela) <= depCount) {
+            parcelaMetodo = pConfig.depositoFormaPagamento || 'DEPOSITO';
+          } else if (depCount > 0 && Number(inst.numeroParcela) > depCount) {
+            parcelaMetodo = pConfig.saldoFormaPagamento || 'BOLETO';
+          }
+        } catch {}
+      }
+      if (!parcelaMetodo) {
+        parcelaMetodo = formaPgto || existing?.formaPagamento || 'BOLETO';
+      }
 
       const entryPayload = {
         tipo: 'pedido_parcela',
@@ -983,7 +1016,7 @@ class FinancialService {
         storeId: existing?.storeId || 'matriz',
         lojaNome: existing?.lojaNome || 'Depósito Central / Matriz',
         empresa: existing?.empresa || 'ALS',
-        formaPagamento: normalizeFormaPagamento(inst.metodoPagamento || formaPgto || existing?.formaPagamento || 'BOLETO'),
+        formaPagamento: normalizeFormaPagamento(parcelaMetodo),
         bancoConta: existing?.bancoConta || '',
         documentoRef: existing?.documentoRef || inst.documentoRef || (isFrete ? 'Boleto Frete' : numPedido),
         parcelaNumero: inst.numeroParcela,

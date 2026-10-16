@@ -471,8 +471,8 @@ class OrderRepository {
           INSERT INTO order_installments (
             id, orderId, numeroParcela, totalParcelas, dataVencimento, valor,
             valorOriginal, status, dataPagamento, observacao, documentoRef,
-            isBoletoFrete, tipoTitulo, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            metodoPagamento, isBoletoFrete, tipoTitulo, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           instId,
           targetId,
@@ -485,6 +485,7 @@ class OrderRepository {
           inst.dataPagamento || null,
           inst.observacao || '',
           inst.documentoRef || '',
+          inst.metodoPagamento || (inst.isBoletoFrete ? 'Boleto' : 'Boleto'),
           inst.isBoletoFrete ? 1 : 0,
           inst.tipoTitulo || (inst.isBoletoFrete ? 'frete' : 'mercadoria'),
           inst.createdAt || now,
@@ -556,8 +557,8 @@ class OrderRepository {
           INSERT INTO order_installments (
             id, orderId, numeroParcela, totalParcelas, dataVencimento, valor,
             valorOriginal, status, dataPagamento, observacao, documentoRef,
-            isBoletoFrete, tipoTitulo, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            metodoPagamento, isBoletoFrete, tipoTitulo, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           instId,
           orderId,
@@ -570,6 +571,7 @@ class OrderRepository {
           inst.dataPagamento || null,
           inst.observacao || '',
           inst.documentoRef || '',
+          inst.metodoPagamento || (inst.isBoletoFrete ? 'Boleto' : 'Boleto'),
           inst.isBoletoFrete ? 1 : 0,
           inst.tipoTitulo || (inst.isBoletoFrete ? 'frete' : 'mercadoria'),
           inst.createdAt || now,
@@ -679,29 +681,38 @@ class OrderRepository {
       items = jsonItems;
     }
 
+    let jsonInsts = [];
+    if (r.installmentsJson) {
+      try { jsonInsts = JSON.parse(r.installmentsJson) || []; } catch { jsonInsts = []; }
+    }
+
     try {
       const dbInst = await queryAll("SELECT * FROM order_installments WHERE orderId = ? ORDER BY numeroParcela ASC", [r.id]);
       if (dbInst && dbInst.length > 0) {
-        installments = dbInst.map(ins => ({
-          id: ins.id,
-          orderId: ins.orderId,
-          numeroParcela: ins.numeroParcela,
-          totalParcelas: ins.totalParcelas,
-          dataVencimento: ins.dataVencimento,
-          valor: ins.valor,
-          valorOriginal: ins.valorOriginal,
-          status: ins.status,
-          dataPagamento: ins.dataPagamento,
-          observacao: ins.observacao,
-          documentoRef: ins.documentoRef,
-          isBoletoFrete: ins.isBoletoFrete === 1,
-          tipoTitulo: ins.tipoTitulo || (ins.isBoletoFrete === 1 ? 'frete' : 'mercadoria')
-        }));
-      } else if (r.installmentsJson) {
-        installments = JSON.parse(r.installmentsJson);
+        installments = dbInst.map((ins, idx) => {
+          const jsonMatch = jsonInsts.find(j => j.id === ins.id || Number(j.numeroParcela) === Number(ins.numeroParcela)) || jsonInsts[idx];
+          return {
+            id: ins.id,
+            orderId: ins.orderId,
+            numeroParcela: ins.numeroParcela,
+            totalParcelas: ins.totalParcelas,
+            dataVencimento: ins.dataVencimento,
+            valor: ins.valor,
+            valorOriginal: ins.valorOriginal,
+            status: ins.status,
+            dataPagamento: ins.dataPagamento,
+            observacao: ins.observacao || jsonMatch?.observacao,
+            documentoRef: ins.documentoRef || jsonMatch?.documentoRef,
+            metodoPagamento: ins.metodoPagamento || jsonMatch?.metodoPagamento || (ins.isBoletoFrete === 1 ? 'Boleto' : undefined),
+            isBoletoFrete: ins.isBoletoFrete === 1,
+            tipoTitulo: ins.tipoTitulo || (ins.isBoletoFrete === 1 ? 'frete' : 'mercadoria')
+          };
+        });
+      } else if (jsonInsts.length > 0) {
+        installments = jsonInsts;
       }
     } catch {
-      try { installments = JSON.parse(r.installmentsJson || '[]'); } catch {}
+      installments = jsonInsts;
     }
 
     if (r.inspectionJson) {

@@ -910,8 +910,14 @@ class OrderService {
     }
 
     const validReleaseStatuses = ['Aprovado', 'Em Distribuição'];
-    if (!validReleaseStatuses.includes(order.header.status) || order.header.distribuicaoConcluida) {
-      const err = new Error(`O pedido não pode ser liberado para separação no status "${order.header.status}". Atualize a lista antes de tentar novamente.`);
+    if (!validReleaseStatuses.includes(order.header.status)) {
+      const err = new Error(`O pedido não pode ser liberado para separação no status "${order.header.status}". O status atual precisa ser "Aprovado" ou "Em Distribuição".`);
+      err.statusCode = 409;
+      err.code = 'INVALID_PIPELINE_STATE';
+      throw err;
+    }
+    if (order.header.distribuicaoConcluida) {
+      const err = new Error(`A distribuição deste pedido já foi concluída anteriormente. Atualize a lista antes de tentar novamente.`);
       err.statusCode = 409;
       err.code = 'INVALID_PIPELINE_STATE';
       throw err;

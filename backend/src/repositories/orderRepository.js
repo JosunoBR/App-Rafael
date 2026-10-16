@@ -973,15 +973,26 @@ class OrderRepository {
     const now = new Date().toISOString();
     const today = now.split('T')[0];
 
-    const duplicatedItems = (original.items || []).map(item => ({
-      ...item,
-      id: `it_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      orderId: newId,
-      qtdReservaEstoque: 0,
-      separacaoLojas: {}
-    }));
+    // Preserva todos os dados de produtos e distribuição física da tela de pedido,
+    // mas reseta as conferências, avarias e apontamentos de execução da esteira.
+    const duplicatedItems = (original.items || []).map(item => {
+      const grade = item.grade || item.separacaoLojas || {};
+      return {
+        ...item,
+        id: `it_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        orderId: newId,
+        qtdReservaEstoque: 0,
+        qtdRecebida: null,
+        motivoRuptura: null,
+        ruptura: false,
+        separacaoManual: false,
+        checks: {},
+        separacaoLojas: typeof grade === 'object' ? { ...grade } : {},
+        grade: typeof grade === 'object' ? { ...grade } : {}
+      };
+    });
 
-    // Duplicar parcelas/títulos com as exatas condições do pedido original
+    // Duplicar parcelas/títulos com as exatas condições comerciais do pedido original
     const duplicatedInstallments = (original.installments || []).map(inst => ({
       ...inst,
       id: `inst_${newId}_${inst.numeroParcela || 1}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
@@ -1003,6 +1014,30 @@ class OrderRepository {
         status: 'Em Cotação',
         separationStatus: 'Pendente',
         isDraft: true,
+        // 🛡️ Limpeza estrita de marcos e histórico da esteira anterior:
+        aprovadoPor: null,
+        dataAprovacao: null,
+        recebidoMatriz: false,
+        dataRecebimentoMatriz: null,
+        recebidoPor: null,
+        numeroNotaFiscal: null,
+        distribuicaoConcluida: false,
+        distribuidoPor: null,
+        dataDistribuicao: null,
+        observacaoDistribuicao: null,
+        separacaoConcluida: false,
+        separadoPor: null,
+        dataSeparacao: null,
+        observacaoSeparacao: null,
+        boletosLiberados: false,
+        boletosLiberadosPor: null,
+        boletosLiberadosEm: null,
+        finalizadoPor: null,
+        dataFinalizacao: null,
+        valorNotaFiscalEntregue: 0,
+        ajusteFiscalDiferenca: 0,
+        ajusteFiscalData: null,
+        ajusteFiscalUsuario: null,
         createdAt: now,
         updatedAt: now
       },

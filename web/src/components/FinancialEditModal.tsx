@@ -32,13 +32,21 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
   onSave,
   showToast
 }) => {
+  const normalizeForma = (forma?: string): FinancialPaymentMethod => {
+    if (!forma) return 'BOLETO';
+    const clean = forma.trim().toUpperCase();
+    if (clean === 'DEPÓSITO' || clean === 'DEPOSITO') return 'DEPOSITO';
+    if (clean === 'CARTÃO' || clean === 'CARTAO') return 'CARTAO';
+    return clean as FinancialPaymentMethod;
+  };
+
   // Estado do formulário isolado
   const [descricao, setDescricao] = useState(entry?.descricao || '');
   const [fornecedor, setFornecedor] = useState(entry?.fornecedor || '');
   const [categoria, setCategoria] = useState<FinancialCategory>(entry?.categoria || 'OUTROS');
   const [lojaNome, setLojaNome] = useState(entry?.lojaNome || entry?.empresa || 'ALS');
   const [empresa, setEmpresa] = useState(entry?.empresa || 'ALS');
-  const [formaPagamento, setFormaPagamento] = useState<FinancialPaymentMethod>(entry?.formaPagamento || 'BOLETO');
+  const [formaPagamento, setFormaPagamento] = useState<FinancialPaymentMethod>(normalizeForma(entry?.formaPagamento));
   const [documentoRef, setDocumentoRef] = useState(entry?.documentoRef || '');
   const [statusPrevisao, setStatusPrevisao] = useState<'PREVISTO' | 'CONFIRMADO'>(entry?.statusPrevisao || 'CONFIRMADO');
   
@@ -65,7 +73,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
       setCategoria(entry.categoria || 'OUTROS');
       setLojaNome(entry.lojaNome || entry.empresa || 'ALS');
       setEmpresa(entry.empresa || 'ALS');
-      setFormaPagamento(entry.formaPagamento || 'BOLETO');
+      setFormaPagamento(normalizeForma(entry.formaPagamento));
       setDocumentoRef(entry.documentoRef || '');
       setStatusPrevisao(entry.statusPrevisao || 'CONFIRMADO');
       setDataVencimento(entry.dataVencimento ? entry.dataVencimento.substring(0, 10) : '');
@@ -257,12 +265,12 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
                 Forma de Pagamento
               </label>
               <select
-                value={formaPagamento}
-                onChange={e => setFormaPagamento(e.target.value as any)}
+                value={normalizeForma(formaPagamento)}
+                onChange={e => setFormaPagamento(normalizeForma(e.target.value))}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-amber-500"
               >
                 <option value="BOLETO">BOLETO</option>
-                <option value="DEPÓSITO">DEPÓSITO</option>
+                <option value="DEPOSITO">DEPÓSITO</option>
                 <option value="DINHEIRO">DINHEIRO</option>
                 <option value="PIX">PIX</option>
                 <option value="CARTAO">CARTÃO</option>

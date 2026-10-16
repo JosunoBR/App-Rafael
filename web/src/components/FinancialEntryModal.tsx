@@ -43,9 +43,9 @@ const CATEGORIAS_CONFIG: { key: FinancialCategory; label: string; color: string 
 
 const FORMAS_PAGAMENTO: FinancialPaymentMethod[] = [
   'BOLETO',
+  'DEPOSITO',
   'DINHEIRO',
   'PIX',
-  'DEPÓSITO',
   'CARTAO',
   'CHEQUE'
 ];
@@ -864,7 +864,9 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               >
                 {FORMAS_PAGAMENTO.map(f => (
-                  <option key={f} value={f}>{f}</option>
+                  <option key={f} value={f}>
+                    {f === 'DEPOSITO' ? 'DEPÓSITO' : f === 'CARTAO' ? 'CARTÃO' : f}
+                  </option>
                 ))}
               </select>
             </div>

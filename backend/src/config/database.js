@@ -150,6 +150,7 @@ async function getDatabase() {
       ajusteFiscalData TEXT,
       ajusteFiscalUsuario TEXT,
       inspectionJson TEXT,
+      removedItemsJson TEXT DEFAULT '[]',
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -479,6 +480,7 @@ async function getDatabase() {
         descontoComercialTotal: "REAL DEFAULT 0",
         descontoComercialTipo: "TEXT DEFAULT '%'",
         inspectionJson: "TEXT",
+        removedItemsJson: "TEXT DEFAULT '[]'",
         isDraft: "INTEGER DEFAULT 0",
         recebidoMatriz: "INTEGER DEFAULT 0",
         dataRecebimentoMatriz: "TEXT",

@@ -9,7 +9,7 @@ import {
   AlertCircle 
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
-import { calculateOrderTotals } from '../shared/orderCalculationEngine';
+import { calculateOrderTotals, PDV_MINIMO_MEDIAS } from '../shared/orderCalculationEngine';
 
 interface OrderSummaryCardsProps {
   order: PurchaseOrder;
@@ -27,9 +27,10 @@ export const OrderSummaryCards: React.FC<OrderSummaryCardsProps> = ({ order }) =
   const totalUnidades = totals.totalPecas;
   const rupturasCount = totals.rupturasCount;
 
-  // Faturamento e Margem Projetados
-  const faturamentoPdvProjetado = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.pdvAlvo || 0)), 0);
-  const custoRealEfetivoTotal = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.custoRealEfetivo || 0)), 0);
+  // Faturamento e Margem Projetados (desconsidera itens com PDV < PDV_MINIMO_MEDIAS)
+  const itemsComPdvValido = activeItems.filter(i => (Number(i.pdvAlvo) || 0) >= PDV_MINIMO_MEDIAS);
+  const faturamentoPdvProjetado = itemsComPdvValido.reduce((acc, i) => acc + (i.qtdTotalUnidades * (Number(i.pdvAlvo) || 0)), 0);
+  const custoRealEfetivoTotal = itemsComPdvValido.reduce((acc, i) => acc + (i.qtdTotalUnidades * (Number(i.custoRealEfetivo) || 0)), 0);
   const lucroEstimadoTotal = faturamentoPdvProjetado - custoRealEfetivoTotal - totals.totalSt;
   const margemPercentualMedia = totals.margemMediaPercentual;
 

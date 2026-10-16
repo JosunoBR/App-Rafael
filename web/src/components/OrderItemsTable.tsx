@@ -34,7 +34,7 @@ import {
 import { optimizeImageFile } from '../utils/imageUtils';
 import { OrderItem, OrderHeader, FiscalConfig, StoreConfig, Product, Supplier } from '../shared/types';
 import { calculateItemFiscal, normalizeRateToDecimal } from '../shared/fiscalEngine';
-import { calculateOrderTotals } from '../shared/orderCalculationEngine';
+import { calculateOrderTotals, PDV_MINIMO_MEDIAS } from '../shared/orderCalculationEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
 import { isOrderItemBlank, generateNextProductCode } from '../utils/orderItemUtils';
 import { handleCurrencyInput, formatCurrency } from '../utils/masks';
@@ -55,6 +55,8 @@ interface OrderItemsTableProps {
   onDeleteItem: (itemId: string) => void;
   onSaveProduct?: (product: Product, silent?: boolean) => void;
   onOpenFiscalModal?: (item: OrderItem) => void;
+  removedItemsCount?: number;
+  onOpenTrashModal?: () => void;
 }
 
 export type ColumnKey =
@@ -215,7 +217,9 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
   onDuplicateItem,
   onDeleteItem,
   onSaveProduct,
-  onOpenFiscalModal
+  onOpenFiscalModal,
+  removedItemsCount = 0,
+  onOpenTrashModal
 }) => {
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
   const [isCatalogPickerOpen, setIsCatalogPickerOpen] = useState(false);
@@ -2013,6 +2017,18 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             <Package className="w-3.5 h-3.5" />
             <span>Catálogo ({products.filter(p => isProductFromSupplier(p, currentSupplierId, currentSupplierName, suppliers)).length})</span>
           </button>
+
+          {removedItemsCount > 0 && (
+            <button
+              type="button"
+              onClick={onOpenTrashModal}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900 transition cursor-pointer shadow-2xs"
+              title="Abrir lixeira de produtos removidos deste pedido"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Itens Removidos ({removedItemsCount})</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -2267,6 +2283,18 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             <span className="font-bold">{totals.pecas.toLocaleString('pt-BR')} un</span>
           </div>
 
+          {removedItemsCount > 0 && (
+            <button
+              type="button"
+              onClick={onOpenTrashModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/80 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition shadow-2xs cursor-pointer font-sans"
+              title="Abrir lixeira de produtos removidos deste pedido"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span className="font-bold">Itens Removidos ({removedItemsCount})</span>
+            </button>
+          )}
+
           {totals.rupturasCount > 0 && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-bold shadow-2xs">
               <span>🚫 {totals.rupturasCount} em ruptura (descontados)</span>
@@ -2289,7 +2317,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
                 ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300'
                 : 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/80 text-rose-800 dark:text-rose-300'
             }`}
-            title={`Margem Real Média Ponderada do Pedido: ${totals.margemMediaPercentual.toFixed(1)}% (Lucro médio projetado de R$ ${totals.margemMediaValor.toFixed(2)} por unidade vendida no PDV)`}
+            title={`Margem Real Média Ponderada do Pedido: ${totals.margemMediaPercentual.toFixed(1)}% (Lucro médio projetado de R$ ${totals.margemMediaValor.toFixed(2)} por unidade vendida considerando PDV >= R$ ${PDV_MINIMO_MEDIAS.toFixed(2)})`}
           >
             <span className="text-slate-400 dark:text-slate-400 font-sans">Margem Média:</span>
             <strong className="font-extrabold font-mono">

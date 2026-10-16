@@ -1,6 +1,7 @@
 import { PurchaseOrder, OrderItem, Supplier } from '../shared/types';
 import { toIsoDate } from './masks';
-import { calculateOrderTotals } from '../shared/orderCalculationEngine';
+import { calculateOrderTotals, PDV_MINIMO_MEDIAS } from '../shared/orderCalculationEngine';
+export { PDV_MINIMO_MEDIAS };
 
 export interface DashboardFilter {
   periodPreset: '30d' | 'trimestre' | 'semestre' | 'ano' | 'tudo' | 'custom';
@@ -211,9 +212,10 @@ export function calculateDashboardMetrics(
       if (qtdTotal <= 0 && valorBruto <= 0) return;
 
       const pdvAlvo = Number(item.pdvAlvo) || 0;
+      const temPdvValido = pdvAlvo >= PDV_MINIMO_MEDIAS;
       const custoRealUnit = Number(item.custoRealEfetivo) || Number(item.precoUnitario) || 0;
-      const itemFaturamento = qtdTotal * pdvAlvo;
-      const itemCustoReal = qtdTotal * custoRealUnit;
+      const itemFaturamento = temPdvValido ? qtdTotal * pdvAlvo : 0;
+      const itemCustoReal = temPdvValido ? qtdTotal * custoRealUnit : 0;
       const itemLucro = itemFaturamento - itemCustoReal;
 
       totalPecas += qtdTotal;
@@ -334,8 +336,11 @@ export function calculateDashboardMetrics(
         if (!i || !i.descricao || i.descricao.trim() === '') return;
         const q = Number(i.qtdTotalUnidades) || 0;
         mPecas += q;
-        mFat += q * (Number(i.pdvAlvo) || 0);
-        mCusto += q * (Number(i.custoRealEfetivo) || Number(i.precoUnitario) || 0);
+        const pdvAlvo = Number(i.pdvAlvo) || 0;
+        if (pdvAlvo >= PDV_MINIMO_MEDIAS) {
+          mFat += q * pdvAlvo;
+          mCusto += q * (Number(i.custoRealEfetivo) || Number(i.precoUnitario) || 0);
+        }
       });
     });
 
@@ -385,8 +390,11 @@ function summarizeOrdersGroup(label: string, orders: PurchaseOrder[]): PeriodSum
       if (!i || !i.descricao || i.descricao.trim() === '') return;
       const q = Number(i.qtdTotalUnidades) || 0;
       pecas += q;
-      fat += q * (Number(i.pdvAlvo) || 0);
-      custo += q * (Number(i.custoRealEfetivo) || Number(i.precoUnitario) || 0);
+      const pdvAlvo = Number(i.pdvAlvo) || 0;
+      if (pdvAlvo >= PDV_MINIMO_MEDIAS) {
+        fat += q * pdvAlvo;
+        custo += q * (Number(i.custoRealEfetivo) || Number(i.precoUnitario) || 0);
+      }
     });
   });
 

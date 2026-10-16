@@ -1,6 +1,14 @@
 import { PurchaseOrder, OrderItem, OrderHeader, FiscalConfig } from './types';
 import { normalizeRateToDecimal, calculateItemFiscal } from './fiscalEngine';
 
+/**
+ * Limite mínimo de PDV para que o produto seja considerado nos acumuladores de médias e estatísticas (Faturamento PDV, Lucro Real e Margem Média).
+ * Produtos com PDV < PDV_MINIMO_MEDIAS continuam calculando o seu custo/margem individual na linha,
+ * mas não distorcem as médias ponderadas e estatísticas consolidadas da rede.
+ * Para desativar este filtro e considerar qualquer PDV > 0, basta alterar o valor para 0.
+ */
+export const PDV_MINIMO_MEDIAS = 12.00;
+
 export interface OrderTotalsResult {
   // Quantidades
   validItemsCount: number;
@@ -172,9 +180,9 @@ export function calculateOrderTotals(
       ? Number((Number(it.stUnitario) * pecas).toFixed(2))
       : (stAliq > 0 ? Number((liquidoItem * (stAliq / 100)).toFixed(2)) : 0);
 
-    // Apuração de Margem Ponderada do Item
+    // Apuração de Margem Ponderada do Pedido (considera apenas itens com PDV >= PDV_MINIMO_MEDIAS)
     const pdv = Number(it.pdvAlvo) || 0;
-    if (pdv > 0 && pecas > 0) {
+    if (pdv >= PDV_MINIMO_MEDIAS && pecas > 0) {
       const precoCompraEfetivo = precoUnit * (1 - descPct / 100);
       const fiscalRes = calculateItemFiscal(precoCompraEfetivo, pdv, fiscal, it.fiscalOverride);
       somaPdvTotal += pdv * pecas;

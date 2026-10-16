@@ -75,6 +75,7 @@ class OrderRepository {
     const items = order.items || [];
     const installments = order.installments || [];
     const itemsJson = JSON.stringify(items);
+    const removedItemsJson = JSON.stringify(order.removedItems || []);
     const installmentsJson = JSON.stringify(installments);
     const separationJson = order.separationDistribution ? JSON.stringify(order.separationDistribution) : null;
 
@@ -214,7 +215,7 @@ class OrderRepository {
           separationStatus = ?, totalBruto = ?, totalIpi = ?, totalDesconto = ?, totalLiquido = ?, totalGeral = ?, totalVolumes = ?, totalPecas = ?, installmentsJson = ?,
           fiscalConfigJson = ?, aliquotaIpi = ?, aliquotaFrete = ?, aliquotaIcmsEntrada = ?,
           aliquotaCustoFixo = ?, aliquotaIcmsSaida = ?, aliquotaPisCofinsIr = ?,
-          itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, inspectionJson = ?,
+          itemsJson = ?, separationDistributionJson = ?, paymentConfigJson = ?, inspectionJson = ?, removedItemsJson = ?,
           valorNotaFiscalEntregue = ?, ajusteFiscalDiferenca = ?, ajusteFiscalData = ?, ajusteFiscalUsuario = ?,
           recebidoMatriz = ?, dataRecebimentoMatriz = ?, recebidoPor = ?, numeroNotaFiscal = ?,
           boletosLiberados = ?, boletosLiberadosPor = ?, boletosLiberadosEm = ?,
@@ -268,6 +269,7 @@ class OrderRepository {
         separationJson,
         paymentConfigJson,
         order.inspection ? JSON.stringify(order.inspection) : null,
+        removedItemsJson,
         Number(order.header.valorNotaFiscalEntregue) || 0,
         Number(order.header.ajusteFiscalDiferenca) || 0,
         order.header.ajusteFiscalData || null,
@@ -305,7 +307,7 @@ class OrderRepository {
           separationStatus, totalBruto, totalIpi, totalDesconto, totalLiquido, totalGeral, totalVolumes, totalPecas, installmentsJson,
           fiscalConfigJson, aliquotaIpi, aliquotaFrete, aliquotaIcmsEntrada,
           aliquotaCustoFixo, aliquotaIcmsSaida, aliquotaPisCofinsIr,
-          itemsJson, separationDistributionJson, paymentConfigJson, inspectionJson,
+          itemsJson, separationDistributionJson, paymentConfigJson, inspectionJson, removedItemsJson,
           valorNotaFiscalEntregue, ajusteFiscalDiferenca, ajusteFiscalData, ajusteFiscalUsuario,
           recebidoMatriz, dataRecebimentoMatriz, recebidoPor, numeroNotaFiscal,
           boletosLiberados, boletosLiberadosPor, boletosLiberadosEm,
@@ -324,7 +326,7 @@ class OrderRepository {
           ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
-          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?,
@@ -379,6 +381,7 @@ class OrderRepository {
         separationJson,
         paymentConfigJson,
         order.inspection ? JSON.stringify(order.inspection) : null,
+        removedItemsJson,
         Number(order.header.valorNotaFiscalEntregue) || 0,
         Number(order.header.ajusteFiscalDiferenca) || 0,
         order.header.ajusteFiscalData || null,
@@ -753,6 +756,15 @@ class OrderRepository {
 
     try { separationDistribution = r.separationDistributionJson ? JSON.parse(r.separationDistributionJson) : null; } catch {}
 
+    let removedItems = [];
+    if (r.removedItemsJson) {
+      try {
+        removedItems = JSON.parse(r.removedItemsJson) || [];
+      } catch (e) {
+        removedItems = [];
+      }
+    }
+
     let parsedFiscal = null;
     if (r.fiscalConfigJson) {
       try { parsedFiscal = JSON.parse(r.fiscalConfigJson); } catch {}
@@ -946,6 +958,7 @@ class OrderRepository {
       },
       fiscalConfig: parsedFiscal,
       items,
+      removedItems,
       installments,
       inspection,
       separationDistribution,

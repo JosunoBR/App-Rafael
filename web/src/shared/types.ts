@@ -371,6 +371,14 @@ export interface OrderInspection {
   conferenciaLojas?: Record<string, StoreItemCheck>; // Chave: `${storeId}_${itemId}`
 }
 
+export interface RemovedOrderItem {
+  id: string;
+  itemOriginal: OrderItem;
+  removidoPor: string;
+  dataRemocao: string;
+  motivo?: string;
+}
+
 export interface PurchaseOrder {
   id?: string;
   header: OrderHeader;
@@ -379,6 +387,7 @@ export interface PurchaseOrder {
   storeConfigs: StoreConfig[];
   inspection?: OrderInspection;
   installments?: PaymentInstallment[];
+  removedItems?: RemovedOrderItem[];
 }
 
 // 7. Tipos de Usuários & Níveis de Acesso (RBAC: Diretoria, Comprador, Depósito, Separação, Faturamento)

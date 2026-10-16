@@ -31,7 +31,8 @@ import {
   DashboardFilter, 
   calculateDashboardMetrics, 
   MonthlyChartData,
-  getOrderDate
+  getOrderDate,
+  PDV_MINIMO_MEDIAS
 } from '../utils/dashboardAnalytics';
 
 interface DashboardViewProps {
@@ -146,8 +147,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const investItem = Number(item.valorTotalBruto) || 0;
         if (qtdTotal <= 0 && investItem <= 0) return;
 
-        const fatItem = qtdTotal * (Number(item.pdvAlvo) || 0);
-        const custoRealItem = qtdTotal * (Number(item.custoRealEfetivo) || Number(item.precoUnitario) || 0);
+        const pdvAlvo = Number(item.pdvAlvo) || 0;
+        const temPdvValido = pdvAlvo >= PDV_MINIMO_MEDIAS;
+        const custoRealUnit = Number(item.custoRealEfetivo) || Number(item.precoUnitario) || 0;
+        const fatItem = temPdvValido ? qtdTotal * pdvAlvo : 0;
+        const custoRealItem = temPdvValido ? qtdTotal * custoRealUnit : 0;
         const lucroItem = fatItem - custoRealItem;
 
         totalInvestido += investItem;

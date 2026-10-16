@@ -33,7 +33,7 @@ import {
 import { PurchaseOrder, OrderItem, Supplier, Product, StoreConfig, FiscalConfig } from '../shared/types';
 import { calculateItemFiscal } from '../shared/fiscalEngine';
 import { calculateAutomaticSeparation } from '../shared/separationEngine';
-import { calculateOrderTotals } from '../shared/orderCalculationEngine';
+import { calculateOrderTotals, PDV_MINIMO_MEDIAS } from '../shared/orderCalculationEngine';
 import { handleCurrencyInput, formatCurrency } from '../utils/masks';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 
@@ -110,8 +110,9 @@ export const MobilePurchasesView: React.FC<MobilePurchasesViewProps> = ({
   const valorSt = totals.totalSt;
   const totalCompraLiquido = totals.totalGeral;
 
-  const faturamentoPdvProjetado = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.pdvAlvo || 0)), 0);
-  const custoRealEfetivoTotal = activeItems.reduce((acc, i) => acc + (i.qtdTotalUnidades * (i.custoRealEfetivo || 0)), 0);
+  const itemsComPdvValido = activeItems.filter(i => (Number(i.pdvAlvo) || 0) >= PDV_MINIMO_MEDIAS);
+  const faturamentoPdvProjetado = itemsComPdvValido.reduce((acc, i) => acc + (i.qtdTotalUnidades * (Number(i.pdvAlvo) || 0)), 0);
+  const custoRealEfetivoTotal = itemsComPdvValido.reduce((acc, i) => acc + (i.qtdTotalUnidades * (Number(i.custoRealEfetivo) || 0)), 0);
   const totalMargemBrutaReais = faturamentoPdvProjetado - custoRealEfetivoTotal - totals.totalSt;
   const margemMediaPercentual = totals.margemMediaPercentual;
 

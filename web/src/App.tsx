@@ -95,6 +95,9 @@ import {
   OrderAuditModal 
 } from './components/OrderAuditModal';
 import { 
+  OrderTrashModal 
+} from './components/OrderTrashModal';
+import { 
   IOSAlertModal, 
   IOSAlertOptions, 
   IOSAlertType 
@@ -104,7 +107,7 @@ import {
   IOSBannerMessage 
 } from './components/IOSNotificationBanner';
 
-import { PurchaseOrder, OrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem, SeparationPreset, FiscalPreset } from './shared/types';
+import { PurchaseOrder, OrderItem, RemovedOrderItem, FiscalConfig, StoreConfig, Supplier, User, Product, PaymentInstallment, CentralStockItem, SeparationPreset, FiscalPreset } from './shared/types';
 import { 
   getInitialFiscalConfig, 
   getInitialStoresConfig, 
@@ -320,6 +323,7 @@ export function App() {
   const [receiptModalOrder, setReceiptModalOrder] = useState<PurchaseOrder | null>(null);
   const [rescheduleModalOrder, setRescheduleModalOrder] = useState<PurchaseOrder | null>(null);
   const [pipelineAuditOrder, setPipelineAuditOrder] = useState<PurchaseOrder | null>(null);
+  const [isTrashModalOpen, setIsTrashModalOpen] = useState<boolean>(false);
 
   // Lista consolidada de pedidos (o pedido em edição em memória sobrepõe a versão antiga salva)
   const effectiveOrders = useMemo(() => {
@@ -1153,17 +1157,73 @@ export function App() {
   };
 
   const handleDeleteItem = (itemId: string) => {
+    const itemToDelete = order.items.find(item => item.id === itemId);
+    const isBlank = itemToDelete ? isOrderItemBlank(itemToDelete) : false;
+
     setOrder(prev => {
       const filtered = prev.items.filter(item => item.id !== itemId);
       const cleanItems = ensureTrailingBlankItem(filtered, fiscalConfig, storeConfigs);
       const synced = syncOrderFreteAndItems(prev, cleanItems);
+
+      let updatedRemovedItems = prev.removedItems || [];
+      if (itemToDelete && !isBlank) {
+        const removedEntry: RemovedOrderItem = {
+          id: 'rmv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+          itemOriginal: { ...itemToDelete },
+          removidoPor: currentUser?.nome || currentUser?.email || 'Usuário',
+          dataRemocao: new Date().toISOString()
+        };
+        updatedRemovedItems = [removedEntry, ...updatedRemovedItems];
+      }
+
       return {
         ...prev,
         header: synced.header,
-        items: synced.items
+        items: synced.items,
+        removedItems: updatedRemovedItems
       };
     });
-    showToast('Item removido do pedido.', 'info');
+
+    if (itemToDelete && !isBlank) {
+      showToast(`Item "${itemToDelete.descricao || 'Produto'}" movido para a lixeira do pedido.`, 'info');
+    } else {
+      showToast('Item removido.', 'info');
+    }
+  };
+
+  const handleRestoreItem = (removedId: string) => {
+    if (order.header.status === 'Finalizado') {
+      showToast('Este pedido já foi Finalizado. Itens não podem ser restaurados para manter a integridade fiscal e de estoque.', 'warning');
+      return;
+    }
+
+    const removedEntry = (order.removedItems || []).find(r => r.id === removedId);
+    if (!removedEntry) return;
+
+    setOrder(prev => {
+      const currentRemoved = prev.removedItems || [];
+      const updatedRemoved = currentRemoved.filter(r => r.id !== removedId);
+
+      const existingIds = new Set(prev.items.map(it => it.id));
+      const restoredItem: OrderItem = { ...removedEntry.itemOriginal };
+      if (existingIds.has(restoredItem.id)) {
+        restoredItem.id = 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      }
+
+      const itemsWithoutTrailing = prev.items.filter(it => !isOrderItemBlank(it));
+      const newItems = [...itemsWithoutTrailing, restoredItem];
+      const cleanItems = ensureTrailingBlankItem(newItems, fiscalConfig, storeConfigs);
+      const synced = syncOrderFreteAndItems(prev, cleanItems);
+
+      return {
+        ...prev,
+        header: synced.header,
+        items: synced.items,
+        removedItems: updatedRemoved
+      };
+    });
+
+    showToast(`Produto "${removedEntry.itemOriginal.descricao || 'Produto'}" restaurado com sucesso ao pedido!`, 'success');
   };
 
   const handleDuplicateItem = (itemToClone: OrderItem) => {
@@ -3374,6 +3434,8 @@ export function App() {
                         onDeleteItem={handleDeleteItem}
                         onSaveProduct={handleSaveProduct}
                         onOpenFiscalModal={(item) => setSelectedFiscalItem(item)}
+                        removedItemsCount={order.removedItems?.length || 0}
+                        onOpenTrashModal={() => setIsTrashModalOpen(true)}
                       />
                     </fieldset>
                   </div>
@@ -3704,7 +3766,15 @@ export function App() {
           order={pipelineAuditOrder}
           onClose={() => setPipelineAuditOrder(null)}
         />
-      )}
+      {/* Modal da Lixeira & Auditoria de Produtos Removidos */}
+      <OrderTrashModal
+        isOpen={isTrashModalOpen}
+        onClose={() => setIsTrashModalOpen(false)}
+        removedItems={order.removedItems || []}
+        onRestoreItem={handleRestoreItem}
+        isOrderFinalized={order.header.status === 'Finalizado'}
+        stores={storeConfigs}
+      />
 
       {/* 📱 Sistema de Notificações & Alertas Estilo iPhone (iOS Design System) */}
       <IOSAlertModal

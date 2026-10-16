@@ -143,6 +143,8 @@ export async function exportFinancialToExcel(
   // ===========================================================================
   // 3. LINHAS DE DADOS
   // ===========================================================================
+  // 3. LINHAS DE DADOS E SUBTOTAIS POR DIA
+  // ===========================================================================
   const borderThin = {
     top: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
     bottom: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
@@ -150,142 +152,247 @@ export async function exportFinancialToExcel(
     right: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } }
   };
 
-  let totalLancado = 0;
-  let totalPago = 0;
-  let totalAberto = 0;
-  const startDataRow = 6;
+  const borderDayTotal = {
+    top: { style: 'thin' as const, color: { argb: 'FF94A3B8' } },
+    bottom: { style: 'medium' as const, color: { argb: 'FF64748B' } },
+    left: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+    right: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } }
+  };
 
-  entries.forEach((item, index) => {
-    const rowIndex = startDataRow + index;
-    const row = ws.getRow(rowIndex);
-    row.height = 22;
+  // 1. Ordena os lançamentos por data de vencimento crescente e descrição secundária
+  const sortedEntries = [...entries].sort((a, b) => {
+    const rawA = (a.dataVencimento || '').trim();
+    const rawB = (b.dataVencimento || '').trim();
+    
+    // Normaliza para comparação (se for DD/MM/AAAA converte temporariamente para YYYY-MM-DD)
+    const normA = /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(rawA) 
+      ? rawA.split('/').reverse().join('-') 
+      : rawA;
+    const normB = /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(rawB) 
+      ? rawB.split('/').reverse().join('-') 
+      : rawB;
 
-    const valorNum = Number(item.valor) || 0;
-    const valorPagoNum = item.valorPago !== undefined && item.valorPago !== null ? Number(item.valorPago) : 0;
-    const isPaid = item.status === 'Pago';
-    const isPrevisto = (item.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO';
+    if (normA !== normB) return normA.localeCompare(normB);
+    return (a.descricao || '').localeCompare(b.descricao || '');
+  });
 
-    totalLancado += valorNum;
-    if (isPaid) {
-      totalPago += (valorPagoNum > 0 ? valorPagoNum : valorNum);
-    } else {
-      totalAberto += valorNum;
+  // 2. Agrupa os lançamentos por data de vencimento formatada (DD/MM/AAAA)
+  const groupedByDay = new Map<string, FinancialEntry[]>();
+  sortedEntries.forEach(item => {
+    const dayKey = toBrDate(item.dataVencimento) || 'Sem Vencimento';
+    if (!groupedByDay.has(dayKey)) {
+      groupedByDay.set(dayKey, []);
     }
+    groupedByDay.get(dayKey)!.push(item);
+  });
 
-    const isEven = index % 2 === 0;
-    const bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+  let currentRowIndex = 6;
+  let totalLancadoGeral = 0;
+  let totalPagoGeral = 0;
+  let totalAbertoGeral = 0;
+  const daySubtotalRows: number[] = [];
 
-    // 1: Vencimento
-    const cellVenc = row.getCell(1);
-    cellVenc.value = toBrDate(item.dataVencimento);
-    cellVenc.alignment = { vertical: 'middle', horizontal: 'center' };
+  groupedByDay.forEach((dayItems, dayDateFormatted) => {
+    const dayStartRow = currentRowIndex;
+    let dayTotalLancado = 0;
+    let dayTotalPago = 0;
 
-    // 2: Situação
-    const cellSit = row.getCell(2);
-    cellSit.value = isPrevisto ? 'Previsão' : 'Confirmado';
-    cellSit.alignment = { vertical: 'middle', horizontal: 'center' };
-    cellSit.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: isPrevisto ? 'FF1D4ED8' : 'FF15803D' } };
+    dayItems.forEach((item, itemIndex) => {
+      const rowIndex = currentRowIndex;
+      const row = ws.getRow(rowIndex);
+      row.height = 22;
 
-    // 3: Descrição / Favorecido
-    const cellDesc = row.getCell(3);
-    cellDesc.value = item.descricao + (item.recorrente ? ' (Recorrente 6M)' : '');
-    cellDesc.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+      const valorNum = Number(item.valor) || 0;
+      const valorPagoNum = item.valorPago !== undefined && item.valorPago !== null ? Number(item.valorPago) : 0;
+      const isPaid = item.status === 'Pago';
+      const isPrevisto = (item.statusPrevisao || 'CONFIRMADO').toUpperCase() === 'PREVISTO';
 
-    // 4: Categoria
-    const cellCat = row.getCell(4);
-    cellCat.value = item.categoria || 'Geral';
-    cellCat.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+      dayTotalLancado += valorNum;
+      totalLancadoGeral += valorNum;
 
-    // 5: Loja / Unidade
-    const cellLoja = row.getCell(5);
-    cellLoja.value = item.lojaNome || item.empresa || 'ALS';
-    cellLoja.alignment = { vertical: 'middle', horizontal: 'center' };
-
-    // 6: Forma Pgto
-    const cellForma = row.getCell(6);
-    cellForma.value = item.formaPagamento || 'Boleto';
-    cellForma.alignment = { vertical: 'middle', horizontal: 'center' };
-
-    // 7: NF / Documento
-    const cellDoc = row.getCell(7);
-    cellDoc.value = item.documentoRef || '—';
-    cellDoc.alignment = { vertical: 'middle', horizontal: 'center' };
-
-    // 🛡️ 8: PARCELA — Explicitamente string com numFmt '@' para prevenir que o Excel trate "09/10" como data
-    const cellParc = row.getCell(8);
-    const parcelaText = String(item.parcelaDesc || 'Única');
-    cellParc.value = parcelaText;
-    cellParc.numFmt = '@'; // Formato de Texto Puro
-    cellParc.alignment = { vertical: 'middle', horizontal: 'center' };
-    cellParc.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FFB45309' } }; // Destaque âmbar
-
-    // 9: Status
-    const cellStatus = row.getCell(9);
-    cellStatus.value = item.status;
-    cellStatus.alignment = { vertical: 'middle', horizontal: 'center' };
-    const statusColor = isPaid ? 'FF16A34A' : item.status === 'Em Atraso' ? 'FFE11D48' : 'FFD97706';
-    cellStatus.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: statusColor } };
-
-    // 10: Valor Lançado (R$) - Numérico com formato monetário oficial do Excel
-    const cellVal = row.getCell(10);
-    cellVal.value = valorNum;
-    cellVal.numFmt = '"R$" #,##0.00';
-    cellVal.alignment = { vertical: 'middle', horizontal: 'right' };
-    cellVal.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
-
-    // 11: Data Pagamento
-    const cellDataPgto = row.getCell(11);
-    cellDataPgto.value = item.dataPagamento ? toBrDate(item.dataPagamento) : '—';
-    cellDataPgto.alignment = { vertical: 'middle', horizontal: 'center' };
-
-    // 12: Valor Pago (R$) - Numérico
-    const cellValPago = row.getCell(12);
-    if (isPaid) {
-      cellValPago.value = valorPagoNum > 0 ? valorPagoNum : valorNum;
-      cellValPago.numFmt = '"R$" #,##0.00';
-      cellValPago.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF16A34A' } };
-    } else {
-      cellValPago.value = null;
-      cellValPago.numFmt = '"R$" #,##0.00';
-    }
-    cellValPago.alignment = { vertical: 'middle', horizontal: 'right' };
-
-    // 13: Observações
-    const cellObs = row.getCell(13);
-    cellObs.value = item.observacao || '';
-    cellObs.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-
-    // Aplica bordas e cor de fundo a todas as 13 células da linha
-    for (let c = 1; c <= 13; c++) {
-      const cell = row.getCell(c);
-      cell.border = borderThin;
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
-      if (!cell.font) {
-        cell.font = { name: 'Segoe UI', size: 9, color: { argb: 'FF1E293B' } };
+      if (isPaid) {
+        const pagoEff = (valorPagoNum > 0 ? valorPagoNum : valorNum);
+        dayTotalPago += pagoEff;
+        totalPagoGeral += pagoEff;
+      } else {
+        totalAbertoGeral += valorNum;
       }
+
+      const isEven = itemIndex % 2 === 0;
+      const bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+
+      // 1: Vencimento
+      const cellVenc = row.getCell(1);
+      cellVenc.value = toBrDate(item.dataVencimento);
+      cellVenc.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // 2: Situação
+      const cellSit = row.getCell(2);
+      cellSit.value = isPrevisto ? 'Previsão' : 'Confirmado';
+      cellSit.alignment = { vertical: 'middle', horizontal: 'center' };
+      cellSit.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: isPrevisto ? 'FF1D4ED8' : 'FF15803D' } };
+
+      // 3: Descrição / Favorecido
+      const cellDesc = row.getCell(3);
+      cellDesc.value = item.descricao + (item.recorrente ? ' (Recorrente 6M)' : '');
+      cellDesc.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+      // 4: Categoria
+      const cellCat = row.getCell(4);
+      cellCat.value = item.categoria || 'Geral';
+      cellCat.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+      // 5: Loja / Unidade
+      const cellLoja = row.getCell(5);
+      cellLoja.value = item.lojaNome || item.empresa || 'ALS';
+      cellLoja.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // 6: Forma Pgto
+      const cellForma = row.getCell(6);
+      cellForma.value = item.formaPagamento || 'Boleto';
+      cellForma.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // 7: NF / Documento
+      const cellDoc = row.getCell(7);
+      cellDoc.value = item.documentoRef || '—';
+      cellDoc.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // 🛡️ 8: PARCELA — Explicitamente string com numFmt '@' para prevenir que o Excel trate "09/10" como data
+      const cellParc = row.getCell(8);
+      const parcelaText = String(item.parcelaDesc || 'Única');
+      cellParc.value = parcelaText;
+      cellParc.numFmt = '@'; // Formato de Texto Puro
+      cellParc.alignment = { vertical: 'middle', horizontal: 'center' };
+      cellParc.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FFB45309' } }; // Destaque âmbar
+
+      // 9: Status
+      const cellStatus = row.getCell(9);
+      cellStatus.value = item.status;
+      cellStatus.alignment = { vertical: 'middle', horizontal: 'center' };
+      const statusColor = isPaid ? 'FF16A34A' : item.status === 'Em Atraso' ? 'FFE11D48' : 'FFD97706';
+      cellStatus.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: statusColor } };
+
+      // 10: Valor Lançado (R$) - Numérico com formato monetário oficial do Excel
+      const cellVal = row.getCell(10);
+      cellVal.value = valorNum;
+      cellVal.numFmt = '"R$" #,##0.00';
+      cellVal.alignment = { vertical: 'middle', horizontal: 'right' };
+      cellVal.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+
+      // 11: Data Pagamento
+      const cellDataPgto = row.getCell(11);
+      cellDataPgto.value = item.dataPagamento ? toBrDate(item.dataPagamento) : '—';
+      cellDataPgto.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // 12: Valor Pago (R$) - Numérico
+      const cellValPago = row.getCell(12);
+      if (isPaid) {
+        cellValPago.value = valorPagoNum > 0 ? valorPagoNum : valorNum;
+        cellValPago.numFmt = '"R$" #,##0.00';
+        cellValPago.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF16A34A' } };
+      } else {
+        cellValPago.value = null;
+        cellValPago.numFmt = '"R$" #,##0.00';
+      }
+      cellValPago.alignment = { vertical: 'middle', horizontal: 'right' };
+
+      // 13: Observações
+      const cellObs = row.getCell(13);
+      cellObs.value = item.observacao || '';
+      cellObs.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+      // Aplica bordas e cor de fundo a todas as 13 células da linha
+      for (let c = 1; c <= 13; c++) {
+        const cell = row.getCell(c);
+        cell.border = borderThin;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+        if (!cell.font) {
+          cell.font = { name: 'Segoe UI', size: 9, color: { argb: 'FF1E293B' } };
+        }
+      }
+
+      currentRowIndex++;
+    });
+
+    const dayEndRow = currentRowIndex - 1;
+
+    // =========================================================================
+    // LINHA DE TOTAL DO DIA (SUBTOTAL DO DIA)
+    // =========================================================================
+    const dayTotalRowIndex = currentRowIndex;
+    daySubtotalRows.push(dayTotalRowIndex);
+    const dayTotalRow = ws.getRow(dayTotalRowIndex);
+    dayTotalRow.height = 24;
+
+    // Mescla A até I para o rótulo "TOTAL DO DIA (DD/MM/AAAA):"
+    ws.mergeCells(`A${dayTotalRowIndex}:I${dayTotalRowIndex}`);
+    const dayLabelCell = ws.getCell(`A${dayTotalRowIndex}`);
+    dayLabelCell.value = `TOTAL DO DIA (${dayDateFormatted}):`;
+    dayLabelCell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF1E293B' } };
+    dayLabelCell.alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
+
+    // Total Valor Lançado do dia com fórmula SUM
+    const dayLancadoCell = ws.getCell(`J${dayTotalRowIndex}`);
+    dayLancadoCell.value = {
+      formula: `SUM(J${dayStartRow}:J${dayEndRow})`,
+      result: dayTotalLancado
+    };
+    dayLancadoCell.numFmt = '"R$" #,##0.00';
+    dayLancadoCell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+    dayLancadoCell.alignment = { vertical: 'middle', horizontal: 'right' };
+
+    // Célula intermediária K
+    const daySpacerK = ws.getCell(`K${dayTotalRowIndex}`);
+    daySpacerK.value = '';
+
+    // Total Valor Pago do dia com fórmula SUM
+    const dayPagoCell = ws.getCell(`L${dayTotalRowIndex}`);
+    dayPagoCell.value = {
+      formula: `SUM(L${dayStartRow}:L${dayEndRow})`,
+      result: dayTotalPago
+    };
+    dayPagoCell.numFmt = '"R$" #,##0.00';
+    dayPagoCell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF16A34A' } };
+    dayPagoCell.alignment = { vertical: 'middle', horizontal: 'right' };
+
+    // Coluna M: contagem de lançamentos do dia
+    const dayObsCell = ws.getCell(`M${dayTotalRowIndex}`);
+    dayObsCell.value = `${dayItems.length} lançamento${dayItems.length > 1 ? 's' : ''}`;
+    dayObsCell.font = { name: 'Segoe UI', size: 8.5, italic: true, color: { argb: 'FF475569' } };
+    dayObsCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+    for (let c = 1; c <= 13; c++) {
+      const cell = dayTotalRow.getCell(c);
+      cell.border = borderDayTotal;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }; // Slate 100
     }
+
+    currentRowIndex++;
   });
 
   // ===========================================================================
-  // 4. LINHA DE SUBTOTAIS (CONTÁBIL)
+  // 4. LINHA DE TOTAL GERAL DO LOTE (CONTÁBIL)
   // ===========================================================================
-  const endDataRow = startDataRow + entries.length - 1;
-  const totalRowIndex = endDataRow + 1;
+  const totalRowIndex = currentRowIndex;
   const totalRow = ws.getRow(totalRowIndex);
   totalRow.height = 26;
 
-  // Mescla A até I para o rótulo "SUBTOTAIS:"
+  // Mescla A até I para o rótulo "TOTAL GERAL:"
   ws.mergeCells(`A${totalRowIndex}:I${totalRowIndex}`);
   const totalLabelCell = ws.getCell(`A${totalRowIndex}`);
-  totalLabelCell.value = 'SUBTOTAIS:';
+  totalLabelCell.value = 'TOTAL GERAL:';
   totalLabelCell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF0F172A' } };
-  totalLabelCell.alignment = { vertical: 'middle', horizontal: 'right' };
+  totalLabelCell.alignment = { vertical: 'middle', horizontal: 'right', indent: 1 };
 
-  // Total Valor Lançado com fórmula SUM
+  // Fórmula do Total Geral: soma dos subtotais dos dias
+  const formulaLancado = daySubtotalRows.length > 0
+    ? (daySubtotalRows.length === 1 ? `J${daySubtotalRows[0]}` : daySubtotalRows.map(r => `J${r}`).join('+'))
+    : `0`;
+
   const totalLancadoCell = ws.getCell(`J${totalRowIndex}`);
   totalLancadoCell.value = {
-    formula: `SUM(J${startDataRow}:J${endDataRow})`,
-    result: totalLancado
+    formula: formulaLancado,
+    result: totalLancadoGeral
   };
   totalLancadoCell.numFmt = '"R$" #,##0.00';
   totalLancadoCell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF0F172A' } };
@@ -295,11 +402,14 @@ export async function exportFinancialToExcel(
   const totalSpacerK = ws.getCell(`K${totalRowIndex}`);
   totalSpacerK.value = '';
 
-  // Total Valor Pago com fórmula SUM
+  const formulaPago = daySubtotalRows.length > 0
+    ? (daySubtotalRows.length === 1 ? `L${daySubtotalRows[0]}` : daySubtotalRows.map(r => `L${r}`).join('+'))
+    : `0`;
+
   const totalPagoCell = ws.getCell(`L${totalRowIndex}`);
   totalPagoCell.value = {
-    formula: `SUM(L${startDataRow}:L${endDataRow})`,
-    result: totalPago
+    formula: formulaPago,
+    result: totalPagoGeral
   };
   totalPagoCell.numFmt = '"R$" #,##0.00';
   totalPagoCell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF16A34A' } };
@@ -307,7 +417,7 @@ export async function exportFinancialToExcel(
 
   // Resumo de "Em Aberto" na coluna M
   const totalAbertoCell = ws.getCell(`M${totalRowIndex}`);
-  totalAbertoCell.value = `Em Aberto: R$ ${formatMoneyCsv(totalAberto)}`;
+  totalAbertoCell.value = `Em Aberto: R$ ${formatMoneyCsv(totalAbertoGeral)}`;
   totalAbertoCell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFDC2626' } };
   totalAbertoCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
 
@@ -322,7 +432,7 @@ export async function exportFinancialToExcel(
   for (let c = 1; c <= 13; c++) {
     const cell = totalRow.getCell(c);
     cell.border = borderTotal;
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }; // Slate 200 contábil
   }
 
   // ===========================================================================

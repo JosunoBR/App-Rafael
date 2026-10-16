@@ -703,7 +703,7 @@ class OrderRepository {
             dataPagamento: ins.dataPagamento,
             observacao: ins.observacao || jsonMatch?.observacao,
             documentoRef: ins.documentoRef || jsonMatch?.documentoRef,
-            metodoPagamento: ins.metodoPagamento || jsonMatch?.metodoPagamento || (ins.isBoletoFrete === 1 ? 'Boleto' : undefined),
+            metodoPagamento: jsonMatch?.metodoPagamento || ins.metodoPagamento || (ins.isBoletoFrete === 1 ? 'Boleto' : undefined),
             isBoletoFrete: ins.isBoletoFrete === 1,
             tipoTitulo: ins.tipoTitulo || (ins.isBoletoFrete === 1 ? 'frete' : 'mercadoria')
           };

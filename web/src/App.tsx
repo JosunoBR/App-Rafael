@@ -1193,7 +1193,7 @@ export function App() {
 
   const handleRestoreItem = (removedId: string) => {
     if (order.header.status === 'Finalizado') {
-      showToast('Este pedido já foi Finalizado. Itens não podem ser restaurados para manter a integridade fiscal e de estoque.', 'warning');
+      showToast('Este pedido já foi Finalizado. Itens não podem ser restaurados para manter a integridade fiscal e de estoque.', 'error');
       return;
     }
 
@@ -3766,6 +3766,8 @@ export function App() {
           order={pipelineAuditOrder}
           onClose={() => setPipelineAuditOrder(null)}
         />
+      )}
+
       {/* Modal da Lixeira & Auditoria de Produtos Removidos */}
       <OrderTrashModal
         isOpen={isTrashModalOpen}

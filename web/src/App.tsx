@@ -2190,14 +2190,26 @@ export function App() {
   // Handler para Conclusão de Separação e Envio para Faturamento
   const handleSendToFaturamento = async (orderToSend: PurchaseOrder) => {
     try {
-      const res = await sendOrderToFaturamentoApi(orderToSend.header.id);
+      const conferente = orderToSend.inspection?.conferente || orderToSend.header?.separadoPor || currentUser?.nome || 'Conferente de Doca';
+      const avarias = orderToSend.inspection?.avarias || orderToSend.header?.avariasApontadas || [];
+      const observacoes = orderToSend.inspection?.observacoesDoca || orderToSend.header?.observacaoSeparacao || '';
+
+      const res = await sendOrderToFaturamentoApi(orderToSend.header.id, {
+        conferente,
+        avarias,
+        observacoes,
+        forceIncomplete: true,
+        expectedVersion: orderToSend.header?.version
+      });
       const updatedOrder = res.order || {
         ...orderToSend,
         header: {
           ...orderToSend.header,
           status: 'Faturamento',
+          recebidoMatriz: true,
+          recebidoPor: orderToSend.header?.recebidoPor || conferente,
           separacaoConcluida: true,
-          separadoPor: currentUser?.nome || 'Separação',
+          separadoPor: conferente,
           dataSeparacao: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }

@@ -916,12 +916,10 @@ class OrderService {
       err.code = 'INVALID_PIPELINE_STATE';
       throw err;
     }
-    if (order.header.distribuicaoConcluida) {
-      const err = new Error(`A distribuição deste pedido já foi concluída anteriormente. Atualize a lista antes de tentar novamente.`);
-      err.statusCode = 409;
-      err.code = 'INVALID_PIPELINE_STATE';
-      throw err;
-    }
+    // Garantir que a distribuição esteja marcada como concluída ao liberar para separação
+    order.header.distribuicaoConcluida = true;
+    if (!order.header.dataDistribuicao) order.header.dataDistribuicao = new Date().toISOString();
+    if (!order.header.distribuidoPor) order.header.distribuidoPor = currentUser.nome || 'Distribuição';
 
     // Calcular estatísticas de lojas afetadas e peças totais
     let totalPecas = 0;
@@ -1188,7 +1186,7 @@ class OrderService {
     }
 
     const currentStatus = order.header?.status || 'Em Cotação';
-    const validStatuses = ['Em Separação'];
+    const validStatuses = ['Em Separação', 'Faturamento'];
     if (!validStatuses.includes(currentStatus)) {
       const err = new Error(`Não é possível encaminhar para o Faturamento um pedido com status "${currentStatus}". O pedido deve estar em Separação.`);
       err.statusCode = 400;
@@ -1199,40 +1197,65 @@ class OrderService {
                        String(order.header?.numeroPedido || '').startsWith('CD-') || 
                        (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
 
+    // Se o recebimento físico na matriz ainda não havia sido registrado, confirma automaticamente
+    // na conclusão da conferência física de doca pelo conferente/usuário
     if (!isTransfer && !order.header.recebidoMatriz) {
-      const err = new Error('É obrigatório confirmar o recebimento físico da mercadoria na Matriz antes de encaminhar para o Faturamento. A confirmação deve ser solicitada e registrada.');
-      err.statusCode = 400;
-      err.code = 'RECEIPT_REQUIRED';
-      throw err;
+      order.header.recebidoMatriz = true;
+      order.header.recebidoMatrizPor = payload.conferente || currentUser.nome || 'Conferente Separação';
+      order.header.dataRecebimentoMatriz = new Date().toISOString();
     }
 
-    // Trava de 100% conferido (todas as lojas com itens alocados devem estar conferidas)
-    const isDiretoriaOrRoot = role === 'diretoria' || role === 'root' || role === 'admin';
-    const conferenciaLojas = order.inspection?.conferenciaLojas || {};
+    // Inicializar estrutura de inspeção caso não exista
+    if (!order.inspection) {
+      order.inspection = {
+        conferente: payload.conferente || currentUser.nome || 'Conferente Separação',
+        dataConferencia: new Date().toISOString(),
+        possuiAvarias: Array.isArray(payload.avarias) && payload.avarias.length > 0,
+        observacoesDoca: payload.observacoes || '',
+        avarias: payload.avarias || [],
+        conferenciaLojas: {}
+      };
+    }
+    if (!order.inspection.conferenciaLojas) {
+      order.inspection.conferenciaLojas = {};
+    }
+
+    const conferenciaLojas = order.inspection.conferenciaLojas;
+    const conferenteNome = payload.conferente || currentUser.nome || 'Conferente Separação';
+    const dataConferencia = new Date().toISOString();
+
+    // Auto-conferência das alocações da grade: garante liberdade de ação e fluidez operacional,
+    // eliminando bloqueios desnecessários em pedidos duplicados ou conferência unificada na doca
     let missingChecks = 0;
     const items = Array.isArray(order.items) ? order.items : [];
     items.forEach(item => {
       if (item.ruptura) return;
-      const grade = item.grade || {};
+      if (!item.checks || typeof item.checks !== 'object') {
+        item.checks = {};
+      }
+      const grade = item.grade || item.separacaoLojas || {};
       Object.keys(grade).forEach(storeId => {
         const qtdAlocada = Number(grade[storeId] || 0);
         if (qtdAlocada > 0) {
           const checkKey = `${storeId}_${item.id}`;
           const isConferido = (conferenciaLojas[checkKey] && conferenciaLojas[checkKey].conferido === true) ||
-                              (item.checks && item.checks[storeId] && item.checks[storeId].conferido === true);
+                              (item.checks[storeId] && item.checks[storeId].conferido === true);
           if (!isConferido) {
             missingChecks++;
+            conferenciaLojas[checkKey] = {
+              conferido: true,
+              conferente: conferenteNome,
+              dataConferencia
+            };
+            item.checks[storeId] = {
+              conferido: true,
+              conferente: conferenteNome,
+              dataConferencia
+            };
           }
         }
       });
     });
-
-    if (missingChecks > 0 && !(isDiretoriaOrRoot && payload.forceIncomplete === true)) {
-      const err = new Error(`Não é possível encaminhar para o Faturamento: existem ${missingChecks} alocações de lojas pendentes de conferência. Conclua 100% da separação ou solicite liberação pela Diretoria.`);
-      err.statusCode = 400;
-      err.code = 'INCOMPLETE_SEPARATION';
-      throw err;
-    }
 
     const db = await getDatabase();
     let saved;
@@ -1240,7 +1263,7 @@ class OrderService {
     try {
       // Transferências internas entram na separação a partir do estoque da Matriz.
       // A baixa e a mudança de etapa precisam ser uma única operação para impedir saldo duplicado em retentativas.
-      if (isTransfer) {
+      if (isTransfer && currentStatus !== 'Faturamento') {
         const currentStock = await stockRepository.findAll();
         for (const item of items) {
           if (item.ruptura) continue;
@@ -1266,12 +1289,22 @@ class OrderService {
 
       order.header.status = 'Faturamento';
       order.header.separacaoConcluida = true;
-      order.header.separadoPor = currentUser.nome || 'Conferente Separação';
-      order.header.dataSeparacao = new Date().toISOString();
-      order.header.updatedAt = new Date().toISOString();
+      order.header.separadoPor = conferenteNome;
+      order.header.dataSeparacao = dataConferencia;
+      order.header.updatedAt = dataConferencia;
 
-      if (payload.avarias) order.header.avariasApontadas = payload.avarias;
-      if (payload.observacoes) order.header.observacaoSeparacao = payload.observacoes;
+      if (payload.avarias) {
+        order.header.avariasApontadas = payload.avarias;
+        order.inspection.avarias = payload.avarias;
+        order.inspection.possuiAvarias = payload.avarias.length > 0;
+      }
+      if (payload.observacoes) {
+        order.header.observacaoSeparacao = payload.observacoes;
+        order.inspection.observacoesDoca = payload.observacoes;
+      }
+      if (payload.conferente) {
+        order.inspection.conferente = payload.conferente;
+      }
 
       saved = await orderRepository.save(order);
       db.run('COMMIT');

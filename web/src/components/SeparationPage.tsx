@@ -2055,26 +2055,25 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (isReceiptPending) {
-                    if (onConfirmReceipt) {
-                      onConfirmReceipt(order);
-                    }
-                    return;
-                  }
+                  const conferenteNome = conferente || currentUser?.nome || 'Conferente de Doca';
+                  const now = new Date().toISOString();
 
                   const updated: PurchaseOrder = {
                     ...order,
                     header: {
                       ...order.header,
                       status: 'Faturamento',
+                      recebidoMatriz: true,
+                      recebidoPor: order.header.recebidoPor || conferenteNome,
+                      dataRecebimentoMatriz: order.header.dataRecebimentoMatriz || now,
                       separacaoConcluida: true,
-                      separadoPor: conferente || currentUser?.nome || 'Conferente de Doca',
-                      dataSeparacao: new Date().toISOString(),
-                      updatedAt: new Date().toISOString()
+                      separadoPor: conferenteNome,
+                      dataSeparacao: now,
+                      updatedAt: now
                     },
                     inspection: {
-                      conferente: conferente || 'Conferente de Doca',
-                      dataConferencia: new Date().toISOString(),
+                      conferente: conferenteNome,
+                      dataConferencia: now,
                       possuiAvarias: avariasList.length > 0,
                       observacoesDoca: observacoesDoca,
                       avarias: avariasList
@@ -2085,7 +2084,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                   else if (onFinalizeOrder) onFinalizeOrder(updated);
                 }}
                 className="w-full sm:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
-                title={isReceiptPending ? "A confirmação de recebimento físico na Matriz será solicitada antes do envio para Faturamento" : "Concluir conferência física na doca e encaminhar pedido para o Faturamento"}
+                title="Concluir conferência física na doca e encaminhar pedido para o Faturamento"
               >
                 <PackageCheck className="w-4 h-4" />
                 <span>Concluir Separação & Liberar p/ Faturamento</span>

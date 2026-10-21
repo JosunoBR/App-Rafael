@@ -1,7 +1,7 @@
 const financialRepo = require('../repositories/financialRepository');
 const financialAuditRepo = require('../repositories/financialAuditRepository');
 const orderRepo = require('../repositories/orderRepository');
-const { flushDatabaseToDisk } = require('../config/database');
+const { flushDatabaseToDisk, execute } = require('../config/database');
 const path = require('path');
 const fs = require('fs');
 
@@ -988,6 +988,10 @@ class FinancialService {
 
     // Buscar lançamentos existentes para manter registros existentes e preservar status de baixas
     const existingEntries = await financialRepo.findByOrderId(orderId);
+    // 🛡️ Prevenção definitiva contra colisão de UNIQUE(orderId, parcelaNumero) ao reordenar/expandir parcelas:
+    if (existingEntries.length > 0) {
+      await execute("UPDATE financial_entries SET parcelaNumero = -ABS(COALESCE(parcelaNumero, 1)) WHERE orderId = ?", [orderId]);
+    }
     const existingMap = new Map();
     for (const ent of existingEntries) {
       if (ent.installmentId) {
@@ -1123,6 +1127,9 @@ class FinancialService {
         }
       }
     }
+
+    // Restaura para positivo caso algum lançamento legado não processado ainda tenha ficado negativo
+    await execute("UPDATE financial_entries SET parcelaNumero = ABS(parcelaNumero) WHERE orderId = ? AND parcelaNumero < 0", [orderId]);
 
     flushDatabaseToDisk();
   }

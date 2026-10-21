@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 title Mega 12 - Atualizar Servidor Hostinger
 
@@ -13,40 +13,75 @@ echo.
 where git >nul 2>nul
 if %errorlevel% neq 0 (
     echo [ERRO] Git nao foi encontrado no sistema.
+    echo Por favor, instale o Git para continuar.
+    echo.
     pause
     exit /b 1
 )
 
-:: 2. Enviar alteracoes locais para o GitHub
+:: 2. Verificar se ha alteracoes locais pendentes de commit
+for /f "tokens=*" %%i in ('git status --porcelain') do (
+    set HAS_CHANGES=1
+)
+
+if defined HAS_CHANGES (
+    echo [AVISO] Existem arquivos modificados localmente que ainda nao foram commitados:
+    git status -s
+    echo.
+    set /p AUTO_COMMIT="Deseja comitar e enviar essas alteracoes agora? (S/N): "
+    if /i "!AUTO_COMMIT!"=="S" (
+        set /p MSG_COMMIT="Digite a mensagem do commit (ou ENTER para 'atualizacao do sistema'): "
+        if "!MSG_COMMIT!"=="" set MSG_COMMIT=atualizacao do sistema
+        git add -A
+        git commit -m "!MSG_COMMIT!"
+    )
+)
+
+:: 3. Enviar alteracoes locais para o GitHub
+echo.
 echo [1/2] Enviando alteracoes locais para o GitHub (main)...
 git push origin main
 if %errorlevel% neq 0 (
     echo.
-    echo [ERRO] Falha ao enviar para o GitHub. Verifique conexao ou conflitos.
+    echo ========================================================
+    echo  [ERRO] Falha ao enviar para o GitHub.
+    echo  Verifique sua conexao ou se ha conflitos pendentes.
+    echo ========================================================
+    echo.
     pause
     exit /b %errorlevel%
 )
 
+:: 4. Conectar na Hostinger via SSH com a chave configurada e atualizar o VPS
 echo.
 echo [2/2] Conectando ao VPS da Hostinger e aplicando atualizacoes...
-echo (Se for solicitada a senha do usuario root, digite-a no prompt)
+echo       - Sincronizando repositorio no servidor...
+echo       - Compilando Frontend Web (React / Vite)...
+echo       - Atualizando dependencias e recarregando PM2...
 echo.
 
-ssh -t root@179.199.151.29 "cd /var/www/app-rafael && git fetch origin main && git reset --hard origin/main && cd web && npm install && npm run build && cd ../backend && npm install && pm2 reload mega12-sistema"
+set SSH_KEY_OPT=
+if exist "%USERPROFILE%\.ssh\id_ed25519" (
+    set SSH_KEY_OPT=-i "%USERPROFILE%\.ssh\id_ed25519"
+)
+
+ssh %SSH_KEY_OPT% -o StrictHostKeyChecking=accept-new root@179.199.151.29 "cd /var/www/app-rafael && git fetch origin main && git reset --hard origin/main && cd web && npm install --no-audit --no-fund --loglevel=error && npm run build && cd ../backend && npm install --no-audit --no-fund --loglevel=error && pm2 reload mega12-sistema"
 
 if %errorlevel% equ 0 (
     echo.
     echo ========================================================
-    echo  [SUCESSO] ATUALIZACAO CONCLUIDA COM SUCESSO!
-    echo  O sistema ja esta atualizado em: https://grupomega.cloud
+    echo  [SUCESSO] SISTEMA ATUALIZADO COM SUCESSO!
+    echo.
+    echo  - Frontend Web compilado e publicado
+    echo  - Backend Node.js recarregado no PM2
+    echo  - Acesse o sistema em: https://grupomega.cloud
     echo ========================================================
 ) else (
     echo.
     echo ========================================================
-    echo  [AVISO] A conexao SSH automatica nao concluiu.
-    echo  Para atualizar diretamente pelo painel Hostinger (hPanel):
-    echo  1. Acesse o VPS na Hostinger ^> Terminal do Navegador
-    echo  2. Cole e execute o comando abaixo:
+    echo  [AVISO] Ocorreu uma instabilidade na conexao com o VPS.
+    echo  Se necessario, acesse o Terminal do Navegador na Hostinger
+    echo  e execute o comando manual:
     echo.
     echo  cd /var/www/app-rafael ^&^& git fetch origin main ^&^& git reset --hard origin/main ^&^& cd web ^&^& npm install ^&^& npm run build ^&^& cd ../backend ^&^& npm install ^&^& pm2 reload mega12-sistema
     echo ========================================================

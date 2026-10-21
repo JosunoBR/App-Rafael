@@ -2,7 +2,7 @@ const orderRepository = require('../repositories/orderRepository');
 const fiscalRepository = require('../repositories/fiscalRepository');
 const distributionAuditRepo = require('../repositories/distributionAuditRepository');
 const stockRepository = require('../repositories/stockRepository');
-const { getDatabase, scheduleDatabaseSave, withTransaction } = require('../config/database');
+const { getDatabase, scheduleDatabaseSave, withTransaction, queryOne } = require('../config/database');
 const supplierService = require('./supplier.service');
 const productService = require('./product.service');
 
@@ -33,8 +33,7 @@ class OrderService {
   }
 
   async getOrderVersionInfo(id) {
-    const db = await getDatabase();
-    const header = await db.queryOne(
+    const header = await queryOne(
       `SELECT id, numeroPedido, status, version, boletosLiberados, updatedAt 
        FROM purchase_orders 
        WHERE id = ? OR numeroPedido = ?`,
@@ -48,7 +47,7 @@ class OrderService {
     let lastModifier = null;
     let lastModifiedAt = null;
     try {
-      const lastLog = await db.queryOne(
+      const lastLog = await queryOne(
         `SELECT usuarioNome, usuarioRole, createdAt 
          FROM order_distribution_logs 
          WHERE orderId = ? 

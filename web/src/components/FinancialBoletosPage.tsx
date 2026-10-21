@@ -1470,8 +1470,9 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             >
               <option value="all">Todas as Categorias</option>
-              <option value="FIXO">FIXO (Água, Luz, Aluguel...)</option>
               <option value="PRODUTOS">PRODUTOS (Mercadorias/Fornecedores)</option>
+              <option value="FRETE">🚚 FRETE (Transportes & Logística)</option>
+              <option value="FIXO">FIXO (Água, Luz, Aluguel...)</option>
               <option value="RH">RH (Folha, Retiradas)</option>
               <option value="OPERACIONAL">OPERACIONAL (Dia a dia loja)</option>
               <option value="IMPOSTOS">IMPOSTOS & TRIBUTOS</option>

@@ -1027,8 +1027,8 @@ class FinancialService {
 
       const existing = (inst.id && existingMap.get(String(inst.id))) ||
                        (isFrete ? existingMap.get('frete') : existingMap.get(`merc_${inst.numeroParcela}`)) ||
-                       existingMap.get(String(inst.numeroParcela)) ||
-                       existingMap.get(Number(inst.numeroParcela));
+                       (!isFrete ? existingMap.get(String(inst.numeroParcela)) : null) ||
+                       (!isFrete ? existingMap.get(Number(inst.numeroParcela)) : null);
 
       const isPaid = inst.status === 'Pago' || existing?.status === 'Pago';
       const dataPagamento = existing?.dataPagamento || inst.dataPagamento || null;
@@ -1039,7 +1039,10 @@ class FinancialService {
       const chosenObs = (inst.observacao && (isAutoOldObs || !existing?.observacao))
         ? inst.observacao
         : (existing?.observacao || inst.observacao || (condicao ? `Condição: ${condicao}` : ''));
-      const cleanObs = chosenObs.replace(/\[(PREVISÃO|CONFIRMADO)[^\]]*\]/gi, '').trim();
+      let cleanObs = chosenObs.replace(/\[(PREVISÃO|CONFIRMADO)[^\]]*\]/gi, '').trim();
+      if (!isFrete && /boleto\s+de\s+frete/i.test(cleanObs)) {
+        cleanObs = cleanObs.replace(/boleto\s+de\s+frete[^\n,;]*/gi, '').trim();
+      }
 
       const obsStatus = isConfirmado
         ? '[CONFIRMADO - Autorizado pela Diretoria]'
@@ -1078,21 +1081,25 @@ class FinancialService {
         parcelaMetodo = formaPgto || existing?.formaPagamento || 'BOLETO';
       }
 
+      const freteFornecedor = fornecedor ? `${fornecedor} (Frete)` : 'Transportadora / Frete';
+
       const entryPayload = {
-        tipo: 'pedido_parcela',
+        tipo: isFrete ? 'despesa' : 'pedido_parcela',
         orderId: orderId,
         installmentId: stableInstId,
         descricao: isFrete
-          ? `${fornecedor} - Pedido ${numPedido} (Frete)`
+          ? `${freteFornecedor} - Pedido ${numPedido}`
           : `${fornecedor} - Pedido ${numPedido} (${inst.numeroParcela}/${inst.totalParcelas})`,
         categoria: isFrete ? 'FRETE' : 'PRODUTOS',
-        fornecedor: fornecedor,
+        fornecedor: isFrete ? freteFornecedor : fornecedor,
         storeId: existing?.storeId || 'matriz',
         lojaNome: existing?.lojaNome || 'Depósito Central / Matriz',
         empresa: existing?.empresa || 'ALS',
         formaPagamento: normalizeFormaPagamento(parcelaMetodo),
         bancoConta: existing?.bancoConta || '',
-        documentoRef: existing?.documentoRef || inst.documentoRef || (isFrete ? 'Boleto Frete' : numPedido),
+        documentoRef: isFrete
+          ? (existing?.documentoRef || inst.documentoRef || `Boleto Frete - Ped. ${numPedido}`)
+          : (existing?.documentoRef || inst.documentoRef || numPedido),
         parcelaNumero: inst.numeroParcela,
         parcelaTotal: inst.totalParcelas,
         parcelaDesc: isFrete ? 'Frete' : `${inst.numeroParcela}/${inst.totalParcelas}`,

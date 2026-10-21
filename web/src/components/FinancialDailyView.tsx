@@ -55,6 +55,7 @@ const CATEGORIA_BADGES: Record<FinancialCategory | string, { label: string; bg: 
   RH: { label: 'RH & Retiradas', bg: 'bg-purple-500/10 dark:bg-purple-500/20', text: 'text-purple-600 dark:text-purple-400' },
   IMPOSTOS: { label: 'Impostos', bg: 'bg-rose-500/10 dark:bg-rose-500/20', text: 'text-rose-600 dark:text-rose-400' },
   INVESTIMENTOS: { label: 'Investimentos', bg: 'bg-amber-500/10 dark:bg-amber-500/20', text: 'text-amber-600 dark:text-amber-400' },
+  FRETE: { label: 'Frete', bg: 'bg-orange-500/10 dark:bg-orange-500/20', text: 'text-orange-600 dark:text-orange-400' },
   OUTROS: { label: 'Outros', bg: 'bg-slate-500/10 dark:bg-slate-500/20', text: 'text-slate-600 dark:text-slate-400' }
 };
 

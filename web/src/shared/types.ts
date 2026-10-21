@@ -437,7 +437,7 @@ export interface PaymentCondition {
 }
 
 // 9. Módulo Financeiro ERP & Contas a Pagar
-export type FinancialCategory = 'FIXO' | 'PRODUTOS' | 'RH' | 'OPERACIONAL' | 'IMPOSTOS' | 'INVESTIMENTOS' | 'OUTROS';
+export type FinancialCategory = 'FIXO' | 'PRODUTOS' | 'RH' | 'OPERACIONAL' | 'IMPOSTOS' | 'INVESTIMENTOS' | 'OUTROS' | 'FRETE';
 
 export type FinancialPaymentMethod = 'BOLETO' | 'DINHEIRO' | 'PIX' | 'DEPÓSITO' | 'CARTAO' | 'CHEQUE' | string;
 

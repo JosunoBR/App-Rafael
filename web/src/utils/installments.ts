@@ -514,7 +514,10 @@ export function generateOrderInstallments(
   const existingMap = new Map<number, PaymentInstallment>();
   if (preserveExistingEdits && Array.isArray(order.installments)) {
     order.installments.forEach(inst => {
-      existingMap.set(inst.numeroParcela, inst);
+      // 🛡️ Ignora estritamente frete para não contaminar parcelas de produtos com ID ou metadados de frete
+      if (!inst.isBoletoFrete && inst.tipoTitulo !== 'frete') {
+        existingMap.set(inst.numeroParcela, inst);
+      }
     });
   }
 
@@ -594,9 +597,15 @@ export function generateOrderInstallments(
       const statusFinal = existingDep?.status || getInstallmentStatus(dataVencFinal, existingDep?.dataPagamento);
       const depFormaLabel = order.header.depositoFormaPagamento || 'Depósito';
 
+      const cleanDepObs = (existingDep?.observacao && !/frete/i.test(existingDep.observacao))
+        ? existingDep.observacao
+        : (totalParcelasDeposito === 1 && depositoPrazo === 'vista' ? `Entrada / Sinal À Vista (${depFormaLabel})` : `${depFormaLabel} ${d}/${totalParcelasDeposito}`);
+      const cleanDepDoc = (existingDep?.documentoRef && !/frete/i.test(existingDep.documentoRef)) ? existingDep.documentoRef : undefined;
+      const cleanDepId = (existingDep?.id && !existingDep.id.includes('frete')) ? existingDep.id : `inst_${order.header.id || 'ord'}_dep_${d}_${Date.now()}`;
+
       list.push({
         ...(existingDep || {}),
-        id: existingDep?.id || `inst_${order.header.id || 'ord'}_dep_${d}_${Date.now()}`,
+        id: cleanDepId,
         orderId: order.header.id,
         numeroPedido: order.header.numeroPedido,
         fornecedor: order.header.fornecedor,
@@ -607,8 +616,8 @@ export function generateOrderInstallments(
         valorOriginal: isDepManuallyOverridden && existingDep ? existingDep.valorOriginal : origVal,
         status: statusFinal,
         dataPagamento: existingDep?.dataPagamento,
-        observacao: existingDep?.observacao || (totalParcelasDeposito === 1 && depositoPrazo === 'vista' ? `Entrada / Sinal À Vista (${depFormaLabel})` : `${depFormaLabel} ${d}/${totalParcelasDeposito}`),
-        documentoRef: existingDep?.documentoRef,
+        observacao: cleanDepObs,
+        documentoRef: cleanDepDoc,
         tipoTitulo: 'mercadoria',
         metodoPagamento: depFormaLabel,
         isBoletoFrete: false,
@@ -650,9 +659,15 @@ export function generateOrderInstallments(
       const dataVencimentoFinal = addDaysToDate(rawDueDate, 0);
       const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
 
+      const cleanSalObs = (existing?.observacao && !/frete/i.test(existing.observacao))
+        ? existing.observacao
+        : `${salFormaLabel} ${j}/${totalParcelasSaldo}`;
+      const cleanSalDoc = (existing?.documentoRef && !/frete/i.test(existing.documentoRef)) ? existing.documentoRef : undefined;
+      const cleanSalId = (existing?.id && !existing.id.includes('frete')) ? existing.id : `inst_${order.header.id || 'ord'}_bol_${j}_${Date.now()}`;
+
       list.push({
         ...(existing || {}),
-        id: existing?.id || `inst_${order.header.id || 'ord'}_bol_${j}_${Date.now()}`,
+        id: cleanSalId,
         orderId: order.header.id,
         numeroPedido: order.header.numeroPedido,
         fornecedor: order.header.fornecedor,
@@ -663,8 +678,8 @@ export function generateOrderInstallments(
         valorOriginal: isManuallyOverridden && existing ? existing.valorOriginal : originalProportionalVal,
         status: statusFinal,
         dataPagamento: existing?.dataPagamento,
-        observacao: existing?.observacao || `${salFormaLabel} ${j}/${totalParcelasSaldo}`,
-        documentoRef: existing?.documentoRef,
+        observacao: cleanSalObs,
+        documentoRef: cleanSalDoc,
         tipoTitulo: 'mercadoria',
         metodoPagamento: salFormaLabel,
         isBoletoFrete: false,
@@ -717,9 +732,13 @@ export function generateOrderInstallments(
         ? 'Pagamento 100% À Vista' 
         : `Parcela ${i}/${totalParcelas} (${dueDays === 0 ? '10d da Entrega' : `+${dueDays}d`})`;
 
+      const cleanObs = (existing?.observacao && !/frete/i.test(existing.observacao)) ? existing.observacao : obsText;
+      const cleanDoc = (existing?.documentoRef && !/frete/i.test(existing.documentoRef)) ? existing.documentoRef : undefined;
+      const cleanId = (existing?.id && !existing.id.includes('frete')) ? existing.id : `inst_${order.header.id || 'ord'}_${i}_${Date.now()}`;
+
       list.push({
         ...(existing || {}),
-        id: existing?.id || `inst_${order.header.id || 'ord'}_${i}_${Date.now()}`,
+        id: cleanId,
         orderId: order.header.id,
         numeroPedido: order.header.numeroPedido,
         fornecedor: order.header.fornecedor,
@@ -730,8 +749,8 @@ export function generateOrderInstallments(
         valorOriginal: isManuallyOverridden && existing ? existing.valorOriginal : originalProportionalVal,
         status: statusFinal,
         dataPagamento: existing?.dataPagamento,
-        observacao: existing?.observacao || obsText,
-        documentoRef: existing?.documentoRef,
+        observacao: cleanObs,
+        documentoRef: cleanDoc,
         tipoTitulo: 'mercadoria',
         metodoPagamento: order.header.formaPagamento || 'Boleto',
         isBoletoFrete: false,

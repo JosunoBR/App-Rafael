@@ -18,7 +18,7 @@ import {
   Check,
   ArrowRight
 } from 'lucide-react';
-import { FinancialCategory, FinancialPaymentMethod, Supplier, StoreConfig } from '../shared/types';
+import { FinancialEntry, FinancialCategory, FinancialPaymentMethod, Supplier, StoreConfig } from '../shared/types';
 import { toBrDate, handleCurrencyInput, formatCurrency, parseCurrency } from '../utils/masks';
 
 interface FinancialEntryModalProps {

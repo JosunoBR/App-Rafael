@@ -1142,7 +1142,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       <td 
                         className="py-3.5 px-4 font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 transition"
                         onClick={() => handleOpenOrder(ord)}
-                        title={canEditSpecificOrder(currentUser, ord.header.status) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
+                        title={canEditSpecificOrder(currentUser, ord.header.status, ord.header.boletosLiberados) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
                       >
                         <span className="underline decoration-dotted underline-offset-4">{ord.header.numeroPedido}</span>
                         {temAjusteFiscal && (
@@ -1162,7 +1162,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       <td 
                         className="py-3.5 px-3 cursor-pointer hover:text-emerald-600 transition"
                         onClick={() => handleOpenOrder(ord)}
-                        title={canEditSpecificOrder(currentUser, ord.header.status) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
+                        title={canEditSpecificOrder(currentUser, ord.header.status, ord.header.boletosLiberados) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
                       >
                         <div className="font-bold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition">
                           {ord.header.fornecedor}
@@ -1357,7 +1357,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             onClick={() => handleOpenOrder(ord)}
                             disabled={openingOrderId === ord.header.id}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 active:scale-95 transition cursor-pointer disabled:opacity-75 disabled:cursor-wait"
-                            title={canEditSpecificOrder(currentUser, ord.header.status) ? "Abrir este pedido para edição" : "Visualizar detalhes do pedido (Somente leitura)"}
+                            title={canEditSpecificOrder(currentUser, ord.header.status, ord.header.boletosLiberados) ? "Abrir este pedido para edição" : "Visualizar detalhes do pedido (Somente leitura)"}
                           >
                             {openingOrderId === ord.header.id ? (
                               <>
@@ -1366,7 +1366,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                               </>
                             ) : (
                               <>
-                                <span>{canEditSpecificOrder(currentUser, ord.header.status) ? 'Editar' : 'Visualizar'}</span>
+                                <span>{canEditSpecificOrder(currentUser, ord.header.status, ord.header.boletosLiberados) ? 'Editar' : 'Visualizar'}</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </>
                             )}

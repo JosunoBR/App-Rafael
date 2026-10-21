@@ -474,7 +474,7 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Subgrupo: Ações Principais (Salvar & Fechar Pedido) */}
               <div className="flex items-center gap-1.5">
                 {order.header.status && order.header.status !== 'Em Cotação' && order.header.status !== 'Rascunho' ? (
-                  (currentUser?.role === 'diretoria' || currentUser?.role === 'faturamento' || (currentUser?.role as any) === 'root' || canEditSpecificOrder(currentUser, order.header.status)) ? (
+                  canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados) ? (
                     <button
                       onClick={onSaveOrder}
                       className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer hover:scale-102"
@@ -486,10 +486,10 @@ export const Header: React.FC<HeaderProps> = ({
                   ) : (
                     <div 
                       className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 select-none"
-                      title="Este pedido já foi fechado. Apenas a Diretoria e o Financeiro possuem autorização para editá-lo."
+                      title={order.header.boletosLiberados ? "Os boletos deste pedido já foram liberados para o Financeiro. Alterações são restritas ao Financeiro e à Diretoria." : "Este pedido já foi fechado. Apenas a Diretoria e o Financeiro possuem autorização para editá-lo."}
                     >
                       <Lock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Fechado (Somente Leitura)</span>
+                      <span>{order.header.boletosLiberados ? 'Boletos Liberados (Bloqueado)' : 'Fechado (Somente Leitura)'}</span>
                     </div>
                   )
                 ) : (

@@ -114,8 +114,25 @@ export function canEditClosedOrders(userOrRole?: UserLike): boolean {
 /**
  * Avalia se o usuário tem permissão para editar um pedido específico considerando o status dele.
  */
-export function canEditSpecificOrder(userOrRole?: UserLike, orderStatus?: string | null): boolean {
+export function canEditSpecificOrder(
+  userOrRole?: UserLike, 
+  orderStatus?: string | null,
+  boletosLiberados?: boolean | number
+): boolean {
   if (!userOrRole) return false;
+
+  // Se os boletos já foram liberados para o Financeiro:
+  // Apenas Diretoria, Root e Faturamento possuem autorização de alteração
+  if (Boolean(boletosLiberados)) {
+    const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role || '';
+    const isDiretoriaOrRoot = role === 'diretoria' || 
+                              role === 'root' || 
+                              (typeof userOrRole === 'object' && (userOrRole.id === 'usr_root' || userOrRole.email?.toLowerCase() === 'root' || userOrRole.nome?.toLowerCase() === 'root'));
+    if (!isDiretoriaOrRoot && role !== 'faturamento') {
+      return false;
+    }
+  }
+
   const st = orderStatus || 'Em Cotação';
   const isClosed = st !== 'Em Cotação' && st !== 'Rascunho';
 

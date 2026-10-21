@@ -278,6 +278,28 @@ export async function fetchOrdersFromDb(): Promise<PurchaseOrder[]> {
   return res.json();
 }
 
+export async function fetchOrderByIdFromDb(orderId: string): Promise<PurchaseOrder> {
+  const res = await apiFetch(`/orders/${encodeURIComponent(orderId)}`);
+  const data = await res.json();
+  return data.order || data;
+}
+
+export interface OrderVersionInfo {
+  id: string;
+  numeroPedido: string;
+  version: number;
+  status: string;
+  boletosLiberados: boolean;
+  updatedAt: string;
+  lastModifier: string | null;
+  lastModifiedAt: string | null;
+}
+
+export async function checkOrderVersionInDb(orderId: string): Promise<OrderVersionInfo> {
+  const res = await apiFetch(`/orders/${encodeURIComponent(orderId)}/version-check`);
+  return res.json();
+}
+
 export interface SaveOrderResult {
   success: boolean;
   message?: string;

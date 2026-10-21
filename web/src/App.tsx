@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, startTransition } from 'react';
+import React, { useState, useEffect, useMemo, useRef, startTransition } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   Sidebar,
@@ -194,13 +194,17 @@ import { calculateItemFiscal, normalizeRateToDecimal } from './shared/fiscalEngi
 import { DEFAULT_FISCAL_CONFIG } from './shared/constants';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem, generateNextProductCode } from './utils/orderItemUtils';
-import { CheckCircle2, AlertCircle, Plus, Lock, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Plus, Lock, ShieldCheck, RefreshCw, X } from 'lucide-react';
 import { canAccessTab, canAuthorizeFinancialRelease, canCreateOrEditOrders, getDefaultNavForRole, canEditSpecificOrder } from './shared/permissions';
 import { 
   calculateOrderTotals, 
   distributeFiscalAdjustmentToItems, 
   restoreOriginalItemPrices 
 } from './shared/orderCalculationEngine';
+import { fetchOrderByIdFromDb } from './utils/api';
+import { useOrderWatcher } from './hooks/useOrderWatcher';
+import { threeWayMergeOrder, OrderMergeResult } from './utils/orderMerge';
+import { OrderConflictResolutionModal } from './components/OrderConflictResolutionModal';
 
 export function App() {
   // 1. Estado de Autenticação (RBAC) - Validação prévia de expiração local
@@ -300,6 +304,21 @@ export function App() {
       ...newOrd,
       items: ensureTrailingBlankItem(newOrd.items || [], initFiscal, initStores)
     };
+  });
+
+  // Snapshot base para Three-Way Merge e controle de concorrência
+  const baseOrderRef = useRef<PurchaseOrder | null>(null);
+  const [isSyncingRemote, setIsSyncingRemote] = useState(false);
+  const [conflictMergeData, setConflictMergeData] = useState<{
+    remote: PurchaseOrder;
+    mergeResult: OrderMergeResult;
+  } | null>(null);
+
+  // Hook de detecção ativa de concorrência em segundo plano
+  const { remoteInfo, hasNewerVersion, dismissAlert } = useOrderWatcher({
+    orderId: order?.header?.id,
+    currentVersion: Number(order?.header?.version || 1),
+    enabled: Boolean(activeNav === 'orders' && order?.header?.id && order?.header?.status)
   });
 
   // Identifica se o pedido em memória é um rascunho em aberto não salvo
@@ -1709,6 +1728,7 @@ export function App() {
 
     // startTransition garante prioridade máxima para a resposta de clique do usuário
     startTransition(() => {
+      baseOrderRef.current = JSON.parse(JSON.stringify(updatedOrder));
       setOrder(updatedOrder);
       setViewMode('desktop');
       if (activeNav !== targetTab) {
@@ -1717,6 +1737,73 @@ export function App() {
     });
 
     showToast(`Pedido ${cleanNum} carregado com sucesso.`);
+  };
+
+  // 🔄 Sincronização Granular com o Servidor (Three-Way Merge)
+  const handleSyncWithRemote = async () => {
+    if (!order?.header?.id) return;
+    setIsSyncingRemote(true);
+    try {
+      const remote = await fetchOrderByIdFromDb(order.header.id);
+      const mergeResult = threeWayMergeOrder(baseOrderRef.current, remote, order);
+      if (mergeResult.hasConflicts) {
+        setConflictMergeData({ remote, mergeResult });
+      } else {
+        const mergedWithBlank = {
+          ...mergeResult.mergedOrder,
+          items: ensureTrailingBlankItem(mergeResult.mergedOrder.items || [], fiscalConfig, storeConfigs)
+        };
+        setOrder(mergedWithBlank);
+        baseOrderRef.current = JSON.parse(JSON.stringify(remote));
+        dismissAlert();
+        triggerIOSBanner(mergeResult.summary, 'success');
+      }
+    } catch (err: any) {
+      triggerIOSAlert({
+        title: 'Erro na Sincronização',
+        message: err?.message || 'Não foi possível buscar a versão mais recente do servidor.',
+        type: 'error',
+        confirmText: 'OK'
+      });
+    } finally {
+      setIsSyncingRemote(false);
+    }
+  };
+
+  // ✅ Resolução de Conflitos Específicos Campo a Campo
+  const handleResolveConflicts = (resolutions: Record<string, 'local' | 'remote'>) => {
+    if (!conflictMergeData) return;
+    const { remote, mergeResult } = conflictMergeData;
+    const resolvedOrder: PurchaseOrder = JSON.parse(JSON.stringify(mergeResult.mergedOrder));
+
+    mergeResult.conflicts.forEach((conflict, index) => {
+      const key = `${conflict.identifier || conflict.field}_${index}`;
+      const choice = resolutions[key] || 'local';
+
+      if (conflict.domain === 'financial') {
+        if (choice === 'remote') {
+          (resolvedOrder.header as any)[conflict.field] = conflict.remoteValue;
+        } else {
+          (resolvedOrder.header as any)[conflict.field] = conflict.localValue;
+        }
+      } else if (conflict.domain === 'items') {
+        const item = resolvedOrder.items.find(i => (i.id || i.codigoInterno || i.descricao) === conflict.identifier);
+        if (item) {
+          (item as any)[conflict.field] = choice === 'remote' ? conflict.remoteValue : conflict.localValue;
+        }
+      }
+    });
+
+    const finalizedOrder = {
+      ...resolvedOrder,
+      items: ensureTrailingBlankItem(resolvedOrder.items || [], fiscalConfig, storeConfigs)
+    };
+
+    setOrder(finalizedOrder);
+    baseOrderRef.current = JSON.parse(JSON.stringify(remote));
+    setConflictMergeData(null);
+    dismissAlert();
+    triggerIOSBanner('Conflitos resolvidos e pedido sincronizado com sucesso!', 'success');
   };
 
   // 1. Salvar Pedido em Rascunho / Espera (mantém o pedido na tela para continuar editando)
@@ -1876,6 +1963,7 @@ export function App() {
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
       setOrder(effectiveOrder);
+      baseOrderRef.current = JSON.parse(JSON.stringify(effectiveOrder));
       clearLocalSavePending();
 
       if (isClosed) {
@@ -1899,23 +1987,54 @@ export function App() {
       if (err?.code === 'ORDER_CONCURRENT_MODIFICATION' || (err?.status === 409 && err?.code === 'ORDER_CONCURRENT_MODIFICATION')) {
         const modifier = err.lastModifier || 'outro operador';
         const time = err.lastModifiedAt ? ` às ${err.lastModifiedAt}` : '';
+
+        // 🧠 Auto-Recuperação Inteligente via Three-Way Merge
+        try {
+          if (order?.header?.id) {
+            triggerIOSBanner('Mesclando alterações com o servidor...', 'info');
+            const remote = await fetchOrderByIdFromDb(order.header.id);
+            const mergeResult = threeWayMergeOrder(baseOrderRef.current, remote, orderWithInstallments);
+
+            if (!mergeResult.hasConflicts) {
+              // Conflito de domínios resolvido com sucesso (ex: colega salvou faturamento e usuário salvou compras)!
+              const autoSaveRes = await saveOrderToDb(mergeResult.mergedOrder, { autoAssignNextOnConflict: false, forceOverwrite: true });
+              const effectiveOrder: PurchaseOrder = autoSaveRes?.order ? {
+                ...autoSaveRes.order,
+                items: ensureTrailingBlankItem(autoSaveRes.order.items || validItems, fiscalConfig, storeConfigs)
+              } : mergeResult.mergedOrder;
+
+              try { saveOrderToHistory(effectiveOrder); } catch {}
+              const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+              setSavedOrders(updatedOrders);
+              setOrder(effectiveOrder);
+              baseOrderRef.current = JSON.parse(JSON.stringify(effectiveOrder));
+              clearLocalSavePending();
+
+              triggerIOSAlert({
+                title: '✨ Sincronização Inteligente Concluída',
+                message: `As alterações de ${modifier}${time} foram unificadas com as suas alterações sem perda de dados!\n\n${mergeResult.summary}`,
+                type: 'info',
+                confirmText: 'Excelente'
+              });
+              return;
+            } else {
+              // Conflitos no mesmo campo específico: abre modal ergonômico de resolução
+              setConflictMergeData({ remote, mergeResult });
+              return;
+            }
+          }
+        } catch (autoMergeErr) {
+          console.error('Falha na tentativa de auto-merge:', autoMergeErr);
+        }
+
         triggerIOSAlert({
           title: '⚠️ Conflito de Edição Simultânea',
           message: `Atenção: Este pedido foi alterado e salvo no servidor por ${modifier}${time} enquanto você o editava.\n\nPara não sobrescrever acidentalmente as alterações de ${modifier}, escolha uma das opções:`,
           type: 'warning',
-          confirmText: '🔄 Recarregar Dados Mais Recentes',
+          confirmText: '🔄 Sincronizar e Mesclar Dados',
           actionText: '⚠️ Sobrescrever Mesmo Assim',
           onConfirm: async () => {
-            const refreshedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
-            setSavedOrders(refreshedOrders);
-            const latest = refreshedOrders.find(o => o.header.id === order.header.id);
-            if (latest) {
-              setOrder({
-                ...latest,
-                items: ensureTrailingBlankItem(latest.items || [], fiscalConfig, storeConfigs)
-              });
-              triggerIOSBanner(`Pedido recarregado com a versão mais recente de ${modifier}!`, 'info');
-            }
+            await handleSyncWithRemote();
           },
           onAction: async () => {
             try {
@@ -1928,6 +2047,7 @@ export function App() {
               const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
               setSavedOrders(updatedOrders);
               setOrder(effectiveOrder);
+              baseOrderRef.current = JSON.parse(JSON.stringify(effectiveOrder));
               clearLocalSavePending();
               triggerIOSBanner(`Pedido ${effectiveOrder.header.numeroPedido} salvo (sobrescrita confirmada)!`, 'success');
             } catch (forceErr: any) {
@@ -3479,6 +3599,63 @@ export function App() {
 
                   {/* 1. Formulário de Cabeçalho do Pedido (Previsão de Entrega liberada para o Comprador até a confirmação física) */}
                   <div className="space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0">
+                    {/* Barra Flutuante de Detecção Ativa de Edição Simultânea por Colega */}
+                    {hasNewerVersion && remoteInfo && (
+                      <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-blue-900 dark:text-blue-100 shadow-xs animate-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-3.5">
+                          <div className="p-2.5 bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl shrink-0">
+                            <RefreshCw className="w-5 h-5 animate-spin" style={{ animationDuration: '3s' }} />
+                          </div>
+                          <div>
+                            <div className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2">
+                              <span>Alteração Salva por Colega</span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-blue-500/20 text-blue-700 dark:text-blue-300">
+                                Versão {remoteInfo.version}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                              {remoteInfo.lastModifier || 'Outro operador'} salvou alterações neste pedido {remoteInfo.lastModifiedAt ? `às ${new Date(remoteInfo.lastModifiedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                          <button
+                            onClick={handleSyncWithRemote}
+                            disabled={isSyncingRemote}
+                            className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer hover:scale-102 disabled:opacity-75"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingRemote ? 'animate-spin' : ''}`} />
+                            <span>{isSyncingRemote ? 'Sincronizando...' : 'Sincronizar Dados'}</span>
+                          </button>
+                          <button
+                            onClick={dismissAlert}
+                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-800 transition cursor-pointer"
+                            title="Dispensar aviso"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Banner Informativo de Boletos Liberados / Bloqueio Financeiro */}
+                    {order.header.boletosLiberados && !canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados) && (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3.5 text-amber-800 dark:text-amber-200 shadow-xs animate-in fade-in duration-200">
+                        <div className="p-2.5 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl shrink-0">
+                          <Lock className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2">
+                            <span>Pedido em Modo Somente Leitura</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300">Boletos Liberados</span>
+                          </div>
+                          <div className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                            Os boletos deste pedido já foram conciliados e liberados para o Financeiro. Alterações são restritas ao Faturamento e à Diretoria.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <OrderHeaderForm 
                       header={order.header} 
                       suppliers={suppliers}
@@ -3496,10 +3673,11 @@ export function App() {
                       supplierTemplateItemsCount={activeSupplierTemplate?.items?.length || 0}
                       showToast={showToast}
                       isLocked={Boolean(
-                        order.header.status && 
-                        order.header.status !== 'Em Cotação' && 
-                        order.header.status !== 'Rascunho' && 
-                        !canEditSpecificOrder(currentUser, order.header.status)
+                        (order.header.status && 
+                         order.header.status !== 'Em Cotação' && 
+                         order.header.status !== 'Rascunho' && 
+                         !canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados)) ||
+                        (order.header.boletosLiberados && !canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados))
                       )}
                       canEditDeliveryDate={Boolean(
                         currentUser?.role === 'diretoria' ||
@@ -3511,17 +3689,18 @@ export function App() {
                         currentUser?.role === 'diretoria' ||
                         currentUser?.role === 'faturamento' ||
                         currentUser?.role === ('root' as any) ||
-                        canEditSpecificOrder(currentUser, order.header.status)
+                        canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados)
                       )}
                     />
 
                     {/* 2. Engenharia Fiscal e Grade de Itens */}
                     <fieldset 
                       disabled={Boolean(
-                        order.header.status && 
-                        order.header.status !== 'Em Cotação' && 
-                        order.header.status !== 'Rascunho' && 
-                        !canEditSpecificOrder(currentUser, order.header.status)
+                        (order.header.status && 
+                         order.header.status !== 'Em Cotação' && 
+                         order.header.status !== 'Rascunho' && 
+                         !canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados)) ||
+                        (order.header.boletosLiberados && !canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados))
                       )}
                       style={{ minWidth: 0 }}
                       className="space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0"
@@ -3912,6 +4091,17 @@ export function App() {
         isOrderFinalized={order.header.status === 'Finalizado'}
         stores={storeConfigs}
       />
+
+      {/* Modal Ergonômico de Resolução de Conflitos Granulares */}
+      {conflictMergeData && (
+        <OrderConflictResolutionModal
+          isOpen={Boolean(conflictMergeData)}
+          conflicts={conflictMergeData.mergeResult.conflicts}
+          remoteModifier={remoteInfo?.lastModifier || conflictMergeData.remote.header.recebidoPor || 'Outro operador'}
+          onResolve={handleResolveConflicts}
+          onCancel={() => setConflictMergeData(null)}
+        />
+      )}
 
       {/* 📱 Sistema de Notificações & Alertas Estilo iPhone (iOS Design System) */}
       <IOSAlertModal

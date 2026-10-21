@@ -8,6 +8,7 @@ const router = Router();
 router.get('/', authMiddleware, (req, res, next) => orderController.list(req, res, next));
 router.get('/next-number', authMiddleware, (req, res, next) => orderController.getNextNumber(req, res, next));
 router.get('/check-numero/:numero', authMiddleware, (req, res, next) => orderController.checkNumero(req, res, next));
+router.get('/:id/version-check', authMiddleware, (req, res, next) => orderController.checkVersion(req, res, next));
 router.get('/:id', authMiddleware, (req, res, next) => orderController.getById(req, res, next));
 router.post('/import', authMiddleware, (req, res, next) => orderController.importPackage(req, res, next));
 router.post('/', authMiddleware, (req, res, next) => orderController.save(req, res, next));

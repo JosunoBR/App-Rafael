@@ -19,6 +19,15 @@ class OrderController {
     }
   }
 
+  async checkVersion(req, res, next) {
+    try {
+      const info = await orderService.getOrderVersionInfo(req.params.id);
+      return res.json(info);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async save(req, res, next) {
     try {
       const options = {

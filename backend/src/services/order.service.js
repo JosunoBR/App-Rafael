@@ -32,6 +32,47 @@ class OrderService {
     return order;
   }
 
+  async getOrderVersionInfo(id) {
+    const db = await getDatabase();
+    const header = await db.queryOne(
+      `SELECT id, numeroPedido, status, version, boletosLiberados, updatedAt 
+       FROM purchase_orders 
+       WHERE id = ? OR numeroPedido = ?`,
+      [id, id]
+    );
+    if (!header) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+    let lastModifier = null;
+    let lastModifiedAt = null;
+    try {
+      const lastLog = await db.queryOne(
+        `SELECT usuarioNome, usuarioRole, createdAt 
+         FROM order_distribution_logs 
+         WHERE orderId = ? 
+         ORDER BY createdAt DESC LIMIT 1`,
+        [header.id]
+      );
+      if (lastLog) {
+        lastModifier = `${lastLog.usuarioNome}${lastLog.usuarioRole ? ` (${lastLog.usuarioRole})` : ''}`;
+        lastModifiedAt = lastLog.createdAt;
+      }
+    } catch {}
+
+    return {
+      id: header.id,
+      numeroPedido: header.numeroPedido,
+      version: Number(header.version || 1),
+      status: header.status,
+      boletosLiberados: Boolean(header.boletosLiberados),
+      updatedAt: header.updatedAt,
+      lastModifier,
+      lastModifiedAt
+    };
+  }
+
   /**
    * Valida a integridade financeira das parcelas do pedido antes da persistência
    */
@@ -1236,7 +1277,13 @@ class OrderService {
     }
 
     const role = currentUser.role?.toLowerCase();
-    const isAuthorized = role === 'comprador' || role === 'separacao' || role === 'deposito' || role === 'diretoria' || role === 'root' || role === 'admin';
+    const isDiretoriaOrRoot = role === 'diretoria' || 
+                              role === 'root' || 
+                              role === 'admin' || 
+                              currentUser.id === 'usr_root' || 
+                              currentUser.email?.toLowerCase() === 'root' ||
+                              currentUser.nome?.toLowerCase() === 'root';
+    const isAuthorized = isDiretoriaOrRoot || role === 'comprador' || role === 'separacao' || role === 'deposito';
     if (!isAuthorized) {
       const err = new Error('Perfil não autorizado a encaminhar pedidos para faturamento.');
       err.statusCode = 403;

@@ -337,8 +337,13 @@ export async function saveOrderToDb(
       warnings: data.warnings || []
     };
   } catch (err: any) {
-    if (err instanceof ApiError && err.status === 409 && (options.autoAssignNextOnConflict !== false)) {
-      // Recuperação resiliente em caso de concorrência com o número do pedido
+    const isOrderNumberConflict = err instanceof ApiError && (
+      err.code === 'ORDER_NUMBER_CONFLICT' || 
+      err.code === 'ORDER_DUPLICATE_NUMBER' ||
+      (!err.code && err.status === 409 && (err.message?.toLowerCase().includes('número') || err.suggestedNextNumber))
+    );
+    if (isOrderNumberConflict && (options.autoAssignNextOnConflict !== false)) {
+      // Recuperação resiliente em caso de concorrência exclusivamente com o número do pedido
       const nextNum = err.suggestedNextNumber || await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
       if (nextNum && nextNum !== order.header.numeroPedido) {
         console.warn(`[Auto-Recovery] Conflito de pedido detectado para ${order.header.numeroPedido}. Tentando salvar automaticamente com ${nextNum}...`);

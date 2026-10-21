@@ -538,6 +538,19 @@ export function App() {
               }
             };
           }
+
+          // 🛡️ Sincroniza versão mais recente caso o pedido já exista no banco (evita falso conflito de versão)
+          const matchingSaved = hydratedOrders.find(o => o.header.id === currentOrder.header.id);
+          if (matchingSaved && matchingSaved.header) {
+            return {
+              ...currentOrder,
+              header: {
+                ...currentOrder.header,
+                version: matchingSaved.header.version || (matchingSaved as any).version || currentOrder.header.version || 1
+              }
+            };
+          }
+
           return currentOrder;
         });
       }
@@ -822,13 +835,20 @@ export function App() {
       await saveOrderToDb(orderToSave, { autoAssignNextOnConflict: false });
     } catch (err: any) {
       console.warn('Aviso ao sincronizar pedido com o SQLite:', err);
-      if (err?.status === 403 || err?.code === 'ORDER_CLOSED_FORBIDDEN' || err?.code === 'ORDER_LOCKED') {
+      if (err?.code === 'ORDER_CONCURRENT_MODIFICATION') {
+        const modifier = err.lastModifier || 'outro operador';
+        triggerIOSBanner(
+          `Aviso: O pedido foi alterado no servidor por ${modifier}. Suas alterações locais estão preservadas. Recarregue os dados mais recentes se desejar.`,
+          'warning',
+          'Edição Simultânea'
+        );
+      } else if (err?.status === 403 || err?.code === 'ORDER_CLOSED_FORBIDDEN' || err?.code === 'ORDER_LOCKED') {
         triggerIOSBanner(
           err.message || 'Sem autorização para salvar alterações neste pedido no servidor. Suas alterações foram retidas apenas neste navegador.',
           'error',
           'Permissão Negada'
         );
-      } else if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
+      } else if (err?.code === 'ORDER_NUMBER_CONFLICT' || (!err?.code && err?.status === 409 && (err?.suggestedNextNumber || err?.message?.toLowerCase().includes('número')))) {
         triggerIOSBanner(
           `O número ${orderToSave.header.numeroPedido} colidiu com outro pedido no servidor. Ajuste o número antes de salvar.`,
           'warning',
@@ -1750,17 +1770,37 @@ export function App() {
         message: `Não é possível salvar este pedido!\n\nO número "${order.header.numeroPedido}" já pertence ao pedido do fornecedor "${conflictFornecedor || 'já cadastrado'}".\n\nNúmeros de pedido devem ser únicos. Por favor, ajuste o número do pedido no cabeçalho antes de prosseguir.`,
         type: 'error',
         confirmText: 'Ajustar Manualmente',
-        actionText: `Usar Próximo Livre (${nextFree})`,
-        onAction: () => {
-          setOrder(prev => ({
-            ...prev,
+        actionText: nextFree ? `⚡ Usar Próximo Livre (${nextFree}) e Salvar` : undefined,
+        onAction: nextFree ? async () => {
+          const renumberedOrder: PurchaseOrder = {
+            ...order,
             header: {
-              ...prev.header,
+              ...order.header,
               numeroPedido: nextFree
             }
-          }));
-          triggerIOSBanner(`Número atualizado para ${nextFree}. Agora você já pode salvar o pedido!`, 'info');
-        }
+          };
+          setOrder(renumberedOrder);
+          try {
+            const saveRes = await saveOrderToDb(renumberedOrder, { autoAssignNextOnConflict: false });
+            const effectiveOrder: PurchaseOrder = saveRes?.order ? {
+              ...saveRes.order,
+              items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
+            } : renumberedOrder;
+            try { saveOrderToHistory(effectiveOrder); } catch {}
+            const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+            setSavedOrders(updatedOrders);
+            setOrder(effectiveOrder);
+            clearLocalSavePending();
+            triggerIOSBanner(`Pedido salvo com sucesso como ${nextFree}!`, 'success');
+          } catch (retryErr: any) {
+            triggerIOSAlert({
+              title: 'Erro ao Salvar Pedido',
+              message: retryErr.message || 'Falha ao salvar com o próximo número sequencial livre.',
+              type: 'error',
+              confirmText: 'OK'
+            });
+          }
+        } : undefined
       });
       return; // IMPEDE O SALVAMENTO!
     }
@@ -1902,7 +1942,7 @@ export function App() {
         });
         return;
       }
-      if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
+      if (err?.code === 'ORDER_NUMBER_CONFLICT' || (!err?.code && err?.status === 409 && (err?.suggestedNextNumber || err?.message?.toLowerCase().includes('número')))) {
         const nextFree = err.suggestedNextNumber || await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(savedOrders));
         const conflictForn = err.conflictDetails?.conflictFornecedor;
         const msgDetail = conflictForn 
@@ -2082,7 +2122,7 @@ export function App() {
         });
         return;
       }
-      if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
+      if (err?.code === 'ORDER_NUMBER_CONFLICT' || (!err?.code && err?.status === 409 && (err?.suggestedNextNumber || err?.message?.toLowerCase().includes('número')))) {
         const nextFree = err.suggestedNextNumber || await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(savedOrders));
         const conflictForn = err.conflictDetails?.conflictFornecedor;
         const msgDetail = conflictForn 

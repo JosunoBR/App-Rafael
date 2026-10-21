@@ -183,21 +183,32 @@ class OrderService {
       const currentVersion = Number(existingForAuthorization.header.version || 1);
       const isForceOverwrite = Boolean(options.forceOverwrite || orderData.forceOverwrite);
 
-      if (incomingVersion !== null && currentVersion > incomingVersion && !isForceOverwrite) {
-        let lastModifierName = 'outro operador';
-        let lastModifiedAt = '';
-        try {
-          const { queryOne } = require('../config/database');
-          const lastLog = await queryOne(
-            'SELECT usuarioNome, usuarioRole, createdAt FROM order_distribution_logs WHERE orderId = ? ORDER BY createdAt DESC LIMIT 1',
-            [currentId]
-          );
-          if (lastLog) {
-            lastModifierName = `${lastLog.usuarioNome}${lastLog.usuarioRole ? ` (${lastLog.usuarioRole})` : ''}`;
-            lastModifiedAt = lastLog.createdAt ? new Date(lastLog.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-          }
-        } catch {}
+      let lastModifierName = 'outro operador';
+      let lastModifiedAt = '';
+      let isSelfOrSystemModifier = false;
 
+      try {
+        const { queryOne } = require('../config/database');
+        const lastLog = await queryOne(
+          'SELECT usuarioId, usuarioNome, usuarioRole, createdAt FROM order_distribution_logs WHERE orderId = ? ORDER BY createdAt DESC LIMIT 1',
+          [currentId]
+        );
+        if (lastLog) {
+          lastModifierName = `${lastLog.usuarioNome}${lastLog.usuarioRole ? ` (${lastLog.usuarioRole})` : ''}`;
+          lastModifiedAt = lastLog.createdAt ? new Date(lastLog.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+          const isUserDiretoria = currentUser?.role === 'diretoria' || currentUser?.role === 'root' || currentUser?.id === 'usr_root';
+          if (
+            lastLog.usuarioId === currentUser?.id ||
+            lastLog.usuarioNome === currentUser?.nome ||
+            (isUserDiretoria && (lastLog.usuarioId === 'usr_root' || lastLog.usuarioNome === 'Root'))
+          ) {
+            isSelfOrSystemModifier = true;
+          }
+        }
+      } catch {}
+
+      if (incomingVersion !== null && currentVersion > incomingVersion && !isForceOverwrite && !isSelfOrSystemModifier) {
         const err = new Error(
           `Conflito de Concorrência: Este pedido foi alterado e salvo no servidor por ${lastModifierName}${lastModifiedAt ? ` às ${lastModifiedAt}` : ''} enquanto você o editava. Recarregue os dados mais recentes para não perder alterações.`
         );

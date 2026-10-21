@@ -32,9 +32,12 @@ const webDistPath = path.join(__dirname, '../web/dist');
 if (fs.existsSync(webDistPath)) {
   app.use(express.static(webDistPath));
   
-  // Qualquer rota GET que não seja /api entrega o index.html para o React Router
+  // Qualquer rota GET que não seja /api entrega o index.html com anti-cache para o React Router
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(path.join(webDistPath, 'index.html'));
   });
 }

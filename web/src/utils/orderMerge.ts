@@ -77,7 +77,7 @@ export function threeWayMergeOrder(
   // DOMÍNIO 1: FINANCEIRO & FATURAMENTO
   // -------------------------------------------------------------
   const financialFields = [
-    'installments',
+    'condicaoPagamento',
     'condicoesPagamento',
     'formaPagamento',
     'valorFrete',
@@ -90,7 +90,8 @@ export function threeWayMergeOrder(
     'boletosLiberados',
     'boletosLiberadosPor',
     'boletosLiberadosEm',
-    'dataPrevisaoEntrega'
+    'dataPrevisaoEntrega',
+    'dataEntregaPrevista'
   ] as const;
 
   let localChangedFinancial = false;
@@ -121,13 +122,36 @@ export function threeWayMergeOrder(
         conflicts.push({
           domain: 'financial',
           field,
-          label: field === 'installments' ? 'Parcelas de Pagamento' : field,
+          label: field,
           localValue: localVal,
           remoteValue: remoteVal
         });
       }
     }
   });
+
+  // Mesclagem Granular de Parcelas e Boletos (Nível Raiz de PurchaseOrder)
+  const baseInstStr = JSON.stringify(base.installments || []);
+  const localInstStr = JSON.stringify(localDraft.installments || []);
+  const remoteInstStr = JSON.stringify(remoteOrder.installments || []);
+
+  const localDiffInst = localInstStr !== baseInstStr;
+  const remoteDiffInst = remoteInstStr !== baseInstStr;
+
+  if (!localDiffInst && remoteDiffInst) {
+    // Servidor atualizou as parcelas/boletos e o usuário local não alterou parcelas -> Adota servidor
+    merged.installments = remoteOrder.installments;
+    domainsMerged.financial = true;
+  } else if (localDiffInst && remoteDiffInst && localInstStr !== remoteInstStr) {
+    // Ambos alteraram parcelas com dados divergentes -> Colisão
+    conflicts.push({
+      domain: 'financial',
+      field: 'installments',
+      label: 'Parcelas e Boletos Financeiros',
+      localValue: localDraft.installments,
+      remoteValue: remoteOrder.installments
+    });
+  }
 
   // -------------------------------------------------------------
   // DOMÍNIO 2: ITENS, QUANTIDADES E RUPTURAS (Compras)

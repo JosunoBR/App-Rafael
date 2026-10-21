@@ -155,10 +155,18 @@ class OrderRepository {
     let totalPecas = 0;
 
     items.forEach(item => {
-      const pecas = Number(item.qtdTotalUnidades || 0);
+      const isRuptura = item.ruptura === true || item.ruptura === 1 || item.ruptura === '1' ||
+                        item.isRuptura === true || item.isRuptura === 1 || item.isRuptura === '1';
+      if (isRuptura) return;
+
+      const pack = Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1;
       const pacotes = Number(item.qtdPacotes || 0);
+      const pecasOriginal = Number(item.qtdTotalUnidades || 0) || (pacotes * pack);
+      const hasQtdRecebida = item.qtdRecebida !== undefined && item.qtdRecebida !== null;
+      const pecas = hasQtdRecebida ? Math.max(0, Number(item.qtdRecebida)) : pecasOriginal;
+
       const preco = Number(item.precoUnitario || 0);
-      const bruto = Number(item.valorTotalBruto !== undefined ? item.valorTotalBruto : (pecas * preco));
+      const bruto = Number(item.valorTotalBruto !== undefined && !hasQtdRecebida ? item.valorTotalBruto : (pecas * preco));
       const desc = Number(item.valorDescontoItem || 0);
       const ipi = Number(item.valorIpi || 0);
 

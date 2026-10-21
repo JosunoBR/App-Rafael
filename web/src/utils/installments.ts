@@ -595,6 +595,7 @@ export function generateOrderInstallments(
       const depFormaLabel = order.header.depositoFormaPagamento || 'Depósito';
 
       list.push({
+        ...(existingDep || {}),
         id: existingDep?.id || `inst_${order.header.id || 'ord'}_dep_${d}_${Date.now()}`,
         orderId: order.header.id,
         numeroPedido: order.header.numeroPedido,
@@ -650,6 +651,7 @@ export function generateOrderInstallments(
       const statusFinal = existing?.status || getInstallmentStatus(dataVencimentoFinal, existing?.dataPagamento);
 
       list.push({
+        ...(existing || {}),
         id: existing?.id || `inst_${order.header.id || 'ord'}_bol_${j}_${Date.now()}`,
         orderId: order.header.id,
         numeroPedido: order.header.numeroPedido,
@@ -716,6 +718,7 @@ export function generateOrderInstallments(
         : `Parcela ${i}/${totalParcelas} (${dueDays === 0 ? '10d da Entrega' : `+${dueDays}d`})`;
 
       list.push({
+        ...(existing || {}),
         id: existing?.id || `inst_${order.header.id || 'ord'}_${i}_${Date.now()}`,
         orderId: order.header.id,
         numeroPedido: order.header.numeroPedido,
@@ -758,6 +761,7 @@ export function generateOrderInstallments(
       : `inst_frete_${order.header.id || 'ord'}_${Date.now()}`;
 
     list.push({
+      ...(existingFrete || {}),
       id: freteId,
       orderId: order.header.id,
       numeroPedido: order.header.numeroPedido,

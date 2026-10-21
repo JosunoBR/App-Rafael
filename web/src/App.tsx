@@ -779,6 +779,11 @@ export function App() {
     const cleanNum = (targetOrder.header.numeroPedido || '').trim().toUpperCase();
     if (!cleanNum) return;
 
+    // 🛡️ Se o usuário não tem permissão para editar este pedido no status atual, aborta o autosave silencioso
+    if (!canEditSpecificOrder(currentUser, targetOrder.header.status, targetOrder.header.boletosLiberados)) {
+      return;
+    }
+
     // 🛡️ Não permite salvar se o número de pedido colidir com outro pedido existente (Alerta visual estilo iPhone)
     const duplicate = savedOrders.find(o => 
       o.header.id !== targetOrder.header.id && 
@@ -1781,7 +1786,9 @@ export function App() {
       const choice = resolutions[key] || 'local';
 
       if (conflict.domain === 'financial') {
-        if (choice === 'remote') {
+        if (conflict.field === 'installments') {
+          resolvedOrder.installments = choice === 'remote' ? conflict.remoteValue : conflict.localValue;
+        } else if (choice === 'remote') {
           (resolvedOrder.header as any)[conflict.field] = conflict.remoteValue;
         } else {
           (resolvedOrder.header as any)[conflict.field] = conflict.localValue;

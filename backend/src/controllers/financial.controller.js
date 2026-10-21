@@ -222,11 +222,43 @@ class FinancialController {
     }
   }
 
+  async getRecurrenceEntries(req, res) {
+    try {
+      const { recorrenciaId } = req.params;
+      const entries = await financialService.getRecurringSeriesEntries(recorrenciaId);
+      return res.status(200).json({ success: true, data: entries });
+    } catch (error) {
+      console.error('Erro ao buscar parcelas da série recorrente:', error);
+      return res.status(400).json({ success: false, error: error.message || 'Erro ao buscar parcelas da recorrência.' });
+    }
+  }
+
+  async terminateRecurrence(req, res) {
+    try {
+      const { recorrenciaId } = req.params;
+      const cutoffDate = req.body?.cutoffDate || req.query?.cutoffDate || null;
+      const result = await financialService.terminateRecurringSeries(recorrenciaId, cutoffDate, req.user);
+      return res.status(200).json({
+        success: true,
+        message: `Série recorrente encerrada com sucesso. ${result.deletedCount || 0} parcelas futuras em aberto foram removidas.`,
+        data: result
+      });
+    } catch (error) {
+      console.error('Erro ao encerrar série recorrente:', error);
+      return res.status(400).json({ success: false, error: error.message || 'Erro ao encerrar série recorrente.' });
+    }
+  }
+
   async cancelRecurrence(req, res) {
     try {
       const { recorrenciaId } = req.params;
-      await financialService.cancelRecurringSeries(recorrenciaId);
-      return res.status(200).json({ success: true, message: 'Recorrência futura cancelada com sucesso.' });
+      const cutoffDate = req.body?.cutoffDate || req.query?.cutoffDate || null;
+      const result = await financialService.cancelRecurringSeries(recorrenciaId, cutoffDate, req.user);
+      return res.status(200).json({
+        success: true,
+        message: `Recorrência cancelada com sucesso. ${result.deletedCount || 0} parcelas futuras em aberto foram removidas.`,
+        data: result
+      });
     } catch (error) {
       console.error('Erro ao cancelar série recorrente:', error);
       return res.status(400).json({ success: false, error: error.message || 'Erro ao cancelar série recorrente.' });

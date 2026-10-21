@@ -111,11 +111,14 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Estados de edição em tempo real para campos monetários do cabeçalho
+  // Estados de edição em tempo real para campos monetários e parcelas do cabeçalho
   const [editingValorEntrada, setEditingValorEntrada] = useState<string | null>(null);
   const [editingValorFrete, setEditingValorFrete] = useState<string | null>(null);
   const [editingDescontoTotal, setEditingDescontoTotal] = useState<string | null>(null);
   const [editingParcelasMap, setEditingParcelasMap] = useState<Record<string, string>>({});
+  const [editingParcelasInput, setEditingParcelasInput] = useState<string | null>(null);
+  const [editingDepositoParcelasInput, setEditingDepositoParcelasInput] = useState<string | null>(null);
+  const [editingSaldoParcelasInput, setEditingSaldoParcelasInput] = useState<string | null>(null);
 
   // 🛡️ Validação em tempo real de unicidade do número do pedido
   const duplicateOrderConflict = useMemo(() => {
@@ -2639,29 +2642,41 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                         <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
                           <span>3. Qtd Parcelas</span>
                         </label>
-                        <select
-                          value={isVistaIntegral ? 1 : currentParcelas}
+                        <input
+                          type="number"
+                          min={1}
+                          max={120}
+                          step={1}
                           disabled={isVistaIntegral}
-                          onChange={(e) => handlePaymentParcelasChange(Number(e.target.value))}
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden font-bold cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          {isVistaIntegral ? (
-                            <option value="1">1x (À Vista ou 1 Parcela)</option>
-                          ) : (
-                            <>
-                              {PARCELAS_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                              {!PARCELAS_OPTIONS.some((o) => o.value === currentParcelas) && currentParcelas > 0 && (
-                                <option key={currentParcelas} value={currentParcelas}>
-                                  {currentParcelas}x Parcelas
-                                </option>
-                              )}
-                            </>
-                          )}
-                        </select>
+                          value={
+                            isVistaIntegral
+                              ? 1
+                              : (editingParcelasInput !== null
+                                  ? editingParcelasInput
+                                  : (currentParcelas > 0 ? currentParcelas : ''))
+                          }
+                          onFocus={(e) => {
+                            if (!isVistaIntegral) {
+                              setEditingParcelasInput(currentParcelas > 0 ? String(currentParcelas) : '');
+                              e.target.select();
+                            }
+                          }}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            setEditingParcelasInput(raw);
+                            const parsed = parseInt(raw, 10);
+                            if (!isNaN(parsed) && parsed >= 1) {
+                              handlePaymentParcelasChange(Math.min(120, parsed));
+                            }
+                          }}
+                          onBlur={() => {
+                            setEditingParcelasInput(null);
+                            if (!currentParcelas || currentParcelas < 1) {
+                              handlePaymentParcelasChange(1);
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
                       </div>
                     </div>
 
@@ -2774,22 +2789,36 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                             Qtd Parcelas
                           </label>
-                          <select
-                            value={depositoParcelas}
-                            onChange={(e) => handleDepositoParcelasChange(Number(e.target.value))}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold cursor-pointer"
-                          >
-                            {PARCELAS_OPTIONS.filter((o) => o.value > 0).map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.value === 1 ? '1x (À Vista)' : `${opt.value}x`}
-                              </option>
-                            ))}
-                            {!PARCELAS_OPTIONS.some((o) => o.value === depositoParcelas) && depositoParcelas > 0 && (
-                              <option key={depositoParcelas} value={depositoParcelas}>
-                                {depositoParcelas}x
-                              </option>
-                            )}
-                          </select>
+                          <input
+                            type="number"
+                            min={1}
+                            max={120}
+                            step={1}
+                            value={
+                              editingDepositoParcelasInput !== null
+                                ? editingDepositoParcelasInput
+                                : (depositoParcelas > 0 ? depositoParcelas : '')
+                            }
+                            onFocus={(e) => {
+                              setEditingDepositoParcelasInput(depositoParcelas > 0 ? String(depositoParcelas) : '');
+                              e.target.select();
+                            }}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setEditingDepositoParcelasInput(raw);
+                              const parsed = parseInt(raw, 10);
+                              if (!isNaN(parsed) && parsed >= 1) {
+                                handleDepositoParcelasChange(Math.min(120, parsed));
+                              }
+                            }}
+                            onBlur={() => {
+                              setEditingDepositoParcelasInput(null);
+                              if (!depositoParcelas || depositoParcelas < 1) {
+                                handleDepositoParcelasChange(1);
+                              }
+                            }}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                          />
                         </div>
 
                         {/* 4. Valor (R$) */}
@@ -2886,22 +2915,36 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
                           <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                             Qtd Parcelas
                           </label>
-                          <select
-                            value={saldoParcelas}
-                            onChange={(e) => handleSaldoParcelasChange(Number(e.target.value))}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold cursor-pointer"
-                          >
-                            {PARCELAS_OPTIONS.filter((o) => o.value > 0).map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.value}x
-                              </option>
-                            ))}
-                            {!PARCELAS_OPTIONS.some((o) => o.value === saldoParcelas) && saldoParcelas > 0 && (
-                              <option key={saldoParcelas} value={saldoParcelas}>
-                                {saldoParcelas}x
-                              </option>
-                            )}
-                          </select>
+                          <input
+                            type="number"
+                            min={1}
+                            max={120}
+                            step={1}
+                            value={
+                              editingSaldoParcelasInput !== null
+                                ? editingSaldoParcelasInput
+                                : (saldoParcelas > 0 ? saldoParcelas : '')
+                            }
+                            onFocus={(e) => {
+                              setEditingSaldoParcelasInput(saldoParcelas > 0 ? String(saldoParcelas) : '');
+                              e.target.select();
+                            }}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setEditingSaldoParcelasInput(raw);
+                              const parsed = parseInt(raw, 10);
+                              if (!isNaN(parsed) && parsed >= 1) {
+                                handleSaldoParcelasChange(Math.min(120, parsed));
+                              }
+                            }}
+                            onBlur={() => {
+                              setEditingSaldoParcelasInput(null);
+                              if (!saldoParcelas || saldoParcelas < 1) {
+                                handleSaldoParcelasChange(1);
+                              }
+                            }}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-bold focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                          />
                         </div>
 
                         {/* 4. Saldo Restante (R$) */}

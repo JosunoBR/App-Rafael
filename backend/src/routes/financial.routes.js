@@ -20,6 +20,8 @@ router.delete('/entries/:id', requirePermission('financial:edit_entry', 'faturam
 router.post('/sync-orders', requirePermission('financial:edit_entry', 'faturamento'), (req, res) => financialController.syncOrders(req, res));
 router.post('/import-sheet', requirePermission('financial:create_entry', 'faturamento'), (req, res) => financialController.importSheet(req, res));
 router.post('/import-spreadsheet', requirePermission('financial:create_entry', 'faturamento'), (req, res) => financialController.importSpreadsheet(req, res));
+router.get('/recurring/:recorrenciaId/entries', requirePermission('financial:view', 'faturamento'), (req, res) => financialController.getRecurrenceEntries(req, res));
+router.post('/recurring/:recorrenciaId/terminate', requirePermission('financial:cancel_recurrence', 'faturamento'), (req, res) => financialController.terminateRecurrence(req, res));
 router.delete('/recurring/:recorrenciaId', requirePermission('financial:cancel_recurrence', 'faturamento'), (req, res) => financialController.cancelRecurrence(req, res));
 
 module.exports = router;

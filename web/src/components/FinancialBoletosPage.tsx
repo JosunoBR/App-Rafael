@@ -172,6 +172,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   const [editingEntry, setEditingEntry] = useState<FinancialEntry | null>(null);
   const [auditingEntry, setAuditingEntry] = useState<FinancialEntry | null>(null);
   const [entryToDelete, setEntryToDelete] = useState<FinancialEntry | null>(null);
+  const [renewalTemplate, setRenewalTemplate] = useState<FinancialEntry | null>(null);
 
   // Estados de Dados do Backend
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
@@ -686,20 +687,10 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     await loadFinancialData();
   };
 
-  // Encerramento de Recorrência Futura
-  const handleCancelRecurrence = async (item: FinancialEntry) => {
+  // Encerramento de Recorrência (abre o box com ponto de corte consciente)
+  const handleCancelRecurrence = (item: FinancialEntry) => {
     if (!item.recorrenciaId) return;
-    const confirmCancel = window.confirm(
-      `Deseja encerrar a série recorrente de "${item.descricao}"?\n\nAs previsões futuras em aberto deste contrato (a partir de hoje) serão canceladas e removidas do contas a pagar.`
-    );
-    if (!confirmCancel) return;
-    try {
-      await cancelRecurringSeriesInDb(item.recorrenciaId);
-      showToast('Série recorrente encerrada com sucesso! Previsões futuras removidas.', 'success');
-      await loadFinancialData();
-    } catch (err: any) {
-      showToast(err.message || 'Erro ao encerrar recorrência.', 'error');
-    }
+    setEditingEntry(item);
   };
 
   // Seleção Múltipla de Contas
@@ -1659,10 +1650,10 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                             )}
                             {item.recorrente && (
                               <span 
-                                className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 inline-flex items-center gap-0.5" 
-                                title="Despesa Fixa Recorrente contínua (Régua de 6 meses)"
+                                className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 inline-flex items-center gap-0.5" 
+                                title="Despesa Fixa Recorrente contínua"
                               >
-                                🔁 Recorrente 6M
+                                🔁 Custo Fixo
                               </span>
                             )}
                           </div>
@@ -1817,11 +1808,15 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
       {/* Modal de Lançamento ERP Padrão */}
       <FinancialEntryModal
         isOpen={isEntryModalOpen}
-        onClose={() => setIsEntryModalOpen(false)}
+        onClose={() => {
+          setIsEntryModalOpen(false);
+          setRenewalTemplate(null);
+        }}
         onSuccess={() => loadFinancialData()}
         suppliers={suppliers}
         stores={stores}
         showToast={showToast}
+        initialTemplate={renewalTemplate}
         onSaveEntry={async (payload) => {
           return await saveFinancialEntryToDb(payload);
         }}
@@ -2493,6 +2488,24 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
         entry={entryToDelete}
         currentUser={currentUser}
         onConfirm={handleConfirmDeleteEntry}
+      />
+
+      {/* Modal de Edição de Lançamento / Custo Fixo Recorrente */}
+      <FinancialEditModal
+        entry={editingEntry}
+        isOpen={Boolean(editingEntry)}
+        onClose={() => setEditingEntry(null)}
+        onSuccess={async () => {
+          await loadFinancialData();
+        }}
+        onSave={async (payload) => {
+          return await saveFinancialEntryToDb(payload);
+        }}
+        showToast={showToast}
+        onRenewRecurrence={(template) => {
+          setRenewalTemplate(template);
+          setIsEntryModalOpen(true);
+        }}
       />
 
     </div>

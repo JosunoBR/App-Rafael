@@ -701,24 +701,149 @@ class FinancialRepository {
   }
 
   /**
-   * Remove parcelas futuras em aberto de uma série recorrente (ex: encerramento de contrato)
+   * Atualiza campos cadastrais e valor de todas as parcelas não pagas de uma série recorrente
    */
-  async deleteFutureRecurringEntries(recorrenciaId, fromDate) {
+  async updateRecurringSeriesOpenEntries(recorrenciaId, { valor, descricao, fornecedor, categoria, observacao, lojaNome, empresa, formaPagamento, documentoRef }) {
+    if (!recorrenciaId) return 0;
+    const now = new Date().toISOString();
+    
+    const setClauses = [];
+    const params = [];
+
+    if (valor !== undefined && valor !== null) {
+      setClauses.push('valor = ?');
+      params.push(parseFloat(valor) || 0);
+    }
+    if (descricao !== undefined) {
+      setClauses.push('descricao = ?');
+      params.push(descricao);
+    }
+    if (fornecedor !== undefined) {
+      setClauses.push('fornecedor = ?');
+      params.push(fornecedor);
+    }
+    if (categoria !== undefined) {
+      setClauses.push('categoria = ?');
+      params.push(categoria.toUpperCase());
+    }
+    if (observacao !== undefined) {
+      setClauses.push('observacao = ?');
+      params.push(observacao);
+    }
+    if (lojaNome !== undefined) {
+      setClauses.push('lojaNome = ?');
+      params.push(lojaNome);
+    }
+    if (empresa !== undefined) {
+      setClauses.push('empresa = ?');
+      params.push(empresa);
+    }
+    if (formaPagamento !== undefined) {
+      setClauses.push('formaPagamento = ?');
+      params.push(formaPagamento.toUpperCase());
+    }
+    if (documentoRef !== undefined) {
+      setClauses.push('documentoRef = ?');
+      params.push(documentoRef);
+    }
+
+    if (setClauses.length === 0) return 0;
+
+    setClauses.push('updatedAt = ?');
+    params.push(now);
+
+    params.push(recorrenciaId);
+
+    const sql = `
+      UPDATE financial_entries 
+      SET ${setClauses.join(', ')} 
+      WHERE recorrenciaId = ? 
+        AND status != 'Pago'
+    `;
+
+    return await execute(sql, params);
+  }
+
+  /**
+   * Retorna todas as parcelas de uma série recorrente ordenadas por data de vencimento
+   */
+  async findByRecorrenciaId(recorrenciaId) {
+    if (!recorrenciaId) return [];
+    const sql = `
+      SELECT * FROM financial_entries 
+      WHERE recorrenciaId = ?
+      ORDER BY 
+        CASE 
+          WHEN dataVencimento LIKE '__/__/____' 
+          THEN substr(dataVencimento, 7, 4) || '-' || substr(dataVencimento, 4, 2) || '-' || substr(dataVencimento, 1, 2)
+          ELSE dataVencimento 
+        END ASC, 
+        parcelaNumero ASC
+    `;
+    const rows = await queryAll(sql, [recorrenciaId]);
+    return rows.map(r => this._hydrate(r));
+  }
+
+  /**
+   * Remove parcelas futuras em aberto de uma série recorrente a partir de uma data de corte
+   * e desliga a esteira contínua (recorrente = 0) para impedir geração futura.
+   */
+  async deleteFutureRecurringEntries(recorrenciaId, cutoffDate = null) {
+    if (!recorrenciaId) return { deletedCount: 0, success: false };
+
+    let isoCutoff = null;
+    if (cutoffDate) {
+      const cleanDate = String(cutoffDate).trim().substring(0, 10);
+      if (cleanDate.includes('/')) {
+        const [d, m, y] = cleanDate.split('/');
+        isoCutoff = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      } else if (cleanDate.includes('-')) {
+        isoCutoff = cleanDate;
+      }
+    }
+
+    let dateCondition = '';
+    const params = [recorrenciaId];
+
+    if (isoCutoff) {
+      dateCondition = `
+        AND (
+          CASE 
+            WHEN dataVencimento LIKE '__/__/____' 
+            THEN substr(dataVencimento, 7, 4) || '-' || substr(dataVencimento, 4, 2) || '-' || substr(dataVencimento, 1, 2)
+            ELSE dataVencimento 
+          END
+        ) >= ?
+      `;
+      params.push(isoCutoff);
+    }
+
+    // 1. Contabiliza quantas parcelas em aberto serão excluídas
+    const countRow = await queryOne(`
+      SELECT COUNT(*) as count 
+      FROM financial_entries 
+      WHERE recorrenciaId = ? 
+        AND status != 'Pago'
+        ${dateCondition}
+    `, params);
+    const deletedCount = countRow ? Number(countRow.count) : 0;
+
+    // 2. Remove as parcelas elegíveis (blindando estritamente status != 'Pago')
     await execute(`
       DELETE FROM financial_entries 
       WHERE recorrenciaId = ? 
-        AND dataVencimento >= ? 
         AND status != 'Pago'
-    `, [recorrenciaId, fromDate]);
+        ${dateCondition}
+    `, params);
 
-    // Marca os registros remanescentes da série como não-recorrentes para impedir reativação pela janela deslizante
+    // 3. Marca os registros remanescentes da série como não-recorrentes (desliga esteira contínua)
     await execute(`
       UPDATE financial_entries 
       SET recorrente = 0 
       WHERE recorrenciaId = ?
     `, [recorrenciaId]);
 
-    return true;
+    return { deletedCount, success: true };
   }
 
   _hydrate(row) {

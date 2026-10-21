@@ -767,6 +767,22 @@ export async function cancelRecurringSeriesInDb(recorrenciaId: string): Promise<
   });
 }
 
+export async function fetchRecurringSeriesEntriesFromDb(recorrenciaId: string): Promise<FinancialEntry[]> {
+  const res = await apiFetch(`/financial/recurring/${encodeURIComponent(recorrenciaId)}/entries`);
+  const json = await res.json();
+  return json.data || [];
+}
+
+export async function terminateRecurringSeriesInDb(recorrenciaId: string, cutoffDate?: string): Promise<{ deletedCount: number; success: boolean }> {
+  const res = await apiFetch(`/financial/recurring/${encodeURIComponent(recorrenciaId)}/terminate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cutoffDate })
+  });
+  const json = await res.json();
+  return json.data || { deletedCount: 0, success: true };
+}
+
 export async function syncFinancialOrdersInDb(): Promise<{ createdCount: number; message: string }> {
   const res = await apiFetch('/financial/sync-orders', {
     method: 'POST'

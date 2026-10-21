@@ -29,6 +29,7 @@ interface FinancialEntryModalProps {
   stores: StoreConfig[];
   showToast: (msg: string, type?: 'success' | 'info' | 'error') => void;
   onSaveEntry: (entryData: any) => Promise<any>;
+  initialTemplate?: Partial<FinancialEntry> | null;
 }
 
 const CATEGORIAS_CONFIG: { key: FinancialCategory; label: string; color: string }[] = [
@@ -58,7 +59,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   suppliers,
   stores,
   showToast,
-  onSaveEntry
+  onSaveEntry,
+  initialTemplate
 }) => {
   const [descricao, setDescricao] = useState('');
   const [fornecedor, setFornecedor] = useState('');
@@ -76,6 +78,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   const [editingValorTotal, setEditingValorTotal] = useState<string | null>(null);
   const [dataBase, setDataBase] = useState<string>(() => new Date().toISOString().substring(0, 10));
   const [parcelasCount, setParcelasCount] = useState<number>(3);
+  const [tipoRegraVencimento, setTipoRegraVencimento] = useState<'dia_mes' | 'intervalo_dias'>('dia_mes');
+  const [diaDoMes, setDiaDoMes] = useState<number>(() => new Date().getDate());
   const [intervaloDias, setIntervaloDias] = useState<number>(30);
   const [datasCustomizadas, setDatasCustomizadas] = useState<string[]>([]);
   const [parcelasValoresNum, setParcelasValoresNum] = useState<number[]>([]);
@@ -87,47 +91,125 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   const isSubmittingRef = useRef(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Limpar formulário ao abrir
+  // Sincroniza dataBase e diaDoMes de forma inteligente
+  const handleDataBaseChange = (newDate: string) => {
+    setDataBase(newDate);
+    if (newDate && tipoRegraVencimento === 'dia_mes') {
+      const parts = newDate.split('-');
+      if (parts.length === 3) {
+        const d = parseInt(parts[2], 10);
+        if (!isNaN(d) && d >= 1 && d <= 31) {
+          setDiaDoMes(d);
+        }
+      }
+    }
+  };
+
+  const handleDiaDoMesChange = (newDay: number) => {
+    setDiaDoMes(newDay);
+    if (dataBase && newDay >= 1 && newDay <= 31) {
+      const parts = dataBase.split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const lastDay = new Date(y, m, 0).getDate();
+        const actualD = Math.min(newDay, lastDay);
+        setDataBase(`${parts[0]}-${parts[1]}-${String(actualD).padStart(2, '0')}`);
+      }
+    }
+  };
+
+  // Limpar formulário ou pré-preencher com modelo ao abrir
   useEffect(() => {
     if (isOpen) {
       isSubmittingRef.current = false;
-      setDescricao('');
-      setFornecedor('');
-      setCategoria('FIXO');
-      setLojaSelecionada('ALS');
-      setEmpresa('ALS');
-      setFormaPagamento('BOLETO');
-      setBancoConta('Banco Santander');
-      setDocumentoRef('');
-      setObservacao('');
-      setModoParcelamento('a_vista');
-      setValorTotalNum(0);
-      setEditingValorTotal(null);
-      setDataBase(new Date().toISOString().substring(0, 10));
-      setParcelasCount(3);
-      setIntervaloDias(30);
-      setDatasCustomizadas([]);
-      setParcelasValoresNum([]);
-      setEditingParcelasMap({});
-      setLockedIndices(new Set());
-      setIsRecorrente(false);
-      setErrorMsg(null);
-    }
-  }, [isOpen]);
+      const today = new Date();
+      const todayIso = today.toISOString().substring(0, 10);
+      const todayDay = today.getDate();
 
-  // Recalcular datas customizadas quando altera a data base, parcelas ou intervalo
+      if (initialTemplate) {
+        setDescricao(initialTemplate.descricao || '');
+        setFornecedor(initialTemplate.fornecedor || '');
+        setCategoria((initialTemplate.categoria as FinancialCategory) || 'FIXO');
+        setLojaSelecionada(initialTemplate.lojaNome || initialTemplate.empresa || 'ALS');
+        setEmpresa((initialTemplate.empresa as any) || 'ALS');
+        setFormaPagamento((initialTemplate.formaPagamento as FinancialPaymentMethod) || 'BOLETO');
+        setBancoConta(initialTemplate.bancoConta || 'Banco Santander');
+        setDocumentoRef('');
+        setObservacao(initialTemplate.observacao ? `Renovação de contrato anterior: ${initialTemplate.observacao}` : 'Renovação de Custo Fixo');
+        setModoParcelamento('a_vista');
+        setValorTotalNum(Number(initialTemplate.valor) || 0);
+        setEditingValorTotal(null);
+        setDataBase(todayIso);
+        setDiaDoMes(todayDay);
+        setTipoRegraVencimento('dia_mes');
+        setParcelasCount(3);
+        setIntervaloDias(30);
+        setDatasCustomizadas([]);
+        setParcelasValoresNum([]);
+        setEditingParcelasMap({});
+        setLockedIndices(new Set());
+        setIsRecorrente(true);
+        setErrorMsg(null);
+      } else {
+        setDescricao('');
+        setFornecedor('');
+        setCategoria('FIXO');
+        setLojaSelecionada('ALS');
+        setEmpresa('ALS');
+        setFormaPagamento('BOLETO');
+        setBancoConta('Banco Santander');
+        setDocumentoRef('');
+        setObservacao('');
+        setModoParcelamento('a_vista');
+        setValorTotalNum(0);
+        setEditingValorTotal(null);
+        setDataBase(todayIso);
+        setDiaDoMes(todayDay);
+        setTipoRegraVencimento('dia_mes');
+        setParcelasCount(3);
+        setIntervaloDias(30);
+        setDatasCustomizadas([]);
+        setParcelasValoresNum([]);
+        setEditingParcelasMap({});
+        setLockedIndices(new Set());
+        setIsRecorrente(false);
+        setErrorMsg(null);
+      }
+    }
+  }, [isOpen, initialTemplate]);
+
+  // Recalcular datas customizadas quando altera a data base, parcelas, regra ou intervalo
   useEffect(() => {
-    if (modoParcelamento === 'parcelado') {
+    if (modoParcelamento === 'parcelado' && dataBase && parcelasCount > 0) {
       const dates: string[] = [];
-      const base = new Date(dataBase + 'T12:00:00Z');
-      for (let i = 0; i < parcelasCount; i++) {
-        const d = new Date(base);
-        d.setDate(d.getDate() + (i * intervaloDias));
-        dates.push(d.toISOString().substring(0, 10));
+      const parts = dataBase.split('-');
+      const baseYear = parseInt(parts[0], 10) || new Date().getFullYear();
+      const baseMonthIdx = (parseInt(parts[1], 10) || 1) - 1;
+      const baseDay = parseInt(parts[2], 10) || 1;
+
+      if (tipoRegraVencimento === 'dia_mes') {
+        const effectiveDay = (diaDoMes >= 1 && diaDoMes <= 31) ? diaDoMes : baseDay;
+        for (let i = 0; i < parcelasCount; i++) {
+          const target = new Date(baseYear, baseMonthIdx + i, 1);
+          const y = target.getFullYear();
+          const m = target.getMonth();
+          const lastDay = new Date(y, m + 1, 0).getDate();
+          const actualDay = Math.min(effectiveDay, lastDay);
+          dates.push(`${y}-${String(m + 1).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`);
+        }
+      } else {
+        const base = new Date(`${dataBase}T12:00:00Z`);
+        const safeInterval = intervaloDias >= 1 ? intervaloDias : 30;
+        for (let i = 0; i < parcelasCount; i++) {
+          const d = new Date(base);
+          d.setDate(d.getDate() + (i * safeInterval));
+          dates.push(d.toISOString().substring(0, 10));
+        }
       }
       setDatasCustomizadas(dates);
     }
-  }, [dataBase, parcelasCount, intervaloDias, modoParcelamento]);
+  }, [dataBase, parcelasCount, tipoRegraVencimento, diaDoMes, intervaloDias, modoParcelamento]);
 
   // Gerar / inicializar valores padrão de parcelas ao alterar valorTotalNum, parcelasCount ou modo
   // Distribuição precisa em centavos: rateia igualmente e atribui centavos residuais na 1ª parcela
@@ -343,6 +425,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
         valorTotal: valorTotalNum,
         valor: valorTotalNum,
         parcelasCount: modoParcelamento === 'parcelado' ? parcelasCount : 1,
+        tipoRegraVencimento: modoParcelamento === 'parcelado' ? tipoRegraVencimento : 'dia_mes',
+        diaDoMes: modoParcelamento === 'parcelado' ? diaDoMes : undefined,
         intervaloDias: modoParcelamento === 'parcelado' ? intervaloDias : 30,
         primeiroVencimento: dataBase,
         dataVencimento: dataBase,
@@ -570,11 +654,11 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4">
               {/* Valor Total */}
-              <div className="sm:col-span-4">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4">
-                  Valor Total do Lançamento (R$) <span className="text-rose-500">*</span>
+              <div className={modoParcelamento === 'parcelado' ? 'sm:col-span-3' : 'sm:col-span-4'}>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4 truncate">
+                  Valor Total (R$) <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold pointer-events-none">R$</span>
@@ -622,54 +706,108 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
               </div>
 
               {/* Data de Vencimento Base / 1ª Parcela */}
-              <div className="sm:col-span-4">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4">
+              <div className={modoParcelamento === 'parcelado' ? 'sm:col-span-3' : 'sm:col-span-4'}>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4 truncate">
                   {modoParcelamento === 'parcelado' ? '1º Vencimento' : 'Data de Vencimento'} <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="date"
                   value={dataBase}
-                  onChange={e => setDataBase(e.target.value)}
+                  onChange={e => handleDataBaseChange(e.target.value)}
                   className="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                   required
                 />
               </div>
 
-              {/* Se for parcelado: Quantidade e Intervalo */}
+              {/* Se for parcelado: Quantidade, Regra e Dia/Intervalo */}
               {modoParcelamento === 'parcelado' ? (
                 <>
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4 truncate">
                       Parcelas
                     </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={120}
+                      step={1}
+                      value={parcelasCount === 0 ? '' : parcelasCount}
+                      onChange={e => {
+                        const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                        if (!isNaN(val)) {
+                          setParcelasCount(Math.min(120, Math.max(0, val)));
+                        }
+                      }}
+                      onBlur={() => {
+                        if (parcelasCount < 2) {
+                          setParcelasCount(2);
+                        }
+                      }}
+                      className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4 truncate">
+                      Vencimento
+                    </label>
                     <select
-                      value={parcelasCount}
-                      onChange={e => setParcelasCount(Math.max(2, parseInt(e.target.value, 10) || 2))}
-                      className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                      value={tipoRegraVencimento}
+                      onChange={e => setTipoRegraVencimento(e.target.value as 'dia_mes' | 'intervalo_dias')}
+                      className="w-full h-11 px-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     >
-                      {Array.from({ length: 23 }, (_, i) => i + 2).map(n => (
-                        <option key={n} value={n}>{n}x</option>
-                      ))}
+                      <option value="dia_mes">Dia do Mês</option>
+                      <option value="intervalo_dias">Intervalo Dias</option>
                     </select>
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4">
-                      Intervalo (Dias)
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 h-4 truncate">
+                      {tipoRegraVencimento === 'dia_mes' ? 'Dia do Mês' : 'Intervalo (Dias)'}
                     </label>
-                    <select
-                      value={intervaloDias}
-                      onChange={e => setIntervaloDias(parseInt(e.target.value, 10) || 30)}
-                      className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value={10}>10 dias</option>
-                      <option value={15}>15 dias</option>
-                      <option value={21}>21 dias</option>
-                      <option value={28}>28 dias</option>
-                      <option value={30}>30 dias</option>
-                      <option value={45}>45 dias</option>
-                      <option value={60}>60 dias</option>
-                    </select>
+                    {tipoRegraVencimento === 'dia_mes' ? (
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        step={1}
+                        value={diaDoMes === 0 ? '' : diaDoMes}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                          if (!isNaN(val)) {
+                            handleDiaDoMesChange(Math.min(31, Math.max(0, val)));
+                          }
+                        }}
+                        onBlur={() => {
+                          if (diaDoMes < 1) {
+                            handleDiaDoMesChange(1);
+                          } else if (diaDoMes > 31) {
+                            handleDiaDoMesChange(31);
+                          }
+                        }}
+                        className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                      />
+                    ) : (
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        step={1}
+                        value={intervaloDias === 0 ? '' : intervaloDias}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                          if (!isNaN(val)) {
+                            setIntervaloDias(Math.min(365, Math.max(0, val)));
+                          }
+                        }}
+                        onBlur={() => {
+                          if (intervaloDias < 1) {
+                            setIntervaloDias(30);
+                          }
+                        }}
+                        className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                      />
+                    )}
                   </div>
                 </>
               ) : (

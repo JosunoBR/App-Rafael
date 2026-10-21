@@ -244,6 +244,8 @@ class FinancialService {
       valorTotal,
       valor, // para parcela única
       parcelasCount = 1,
+      tipoRegraVencimento = 'dia_mes',
+      diaDoMes,
       intervaloDias = 30,
       primeiroVencimento,
       dataVencimento,
@@ -432,6 +434,30 @@ class FinancialService {
       let dueBr = '';
       if (Array.isArray(datasCustomizadas) && datasCustomizadas[i - 1]) {
         dueBr = toBrDate(datasCustomizadas[i - 1]);
+      } else if (tipoRegraVencimento === 'dia_mes') {
+        let baseDay = 1;
+        let baseMonthIdx = 0;
+        let baseYear = new Date().getFullYear();
+        if (dataBase.includes('/')) {
+          const [d, m, y] = dataBase.split('/');
+          baseDay = parseInt(d, 10) || 1;
+          baseMonthIdx = (parseInt(m, 10) || 1) - 1;
+          baseYear = parseInt(y, 10) || baseYear;
+        } else if (dataBase.includes('-')) {
+          const [y, m, d] = dataBase.split('-');
+          baseDay = parseInt(d, 10) || 1;
+          baseMonthIdx = (parseInt(m, 10) || 1) - 1;
+          baseYear = parseInt(y, 10) || baseYear;
+        }
+        const effectiveDay = (diaDoMes && parseInt(diaDoMes, 10) >= 1 && parseInt(diaDoMes, 10) <= 31)
+          ? parseInt(diaDoMes, 10)
+          : baseDay;
+        const targetDate = new Date(baseYear, baseMonthIdx + (i - 1), 1);
+        const y = targetDate.getFullYear();
+        const m = targetDate.getMonth();
+        const lastDayOfTargetMonth = new Date(y, m + 1, 0).getDate();
+        const actualDay = Math.min(effectiveDay, lastDayOfTargetMonth);
+        dueBr = `${String(actualDay).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`;
       } else {
         const d = new Date(baseDateObj);
         d.setDate(d.getDate() + ((i - 1) * parseInt(intervaloDias, 10)));
@@ -514,8 +540,18 @@ class FinancialService {
       throw new Error('Lançamento não encontrado.');
     }
 
+    // 🛡️ Se o lançamento já estiver PAGO, blinda o valor contábil original e o valor liquidado
+    const isAlreadyPaid = before.status === 'Pago';
+    if (isAlreadyPaid) {
+      data.valor = before.valor;
+      if (data.valorPago === undefined || data.valorPago === null) {
+        data.valorPago = before.valorPago;
+      }
+    }
+
     // 🛡️ Se estiver alterando dados chave (valor, vencimento, documentoRef, descricao), valida duplicidade contra outros registros
-    if (data.descricao || data.valor !== undefined || data.dataVencimento || data.documentoRef) {
+    // Se for uma atualização de série com escopo 'all_open', a checagem não deve bloquear outras parcelas da própria série
+    if ((data.descricao || data.valor !== undefined || data.dataVencimento || data.documentoRef) && data.escopoRecorrencia !== 'all_open') {
       const duplicate = await financialRepo.findDuplicate({
         descricao: data.descricao || before.descricao,
         valor: data.valor !== undefined ? data.valor : before.valor,
@@ -534,6 +570,40 @@ class FinancialService {
         err.code = 'DUPLICATE_ENTRY';
         err.conflictEntry = duplicate;
         throw err;
+      }
+    }
+
+    // ⚡ Escopo Recorrente: Propaga reajuste de valor e cadastro para todas as parcelas EM ABERTO da série
+    if (data.escopoRecorrencia === 'all_open' && before.recorrenciaId) {
+      await financialRepo.updateRecurringSeriesOpenEntries(before.recorrenciaId, {
+        valor: data.novoValorRecorrencia !== undefined ? data.novoValorRecorrencia : data.valor,
+        descricao: data.descricao,
+        fornecedor: data.fornecedor,
+        categoria: data.categoria,
+        observacao: data.observacao,
+        lojaNome: data.lojaNome,
+        empresa: data.empresa,
+        formaPagamento: data.formaPagamento,
+        documentoRef: data.documentoRef
+      });
+
+      if (currentUser) {
+        const valorPropagado = data.novoValorRecorrencia !== undefined ? data.novoValorRecorrencia : data.valor;
+        await financialAuditRepo.create({
+          entryId: id,
+          orderId: null,
+          numeroPedido: '',
+          descricao: before.descricao || '',
+          usuarioId: currentUser.id || null,
+          usuarioNome: currentUser.nome || 'Operador',
+          usuarioRole: currentUser.role || 'faturamento',
+          acao: 'UPDATE_RECURRING_SERIES',
+          campoAlterado: 'valor',
+          valorAnterior: before.valor,
+          valorNovo: valorPropagado,
+          snapshotJson: { recorrenciaId: before.recorrenciaId, novoValor: valorPropagado },
+          observacao: `Reajuste contratual em lote: parcelas a pagar da série ${before.recorrenciaId} atualizadas para R$ ${Number(valorPropagado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (parcelas pagas preservadas).`
+        }).catch(err => console.error('Erro ao auditar atualização de série recorrente:', err));
       }
     }
 
@@ -1316,12 +1386,69 @@ class FinancialService {
   }
 
   /**
-   * Cancela uma série recorrente (remove previsões futuras em aberto a partir de hoje)
+   * Retorna todas as parcelas de uma série recorrente (pagas e em aberto)
    */
-  async cancelRecurringSeries(recorrenciaId, fromDate = null) {
+  async getRecurringSeriesEntries(recorrenciaId) {
     if (!recorrenciaId) throw new Error('Identificador da recorrência é obrigatório.');
-    const from = fromDate || new Date().toISOString().substring(0, 10);
-    return await financialRepo.deleteFutureRecurringEntries(recorrenciaId, from);
+    const entries = await financialRepo.findByRecorrenciaId(recorrenciaId);
+    const now = new Date();
+    const todayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).getTime();
+    return entries.map(e => ({
+      ...e,
+      dataVencimento: toBrDate(e.dataVencimento),
+      dataPagamento: e.dataPagamento ? toBrDate(e.dataPagamento) : null,
+      status: this._computeStatus(e, todayTimestamp)
+    }));
+  }
+
+  /**
+   * Encerra conscientemente uma série recorrente a partir de uma data de corte.
+   * Remove apenas os boletos em aberto (status != 'Pago') daquela data em diante,
+   * preserva os boletos anteriores e já quitados, e desativa a geração de novos meses.
+   */
+  async terminateRecurringSeries(recorrenciaId, cutoffDate = null, currentUser = null) {
+    if (!recorrenciaId) throw new Error('Identificador da recorrência é obrigatório.');
+    
+    // Busca informações da série antes da exclusão para registro de auditoria
+    const seriesEntries = await financialRepo.findByRecorrenciaId(recorrenciaId);
+    const sample = seriesEntries[0] || {};
+
+    const result = await financialRepo.deleteFutureRecurringEntries(recorrenciaId, cutoffDate);
+
+    flushDatabaseToDisk();
+
+    // Auditoria de encerramento consciente
+    if (currentUser) {
+      await financialAuditRepo.create({
+        entryId: sample.id || null,
+        orderId: null,
+        numeroPedido: '',
+        descricao: sample.descricao || 'Custo Fixo Recorrente',
+        usuarioId: currentUser.id || null,
+        usuarioNome: currentUser.nome || 'Operador',
+        usuarioRole: currentUser.role || 'faturamento',
+        acao: 'TERMINATE_RECURRENCE',
+        campoAlterado: 'recorrenciaId',
+        valorAnterior: recorrenciaId,
+        valorNovo: 'ENCERRADA',
+        snapshotJson: {
+          recorrenciaId,
+          cutoffDate,
+          deletedCount: result.deletedCount,
+          totalBefore: seriesEntries.length
+        },
+        observacao: `Recorrência "${sample.descricao}" encerrada a partir de ${cutoffDate || 'hoje'}. ${result.deletedCount} parcelas futuras em aberto foram removidas e novos meses não serão mais gerados.`
+      }).catch(err => console.error('Erro ao registrar auditoria de encerramento de recorrência:', err));
+    }
+
+    return result;
+  }
+
+  /**
+   * Cancela uma série recorrente (compatibilidade)
+   */
+  async cancelRecurringSeries(recorrenciaId, fromDate = null, currentUser = null) {
+    return await this.terminateRecurringSeries(recorrenciaId, fromDate, currentUser);
   }
 }
 

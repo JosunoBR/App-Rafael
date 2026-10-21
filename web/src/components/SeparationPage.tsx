@@ -1561,8 +1561,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 )}
                 {/* 6. Total Comprado */}
                 {isColVisible('comprado') && (
-                  <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-slate-900 min-w-[75px]">
+                  <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-slate-900 min-w-[75px]" title="Total de unidades compradas">
                     {totalPecasGeralBruto.toLocaleString('pt-BR')}
+                  </td>
+                )}
+                {/* 6.1 Total Recebido na Doca */}
+                {isColVisible('recebido') && (
+                  <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-slate-50 dark:bg-slate-900 min-w-[90px]" title="Total físico recebido na doca">
+                    {totalPecasRecebidasGeral.toLocaleString('pt-BR')}
                   </td>
                 )}
                 {/* 7. Estoque CD */}

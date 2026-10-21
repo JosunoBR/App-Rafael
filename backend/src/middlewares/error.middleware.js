@@ -16,6 +16,10 @@ function errorHandler(err, req, res, next) {
   if (err.conflictDetails) response.conflictDetails = err.conflictDetails;
   if (err.suggestedNextCode) response.suggestedNextCode = err.suggestedNextCode;
   if (err.conflictProduct) response.conflictProduct = err.conflictProduct;
+  if (err.lastModifier) response.lastModifier = err.lastModifier;
+  if (err.lastModifiedAt) response.lastModifiedAt = err.lastModifiedAt;
+  if (err.currentVersion !== undefined) response.currentVersion = err.currentVersion;
+  if (err.incomingVersion !== undefined) response.incomingVersion = err.incomingVersion;
 
   if (config.NODE_ENV === 'development') {
     response.stack = err.stack;

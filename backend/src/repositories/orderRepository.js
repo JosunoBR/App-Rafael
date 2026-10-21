@@ -172,6 +172,18 @@ class OrderRepository {
     const headerDesc = Number(order.header.descontoComercialTotal || 0);
     const totalDesconto = totalDescontoItens > 0 ? totalDescontoItens : headerDesc;
     const totalLiquido = Number(Math.max(0, totalBruto - totalDesconto).toFixed(2));
+
+    // 🛡️ Se totalIpi for zero nos itens mas houver alíquota no cabeçalho ou fiscalConfig
+    if (totalIpi === 0) {
+      const headerIpi = Number(order.header?.aliquotaIpi || 0);
+      const fiscalIpi = Number(fiscal?.ipiAliquota || 0);
+      const aliqIpi = headerIpi > 0 ? headerIpi : fiscalIpi;
+      if (aliqIpi > 0) {
+        const pct = aliqIpi > 1 ? aliqIpi / 100 : aliqIpi;
+        totalIpi = Number((totalLiquido * pct).toFixed(2));
+      }
+    }
+
     // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Comercial Base
     const totalBase = Number((totalBruto + totalIpi - totalDesconto).toFixed(2));
 

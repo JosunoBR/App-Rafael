@@ -376,9 +376,11 @@ export function App() {
     } else if (status === 403) {
       title = 'Operação recusada';
       guidance = 'Seu usuário não possui permissão para concluir esta ação. A alteração não foi salva.';
-    } else if (status === 409 || code.includes('CONFLICT')) {
-      title = 'Dados atualizados por outra pessoa';
-      guidance = 'Atualize o pedido para carregar a versão mais recente antes de tentar novamente.';
+    } else if (status === 409 || code.includes('CONFLICT') || code.includes('CONCURRENT')) {
+      title = '⚠️ Pedido alterado por outra pessoa';
+      guidance = err?.lastModifier
+        ? `Alterado e salvo recentemente por ${err.lastModifier}${err.lastModifiedAt ? ` às ${err.lastModifiedAt}` : ''}. Recarregue o pedido para carregar a versão mais recente.`
+        : 'Atualize o pedido para carregar a versão mais recente antes de tentar novamente.';
     } else if (isOfflineError(err)) {
       title = 'Servidor indisponível';
       guidance = 'Verifique a conexão. Etapas operacionais não são concluídas apenas no navegador.';
@@ -1854,6 +1856,52 @@ export function App() {
       }
     } catch (err: any) {
       console.error('Erro ao salvar pedido no servidor:', err);
+      if (err?.code === 'ORDER_CONCURRENT_MODIFICATION' || (err?.status === 409 && err?.code === 'ORDER_CONCURRENT_MODIFICATION')) {
+        const modifier = err.lastModifier || 'outro operador';
+        const time = err.lastModifiedAt ? ` às ${err.lastModifiedAt}` : '';
+        triggerIOSAlert({
+          title: '⚠️ Conflito de Edição Simultânea',
+          message: `Atenção: Este pedido foi alterado e salvo no servidor por ${modifier}${time} enquanto você o editava.\n\nPara não sobrescrever acidentalmente as alterações de ${modifier}, escolha uma das opções:`,
+          type: 'warning',
+          confirmText: '🔄 Recarregar Dados Mais Recentes',
+          actionText: '⚠️ Sobrescrever Mesmo Assim',
+          onConfirm: async () => {
+            const refreshedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+            setSavedOrders(refreshedOrders);
+            const latest = refreshedOrders.find(o => o.header.id === order.header.id);
+            if (latest) {
+              setOrder({
+                ...latest,
+                items: ensureTrailingBlankItem(latest.items || [], fiscalConfig, storeConfigs)
+              });
+              triggerIOSBanner(`Pedido recarregado com a versão mais recente de ${modifier}!`, 'info');
+            }
+          },
+          onAction: async () => {
+            try {
+              const forceRes = await saveOrderToDb(orderWithInstallments, { autoAssignNextOnConflict: false, forceOverwrite: true });
+              const effectiveOrder: PurchaseOrder = forceRes?.order ? {
+                ...forceRes.order,
+                items: ensureTrailingBlankItem(validItems, fiscalConfig, storeConfigs)
+              } : orderWithInstallments;
+              try { saveOrderToHistory(effectiveOrder); } catch {}
+              const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+              setSavedOrders(updatedOrders);
+              setOrder(effectiveOrder);
+              clearLocalSavePending();
+              triggerIOSBanner(`Pedido ${effectiveOrder.header.numeroPedido} salvo (sobrescrita confirmada)!`, 'success');
+            } catch (forceErr: any) {
+              triggerIOSAlert({
+                title: 'Erro ao Forçar Gravação',
+                message: forceErr?.message || 'Falha ao forçar o salvamento do pedido.',
+                type: 'error',
+                confirmText: 'OK'
+              });
+            }
+          }
+        });
+        return;
+      }
       if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
         const nextFree = err.suggestedNextNumber || await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(savedOrders));
         const conflictForn = err.conflictDetails?.conflictFornecedor;
@@ -1987,6 +2035,53 @@ export function App() {
       clearLocalSavePending();
     } catch (err: any) {
       console.error('Erro ao fechar pedido no servidor:', err);
+      if (err?.code === 'ORDER_CONCURRENT_MODIFICATION' || (err?.status === 409 && err?.code === 'ORDER_CONCURRENT_MODIFICATION')) {
+        const modifier = err.lastModifier || 'outro operador';
+        const time = err.lastModifiedAt ? ` às ${err.lastModifiedAt}` : '';
+        triggerIOSAlert({
+          title: '⚠️ Conflito de Edição Simultânea',
+          message: `Atenção: Este pedido foi alterado e salvo no servidor por ${modifier}${time} enquanto você o finalizava.\n\nPara não sobrescrever acidentalmente as alterações de ${modifier}, escolha uma das opções:`,
+          type: 'warning',
+          confirmText: '🔄 Recarregar Dados Mais Recentes',
+          actionText: '⚠️ Fechar e Sobrescrever Mesmo Assim',
+          onConfirm: async () => {
+            const refreshedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+            setSavedOrders(refreshedOrders);
+            const latest = refreshedOrders.find(o => o.header.id === order.header.id);
+            if (latest) {
+              setOrder({
+                ...latest,
+                items: ensureTrailingBlankItem(latest.items || [], fiscalConfig, storeConfigs)
+              });
+              triggerIOSBanner(`Pedido recarregado com a versão mais recente de ${modifier}!`, 'info');
+            }
+          },
+          onAction: async () => {
+            try {
+              const forceRes = await saveOrderToDb(orderWithInstallments, { autoAssignNextOnConflict: false, forceOverwrite: true });
+              const effectiveNum = forceRes?.newNumber || targetOrderNumber;
+              const orderToPersist = forceRes?.order || {
+                ...orderWithInstallments,
+                header: { ...orderWithInstallments.header, numeroPedido: effectiveNum }
+              };
+              try { saveOrderToHistory(orderToPersist); } catch {}
+              const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+              setSavedOrders(updatedOrders);
+              clearCurrentDraft();
+              triggerIOSBanner(`Pedido ${effectiveNum} FECHADO (sobrescrita confirmada)!`, 'success');
+              clearLocalSavePending();
+            } catch (forceErr: any) {
+              triggerIOSAlert({
+                title: 'Erro ao Forçar Fechamento',
+                message: forceErr?.message || 'Falha ao forçar o fechamento do pedido.',
+                type: 'error',
+                confirmText: 'OK'
+              });
+            }
+          }
+        });
+        return;
+      }
       if (err?.status === 409 || err?.code === 'ORDER_NUMBER_CONFLICT') {
         const nextFree = err.suggestedNextNumber || await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(savedOrders));
         const conflictForn = err.conflictDetails?.conflictFornecedor;

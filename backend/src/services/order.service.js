@@ -99,13 +99,43 @@ class OrderService {
 
       const headerDesc = Number(orderData.header.descontoComercialTotal || 0);
       const totalDesconto = descSum > 0 ? descSum : headerDesc;
+
+      // 🛡️ Se não houver IPI destacado item a item, verifica se há alíquota global no cabeçalho ou fiscalConfig
+      if (ipiSum === 0) {
+        const headerIpi = Number(orderData.header?.aliquotaIpi || 0);
+        const fiscalIpi = Number(orderData.fiscalConfig?.ipiAliquota || 0);
+        const aliqIpi = headerIpi > 0 ? headerIpi : fiscalIpi;
+        if (aliqIpi > 0) {
+          const pct = aliqIpi > 1 ? aliqIpi / 100 : aliqIpi;
+          const baseCalculo = Math.max(0, brutoSum - totalDesconto);
+          ipiSum = Number((baseCalculo * pct).toFixed(2));
+        }
+      }
+
       // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Geral
       const expectedTotal = Number(Math.max(0, brutoSum + ipiSum - totalDesconto).toFixed(2));
+
+      // Se houver ST destacada ou alíquota global de ST
+      let stSum = 0;
+      orderData.items.forEach(item => {
+        if (item.ruptura) return;
+        stSum += Number(item.valorSt || 0);
+      });
+      if (stSum === 0 && Number(orderData.header?.aliquotaSt || 0) > 0) {
+        const aliqSt = Number(orderData.header.aliquotaSt);
+        const pctSt = aliqSt > 1 ? aliqSt / 100 : aliqSt;
+        const baseSt = Math.max(0, brutoSum + ipiSum - totalDesconto);
+        stSum = Number((baseSt * pctSt).toFixed(2));
+      }
 
       // Se ambas as somas forem expressivas (> 1 real) e a discrepância for superior a 1 real
       if (sumMercadorias > 1 && expectedTotal > 1) {
         const diff = Math.abs(sumMercadorias - expectedTotal);
-        if (diff > 1.0 && !orderData.header.percentualDescontoOff && !orderData.header.descontoComercialTotal) {
+        const diffWithSt = Math.abs(sumMercadorias - (expectedTotal + stSum));
+        const rawNf = Number(orderData.header?.valorNotaFiscalEntregue || 0);
+        const diffWithNf = rawNf > 0 ? Math.abs(sumMercadorias - rawNf) : 999999;
+
+        if (diff > 1.0 && diffWithSt > 1.0 && diffWithNf > 1.0 && !orderData.header.percentualDescontoOff && !orderData.header.descontoComercialTotal) {
           const warnMsg = `Divergência Financeira: A soma das parcelas de produtos (R$ ${sumMercadorias.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) difere do total calculado do pedido (R$ ${expectedTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Diferença de R$ ${diff.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`;
           console.warn(`[Auditoria Financeira] Divergência no pedido ${orderData.header.numeroPedido}: ${warnMsg}`);
           warnings.push({
@@ -144,6 +174,42 @@ class OrderService {
     let isEditingClosed = false;
     const currentId = orderData.header.id;
     const existingForAuthorization = currentId ? await orderRepository.findById(currentId) : null;
+
+    // 🛡️ Alerta e Proteção contra Concorrência e Sobrescrita Simultânea
+    if (currentId && existingForAuthorization && existingForAuthorization.header) {
+      const incomingVersion = orderData.header?.version !== undefined && orderData.header?.version !== null
+        ? Number(orderData.header.version)
+        : null;
+      const currentVersion = Number(existingForAuthorization.header.version || 1);
+      const isForceOverwrite = Boolean(options.forceOverwrite || orderData.forceOverwrite);
+
+      if (incomingVersion !== null && currentVersion > incomingVersion && !isForceOverwrite) {
+        let lastModifierName = 'outro operador';
+        let lastModifiedAt = '';
+        try {
+          const { queryOne } = require('../config/database');
+          const lastLog = await queryOne(
+            'SELECT usuarioNome, usuarioRole, createdAt FROM order_distribution_logs WHERE orderId = ? ORDER BY createdAt DESC LIMIT 1',
+            [currentId]
+          );
+          if (lastLog) {
+            lastModifierName = `${lastLog.usuarioNome}${lastLog.usuarioRole ? ` (${lastLog.usuarioRole})` : ''}`;
+            lastModifiedAt = lastLog.createdAt ? new Date(lastLog.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+          }
+        } catch {}
+
+        const err = new Error(
+          `Conflito de Concorrência: Este pedido foi alterado e salvo no servidor por ${lastModifierName}${lastModifiedAt ? ` às ${lastModifiedAt}` : ''} enquanto você o editava. Recarregue os dados mais recentes para não perder alterações.`
+        );
+        err.statusCode = 409;
+        err.code = 'ORDER_CONCURRENT_MODIFICATION';
+        err.lastModifier = lastModifierName;
+        err.lastModifiedAt = lastModifiedAt;
+        err.currentVersion = currentVersion;
+        err.incomingVersion = incomingVersion;
+        throw err;
+      }
+    }
     const role = currentUser?.role;
     const isUnrestricted = currentUser && (
       role === 'diretoria' || role === 'root' || currentUser.id === 'usr_root' ||

@@ -10,6 +10,10 @@ export class ApiError extends Error {
   conflictDetails?: any;
   suggestedNextCode?: string;
   conflictProduct?: any;
+  lastModifier?: string;
+  lastModifiedAt?: string;
+  currentVersion?: number;
+  incomingVersion?: number;
 
   constructor(
     message: string, 
@@ -21,6 +25,10 @@ export class ApiError extends Error {
       conflictDetails?: any;
       suggestedNextCode?: string;
       conflictProduct?: any;
+      lastModifier?: string;
+      lastModifiedAt?: string;
+      currentVersion?: number;
+      incomingVersion?: number;
     }
   ) {
     super(message);
@@ -32,6 +40,10 @@ export class ApiError extends Error {
     if (extra?.conflictDetails) this.conflictDetails = extra.conflictDetails;
     if (extra?.suggestedNextCode) this.suggestedNextCode = extra.suggestedNextCode;
     if (extra?.conflictProduct) this.conflictProduct = extra.conflictProduct;
+    if (extra?.lastModifier) this.lastModifier = extra.lastModifier;
+    if (extra?.lastModifiedAt) this.lastModifiedAt = extra.lastModifiedAt;
+    if (extra?.currentVersion !== undefined) this.currentVersion = extra.currentVersion;
+    if (extra?.incomingVersion !== undefined) this.incomingVersion = extra.incomingVersion;
   }
 }
 
@@ -159,7 +171,11 @@ async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Re
         suggestedNextNumber: errorData?.suggestedNextNumber,
         conflictDetails: errorData?.conflictDetails,
         suggestedNextCode: errorData?.suggestedNextCode,
-        conflictProduct: errorData?.conflictProduct
+        conflictProduct: errorData?.conflictProduct,
+        lastModifier: errorData?.lastModifier,
+        lastModifiedAt: errorData?.lastModifiedAt,
+        currentVersion: errorData?.currentVersion,
+        incomingVersion: errorData?.incomingVersion
       });
     }
     return res;
@@ -296,11 +312,12 @@ export async function importOrderPackageToDb(
 
 export async function saveOrderToDb(
   order: PurchaseOrder, 
-  options: { autoAssignNextOnConflict?: boolean } = { autoAssignNextOnConflict: true }
+  options: { autoAssignNextOnConflict?: boolean; forceOverwrite?: boolean } = { autoAssignNextOnConflict: true }
 ): Promise<SaveOrderResult> {
   const payload = {
     ...order,
-    autoAssignNextOnConflict: options.autoAssignNextOnConflict !== false
+    autoAssignNextOnConflict: options.autoAssignNextOnConflict !== false,
+    forceOverwrite: Boolean(options.forceOverwrite)
   };
 
   try {
@@ -316,7 +333,8 @@ export async function saveOrderToDb(
       order: data.order || order,
       numberReassigned: Boolean(data.numberReassigned),
       originalNumber: data.originalNumber,
-      newNumber: data.newNumber
+      newNumber: data.newNumber,
+      warnings: data.warnings || []
     };
   } catch (err: any) {
     if (err instanceof ApiError && err.status === 409 && (options.autoAssignNextOnConflict !== false)) {

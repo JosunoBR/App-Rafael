@@ -21,7 +21,11 @@ class OrderController {
 
   async save(req, res, next) {
     try {
-      const result = await orderService.saveOrder(req.body, req.user);
+      const options = {
+        forceOverwrite: req.body?.forceOverwrite === true || req.query?.forceOverwrite === 'true',
+        autoAssignNextOnConflict: req.body?.autoAssignNextOnConflict !== false
+      };
+      const result = await orderService.saveOrder(req.body, req.user, options);
       return res.json(result);
     } catch (err) {
       next(err);

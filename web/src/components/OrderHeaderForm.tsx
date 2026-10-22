@@ -437,8 +437,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       const normalizedDate = toIsoDate(value) || value;
       onChange({
         ...header,
-        [field]: normalizedDate,
-        datasVencimentoPersonalizadas: undefined
+        [field]: normalizedDate
       });
       return;
     }

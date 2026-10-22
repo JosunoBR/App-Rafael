@@ -857,6 +857,9 @@ export function App() {
 
   // Handlers for Order Header
   const handleHeaderChange = (updatedHeader: typeof order.header) => {
+    let rescheduleNotice: { diffDays: number; adjustedCount: number; newDate: string } | null = null;
+    let orderToPersist: PurchaseOrder | null = null;
+
     setOrder(prev => {
       let newFiscal = prev.fiscalConfig || fiscalConfig;
       let updatedItems = prev.items;
@@ -953,25 +956,37 @@ export function App() {
             }
           );
           newOrder = rescheduleRes.updatedOrder;
-          saveCurrentOrder(newOrder);
-          saveOrderToHistory(newOrder);
-          setSavedOrders(loadSavedOrdersList());
-          saveOrderSilently(newOrder).catch(() => {});
-          const daysText = rescheduleRes.diffDays !== 0 ? ` (${rescheduleRes.diffDays > 0 ? '+' : ''}${rescheduleRes.diffDays} dias)` : '';
-          const boletosMsg = rescheduleRes.installmentsAdjustedCount > 0 
-            ? ` ${rescheduleRes.installmentsAdjustedCount} boleto(s) em aberto ajustado(s)!` 
-            : ' Boletos recalculados!';
-          showToast(`Previsão de entrega atualizada para ${toBrDate(updatedHeader.dataEntregaPrevista) || 'A definir'}${daysText}.${boletosMsg}`, 'info');
-        } catch {
-          saveCurrentOrder(newOrder);
-          saveOrderToHistory(newOrder);
-          setSavedOrders(loadSavedOrdersList());
-          saveOrderSilently(newOrder).catch(() => {});
+          rescheduleNotice = {
+            diffDays: rescheduleRes.diffDays,
+            adjustedCount: rescheduleRes.installmentsAdjustedCount,
+            newDate: updatedHeader.dataEntregaPrevista || ''
+          };
+        } catch (err) {
+          console.warn('Aviso ao reagendar boletos na alteração de cabeçalho:', err);
         }
+        orderToPersist = newOrder;
       }
 
       return newOrder;
     });
+
+    // 🛡️ Efeitos colaterais e persistência executados estritamente FORA do render/updater do React 19
+    if (orderToPersist) {
+      const targetOrder: PurchaseOrder = orderToPersist;
+      saveCurrentOrder(targetOrder);
+      saveOrderToHistory(targetOrder);
+      setSavedOrders(loadSavedOrdersList());
+      saveOrderSilently(targetOrder).catch(() => {});
+
+      if (rescheduleNotice) {
+        const { diffDays, adjustedCount, newDate } = rescheduleNotice;
+        const daysText = diffDays !== 0 ? ` (${diffDays > 0 ? '+' : ''}${diffDays} dias)` : '';
+        const boletosMsg = adjustedCount > 0 
+          ? ` ${adjustedCount} boleto(s) em aberto ajustado(s)!` 
+          : ' Boletos recalculados!';
+        showToast(`Previsão de entrega atualizada para ${toBrDate(newDate) || 'A definir'}${daysText}.${boletosMsg}`, 'info');
+      }
+    }
   };
 
   // Handler para configuração fiscal individual do pedido

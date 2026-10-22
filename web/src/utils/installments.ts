@@ -409,20 +409,38 @@ export function parseDateFlexible(dateStr: string): Date | null {
       const d = parseInt(parts[0], 10);
       const m = parseInt(parts[1], 10) - 1;
       let y = parseInt(parts[2], 10);
+      if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
       if (y < 100) y += y > 50 ? 1900 : 2000;
       const dt = new Date(Date.UTC(y, m, d));
-      return isNaN(dt.getTime()) ? null : dt;
+      if (isNaN(dt.getTime())) return null;
+      // Validação estrita de calendário (impede overflow de 31/02 para março)
+      if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m || dt.getUTCDate() !== d) {
+        return null;
+      }
+      return dt;
     }
   } else if (str.includes('-')) {
     const parts = str.split('T')[0].split('-');
     if (parts.length === 3) {
+      let y: number, m: number, d: number;
       if (parts[0].length === 4) {
-        const dt = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
-        return isNaN(dt.getTime()) ? null : dt;
+        y = Number(parts[0]);
+        m = Number(parts[1]) - 1;
+        d = Number(parts[2]);
       } else {
-        const dt = new Date(Date.UTC(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0])));
-        return isNaN(dt.getTime()) ? null : dt;
+        d = Number(parts[0]);
+        m = Number(parts[1]) - 1;
+        y = Number(parts[2]);
       }
+      if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
+      if (y < 100) y += y > 50 ? 1900 : 2000;
+      const dt = new Date(Date.UTC(y, m, d));
+      if (isNaN(dt.getTime())) return null;
+      // Validação estrita de calendário: impede overflow de dias inexistentes no mês
+      if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m || dt.getUTCDate() !== d) {
+        return null;
+      }
+      return dt;
     }
   }
   const fallback = new Date(str);

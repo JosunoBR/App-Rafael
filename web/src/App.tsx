@@ -2269,9 +2269,48 @@ export function App() {
         };
       }
 
-      // 1. Preservar dados comerciais do cabeçalho original, mas blindar estritamente o ciclo de vida (status, boletos, conferência, versão)
+      // 1. Reverter preços originais dos produtos caso o pedido de origem tenha sofrido ajuste fiscal
+      const cleanedItems = (duplicated.items || order.items || []).map(it => {
+        const origPrice = it.precoUnitarioOriginal !== undefined && Number(it.precoUnitarioOriginal) > 0
+          ? Number(it.precoUnitarioOriginal)
+          : Number(it.precoUnitario || 0);
+        const pecas = Number(it.qtdTotalUnidades || 0);
+        const bruto = Number(it.valorTotalBrutoOriginal !== undefined ? it.valorTotalBrutoOriginal : (pecas * origPrice));
+        const hasItemDesc = it.percentualDesconto !== undefined && it.percentualDesconto !== null && it.percentualDesconto > 0;
+        const descPct = hasItemDesc ? Number(it.percentualDesconto) : 0;
+        const descVal = descPct > 0 ? Number((bruto * (descPct / 100)).toFixed(2)) : 0;
+        const liqVal = Math.max(0, Number((bruto - descVal).toFixed(2)));
+
+        const itemCopy = {
+          ...it,
+          id: it.id && it.id.startsWith('it_') ? it.id : ('it_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
+          precoUnitario: origPrice,
+          valorTotalBruto: bruto,
+          valorDescontoItem: descVal,
+          valorTotalLiquido: liqVal
+        };
+        delete itemCopy.precoUnitarioOriginal;
+        delete itemCopy.valorTotalBrutoOriginal;
+        return itemCopy;
+      });
+      duplicated.items = cleanedItems;
+
+      // 2. Destruturação para remover chaves que NUNCA devem ser herdadas
+      const {
+        valorNotaFiscalEntregue: _oldNf,
+        ajusteFiscalDiferenca: _oldAdjDiff,
+        ajusteFiscalData: _oldAdjDate,
+        ajusteFiscalUsuario: _oldAdjUser,
+        valoresParcelasPersonalizados: _oldCustomVals,
+        datasVencimentoPersonalizadas: _oldCustomDates,
+        deliveryRescheduleHistory: _oldResched,
+        paymentConfigJson: _oldPJson,
+        ...restHeader
+      } = (order.header || {}) as any;
+
+      // 3. Preservar dados comerciais do cabeçalho original, mas blindar estritamente o ciclo de vida (status, boletos, conferência, versão, ajuste fiscal)
       duplicated.header = {
-        ...order.header,
+        ...restHeader,
         id: duplicated.header.id,
         numeroPedido: duplicated.header.numeroPedido,
         dataPedido: today,
@@ -2303,16 +2342,19 @@ export function App() {
         ajusteFiscalDiferenca: 0,
         ajusteFiscalData: undefined,
         ajusteFiscalUsuario: undefined,
+        valoresParcelasPersonalizados: undefined,
+        datasVencimentoPersonalizadas: undefined,
+        deliveryRescheduleHistory: [],
         createdAt: duplicated.header.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
-      // 2. Preservar 100% da Engenharia Fiscal do pedido original
+      // 4. Preservar 100% da Engenharia Fiscal do pedido original
       const targetFiscal = order.fiscalConfig || fiscalConfig;
       duplicated.fiscalConfig = targetFiscal;
       setFiscalConfig(targetFiscal);
 
-      // Gerar as parcelas de pagamento calculadas a partir da nova data do pedido com as condições idênticas
+      // Gerar as parcelas de pagamento calculadas a partir da nova data do pedido com as condições idênticas e valor limpo
       duplicated.installments = generateOrderInstallments(duplicated, undefined, undefined, false);
 
       // Salva no banco e histórico com a data atual e as parcelas geradas

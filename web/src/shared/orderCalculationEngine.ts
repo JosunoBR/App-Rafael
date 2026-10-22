@@ -236,10 +236,15 @@ export function calculateOrderTotals(
     ? Number(header.ajusteFiscalDiferenca)
     : undefined;
 
-  if (rawNf > 0) {
+  // 🛡️ Blindagem de Ciclo de Vida: Ajuste Fiscal da Entrega é estritamente aplicável quando a nota fiscal física foi entregue/conferida (recebidoMatriz) ou em etapas avançadas de faturamento.
+  // Em pedidos em Cotação / Rascunho, o total comercial das mercadorias é a fonte soberana da verdade.
+  const isCotacaoOrDraft = header?.status === 'Em Cotação' || header?.status === 'Rascunho' || header?.isDraft === true;
+  const isEntregaFisica = Boolean(header?.recebidoMatriz) || (!isCotacaoOrDraft && rawNf > 0);
+
+  if (isEntregaFisica && rawNf > 0) {
     finalTotalGeral = Number(rawNf.toFixed(2));
     ajusteFiscalValor = Number((finalTotalGeral - totalComercialSemAjuste).toFixed(2));
-  } else if (rawDiff !== undefined && Math.abs(rawDiff) > 0.005) {
+  } else if (isEntregaFisica && rawDiff !== undefined && Math.abs(rawDiff) > 0.005) {
     ajusteFiscalValor = Number(rawDiff.toFixed(2));
     finalTotalGeral = Number((totalComercialSemAjuste + ajusteFiscalValor).toFixed(2));
   }

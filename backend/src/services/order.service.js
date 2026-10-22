@@ -417,35 +417,38 @@ class OrderService {
           orderData.header.status = existing.header.status;
         }
 
-        // Preservação de marcos operacionais e liberação de boletos
-        if (existing.header.boletosLiberados && !orderData.header.boletosLiberados) {
-          orderData.header.boletosLiberados = existing.header.boletosLiberados;
-          orderData.header.boletosLiberadosPor = existing.header.boletosLiberadosPor || orderData.header.boletosLiberadosPor;
-          orderData.header.boletosLiberadosEm = existing.header.boletosLiberadosEm || orderData.header.boletosLiberadosEm;
-        }
+        // Preservação de marcos operacionais e liberação de boletos (apenas para pedidos em esteira avançada)
+        const isCotacaoOrDraft = orderData.header?.status === 'Em Cotação' || orderData.header?.status === 'Rascunho';
+        if (!isCotacaoOrDraft) {
+          if (existing.header.boletosLiberados && !orderData.header.boletosLiberados) {
+            orderData.header.boletosLiberados = existing.header.boletosLiberados;
+            orderData.header.boletosLiberadosPor = existing.header.boletosLiberadosPor || orderData.header.boletosLiberadosPor;
+            orderData.header.boletosLiberadosEm = existing.header.boletosLiberadosEm || orderData.header.boletosLiberadosEm;
+          }
 
-        if (existing.header.recebidoMatriz && !orderData.header.recebidoMatriz) {
-          orderData.header.recebidoMatriz = existing.header.recebidoMatriz;
-          orderData.header.dataRecebimentoMatriz = existing.header.dataRecebimentoMatriz || orderData.header.dataRecebimentoMatriz;
-          orderData.header.recebidoPor = existing.header.recebidoPor || orderData.header.recebidoPor;
-          orderData.header.numeroNotaFiscal = existing.header.numeroNotaFiscal || orderData.header.numeroNotaFiscal;
-        }
+          if (existing.header.recebidoMatriz && !orderData.header.recebidoMatriz) {
+            orderData.header.recebidoMatriz = existing.header.recebidoMatriz;
+            orderData.header.dataRecebimentoMatriz = existing.header.dataRecebimentoMatriz || orderData.header.dataRecebimentoMatriz;
+            orderData.header.recebidoPor = existing.header.recebidoPor || orderData.header.recebidoPor;
+            orderData.header.numeroNotaFiscal = existing.header.numeroNotaFiscal || orderData.header.numeroNotaFiscal;
+          }
 
-        if (existing.header.distribuicaoConcluida && !orderData.header.distribuicaoConcluida) {
-          orderData.header.distribuicaoConcluida = existing.header.distribuicaoConcluida;
-          orderData.header.distribuidoPor = existing.header.distribuidoPor || orderData.header.distribuidoPor;
-          orderData.header.dataDistribuicao = existing.header.dataDistribuicao || orderData.header.dataDistribuicao;
-        }
+          if (existing.header.distribuicaoConcluida && !orderData.header.distribuicaoConcluida) {
+            orderData.header.distribuicaoConcluida = existing.header.distribuicaoConcluida;
+            orderData.header.distribuidoPor = existing.header.distribuidoPor || orderData.header.distribuidoPor;
+            orderData.header.dataDistribuicao = existing.header.dataDistribuicao || orderData.header.dataDistribuicao;
+          }
 
-        if (existing.header.separacaoConcluida && !orderData.header.separacaoConcluida) {
-          orderData.header.separacaoConcluida = existing.header.separacaoConcluida;
-          orderData.header.separadoPor = existing.header.separadoPor || orderData.header.separadoPor;
-          orderData.header.dataSeparacao = existing.header.dataSeparacao || orderData.header.dataSeparacao;
-        }
+          if (existing.header.separacaoConcluida && !orderData.header.separacaoConcluida) {
+            orderData.header.separacaoConcluida = existing.header.separacaoConcluida;
+            orderData.header.separadoPor = existing.header.separadoPor || orderData.header.separadoPor;
+            orderData.header.dataSeparacao = existing.header.dataSeparacao || orderData.header.dataSeparacao;
+          }
 
-        if (existing.header.finalizadoPor && !orderData.header.finalizadoPor) {
-          orderData.header.finalizadoPor = existing.header.finalizadoPor;
-          orderData.header.dataFinalizacao = existing.header.dataFinalizacao || orderData.header.dataFinalizacao;
+          if (existing.header.finalizadoPor && !orderData.header.finalizadoPor) {
+            orderData.header.finalizadoPor = existing.header.finalizadoPor;
+            orderData.header.dataFinalizacao = existing.header.dataFinalizacao || orderData.header.dataFinalizacao;
+          }
         }
       }
     }

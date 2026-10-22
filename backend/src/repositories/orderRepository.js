@@ -108,6 +108,14 @@ class OrderRepository {
       finalPrazoDias = 'deposito_e_boleto';
     }
 
+    const isCotacaoOrDraft = order.header.status === 'Em Cotação' || order.header.status === 'Rascunho' || Boolean(order.header.isDraft);
+    const isEntregaFisica = Boolean(order.header.recebidoMatriz) || (!isCotacaoOrDraft && Number(order.header.valorNotaFiscalEntregue) > 0);
+
+    const safeNfEntregue = isEntregaFisica ? (Number(order.header.valorNotaFiscalEntregue) || 0) : 0;
+    const safeAjusteDiff = isEntregaFisica ? (Number(order.header.ajusteFiscalDiferenca) || 0) : 0;
+    const safeAjusteData = isEntregaFisica ? (order.header.ajusteFiscalData || null) : null;
+    const safeAjusteUser = isEntregaFisica ? (order.header.ajusteFiscalUsuario || null) : null;
+
     const paymentConfig = {
       parcelasCount: order.header.parcelasCount,
       prazoDias: finalPrazoDias,
@@ -124,10 +132,10 @@ class OrderRepository {
       saldoFormaPagamento: order.header.saldoFormaPagamento,
       saldoParcelasCount: order.header.saldoParcelasCount,
       saldoPrazoDias: order.header.saldoPrazoDias,
-      valorNotaFiscalEntregue: order.header.valorNotaFiscalEntregue,
-      ajusteFiscalDiferenca: order.header.ajusteFiscalDiferenca,
-      ajusteFiscalData: order.header.ajusteFiscalData,
-      ajusteFiscalUsuario: order.header.ajusteFiscalUsuario,
+      valorNotaFiscalEntregue: safeNfEntregue,
+      ajusteFiscalDiferenca: safeAjusteDiff,
+      ajusteFiscalData: safeAjusteData,
+      ajusteFiscalUsuario: safeAjusteUser,
       deliveryRescheduleHistory: order.header.deliveryRescheduleHistory,
       possuiDivergenciaFaturamento: order.header.possuiDivergenciaFaturamento,
       divergenciaResolvida: order.header.divergenciaResolvida,
@@ -196,15 +204,14 @@ class OrderRepository {
     const totalBase = Number((totalBruto + totalIpi - totalDesconto).toFixed(2));
 
     // Ajuste Fiscal da Entrega (NF): Acréscimo ou desconto direto no valor final do pedido
-    const rawNf = Number(order.header.valorNotaFiscalEntregue);
-    const rawDiff = order.header.ajusteFiscalDiferenca !== undefined && order.header.ajusteFiscalDiferenca !== null
-      ? Number(order.header.ajusteFiscalDiferenca)
-      : undefined;
+    // 🛡️ Aplicável exclusivamente para notas entregues/conferidas fisicamente
+    const rawNf = safeNfEntregue;
+    const rawDiff = safeAjusteDiff;
 
     let totalGeral = totalBase;
-    if (rawNf > 0) {
+    if (isEntregaFisica && rawNf > 0) {
       totalGeral = Number(rawNf.toFixed(2));
-    } else if (rawDiff !== undefined && Math.abs(rawDiff) > 0.005) {
+    } else if (isEntregaFisica && rawDiff !== undefined && Math.abs(rawDiff) > 0.005) {
       totalGeral = Number((totalBase + rawDiff).toFixed(2));
     }
 
@@ -291,10 +298,10 @@ class OrderRepository {
         paymentConfigJson,
         order.inspection ? JSON.stringify(order.inspection) : null,
         removedItemsJson,
-        Number(order.header.valorNotaFiscalEntregue) || 0,
-        Number(order.header.ajusteFiscalDiferenca) || 0,
-        order.header.ajusteFiscalData || null,
-        order.header.ajusteFiscalUsuario || null,
+        safeNfEntregue,
+        safeAjusteDiff,
+        safeAjusteData,
+        safeAjusteUser,
         order.header.recebidoMatriz ? 1 : 0,
         order.header.dataRecebimentoMatriz || null,
         order.header.recebidoPor || null,
@@ -409,10 +416,10 @@ class OrderRepository {
         paymentConfigJson,
         order.inspection ? JSON.stringify(order.inspection) : null,
         removedItemsJson,
-        Number(order.header.valorNotaFiscalEntregue) || 0,
-        Number(order.header.ajusteFiscalDiferenca) || 0,
-        order.header.ajusteFiscalData || null,
-        order.header.ajusteFiscalUsuario || null,
+        safeNfEntregue,
+        safeAjusteDiff,
+        safeAjusteData,
+        safeAjusteUser,
         order.header.recebidoMatriz ? 1 : 0,
         order.header.dataRecebimentoMatriz || null,
         order.header.recebidoPor || null,
@@ -905,9 +912,12 @@ class OrderRepository {
         ? Number(paymentConfig.ajusteFiscalDiferenca)
         : undefined;
 
-      if (rawFallbackNf > 0) {
+      const isCotacaoOrDraftFallback = r.status === 'Em Cotação' || r.status === 'Rascunho' || r.isDraft === 1;
+      const isEntregaFisicaFallback = Boolean(r.recebidoMatriz === 1) || (!isCotacaoOrDraftFallback && rawFallbackNf > 0);
+
+      if (isEntregaFisicaFallback && rawFallbackNf > 0) {
         totalGeral = Number(rawFallbackNf.toFixed(2));
-      } else if (rawFallbackDiff !== undefined && Math.abs(rawFallbackDiff) > 0.005) {
+      } else if (isEntregaFisicaFallback && rawFallbackDiff !== undefined && Math.abs(rawFallbackDiff) > 0.005) {
         totalGeral = Number((baseCalc + rawFallbackDiff).toFixed(2));
       } else {
         totalGeral = baseCalc;
@@ -979,10 +989,10 @@ class OrderRepository {
         totalVolumes,
         totalPecas,
         ...paymentConfig,
-        valorNotaFiscalEntregue: r.valorNotaFiscalEntregue !== undefined && r.valorNotaFiscalEntregue !== null && Number(r.valorNotaFiscalEntregue) > 0 ? Number(r.valorNotaFiscalEntregue) : paymentConfig.valorNotaFiscalEntregue,
-        ajusteFiscalDiferenca: r.ajusteFiscalDiferenca !== undefined && r.ajusteFiscalDiferenca !== null && Math.abs(Number(r.ajusteFiscalDiferenca)) > 0.005 ? Number(r.ajusteFiscalDiferenca) : paymentConfig.ajusteFiscalDiferenca,
-        ajusteFiscalData: r.ajusteFiscalData || paymentConfig.ajusteFiscalData,
-        ajusteFiscalUsuario: r.ajusteFiscalUsuario || paymentConfig.ajusteFiscalUsuario,
+        valorNotaFiscalEntregue: r.valorNotaFiscalEntregue !== undefined && r.valorNotaFiscalEntregue !== null && Number(r.valorNotaFiscalEntregue) > 0 ? Number(r.valorNotaFiscalEntregue) : ((r.status !== 'Em Cotação' && r.status !== 'Rascunho') ? (paymentConfig.valorNotaFiscalEntregue || 0) : 0),
+        ajusteFiscalDiferenca: r.ajusteFiscalDiferenca !== undefined && r.ajusteFiscalDiferenca !== null && Math.abs(Number(r.ajusteFiscalDiferenca)) > 0.005 ? Number(r.ajusteFiscalDiferenca) : ((r.status !== 'Em Cotação' && r.status !== 'Rascunho') ? (paymentConfig.ajusteFiscalDiferenca || 0) : 0),
+        ajusteFiscalData: r.ajusteFiscalData || ((r.status !== 'Em Cotação' && r.status !== 'Rascunho') ? paymentConfig.ajusteFiscalData : null),
+        ajusteFiscalUsuario: r.ajusteFiscalUsuario || ((r.status !== 'Em Cotação' && r.status !== 'Rascunho') ? paymentConfig.ajusteFiscalUsuario : null),
         lastModifiedById: r.lastModifiedById || null,
         lastModifiedByName: r.lastModifiedByName || null,
         lastModifiedByRole: r.lastModifiedByRole || null,
@@ -1032,14 +1042,27 @@ class OrderRepository {
     const now = new Date().toISOString();
     const today = now.split('T')[0];
 
-    // Preserva todos os dados de produtos e distribuição física da tela de pedido,
-    // mas reseta as conferências, avarias e apontamentos de execução da esteira.
+    // Preserva produtos revertendo qualquer alteração de preço decorrente de ajuste fiscal
     const duplicatedItems = (original.items || []).map(item => {
       const grade = item.grade || item.separacaoLojas || {};
-      return {
+      const origPrice = item.precoUnitarioOriginal !== undefined && Number(item.precoUnitarioOriginal) > 0
+        ? Number(item.precoUnitarioOriginal)
+        : Number(item.precoUnitario || 0);
+      const pecas = Number(item.qtdTotalUnidades || 0);
+      const bruto = Number(item.valorTotalBrutoOriginal !== undefined ? item.valorTotalBrutoOriginal : (pecas * origPrice));
+      const hasItemDesc = item.percentualDesconto !== undefined && item.percentualDesconto !== null && item.percentualDesconto > 0;
+      const descPct = hasItemDesc ? Number(item.percentualDesconto) : 0;
+      const descVal = descPct > 0 ? Number((bruto * (descPct / 100)).toFixed(2)) : 0;
+      const liqVal = Math.max(0, Number((bruto - descVal).toFixed(2)));
+
+      const cleanItem = {
         ...item,
         id: `it_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         orderId: newId,
+        precoUnitario: origPrice,
+        valorTotalBruto: bruto,
+        valorDescontoItem: descVal,
+        valorTotalLiquido: liqVal,
         qtdReservaEstoque: 0,
         qtdRecebida: null,
         motivoRuptura: null,
@@ -1049,23 +1072,26 @@ class OrderRepository {
         separacaoLojas: typeof grade === 'object' ? { ...grade } : {},
         grade: typeof grade === 'object' ? { ...grade } : {}
       };
+      delete cleanItem.precoUnitarioOriginal;
+      delete cleanItem.valorTotalBrutoOriginal;
+      return cleanItem;
     });
 
-    // Duplicar parcelas/títulos com as exatas condições comerciais do pedido original
-    const duplicatedInstallments = (original.installments || []).map(inst => ({
-      ...inst,
-      id: `inst_${newId}_${inst.numeroParcela || 1}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-      orderId: newId,
-      numeroPedido: newNumero,
-      fornecedor: original.header?.fornecedor || inst.fornecedor,
-      status: 'A Vencer',
-      dataPagamento: null,
-      updatedAt: now
-    }));
+    const {
+      valorNotaFiscalEntregue: _oldNf,
+      ajusteFiscalDiferenca: _oldDiff,
+      ajusteFiscalData: _oldAdjDate,
+      ajusteFiscalUsuario: _oldAdjUser,
+      valoresParcelasPersonalizados: _oldCustomVals,
+      datasVencimentoPersonalizadas: _oldCustomDates,
+      deliveryRescheduleHistory: _oldResched,
+      paymentConfigJson: _oldPConfig,
+      ...baseHeader
+    } = (original.header || {});
 
     const duplicatedOrder = {
       header: {
-        ...original.header,
+        ...baseHeader,
         id: newId,
         numeroPedido: newNumero,
         dataPedido: today,
@@ -1073,6 +1099,15 @@ class OrderRepository {
         status: 'Em Cotação',
         separationStatus: 'Pendente',
         isDraft: true,
+        version: 1,
+        // 🛡️ Limpeza estrita de ajuste fiscal (NUNCA herdar conciliação fiscal do pedido anterior)
+        valorNotaFiscalEntregue: 0,
+        ajusteFiscalDiferenca: 0,
+        ajusteFiscalData: null,
+        ajusteFiscalUsuario: null,
+        valoresParcelasPersonalizados: undefined,
+        datasVencimentoPersonalizadas: undefined,
+        deliveryRescheduleHistory: [],
         // 🛡️ Limpeza estrita de marcos e histórico da esteira anterior:
         aprovadoPor: null,
         dataAprovacao: null,
@@ -1093,16 +1128,16 @@ class OrderRepository {
         boletosLiberadosEm: null,
         finalizadoPor: null,
         dataFinalizacao: null,
-        valorNotaFiscalEntregue: 0,
-        ajusteFiscalDiferenca: 0,
-        ajusteFiscalData: null,
-        ajusteFiscalUsuario: null,
+        lastModifiedById: null,
+        lastModifiedByName: null,
+        lastModifiedByRole: null,
+        lastModifiedAt: now,
         createdAt: now,
         updatedAt: now
       },
       fiscalConfig: original.fiscalConfig,
       items: duplicatedItems,
-      installments: duplicatedInstallments,
+      installments: [],
       inspection: null,
       separationDistribution: null
     };

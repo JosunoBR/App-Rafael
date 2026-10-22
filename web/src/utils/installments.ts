@@ -406,11 +406,20 @@ export function parseDateFlexible(dateStr: string): Date | null {
   if (str.includes('/')) {
     const parts = str.split('/');
     if (parts.length === 3) {
-      const d = parseInt(parts[0], 10);
-      const m = parseInt(parts[1], 10) - 1;
-      let y = parseInt(parts[2], 10);
+      const rawDay = parts[0].trim();
+      const rawMonth = parts[1].trim();
+      const rawYear = parts[2].trim();
+      if ((rawYear.length !== 2 && rawYear.length !== 4) || rawDay.length === 0 || rawMonth.length === 0) {
+        return null;
+      }
+      const d = parseInt(rawDay, 10);
+      const m = parseInt(rawMonth, 10) - 1;
+      let y = parseInt(rawYear, 10);
       if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
-      if (y < 100) y += y > 50 ? 1900 : 2000;
+      if (rawYear.length === 2) {
+        y += y > 50 ? 1900 : 2000;
+      }
+      if (y < 1900 || y > 2100) return null;
       const dt = new Date(Date.UTC(y, m, d));
       if (isNaN(dt.getTime())) return null;
       // Validação estrita de calendário (impede overflow de 31/02 para março)
@@ -423,17 +432,25 @@ export function parseDateFlexible(dateStr: string): Date | null {
     const parts = str.split('T')[0].split('-');
     if (parts.length === 3) {
       let y: number, m: number, d: number;
-      if (parts[0].length === 4) {
-        y = Number(parts[0]);
-        m = Number(parts[1]) - 1;
-        d = Number(parts[2]);
+      const rawPart0 = parts[0].trim();
+      const rawPart1 = parts[1].trim();
+      const rawPart2 = parts[2].trim();
+      if (rawPart0.length === 4) {
+        y = Number(rawPart0);
+        m = Number(rawPart1) - 1;
+        d = Number(rawPart2);
+      } else if (rawPart2.length === 4 || rawPart2.length === 2) {
+        d = Number(rawPart0);
+        m = Number(rawPart1) - 1;
+        y = Number(rawPart2);
+        if (rawPart2.length === 2) {
+          y += y > 50 ? 1900 : 2000;
+        }
       } else {
-        d = Number(parts[0]);
-        m = Number(parts[1]) - 1;
-        y = Number(parts[2]);
+        return null;
       }
       if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
-      if (y < 100) y += y > 50 ? 1900 : 2000;
+      if (y < 1900 || y > 2100) return null;
       const dt = new Date(Date.UTC(y, m, d));
       if (isNaN(dt.getTime())) return null;
       // Validação estrita de calendário: impede overflow de dias inexistentes no mês
@@ -443,8 +460,8 @@ export function parseDateFlexible(dateStr: string): Date | null {
       return dt;
     }
   }
-  const fallback = new Date(str);
-  return isNaN(fallback.getTime()) ? null : fallback;
+  // Se não possuir 3 partes válidas com separadores reconhecidos (/ ou -), não é uma data válida
+  return null;
 }
 
 /**
@@ -669,8 +686,10 @@ export function generateOrderInstallments(
       }
 
       const originalProportionalVal = j === 1 ? Number((saldoBaseValue + saldoRemainder).toFixed(2)) : saldoBaseValue;
-      const customVal = preserveExistingEdits ? customValues?.[String(numParcela)] : undefined;
-      const customSaldoDate = customDates?.[String(numParcela)];
+      const hasZeroValKey = customValues && Object.prototype.hasOwnProperty.call(customValues, '0');
+      const customVal = preserveExistingEdits ? (hasZeroValKey ? customValues?.[String(numParcela - 1)] : customValues?.[String(numParcela)]) : undefined;
+      const hasZeroDateKey = customDates && Object.prototype.hasOwnProperty.call(customDates, '0');
+      const customSaldoDate = hasZeroDateKey ? customDates?.[String(numParcela - 1)] : customDates?.[String(numParcela)];
       const isManuallyOverridden = preserveExistingEdits && (customVal !== undefined || (existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01));
       const valorFinal = customVal !== undefined ? customVal : (isManuallyOverridden && existing ? existing.valor : originalProportionalVal);
       const rawDueDate = customSaldoDate || calculatedDueDate;
@@ -737,8 +756,10 @@ export function generateOrderInstallments(
       }
 
       const originalProportionalVal = i === 1 ? Number((baseValue + remainder).toFixed(2)) : baseValue;
-      const customVal = customValues?.[String(i)];
-      const customDate = customDates?.[String(i)];
+      const hasZeroValKey = customValues && Object.prototype.hasOwnProperty.call(customValues, '0');
+      const customVal = hasZeroValKey ? customValues?.[String(i - 1)] : customValues?.[String(i)];
+      const hasZeroDateKey = customDates && Object.prototype.hasOwnProperty.call(customDates, '0');
+      const customDate = hasZeroDateKey ? customDates?.[String(i - 1)] : customDates?.[String(i)];
       const isManuallyOverridden = customVal !== undefined || (existing?.valor !== undefined && existing?.valorOriginal !== undefined && Math.abs(existing.valor - existing.valorOriginal) > 0.01);
       const valorFinal = customVal !== undefined ? customVal : (isManuallyOverridden && existing ? existing.valor : originalProportionalVal);
       // Stale dates fix: recalculate dynamically if not explicitly in customDates
@@ -887,7 +908,7 @@ export function rescheduleOrderDelivery(
 
   if (Array.isArray(order.installments) && order.installments.length > 0) {
     nextInstallments = order.installments.map(inst => {
-      const isPaid = inst.status === 'Pago' || !!inst.dataPagamento;
+      const isPaid = String(inst.status || '').toLowerCase() === 'pago' || !!inst.dataPagamento || (inst as any).pago === true;
       if (isPaid) {
         preservedCount++;
         return inst;
@@ -923,7 +944,7 @@ export function rescheduleOrderDelivery(
       }
     };
     nextInstallments = generateOrderInstallments(tempOrder);
-    adjustedCount = nextInstallments.filter(i => i.status !== 'Pago').length;
+    adjustedCount = nextInstallments.filter(i => String(i.status || '').toLowerCase() !== 'pago').length;
   }
 
   // Ajuste do mapa de datas personalizadas (se houver)
@@ -933,7 +954,7 @@ export function rescheduleOrderDelivery(
     for (const [key, dateStr] of Object.entries(order.header.datasVencimentoPersonalizadas)) {
       const parcNum = Number(key);
       const linked = order.installments?.find(i => i.numeroParcela === parcNum);
-      const isPaid = linked?.status === 'Pago' || !!linked?.dataPagamento;
+      const isPaid = String(linked?.status || '').toLowerCase() === 'pago' || !!linked?.dataPagamento || (linked as any)?.pago === true;
       if (isPaid) {
         updatedCustomDates[key] = dateStr;
       } else {

@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test:order-import": "node scripts/test-order-import.mjs",
+    "test:dates": "node scripts/test-dates-and-installments.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

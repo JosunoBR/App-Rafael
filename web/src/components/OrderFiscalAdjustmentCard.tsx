@@ -15,7 +15,8 @@ import {
   HelpCircle,
   FileCheck,
   ShieldCheck,
-  Calculator
+  Calculator,
+  Lock
 } from 'lucide-react';
 import { PurchaseOrder, User } from '../shared/types';
 import { OrderTotalsResult, isBlankItem } from '../shared/orderCalculationEngine';
@@ -163,6 +164,16 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
           )}
         </div>
       </div>
+
+      {/* AVISO QUANDO BLOQUEADO NA ESTEIRA */}
+      {disabled && (
+        <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-amber-300/80 bg-amber-50/90 p-3 text-xs text-amber-900 dark:border-amber-800/80 dark:bg-amber-950/40 dark:text-amber-200">
+          <Lock className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            <strong>Ajuste Fiscal Bloqueado:</strong> Este pedido está {order.header.status === 'Finalizado' ? 'com status FINALIZADO' : 'com boletos liberados para o Financeiro'}. Para alterar valores ou conciliar nova NF, é necessário <strong>retroceder o pedido na esteira</strong>.
+          </span>
+        </div>
+      )}
 
       {/* EXPLICAÇÃO RETRÁTIL */}
       {showHelp && (

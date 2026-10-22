@@ -15,6 +15,7 @@ export interface UseOrderWatcherOptions {
   onRemoteChange?: (info: OrderPresenceResponse) => void;
   onViewerJoined?: (viewer: OrderViewerInfo) => void;
   onViewerLeft?: (viewer: OrderViewerInfo) => void;
+  onInitialViewers?: (viewers: OrderViewerInfo[]) => void;
 }
 
 export function useOrderWatcher({
@@ -22,10 +23,11 @@ export function useOrderWatcher({
   currentVersion = 1,
   currentUserId,
   enabled = true,
-  intervalMs = 15000,
+  intervalMs = 8000,
   onRemoteChange,
   onViewerJoined,
-  onViewerLeft
+  onViewerLeft,
+  onInitialViewers
 }: UseOrderWatcherOptions) {
   const [activeViewers, setActiveViewers] = useState<OrderViewerInfo[]>([]);
   const [remoteInfo, setRemoteInfo] = useState<{
@@ -45,6 +47,8 @@ export function useOrderWatcher({
   onViewerJoinedRef.current = onViewerJoined;
   const onViewerLeftRef = useRef(onViewerLeft);
   onViewerLeftRef.current = onViewerLeft;
+  const onInitialViewersRef = useRef(onInitialViewers);
+  onInitialViewersRef.current = onInitialViewers;
 
   const pingPresence = useCallback(async () => {
     if (!orderId || !enabled || isCheckingRef.current) return;
@@ -71,6 +75,14 @@ export function useOrderWatcher({
         });
       } else {
         isFirstPingRef.current = false;
+        // Se ao acessar o pedido já houver outros operadores nele, notifica imediatamente quem acabou de entrar!
+        if (newViewers.length > 0) {
+          if (onInitialViewersRef.current) {
+            onInitialViewersRef.current(newViewers);
+          } else if (onViewerJoinedRef.current) {
+            newViewers.forEach(v => onViewerJoinedRef.current!(v));
+          }
+        }
       }
 
       prevViewersRef.current = newViewers;
@@ -112,10 +124,8 @@ export function useOrderWatcher({
     isFirstPingRef.current = true;
     prevViewersRef.current = [];
 
-    // Primeiro ping rápido ao abrir a tela
-    const initialTimer = setTimeout(() => {
-      void pingPresence();
-    }, 1500);
+    // Primeiro ping IMEDIATO ao acessar o pedido (segundo 0)
+    void pingPresence();
 
     // Heartbeat periódico (a cada intervalMs)
     const interval = setInterval(() => {
@@ -142,7 +152,6 @@ export function useOrderWatcher({
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
-      clearTimeout(initialTimer);
       clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);

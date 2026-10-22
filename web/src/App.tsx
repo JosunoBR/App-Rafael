@@ -194,8 +194,8 @@ import { calculateItemFiscal, normalizeRateToDecimal } from './shared/fiscalEngi
 import { DEFAULT_FISCAL_CONFIG } from './shared/constants';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem, generateNextProductCode } from './utils/orderItemUtils';
-import { CheckCircle2, AlertCircle, Plus, Lock, ShieldCheck, RefreshCw, X } from 'lucide-react';
-import { canAccessTab, canAuthorizeFinancialRelease, canCreateOrEditOrders, getDefaultNavForRole, canEditSpecificOrder } from './shared/permissions';
+import { CheckCircle2, AlertCircle, Plus, Lock, ShieldCheck, RefreshCw, X, RotateCcw } from 'lucide-react';
+import { canAccessTab, canAuthorizeFinancialRelease, canCreateOrEditOrders, getDefaultNavForRole, canEditSpecificOrder, canRollbackOrderStatus } from './shared/permissions';
 import { 
   calculateOrderTotals, 
   distributeFiscalAdjustmentToItems, 
@@ -205,6 +205,7 @@ import { fetchOrderByIdFromDb } from './utils/api';
 import { useOrderWatcher } from './hooks/useOrderWatcher';
 import { threeWayMergeOrder, OrderMergeResult } from './utils/orderMerge';
 import { OrderConflictResolutionModal } from './components/OrderConflictResolutionModal';
+import { OrderRollbackModal } from './components/OrderRollbackModal';
 
 export function App() {
   // 1. Estado de Autenticação (RBAC) - Validação prévia de expiração local
@@ -313,14 +314,22 @@ export function App() {
     remote: PurchaseOrder;
     mergeResult: OrderMergeResult;
   } | null>(null);
+  const [rollbackModalOrder, setRollbackModalOrder] = useState<PurchaseOrder | null>(null);
 
-  // Hook de detecção ativa de concorrência e co-presença em tempo real
+  // Hook de detecção ativa de concorrência e co-presença em tempo real (ativo em Cotação e Separação)
   const { activeViewers, remoteInfo, hasNewerVersion, dismissAlert } = useOrderWatcher({
     orderId: order?.header?.id,
     currentVersion: Number(order?.header?.version || 1),
     currentUserId: currentUser?.id,
-    enabled: Boolean(order?.header?.id && activeNav === 'orders'),
-    intervalMs: 15000,
+    enabled: Boolean(
+      order?.header?.id && 
+      (activeNav === 'orders' || activeNav === 'separation')
+    ),
+    intervalMs: 8000,
+    onInitialViewers: (viewers) => {
+      const names = viewers.map(v => `${v.userName} (${v.userRole})`).join(', ');
+      showToast(`👀 ${names} já está com este pedido aberto no momento.`, 'info');
+    },
     onViewerJoined: (viewer) => {
       showToast(`👋 ${viewer.userName} (${viewer.userRole}) acabou de acessar este pedido.`, 'info');
     },
@@ -1462,30 +1471,35 @@ export function App() {
       installments: updatedInstallments
     };
 
-    setOrder(finalOrder);
-    saveOrderToHistory(finalOrder);
-    setSavedOrders(prev => {
-      const idx = prev.findIndex(o => o.header.id === finalOrder.header.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = finalOrder;
-        return next;
-      }
-      return [finalOrder, ...prev];
-    });
-
     try {
       await saveOrderToDb(finalOrder);
-    } catch (e) {
-      console.warn('Aviso ao sincronizar ajuste fiscal no SQLite:', e);
-    }
+      setOrder(finalOrder);
+      saveOrderToHistory(finalOrder);
+      setSavedOrders(prev => {
+        const idx = prev.findIndex(o => o.header.id === finalOrder.header.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = finalOrder;
+          return next;
+        }
+        return [finalOrder, ...prev];
+      });
 
-    const tipoAjuste = adjResult.diferencaTotal >= 0 ? 'Acréscimo' : 'Desconto';
-    const sinal = adjResult.diferencaTotal >= 0 ? '+' : '-';
-    showToast(
-      `Ajuste Fiscal aplicado: ${tipoAjuste} de ${sinal}R$ ${Math.abs(adjResult.diferencaTotal).toFixed(2).replace('.', ',')} direto no valor final do pedido. Total da NF: R$ ${targetNfValue.toFixed(2).replace('.', ',')}. Produtos 100% inalterados.`,
-      'success'
-    );
+      const tipoAjuste = adjResult.diferencaTotal >= 0 ? 'Acréscimo' : 'Desconto';
+      const sinal = adjResult.diferencaTotal >= 0 ? '+' : '-';
+      showToast(
+        `Ajuste Fiscal aplicado: ${tipoAjuste} de ${sinal}R$ ${Math.abs(adjResult.diferencaTotal).toFixed(2).replace('.', ',')} direto no valor final do pedido. Total da NF: R$ ${targetNfValue.toFixed(2).replace('.', ',')}. Produtos 100% inalterados.`,
+        'success'
+      );
+    } catch (e: any) {
+      console.error('Erro ao sincronizar ajuste fiscal no servidor:', e);
+      triggerIOSAlert({
+        title: 'Não foi possível salvar o ajuste fiscal',
+        message: e?.message || 'O servidor recusou a gravação do ajuste fiscal no banco de dados.',
+        type: 'error',
+        confirmText: 'Entendido'
+      });
+    }
   };
 
   // 🛡️ Restaura os preços unitários originais dos produtos antes do Ajuste Fiscal
@@ -1530,26 +1544,31 @@ export function App() {
       installments: updatedInstallments
     };
 
-    setOrder(finalOrder);
-    saveOrderToHistory(finalOrder);
-    setSavedOrders(prev => {
-      const idx = prev.findIndex(o => o.header.id === finalOrder.header.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = finalOrder;
-        return next;
-      }
-      return [finalOrder, ...prev];
-    });
-
     try {
       await saveOrderToDb(finalOrder);
-    } catch (e) {
-      console.warn('Aviso ao sincronizar restauração fiscal no SQLite:', e);
-    }
+      setOrder(finalOrder);
+      saveOrderToHistory(finalOrder);
+      setSavedOrders(prev => {
+        const idx = prev.findIndex(o => o.header.id === finalOrder.header.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = finalOrder;
+          return next;
+        }
+        return [finalOrder, ...prev];
+      });
 
-    const totalOriginal = calculateOrderTotals(restResult.updatedItems, updatedHeader, order.fiscalConfig || fiscalConfig).totalGeral;
-    showToast(`Ajuste Fiscal removido. Total do pedido restabelecido para R$ ${totalOriginal.toFixed(2).replace('.', ',')}.`, 'info');
+      const totalOriginal = calculateOrderTotals(restResult.updatedItems, updatedHeader, order.fiscalConfig || fiscalConfig).totalGeral;
+      showToast(`Ajuste Fiscal removido. Total do pedido restabelecido para R$ ${totalOriginal.toFixed(2).replace('.', ',')}.`, 'info');
+    } catch (e: any) {
+      console.error('Erro ao restaurar ajuste fiscal no servidor:', e);
+      triggerIOSAlert({
+        title: 'Não foi possível restaurar os valores originais',
+        message: e?.message || 'O servidor recusou a restauração no banco de dados.',
+        type: 'error',
+        confirmText: 'Entendido'
+      });
+    }
   };
 
   // Carrega com segurança e resposta instantânea (0ms) o pedido selecionado
@@ -1647,7 +1666,28 @@ export function App() {
       }
     });
 
-    showToast(`Pedido ${cleanNum} carregado com sucesso.`);
+    // Alerta proativo de Pedido Finalizado / Fechado com atalho para retroceder na esteira
+    const isOrderFinalized = updatedOrder.header.status === 'Finalizado';
+    const isOrderLocked = Boolean(
+      isOrderFinalized ||
+      (updatedOrder.header.boletosLiberados && !canEditSpecificOrder(currentUser, updatedOrder.header.status, updatedOrder.header.boletosLiberados))
+    );
+
+    if (isOrderLocked) {
+      const canRollback = canRollbackOrderStatus(currentUser);
+      triggerIOSAlert({
+        title: isOrderFinalized ? '🔒 Pedido Finalizado (Somente Leitura)' : '🔒 Boletos Liberados (Somente Leitura)',
+        message: `O pedido ${cleanNum} está ${isOrderFinalized ? 'com status FINALIZADO' : 'com boletos já liberados para o Financeiro'}.\n\nPara efetuar qualquer alteração ou ajuste de valores, produtos ou faturamento, é necessário retroceder o pedido na esteira operacional.`,
+        type: 'warning',
+        confirmText: 'Entendido (Apenas Visualizar)',
+        actionText: canRollback ? '↩️ Retroceder na Esteira' : undefined,
+        onAction: canRollback ? () => {
+          setRollbackModalOrder(updatedOrder);
+        } : undefined
+      });
+    } else {
+      showToast(`Pedido ${cleanNum} carregado com sucesso.`);
+    }
   };
 
   // 🔄 Sincronização Granular com o Servidor (Three-Way Merge)
@@ -3685,21 +3725,36 @@ export function App() {
                       </div>
                     )}
 
-                    {/* Banner Informativo de Boletos Liberados / Bloqueio Financeiro */}
-                    {order.header.boletosLiberados && !canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados) && (
-                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3.5 text-amber-800 dark:text-amber-200 shadow-xs animate-in fade-in duration-200">
-                        <div className="p-2.5 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl shrink-0">
-                          <Lock className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2">
-                            <span>Pedido em Modo Somente Leitura</span>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300">Boletos Liberados</span>
+                    {/* Banner Informativo de Boletos Liberados / Bloqueio Financeiro / Pedido Finalizado */}
+                    {(order.header.status === 'Finalizado' || (order.header.boletosLiberados && !canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados))) && (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 text-amber-900 dark:text-amber-100 shadow-xs animate-in fade-in duration-200">
+                        <div className="flex items-center gap-3.5">
+                          <div className="p-2.5 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl shrink-0">
+                            <Lock className="w-5 h-5" />
                           </div>
-                          <div className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                            Os boletos deste pedido já foram conciliados e liberados para o Financeiro. Alterações são restritas ao Faturamento e à Diretoria.
+                          <div>
+                            <div className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2">
+                              <span>Pedido em Modo Somente Leitura</span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                {order.header.status === 'Finalizado' ? 'Finalizado' : 'Boletos Liberados'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                              Este pedido está fechado e seus boletos já foram liberados para o Financeiro. Para efetuar qualquer edição ou ajuste, é necessário <strong>voltar o pedido na esteira</strong>.
+                            </div>
                           </div>
                         </div>
+                        {canRollbackOrderStatus(currentUser) && (
+                          <button
+                            type="button"
+                            onClick={() => setRollbackModalOrder(order)}
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-sm shadow-amber-600/30 transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer hover:scale-102"
+                            title="Retroceder o status deste pedido na esteira para liberar edições e ajustes"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            <span>Voltar na Esteira</span>
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -3809,9 +3864,10 @@ export function App() {
                     onApplyAdjustment={handleApplyFiscalAdjustment}
                     onRestoreOriginals={handleRestoreFiscalAdjustment}
                     disabled={Boolean(
-                      currentUser?.role !== 'diretoria' && 
-                      currentUser?.role !== 'faturamento' && 
-                      currentUser?.role !== 'comprador'
+                      order.header.status === 'Finalizado' ||
+                      (order.header.boletosLiberados && !canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados)) ||
+                      (order.header.status && order.header.status !== 'Em Cotação' && order.header.status !== 'Rascunho' && !canEditSpecificOrder(currentUser, order.header.status, order.header.boletosLiberados)) ||
+                      (currentUser?.role !== 'diretoria' && currentUser?.role !== 'faturamento' && currentUser?.role !== 'comprador')
                     )}
                   />
                 </div>
@@ -3835,39 +3891,106 @@ export function App() {
 
               {/* PÁGINA 2: CONFERÊNCIA DE SEPARAÇÃO E ROMANEIO (20 LOJAS) */}
               {activeNav === 'separation' && canAccessTab(currentUser, 'separation') && (
-                currentUser?.role === 'separacao' ? (
-                  <MobileSeparationView
-                    order={order}
-                    orders={savedOrders.length > 0 ? savedOrders : [order]}
-                    currentUser={currentUser}
-                    onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
-                    onUpdateOrder={handleSaveOrderDirect}
-                    onFinalizeOrder={handleFinalizeSeparation}
-                  />
-                ) : (
-                  <SeparationPage
-                    order={order}
-                    orders={savedOrders.length > 0 ? savedOrders : [order]}
-                    stores={storeConfigs}
-                    presets={separationPresets}
-                    currentUser={currentUser}
-                    onExportPDF={handleExportSeparationPDF}
-                    onNavigateToOrders={() => setActiveNav('orders')}
-                    onNavigateToHistory={() => setActiveNav('separationHistory')}
-                    onChangeOrder={setOrder}
-                    onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
-                    onFinalizeOrder={handleFinalizeSeparation}
-                    onReleaseToSeparation={handleReleaseToSeparation}
-                    onApproveOrder={handleApproveOrder}
-                    onSendToDistribution={handleSendToDistribution}
-                    onSendToFaturamento={handleSendToFaturamento}
-                    onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
-                    onAuthorizeFinancial={handleAuthorizeFinancial}
-                    onViewAuditLogs={(ord) => setPipelineAuditOrder(ord)}
-                    onSavePreset={handleSaveSeparationPreset}
-                    onDeletePreset={handleDeleteSeparationPreset}
-                  />
-                )
+                <div className="space-y-6 animate-in fade-in duration-200 w-full max-w-full min-w-0">
+                  {/* Pill de Co-presença Ativa em Tempo Real */}
+                  {activeViewers && activeViewers.length > 0 && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-emerald-900 dark:text-emerald-100 shadow-2xs animate-in fade-in duration-300">
+                      <div className="flex items-center gap-2.5">
+                        <span className="relative flex h-2.5 w-2.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                        </span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                          {activeViewers.length === 1 ? (
+                            <>
+                              <span className="text-emerald-700 dark:text-emerald-300 font-extrabold">{activeViewers[0].userName}</span> ({activeViewers[0].userRole}) está com este pedido aberto agora
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-emerald-700 dark:text-emerald-300 font-extrabold">{activeViewers.map(v => v.userName).join(', ')}</span> estão com este pedido aberto agora
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0">
+                        Edição Compartilhada
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Barra Flutuante de Detecção Ativa de Edição Simultânea por Colega */}
+                  {hasNewerVersion && remoteInfo && (
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-blue-900 dark:text-blue-100 shadow-xs animate-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center gap-3.5">
+                        <div className="p-2.5 bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl shrink-0">
+                          <RefreshCw className="w-5 h-5 animate-spin" style={{ animationDuration: '3s' }} />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2">
+                            <span>Alteração Salva por Colega</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-blue-500/20 text-blue-700 dark:text-blue-300">
+                              Versão {remoteInfo.version}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                            {remoteInfo.lastModifier || 'Outro operador'} salvou alterações neste pedido {remoteInfo.lastModifiedAt ? `às ${new Date(remoteInfo.lastModifiedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                          onClick={handleSyncWithRemote}
+                          disabled={isSyncingRemote}
+                          className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer hover:scale-102 disabled:opacity-75"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isSyncingRemote ? 'animate-spin' : ''}`} />
+                          <span>{isSyncingRemote ? 'Sincronizando...' : 'Sincronizar Dados'}</span>
+                        </button>
+                        <button
+                          onClick={dismissAlert}
+                          className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-800 transition cursor-pointer"
+                          title="Dispensar aviso"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentUser?.role === 'separacao' ? (
+                    <MobileSeparationView
+                      order={order}
+                      orders={savedOrders.length > 0 ? savedOrders : [order]}
+                      currentUser={currentUser}
+                      onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
+                      onUpdateOrder={handleSaveOrderDirect}
+                      onFinalizeOrder={handleFinalizeSeparation}
+                    />
+                  ) : (
+                    <SeparationPage
+                      order={order}
+                      orders={savedOrders.length > 0 ? savedOrders : [order]}
+                      stores={storeConfigs}
+                      presets={separationPresets}
+                      currentUser={currentUser}
+                      onExportPDF={handleExportSeparationPDF}
+                      onNavigateToOrders={() => setActiveNav('orders')}
+                      onNavigateToHistory={() => setActiveNav('separationHistory')}
+                      onChangeOrder={setOrder}
+                      onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
+                      onFinalizeOrder={handleFinalizeSeparation}
+                      onReleaseToSeparation={handleReleaseToSeparation}
+                      onApproveOrder={handleApproveOrder}
+                      onSendToDistribution={handleSendToDistribution}
+                      onSendToFaturamento={handleSendToFaturamento}
+                      onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
+                      onAuthorizeFinancial={handleAuthorizeFinancial}
+                      onViewAuditLogs={(ord) => setPipelineAuditOrder(ord)}
+                      onSavePreset={handleSaveSeparationPreset}
+                      onDeletePreset={handleDeleteSeparationPreset}
+                    />
+                  )}
+                </div>
               )}
 
               {/* PÁGINA 2.1: HISTÓRICO DE SEPARAÇÕES & AUDITORIA DE CONFERENTES */}
@@ -4147,6 +4270,22 @@ export function App() {
           remoteModifier={remoteInfo?.lastModifier || conflictMergeData.remote.header.recebidoPor || 'Outro operador'}
           onResolve={handleResolveConflicts}
           onCancel={() => setConflictMergeData(null)}
+        />
+      )}
+
+      {/* Modal de Retrocesso de Status na Esteira */}
+      {rollbackModalOrder && (
+        <OrderRollbackModal
+          isOpen={Boolean(rollbackModalOrder)}
+          onClose={() => setRollbackModalOrder(null)}
+          order={rollbackModalOrder}
+          onSuccess={(updated) => {
+            setOrder(updated);
+            saveOrderToHistory(updated);
+            fetchOrdersFromDb().then(setSavedOrders).catch(() => setSavedOrders(loadSavedOrdersList()));
+            setRollbackModalOrder(null);
+            triggerIOSBanner(`Pedido ${updated.header.numeroPedido} retrocedido para "${updated.header.status}" com sucesso!`, 'success');
+          }}
         />
       )}
 

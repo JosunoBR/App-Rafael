@@ -2245,7 +2245,7 @@ export function App() {
       try {
         duplicated = await duplicateOrderInDb(order.header.id);
       } catch {
-        const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber());
+        const nextNum = await fetchNextOrderNumberFromDb().catch(() => getNextOrderNumber(savedOrders));
         const newId = 'po_' + Date.now();
         duplicated = {
           ...order,
@@ -2360,17 +2360,24 @@ export function App() {
       // Salva no banco e histórico com a data atual e as parcelas geradas
       let effectiveDuplicated = duplicated;
       try {
-        const saveRes = await saveOrderToDb(duplicated, { autoAssignNextOnConflict: false });
+        const saveRes = await saveOrderToDb(duplicated, { autoAssignNextOnConflict: true });
         if (saveRes?.order) {
           effectiveDuplicated = saveRes.order;
         }
       } catch (saveErr) {
         console.warn('Aviso ao persistir pedido duplicado:', saveErr);
       }
-      saveOrderToHistory(effectiveDuplicated);
+      try {
+        saveOrderToHistory(effectiveDuplicated);
+      } catch (histErr) {
+        console.warn('Aviso ao sincronizar pedido duplicado no histórico local:', histErr);
+      }
 
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
+      if (updatedOrders && updatedOrders.length > 0) {
+        saveSavedOrdersList(updatedOrders);
+      }
       setOrder({
         ...effectiveDuplicated,
         items: ensureTrailingBlankItem(effectiveDuplicated.items || [], targetFiscal, storeConfigs)
@@ -2380,7 +2387,7 @@ export function App() {
       // 📱 Lembrete obrigatório estilo iPhone ao duplicar pedido
       triggerIOSAlert({
         title: 'Pedido Duplicado',
-        message: `Este pedido foi duplicado a partir do pedido anterior e recebeu o novo número sequencial ${duplicated.header.numeroPedido}.\n\n⚠️ Lembrete importante:\nVerifique e confirme o Número do Pedido, Fornecedor e as Datas de Entrega antes de finalizar a negociação.`,
+        message: `Este pedido foi duplicado a partir do pedido anterior e recebeu o novo número sequencial ${effectiveDuplicated.header.numeroPedido}.\n\n⚠️ Lembrete importante:\nVerifique e confirme o Número do Pedido, Fornecedor e as Datas de Entrega antes de finalizar a negociação.`,
         type: 'info',
         confirmText: 'Entendi, vou revisar'
       });
@@ -3374,8 +3381,13 @@ export function App() {
       const updatedOrders = await fetchOrdersFromDb().catch(() => null);
       if (updatedOrders !== null) {
         setSavedOrders(updatedOrders);
+        saveSavedOrdersList(updatedOrders);
       } else {
-        setSavedOrders(prev => prev.filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId));
+        setSavedOrders(prev => {
+          const filtered = prev.filter(o => o.header.id !== orderId && o.header.numeroPedido !== orderId);
+          saveSavedOrdersList(filtered);
+          return filtered;
+        });
       }
 
       // 🧹 LIMPEZA IMEDIATA DA TELA DE COTAÇÃO:

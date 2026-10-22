@@ -801,38 +801,35 @@ export function loadSavedOrdersList(): PurchaseOrder[] {
 }
 
 export function saveOrderToHistory(order: PurchaseOrder): void {
-  const list = loadSavedOrdersList();
-  const orderNum = (order.header.numeroPedido || '').trim().toUpperCase();
-  
-  // 🛡️ Prevenção de duplicidade: não permite que dois pedidos distintos tenham o mesmo número
-  const conflict = list.find(o => 
-    o.header.id !== order.header.id && 
-    o.header.numeroPedido && 
-    o.header.numeroPedido.trim().toUpperCase() === orderNum
-  );
-  if (conflict) {
-    console.error(`[storage] Erro de unicidade: O número "${orderNum}" já pertence ao pedido ID ${conflict.header.id}`);
-    throw new Error(`O número de pedido "${orderNum}" já está em uso por outro pedido (${conflict.header.fornecedor || 'Fornecedor'}). Números de pedido devem ser únicos!`);
-  }
+  try {
+    const list = loadSavedOrdersList();
+    const orderNum = (order.header.numeroPedido || '').trim().toUpperCase();
+    
+    // 🛡️ Prevenção de fantasmas/duplicações no histórico local:
+    // Remove qualquer registro com o mesmo ID ou mesmo número de pedido, substituindo pela versão fresca
+    const filteredList = list.filter(o => {
+      if (o.header.id === order.header.id) return false;
+      if (orderNum && o.header.numeroPedido && o.header.numeroPedido.trim().toUpperCase() === orderNum) {
+        console.warn(`[storage] Substituindo registro local obsoleto do pedido "${orderNum}" (ID anterior: ${o.header.id}) pelo atual (ID: ${order.header.id})`);
+        return false;
+      }
+      return true;
+    });
 
-  const index = list.findIndex(o => o.header.id === order.header.id);
-  
-  const updatedOrder = { 
-    ...order, 
-    items: (order.items || []).map(it => ({ 
-      ...it, 
-      pdvAlvo: it.pdvAlvo !== undefined && it.pdvAlvo !== null && !isNaN(Number(it.pdvAlvo)) ? Number(it.pdvAlvo) : 12.00 
-    })),
-    header: { ...order.header, updatedAt: new Date().toISOString() } 
-  };
-  
-  if (index >= 0) {
-    list[index] = updatedOrder;
-  } else {
-    list.unshift(updatedOrder);
+    const updatedOrder = { 
+      ...order, 
+      items: (order.items || []).map(it => ({ 
+        ...it, 
+        pdvAlvo: it.pdvAlvo !== undefined && it.pdvAlvo !== null && !isNaN(Number(it.pdvAlvo)) ? Number(it.pdvAlvo) : 12.00 
+      })),
+      header: { ...order.header, updatedAt: new Date().toISOString() } 
+    };
+    
+    filteredList.unshift(updatedOrder);
+    saveSavedOrdersList(filteredList);
+  } catch (err) {
+    console.warn('[storage] Erro seguro ao salvar pedido no histórico do localStorage:', err);
   }
-  
-  saveSavedOrdersList(list);
 }
 
 // ==========================================

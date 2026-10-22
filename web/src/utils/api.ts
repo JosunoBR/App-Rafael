@@ -454,8 +454,12 @@ export async function deleteOrderFromDb(
 }
 
 export async function duplicateOrderInDb(orderId: string): Promise<PurchaseOrder> {
+  const idempotencyKey = `dup_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const res = await apiFetch(`/orders/${orderId}/duplicate`, {
-    method: 'POST'
+    method: 'POST',
+    headers: {
+      'Idempotency-Key': idempotencyKey
+    }
   });
   const data = await res.json();
   return data.order;

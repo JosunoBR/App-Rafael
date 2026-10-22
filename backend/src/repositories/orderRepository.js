@@ -1099,6 +1099,7 @@ class OrderRepository {
         status: 'Em Cotação',
         separationStatus: 'Pendente',
         isDraft: true,
+        autoAssignNextOnConflict: true,
         version: 1,
         // 🛡️ Limpeza estrita de ajuste fiscal (NUNCA herdar conciliação fiscal do pedido anterior)
         valorNotaFiscalEntregue: 0,

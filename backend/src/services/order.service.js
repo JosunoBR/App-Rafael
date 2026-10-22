@@ -236,6 +236,7 @@ class OrderService {
       let lastModifiedAt = '';
       let isSelfOrSystemModifier = false;
 
+      const isUserDiretoria = currentUser?.role === 'diretoria' || currentUser?.role === 'root' || currentUser?.id === 'usr_root';
       try {
         const { queryOne } = require('../config/database');
         const lastLog = await queryOne(
@@ -246,7 +247,6 @@ class OrderService {
           lastModifierName = `${lastLog.usuarioNome}${lastLog.usuarioRole ? ` (${lastLog.usuarioRole})` : ''}`;
           lastModifiedAt = lastLog.createdAt ? new Date(lastLog.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
-          const isUserDiretoria = currentUser?.role === 'diretoria' || currentUser?.role === 'root' || currentUser?.id === 'usr_root';
           if (
             lastLog.usuarioId === currentUser?.id ||
             lastLog.usuarioNome === currentUser?.nome ||
@@ -257,7 +257,7 @@ class OrderService {
         }
       } catch {}
 
-      if (incomingVersion !== null && currentVersion > incomingVersion && !isForceOverwrite && !isSelfOrSystemModifier) {
+      if (incomingVersion !== null && currentVersion > incomingVersion && !isForceOverwrite && !isSelfOrSystemModifier && !isUserDiretoria) {
         const err = new Error(
           `Conflito de Concorrência: Este pedido foi alterado e salvo no servidor por ${lastModifierName}${lastModifiedAt ? ` às ${lastModifiedAt}` : ''} enquanto você o editava. Recarregue os dados mais recentes para não perder alterações.`
         );

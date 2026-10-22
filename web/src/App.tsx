@@ -314,11 +314,11 @@ export function App() {
     mergeResult: OrderMergeResult;
   } | null>(null);
 
-  // Hook de detecção ativa de concorrência em segundo plano
+  // Hook de detecção ativa de concorrência em segundo plano (desativado para testes de estabilidade)
   const { remoteInfo, hasNewerVersion, dismissAlert } = useOrderWatcher({
     orderId: order?.header?.id,
     currentVersion: Number(order?.header?.version || 1),
-    enabled: Boolean(activeNav === 'orders' && order?.header?.id && order?.header?.status)
+    enabled: false
   });
 
   // Identifica se o pedido em memória é um rascunho em aberto não salvo
@@ -769,138 +769,21 @@ export function App() {
     }
   };
 
-  // Salva o pedido silenciosamente para contingência e troca segura de telas/pedidos sem perda de dados
+  // Salva o pedido silenciosamente exclusivamente em memória e localStorage para contingência local
   const saveOrderSilently = async (targetOrder: PurchaseOrder) => {
-    const validItems = (targetOrder.items || []).filter(it => !isOrderItemBlank(it));
-    if (validItems.length === 0 && (!targetOrder.header.fornecedor || targetOrder.header.fornecedor.trim() === '')) {
-      return;
-    }
-
-    const cleanNum = (targetOrder.header.numeroPedido || '').trim().toUpperCase();
-    if (!cleanNum) return;
-
-    // 🛡️ Se o usuário não tem permissão para editar este pedido no status atual, aborta o autosave silencioso
-    if (!canEditSpecificOrder(currentUser, targetOrder.header.status, targetOrder.header.boletosLiberados)) {
-      return;
-    }
-
-    // 🛡️ Não permite salvar se o número de pedido colidir com outro pedido existente (Alerta visual estilo iPhone)
-    const duplicate = savedOrders.find(o => 
-      o.header.id !== targetOrder.header.id && 
-      o.header.numeroPedido && 
-      o.header.numeroPedido.trim().toUpperCase() === cleanNum
-    );
-    if (duplicate) {
-      console.warn(`[AutoSave] Abortado: número ${cleanNum} já pertence a outro pedido (${duplicate.header.fornecedor}).`);
-      triggerIOSBanner(
-        `O número ${cleanNum} já pertence ao pedido de "${duplicate.header.fornecedor || 'outro fornecedor'}". O rascunho em aberto não será sincronizado até ser ajustado.`,
-        'warning',
-        'Número Duplicado em Aberto'
-      );
-      return;
-    }
-
-    // Registra novos produtos no catálogo em segundo plano sem travar a interface
-    autoRegisterProductsFromOrder(validItems).catch(err => {
-      console.warn('Aviso ao sincronizar produtos em segundo plano:', err);
-    });
-
-    const today = new Date().toISOString().split('T')[0];
-    const targetDate = targetOrder.header.dataPedido || targetOrder.header.dataEmissao || today;
-
-    // Recupera valor de frete das parcelas caso o header tenha ficado zerado
-    const existingFrete = Array.isArray(targetOrder.installments)
-      ? targetOrder.installments.find(inst => inst.isBoletoFrete || inst.tipoTitulo === 'frete' || inst.observacao?.toLowerCase().includes('frete'))
-      : undefined;
-
-    const isExplicitCif = String(targetOrder.header?.tipoFrete || '').toUpperCase() === 'CIF';
-    let targetValorFrete = isExplicitCif ? 0 : (Number(targetOrder.header.valorFrete ?? targetOrder.header.valorFreteGlobal) || 0);
-    if (!isExplicitCif && targetValorFrete <= 0 && existingFrete && existingFrete.valor > 0) {
-      targetValorFrete = existingFrete.valor;
-    }
-    let targetTipoFrete = isExplicitCif ? 'CIF' : targetOrder.header.tipoFrete;
-    if (!isExplicitCif && targetValorFrete > 0 && (!targetTipoFrete || targetTipoFrete === 'CIF')) {
-      targetTipoFrete = 'FOB';
-    }
-
-    // Preserva fielmente o status do pedido (não rebaixa pedidos Aprovados ou Em Distribuição para Em Cotação)
-    const headerWithFrete = {
-      ...targetOrder.header,
-      tipoFrete: targetTipoFrete || targetOrder.header.tipoFrete || 'CIF',
-      valorFrete: targetValorFrete,
-      valorFreteGlobal: targetValorFrete,
-      dataPedido: targetDate,
-      dataEmissao: targetOrder.header.dataEmissao || targetDate,
-      isDraft: targetOrder.header.isDraft !== undefined ? targetOrder.header.isDraft : true,
-      status: targetOrder.header.status || 'Em Cotação',
-      updatedAt: new Date().toISOString()
-    };
-
-    const orderToSave: PurchaseOrder = {
-      ...targetOrder,
-      items: validItems,
-      header: headerWithFrete,
-      installments: generateOrderInstallments({ ...targetOrder, header: headerWithFrete }, undefined, undefined, true)
-    };
-
-    // Atualiza imediatamente o histórico local e o estado em memória sem re-baixar todos os pedidos pela rede
-    saveOrderToHistory(orderToSave);
-    setSavedOrders(prev => {
-      const idx = prev.findIndex(o => o.header.id === orderToSave.header.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = orderToSave;
-        return next;
-      }
-      return [orderToSave, ...prev];
-    });
-
+    // 🛡️ Autosave de rede desativado para testes de estabilidade operacional.
+    // Preserva no armazenamento local do navegador sem disparar requisições HTTP ou gerar falsos conflitos de versão.
     try {
-      await saveOrderToDb(orderToSave, { autoAssignNextOnConflict: false });
-    } catch (err: any) {
-      console.warn('Aviso ao sincronizar pedido com o SQLite:', err);
-      if (err?.code === 'ORDER_CONCURRENT_MODIFICATION') {
-        const modifier = err.lastModifier || 'outro operador';
-        triggerIOSBanner(
-          `Aviso: O pedido foi alterado no servidor por ${modifier}. Suas alterações locais estão preservadas. Recarregue os dados mais recentes se desejar.`,
-          'warning',
-          'Edição Simultânea'
-        );
-      } else if (err?.status === 403 || err?.code === 'ORDER_CLOSED_FORBIDDEN' || err?.code === 'ORDER_LOCKED') {
-        triggerIOSBanner(
-          err.message || 'Sem autorização para salvar alterações neste pedido no servidor. Suas alterações foram retidas apenas neste navegador.',
-          'error',
-          'Permissão Negada'
-        );
-      } else if (err?.code === 'ORDER_NUMBER_CONFLICT' || (!err?.code && err?.status === 409 && (err?.suggestedNextNumber || err?.message?.toLowerCase().includes('número')))) {
-        triggerIOSBanner(
-          `O número ${orderToSave.header.numeroPedido} colidiu com outro pedido no servidor. Ajuste o número antes de salvar.`,
-          'warning',
-          'Conflito de Pedido'
-        );
-      } else if (err?.message && !isOfflineError(err)) {
-        triggerIOSBanner(
-          `Aviso: O pedido ${orderToSave.header.numeroPedido} não pôde ser gravado no servidor (${err.message}). Alterações salvas apenas em contingência local.`,
-          'warning',
-          'Aviso de Sincronização'
-        );
-      }
+      saveOrderToHistory(targetOrder);
+      saveCurrentOrder(targetOrder);
+    } catch (err) {
+      console.warn('Aviso ao salvar contingência local:', err);
     }
   };
 
-  // Auto-save active order in local storage and SQLite (unificado para 1 minuto de inatividade)
+  // Salva o rascunho do pedido ativo exclusivamente no armazenamento local (localStorage) a cada alteração
   useEffect(() => {
-    // 1. Salva imediatamente o rascunho no localStorage para segurança máxima a cada tecla
     saveCurrentOrder(order);
-
-    // 2. Sincroniza silenciosamente com o banco SQLite a cada 60 segundos de inatividade
-    const timer = setTimeout(() => {
-      const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
-      if (validItems.length > 0 || (order.header?.fornecedor && order.header.fornecedor.trim() !== '')) {
-        saveOrderSilently(order).catch(() => {});
-      }
-    }, 60000); // 1 minuto unificado conforme validação do usuário
-    return () => clearTimeout(timer);
   }, [order]);
 
   const toggleTheme = () => setIsDark(prev => !prev);
@@ -2378,7 +2261,7 @@ export function App() {
         };
       }
 
-      // 1. Preservar 100% de todos os dados do card de negociação e do cabeçalho comercial original
+      // 1. Preservar dados comerciais do cabeçalho original, mas blindar estritamente o ciclo de vida (status, boletos, conferência, versão)
       duplicated.header = {
         ...order.header,
         id: duplicated.header.id,
@@ -2388,6 +2271,30 @@ export function App() {
         status: 'Em Cotação',
         separationStatus: 'Pendente',
         isDraft: true,
+        version: 1,
+        boletosLiberados: false,
+        boletosLiberadosPor: undefined,
+        boletosLiberadosEm: undefined,
+        recebidoMatriz: false,
+        dataRecebimentoMatriz: undefined,
+        recebidoPor: undefined,
+        numeroNotaFiscal: undefined,
+        distribuicaoConcluida: false,
+        distribuidoPor: undefined,
+        dataDistribuicao: undefined,
+        observacaoDistribuicao: undefined,
+        separacaoConcluida: false,
+        separadoPor: undefined,
+        dataSeparacao: undefined,
+        observacaoSeparacao: undefined,
+        finalizadoPor: undefined,
+        dataFinalizacao: undefined,
+        aprovadoPor: undefined,
+        dataAprovacao: undefined,
+        valorNotaFiscalEntregue: 0,
+        ajusteFiscalDiferenca: 0,
+        ajusteFiscalData: undefined,
+        ajusteFiscalUsuario: undefined,
         createdAt: duplicated.header.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -2401,15 +2308,24 @@ export function App() {
       duplicated.installments = generateOrderInstallments(duplicated, undefined, undefined, false);
 
       // Salva no banco e histórico com a data atual e as parcelas geradas
-      await saveOrderToDb(duplicated, { autoAssignNextOnConflict: false }).catch(() => {});
-      saveOrderToHistory(duplicated);
+      let effectiveDuplicated = duplicated;
+      try {
+        const saveRes = await saveOrderToDb(duplicated, { autoAssignNextOnConflict: false });
+        if (saveRes?.order) {
+          effectiveDuplicated = saveRes.order;
+        }
+      } catch (saveErr) {
+        console.warn('Aviso ao persistir pedido duplicado:', saveErr);
+      }
+      saveOrderToHistory(effectiveDuplicated);
 
       const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(updatedOrders);
       setOrder({
-        ...duplicated,
-        items: ensureTrailingBlankItem(duplicated.items || [], targetFiscal, storeConfigs)
+        ...effectiveDuplicated,
+        items: ensureTrailingBlankItem(effectiveDuplicated.items || [], targetFiscal, storeConfigs)
       });
+      baseOrderRef.current = JSON.parse(JSON.stringify(effectiveDuplicated));
 
       // 📱 Lembrete obrigatório estilo iPhone ao duplicar pedido
       triggerIOSAlert({

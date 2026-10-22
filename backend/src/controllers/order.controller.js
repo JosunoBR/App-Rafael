@@ -28,6 +28,25 @@ class OrderController {
     }
   }
 
+  async recordPresence(req, res, next) {
+    try {
+      const result = await orderService.recordPresence(req.params.id, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async leavePresence(req, res, next) {
+    try {
+      const userId = req.user?.id || req.body?.userId || req.query?.userId;
+      orderService.leavePresence(req.params.id, userId);
+      return res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async save(req, res, next) {
     try {
       const options = {

@@ -34,7 +34,8 @@ class OrderService {
 
   async getOrderVersionInfo(id) {
     const header = await queryOne(
-      `SELECT id, numeroPedido, status, version, boletosLiberados, updatedAt 
+      `SELECT id, numeroPedido, status, version, boletosLiberados, updatedAt,
+              lastModifiedById, lastModifiedByName, lastModifiedByRole, lastModifiedAt
        FROM purchase_orders 
        WHERE id = ? OR numeroPedido = ?`,
       [id, id]
@@ -44,21 +45,28 @@ class OrderService {
       err.statusCode = 404;
       throw err;
     }
-    let lastModifier = null;
-    let lastModifiedAt = null;
-    try {
-      const lastLog = await queryOne(
-        `SELECT usuarioNome, usuarioRole, createdAt 
-         FROM order_distribution_logs 
-         WHERE orderId = ? 
-         ORDER BY createdAt DESC LIMIT 1`,
-        [header.id]
-      );
-      if (lastLog) {
-        lastModifier = `${lastLog.usuarioNome}${lastLog.usuarioRole ? ` (${lastLog.usuarioRole})` : ''}`;
-        lastModifiedAt = lastLog.createdAt;
-      }
-    } catch {}
+    let lastModifierId = header.lastModifiedById || null;
+    let lastModifier = header.lastModifiedByName 
+      ? `${header.lastModifiedByName}${header.lastModifiedByRole ? ` (${header.lastModifiedByRole})` : ''}`
+      : null;
+    let lastModifiedAt = header.lastModifiedAt || null;
+
+    if (!lastModifier) {
+      try {
+        const lastLog = await queryOne(
+          `SELECT usuarioId, usuarioNome, usuarioRole, createdAt 
+           FROM order_distribution_logs 
+           WHERE orderId = ? 
+           ORDER BY createdAt DESC LIMIT 1`,
+          [header.id]
+        );
+        if (lastLog) {
+          lastModifierId = lastLog.usuarioId || null;
+          lastModifier = `${lastLog.usuarioNome}${lastLog.usuarioRole ? ` (${lastLog.usuarioRole})` : ''}`;
+          lastModifiedAt = lastLog.createdAt;
+        }
+      } catch {}
+    }
 
     return {
       id: header.id,
@@ -67,9 +75,29 @@ class OrderService {
       status: header.status,
       boletosLiberados: Boolean(header.boletosLiberados),
       updatedAt: header.updatedAt,
+      lastModifierId,
       lastModifier,
       lastModifiedAt
     };
+  }
+
+  async recordPresence(orderId, user) {
+    const presenceService = require('./presence.service');
+    const activeViewers = presenceService.record(orderId, user);
+    const versionInfo = await this.getOrderVersionInfo(orderId).catch(() => null);
+
+    return {
+      activeViewers,
+      currentVersion: versionInfo?.version || 1,
+      lastModifiedById: versionInfo?.lastModifierId || null,
+      lastModifiedByName: versionInfo?.lastModifier || null,
+      lastModifiedAt: versionInfo?.lastModifiedAt || null
+    };
+  }
+
+  leavePresence(orderId, userId) {
+    const presenceService = require('./presence.service');
+    presenceService.leave(orderId, userId);
   }
 
   /**
@@ -219,6 +247,13 @@ class OrderService {
       throw err;
     }
 
+    if (currentUser) {
+      orderData.header.lastModifiedById = currentUser.id || null;
+      orderData.header.lastModifiedByName = currentUser.nome || currentUser.email || 'Usuário';
+      orderData.header.lastModifiedByRole = currentUser.role || null;
+      orderData.header.lastModifiedAt = new Date().toISOString();
+    }
+
     // Validação de Permissão: Pedidos fechados / em esteira
     let isEditingClosed = false;
     const currentId = orderData.header.id;
@@ -232,30 +267,49 @@ class OrderService {
       const currentVersion = Number(existingForAuthorization.header.version || 1);
       const isForceOverwrite = Boolean(options.forceOverwrite || orderData.forceOverwrite);
 
-      let lastModifierName = 'outro operador';
-      let lastModifiedAt = '';
+      // Identifica quem modificou por último: direto pelo cabeçalho do pedido
+      let lastModifierId = existingForAuthorization.header.lastModifiedById || null;
+      let lastModifierName = existingForAuthorization.header.lastModifiedByName || 'outro operador';
+      let lastModifiedAt = existingForAuthorization.header.lastModifiedAt
+        ? new Date(existingForAuthorization.header.lastModifiedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+        : '';
       let isSelfOrSystemModifier = false;
 
       const isUserDiretoria = currentUser?.role === 'diretoria' || currentUser?.role === 'root' || currentUser?.id === 'usr_root';
-      try {
-        const { queryOne } = require('../config/database');
-        const lastLog = await queryOne(
-          'SELECT usuarioId, usuarioNome, usuarioRole, createdAt FROM order_distribution_logs WHERE orderId = ? ORDER BY createdAt DESC LIMIT 1',
-          [currentId]
-        );
-        if (lastLog) {
-          lastModifierName = `${lastLog.usuarioNome}${lastLog.usuarioRole ? ` (${lastLog.usuarioRole})` : ''}`;
-          lastModifiedAt = lastLog.createdAt ? new Date(lastLog.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
-          if (
-            lastLog.usuarioId === currentUser?.id ||
-            lastLog.usuarioNome === currentUser?.nome ||
-            (isUserDiretoria && (lastLog.usuarioId === 'usr_root' || lastLog.usuarioNome === 'Root'))
-          ) {
-            isSelfOrSystemModifier = true;
+      // 🛡️ Regra 1: Se o autor da última alteração for o próprio usuário logado, NÃO há concorrência consigo mesmo!
+      if (
+        currentUser && (
+          (lastModifierId && lastModifierId === currentUser.id) ||
+          (lastModifierName && lastModifierName === currentUser.nome) ||
+          (isUserDiretoria && (lastModifierId === 'usr_root' || lastModifierName === 'Root'))
+        )
+      ) {
+        isSelfOrSystemModifier = true;
+      }
+
+      // Fallback: consulta auditoria de doca caso os campos do cabeçalho estejam nulos
+      if (!isSelfOrSystemModifier && !lastModifierId) {
+        try {
+          const { queryOne } = require('../config/database');
+          const lastLog = await queryOne(
+            'SELECT usuarioId, usuarioNome, usuarioRole, createdAt FROM order_distribution_logs WHERE orderId = ? ORDER BY createdAt DESC LIMIT 1',
+            [currentId]
+          );
+          if (lastLog) {
+            lastModifierName = `${lastLog.usuarioNome}${lastLog.usuarioRole ? ` (${lastLog.usuarioRole})` : ''}`;
+            lastModifiedAt = lastLog.createdAt ? new Date(lastLog.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+            if (
+              lastLog.usuarioId === currentUser?.id ||
+              lastLog.usuarioNome === currentUser?.nome ||
+              (isUserDiretoria && (lastLog.usuarioId === 'usr_root' || lastLog.usuarioNome === 'Root'))
+            ) {
+              isSelfOrSystemModifier = true;
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
 
       if (incomingVersion !== null && currentVersion > incomingVersion && !isForceOverwrite && !isSelfOrSystemModifier && !isUserDiretoria) {
         const err = new Error(
@@ -401,8 +455,8 @@ class OrderService {
 
     const saved = await orderRepository.save(orderData);
 
-    // Auditoria de governança para alterações em pedidos fechados/em esteira
-    if (isEditingClosed && currentUser) {
+    // Auditoria de governança para alterações em pedidos
+    if (currentUser) {
       await distributionAuditRepo.create({
         orderId: saved.header.id,
         numeroPedido: saved.header.numeroPedido,
@@ -410,8 +464,8 @@ class OrderService {
         usuarioId: currentUser.id || null,
         usuarioNome: currentUser.nome || currentUser.email || 'Usuário',
         usuarioRole: currentUser.role,
-        acao: 'EDICAO_PEDIDO_FECHADO',
-        observacoes: `Alteração salva no pedido fechado/em esteira (${saved.header.status}) por ${currentUser.nome || currentUser.email || 'Usuário'} (${currentUser.role}).`
+        acao: isEditingClosed ? 'EDICAO_PEDIDO_FECHADO' : 'SALVAMENTO_PEDIDO',
+        observacoes: `Alteração salva no pedido (${saved.header.status}) por ${currentUser.nome || currentUser.email || 'Usuário'} (${currentUser.role}).`
       }).catch(e => console.error('Erro ao registrar log de auditoria de alteração:', e));
     }
 

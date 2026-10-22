@@ -249,10 +249,11 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       }
     }
 
+    const detectedParc = cond.qtdParcelas || (cond.parcelasDias?.length) || parsePaymentConditionString(cond.descricao).parcelas || 1;
     onChange({
       ...header,
       condicaoPagamento: cond.descricao,
-      parcelasCount: cond.qtdParcelas,
+      parcelasCount: detectedParc,
       prazoDias: prazoStr,
       formaPagamento: formaPgto,
       datasVencimentoPersonalizadas: Object.keys(customDates).length > 0 ? customDates : undefined
@@ -488,6 +489,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
         ...header,
         formaPagamento: value,
         prazoDias: fallbackPrazo,
+        parcelasCount: fallbackParc,
         condicaoPagamento: newCondString,
         datasVencimentoPersonalizadas: undefined
       });
@@ -514,9 +516,6 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
 
   // Condição de Pagamento estruturada (Dropdown Duplo & Entrada Mista)
   const parsedPayment = parsePaymentConditionString(header.condicaoPagamento);
-  const currentParcelas = (header.parcelasCount && (header.condicaoPagamento?.includes('/') || header.condicaoPagamento?.toLowerCase().includes('x')) && parsedPayment.parcelas > 1 && header.parcelasCount === 1)
-    ? parsedPayment.parcelas
-    : (header.parcelasCount ?? parsedPayment.parcelas);
 
   const isDepositoEBoleto = header.prazoDias === 'deposito_e_boleto' || 
     header.formaPagamento === 'Boleto / Depósito' || 
@@ -530,6 +529,36 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
     ? 'deposito_e_boleto' 
     : (header.prazoDias === 'entrada_com_parcelamento' ? 'entrada_com_parcelamento' : String(header.prazoDias ?? parsedPayment.prazo));
   const isVistaIntegral = currentPrazo === 'vista';
+
+  // 🛡️ Sincronização Dinâmica: A quantidade de parcelas herda a condição/prazos selecionados,
+  // permitindo recálculo e edição bidirecionais sem travas estáticas
+  const currentParcelas = useMemo(() => {
+    if (isEntradaMista) {
+      const dParc = Math.max(1, header.depositoParcelasCount || (currentPrazo === 'deposito_e_boleto' ? 2 : 1));
+      const sParc = Math.max(1, header.saldoParcelasCount || 2);
+      return dParc + sParc;
+    }
+    if (isVistaIntegral) return 1;
+
+    const condStr = (header.condicaoPagamento || '').trim();
+    if (condStr) {
+      const condLower = condStr.toLowerCase();
+      const hasExplicitFormat = condStr.includes('/') || 
+        /\b\d+\s*x\b/i.test(condStr) || 
+        condLower.includes('vista') ||
+        QUICK_PAYMENT_PRESETS.some(p => p.conditionString.toLowerCase() === condLower);
+
+      if (hasExplicitFormat && parsedPayment.parcelas > 0) {
+        return parsedPayment.parcelas;
+      }
+    }
+
+    if (header.parcelasCount !== undefined && header.parcelasCount > 0) {
+      return header.parcelasCount;
+    }
+
+    return parsedPayment.parcelas > 0 ? parsedPayment.parcelas : 3;
+  }, [isEntradaMista, header.depositoParcelasCount, header.saldoParcelasCount, currentPrazo, isVistaIntegral, header.condicaoPagamento, header.parcelasCount, parsedPayment.parcelas]);
 
   const valorTotalPedido = orderTotal || 0;
   const valorFreteNum = Number(header.valorFrete ?? header.valorFreteGlobal) || 0;
@@ -809,6 +838,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       onChange({
         ...header,
         prazoDias: 'vista',
+        parcelasCount: 1,
         condicaoPagamento: newCondString,
         datasVencimentoPersonalizadas: undefined,
         valoresParcelasPersonalizados: undefined
@@ -836,6 +866,7 @@ export const OrderHeaderForm: React.FC<OrderHeaderFormProps> = ({
       onChange({
         ...header,
         prazoDias: String(numDias),
+        parcelasCount: currentParcelas,
         condicaoPagamento: newCondString,
         datasVencimentoPersonalizadas: undefined,
         valoresParcelasPersonalizados: undefined

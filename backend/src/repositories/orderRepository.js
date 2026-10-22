@@ -243,6 +243,7 @@ class OrderRepository {
           separacaoConcluida = ?, separadoPor = ?, dataSeparacao = ?, observacaoSeparacao = ?,
           finalizadoPor = ?, dataFinalizacao = ?,
           aprovadoPor = ?, dataAprovacao = ?,
+          lastModifiedById = ?, lastModifiedByName = ?, lastModifiedByRole = ?, lastModifiedAt = ?,
           version = COALESCE(version, 1) + 1,
           updatedAt = ?
         WHERE id = ?
@@ -313,6 +314,10 @@ class OrderRepository {
         order.header.dataFinalizacao || null,
         order.header.aprovadoPor || null,
         order.header.dataAprovacao || null,
+        order.header.lastModifiedById || null,
+        order.header.lastModifiedByName || null,
+        order.header.lastModifiedByRole || null,
+        order.header.lastModifiedAt || now,
         now,
         targetId
       ]);
@@ -335,6 +340,7 @@ class OrderRepository {
           separacaoConcluida, separadoPor, dataSeparacao, observacaoSeparacao,
           finalizadoPor, dataFinalizacao,
           aprovadoPor, dataAprovacao,
+          lastModifiedById, lastModifiedByName, lastModifiedByRole, lastModifiedAt,
           version,
           createdAt, updatedAt
         ) VALUES (
@@ -354,6 +360,7 @@ class OrderRepository {
           ?, ?, ?, ?,
           ?, ?,
           ?, ?,
+          ?, ?, ?, ?,
           1,
           ?, ?
         )
@@ -425,6 +432,10 @@ class OrderRepository {
         order.header.dataFinalizacao || null,
         order.header.aprovadoPor || null,
         order.header.dataAprovacao || null,
+        order.header.lastModifiedById || null,
+        order.header.lastModifiedByName || null,
+        order.header.lastModifiedByRole || null,
+        order.header.lastModifiedAt || now,
         order.header.createdAt || now,
         now
       ]);
@@ -972,6 +983,10 @@ class OrderRepository {
         ajusteFiscalDiferenca: r.ajusteFiscalDiferenca !== undefined && r.ajusteFiscalDiferenca !== null && Math.abs(Number(r.ajusteFiscalDiferenca)) > 0.005 ? Number(r.ajusteFiscalDiferenca) : paymentConfig.ajusteFiscalDiferenca,
         ajusteFiscalData: r.ajusteFiscalData || paymentConfig.ajusteFiscalData,
         ajusteFiscalUsuario: r.ajusteFiscalUsuario || paymentConfig.ajusteFiscalUsuario,
+        lastModifiedById: r.lastModifiedById || null,
+        lastModifiedByName: r.lastModifiedByName || null,
+        lastModifiedByRole: r.lastModifiedByRole || null,
+        lastModifiedAt: r.lastModifiedAt || null,
         version: r.version !== undefined && r.version !== null ? Number(r.version) : 1,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt

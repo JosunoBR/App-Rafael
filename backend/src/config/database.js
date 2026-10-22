@@ -151,6 +151,10 @@ async function getDatabase() {
       ajusteFiscalUsuario TEXT,
       inspectionJson TEXT,
       removedItemsJson TEXT DEFAULT '[]',
+      lastModifiedById TEXT,
+      lastModifiedByName TEXT,
+      lastModifiedByRole TEXT,
+      lastModifiedAt TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -505,7 +509,11 @@ async function getDatabase() {
         ajusteFiscalDiferenca: "REAL DEFAULT 0",
         ajusteFiscalData: "TEXT",
         ajusteFiscalUsuario: "TEXT",
-        version: "INTEGER DEFAULT 1"
+        version: "INTEGER DEFAULT 1",
+        lastModifiedById: "TEXT",
+        lastModifiedByName: "TEXT",
+        lastModifiedByRole: "TEXT",
+        lastModifiedAt: "TEXT"
       };
 
       Object.entries(requiredCols).forEach(([col, def]) => {

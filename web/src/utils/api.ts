@@ -295,9 +295,54 @@ export interface OrderVersionInfo {
   lastModifiedAt: string | null;
 }
 
+export interface OrderViewerInfo {
+  userId: string;
+  userName: string;
+  userRole: string;
+  lastSeenAt: number;
+}
+
+export interface OrderPresenceResponse {
+  activeViewers: OrderViewerInfo[];
+  currentVersion: number;
+  lastModifiedById: string | null;
+  lastModifiedByName: string | null;
+  lastModifiedAt: string | null;
+}
+
 export async function checkOrderVersionInDb(orderId: string): Promise<OrderVersionInfo> {
   const res = await apiFetch(`/orders/${encodeURIComponent(orderId)}/version-check`);
   return res.json();
+}
+
+export async function sendOrderPresencePing(orderId: string): Promise<OrderPresenceResponse> {
+  const res = await apiFetch(`/orders/${encodeURIComponent(orderId)}/presence`, {
+    method: 'POST'
+  });
+  return res.json();
+}
+
+export function sendOrderPresenceLeave(orderId: string, userId?: string): void {
+  if (!orderId) return;
+  const url = `${API_BASE_URL}/orders/${encodeURIComponent(orderId)}/presence/leave`;
+  const payload = JSON.stringify({ userId: userId || '' });
+
+  // Tenta navigator.sendBeacon para garantia de entrega em fechamento de aba
+  if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+    try {
+      const blob = new Blob([payload], { type: 'application/json' });
+      const sent = navigator.sendBeacon(url, blob);
+      if (sent) return;
+    } catch {}
+  }
+
+  // Fallback com fetch keepalive
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    keepalive: true
+  }).catch(() => {});
 }
 
 export interface SaveOrderResult {

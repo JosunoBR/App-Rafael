@@ -314,11 +314,19 @@ export function App() {
     mergeResult: OrderMergeResult;
   } | null>(null);
 
-  // Hook de detecção ativa de concorrência em segundo plano (desativado para testes de estabilidade)
-  const { remoteInfo, hasNewerVersion, dismissAlert } = useOrderWatcher({
+  // Hook de detecção ativa de concorrência e co-presença em tempo real
+  const { activeViewers, remoteInfo, hasNewerVersion, dismissAlert } = useOrderWatcher({
     orderId: order?.header?.id,
     currentVersion: Number(order?.header?.version || 1),
-    enabled: false
+    currentUserId: currentUser?.id,
+    enabled: Boolean(order?.header?.id && activeNav === 'orders'),
+    intervalMs: 15000,
+    onViewerJoined: (viewer) => {
+      showToast(`👋 ${viewer.userName} (${viewer.userRole}) acabou de acessar este pedido.`, 'info');
+    },
+    onViewerLeft: (viewer) => {
+      showToast(`${viewer.userName} saiu deste pedido.`, 'info');
+    }
   });
 
   // Identifica se o pedido em memória é um rascunho em aberto não salvo
@@ -2352,28 +2360,49 @@ export function App() {
       return;
     }
 
+    // 🛡️ Sincroniza a versão mais recente do banco para que a aprovação não falhe por defasagem
+    let baseOrder = orderToApprove;
+    let targetVersion = orderToApprove.header.version;
+    try {
+      if (orderToApprove.header.id) {
+        const remote = await fetchOrderByIdFromDb(orderToApprove.header.id);
+        if (remote && remote.header) {
+          targetVersion = remote.header.version;
+          // Se o pedido no banco possuir itens com distribuição mais recente, preserva
+          if (remote.items && remote.items.length > 0) {
+            baseOrder = remote;
+          }
+        }
+      }
+    } catch {}
+
+    const updatedItems = baseOrder.items.filter(it => !isOrderItemBlank(it));
     const updated: PurchaseOrder = {
-      ...orderToApprove,
-      items: validItems,
+      ...baseOrder,
+      items: updatedItems.length > 0 ? updatedItems : validItems,
       header: {
-        ...orderToApprove.header,
+        ...baseOrder.header,
+        version: targetVersion,
         status: 'Aprovado',
         aprovadoPor: currentUser?.nome || 'Diretoria Compras',
         dataAprovacao: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       },
-      installments: (orderToApprove.installments && orderToApprove.installments.length > 0)
-        ? orderToApprove.installments
-        : generateOrderInstallments(orderToApprove)
+      installments: (baseOrder.installments && baseOrder.installments.length > 0)
+        ? baseOrder.installments
+        : generateOrderInstallments(baseOrder)
     };
 
     try {
-      await saveOrderToDb(updated);
-      saveOrderToHistory(updated);
-      setSavedOrders(loadSavedOrdersList());
-      setOrder(updated);
+      const saveRes = await saveOrderToDb(updated, { forceOverwrite: true });
+      const finalApproved = saveRes?.order || updated;
+      saveOrderToHistory(finalApproved);
+      const refreshedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(refreshedOrders);
+      setOrder(finalApproved);
+      baseOrderRef.current = JSON.parse(JSON.stringify(finalApproved));
       confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
-      showToast(`Pedido ${updated.header.numeroPedido} APROVADO! Enviado para distribuição do Depósito Central.`, 'success');
+      showToast(`Pedido ${finalApproved.header.numeroPedido} APROVADO! Enviado para distribuição do Depósito Central.`, 'success');
     } catch (err: any) {
       showPersistenceError(err, `Não foi possível aprovar o pedido ${updated.header.numeroPedido}`);
     }
@@ -3522,6 +3551,32 @@ export function App() {
 
                   {/* 1. Formulário de Cabeçalho do Pedido (Previsão de Entrega liberada para o Comprador até a confirmação física) */}
                   <div className="space-y-6 border-none p-0 m-0 w-full max-w-full min-w-0">
+                    {/* Pill de Co-presença Ativa em Tempo Real */}
+                    {activeViewers && activeViewers.length > 0 && (
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-emerald-900 dark:text-emerald-100 shadow-2xs animate-in fade-in duration-300">
+                        <div className="flex items-center gap-2.5">
+                          <span className="relative flex h-2.5 w-2.5 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                          </span>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            {activeViewers.length === 1 ? (
+                              <>
+                                <span className="text-emerald-700 dark:text-emerald-300 font-extrabold">{activeViewers[0].userName}</span> ({activeViewers[0].userRole}) está com este pedido aberto agora
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-emerald-700 dark:text-emerald-300 font-extrabold">{activeViewers.map(v => v.userName).join(', ')}</span> estão com este pedido aberto agora
+                              </>
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0">
+                          Edição Compartilhada
+                        </div>
+                      </div>
+                    )}
+
                     {/* Barra Flutuante de Detecção Ativa de Edição Simultânea por Colega */}
                     {hasNewerVersion && remoteInfo && (
                       <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-blue-900 dark:text-blue-100 shadow-xs animate-in slide-in-from-top-2 duration-300">

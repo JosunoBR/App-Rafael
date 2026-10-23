@@ -977,6 +977,11 @@ class OrderService {
       order.header.boletosLiberados = true;
       order.header.boletosLiberadosPor = currentUser.nome || 'Diretoria';
       order.header.boletosLiberadosEm = new Date().toISOString();
+      if (currentStatus === 'Faturamento') {
+        order.header.status = 'Finalizado';
+        order.header.finalizadoPor = currentUser.nome || 'Diretoria';
+        order.header.dataFinalizacao = new Date().toISOString();
+      }
     }
 
     // Recalcular as datas de vencimento das parcelas a partir da data de recebimento na Matriz

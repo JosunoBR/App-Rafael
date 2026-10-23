@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { FinancialEntry, FinancialStatus, FinancialCategory, PurchaseOrder } from '../shared/types';
 import { toBrDate, formatCurrency } from '../utils/masks';
+import { getEntryOrderAndNf } from '../utils/financialHelper';
 
 interface FinancialDailyViewProps {
   entries: FinancialEntry[];
@@ -426,7 +427,8 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                         <th className="py-2.5 px-3">Categoria</th>
                         <th className="py-2.5 px-3">Loja / Unidade</th>
                         <th className="py-2.5 px-3">Forma Pgto</th>
-                        <th className="py-2.5 px-3">NF / Doc</th>
+                        <th className="py-2.5 px-3">NF</th>
+                        <th className="py-2.5 px-3">Pedido</th>
                         <th className="py-2.5 px-3">Parcela</th>
                         <th className="py-2.5 px-3">Status</th>
                         <th className="py-2.5 px-4 text-right">Valor</th>
@@ -447,6 +449,7 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                         );
                         const adjDiff = linkedOrder?.header.ajusteFiscalDiferenca || 0;
                         const adjNf = linkedOrder?.header.valorNotaFiscalEntregue || 0;
+                        const { orderNumber, nfNumber } = getEntryOrderAndNf(item, linkedOrder);
 
                         return (
                           <tr
@@ -538,10 +541,12 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                               </span>
                             </td>
 
-                            {/* NF / Doc */}
-                            <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400">
+                            {/* NF */}
+                            <td className="py-2.5 px-3 font-mono text-slate-700 dark:text-slate-300">
                               <div className="flex items-center gap-1.5">
-                                <span>{item.documentoRef || '—'}</span>
+                                <span className={nfNumber !== '—' ? 'font-bold text-slate-900 dark:text-white' : 'text-slate-400'}>
+                                  {nfNumber}
+                                </span>
                                 {hasFiscalAdjustment && (
                                   <span 
                                     title={`Pedido com conciliação fiscal (${adjDiff >= 0 ? '+' : '-'}R$ ${Math.abs(adjDiff).toFixed(2).replace('.', ',')})`}
@@ -551,6 +556,28 @@ export const FinancialDailyView: React.FC<FinancialDailyViewProps> = ({
                                   </span>
                                 )}
                               </div>
+                            </td>
+
+                            {/* Pedido */}
+                            <td className="py-2.5 px-3 font-mono">
+                              {orderNumber !== '—' ? (
+                                linkedOrder && onSelectOrder ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onSelectOrder(linkedOrder)}
+                                    className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer transition text-left"
+                                    title={`Clique para visualizar o Pedido ${orderNumber}`}
+                                  >
+                                    {orderNumber}
+                                  </button>
+                                ) : (
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                    {orderNumber}
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-slate-400 font-mono">—</span>
+                              )}
                             </td>
 
                             {/* Parcela */}

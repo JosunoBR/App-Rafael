@@ -476,6 +476,8 @@ export interface FinancialEntry {
   comprovanteUrl?: string;
   comprovantesJson?: string;
   comprovantes?: ComprovanteAnexo[];
+  numeroNotaFiscal?: string | null;
+  numeroPedido?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

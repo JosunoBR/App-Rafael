@@ -58,6 +58,7 @@ import {
 } from '../utils/api';
 import { toBrDate, formatCurrency } from '../utils/masks';
 import { exportFinancialToExcel, exportFinancialToPdf } from '../utils/financialExporter';
+import { getEntryOrderAndNf } from '../utils/financialHelper';
 import { compressImage, isImageFile, formatFileSize } from '../utils/imageUtils';
 import { FinancialEntryModal } from './FinancialEntryModal';
 import { FinancialEditModal } from './FinancialEditModal';
@@ -1560,7 +1561,8 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                   <th className="py-3 px-3">Categoria</th>
                   <th className="py-3 px-3">Loja / Unidade</th>
                   <th className="py-3 px-3">Forma Pgto</th>
-                  <th className="py-3 px-3">NF / Doc</th>
+                  <th className="py-3 px-3">NF</th>
+                  <th className="py-3 px-3">Pedido</th>
                   <th className="py-3 px-3">Parcela</th>
                   <th className="py-3 px-3">Status</th>
                   <th className="py-3 px-4 text-right">Valor</th>
@@ -1570,7 +1572,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
                 {entries.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-slate-400">
+                    <td colSpan={13} className="py-12 text-center text-slate-400">
                       Nenhum lançamento financeiro encontrado com os filtros aplicados.
                     </td>
                   </tr>
@@ -1587,6 +1589,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                     );
                     const adjDiff = linkedOrder?.header.ajusteFiscalDiferenca || 0;
                     const adjNf = linkedOrder?.header.valorNotaFiscalEntregue || 0;
+                    const { orderNumber, nfNumber } = getEntryOrderAndNf(item, linkedOrder);
 
                     return (
                       <tr
@@ -1670,9 +1673,12 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                         <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-300 uppercase">
                           {item.formaPagamento}
                         </td>
-                        <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-400">
+                        {/* NF */}
+                        <td className="py-3 px-3 font-mono text-slate-700 dark:text-slate-300">
                           <div className="flex items-center gap-1.5">
-                            <span>{item.documentoRef || '—'}</span>
+                            <span className={nfNumber !== '—' ? 'font-bold text-slate-900 dark:text-white' : 'text-slate-400'}>
+                              {nfNumber}
+                            </span>
                             {hasFiscalAdjustment && (
                               <span 
                                 title={`Pedido com conciliação fiscal (${adjDiff >= 0 ? '+' : '-'}R$ ${Math.abs(adjDiff).toFixed(2).replace('.', ',')})`}
@@ -1682,6 +1688,28 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                               </span>
                             )}
                           </div>
+                        </td>
+
+                        {/* Pedido */}
+                        <td className="py-3 px-3 font-mono">
+                          {orderNumber !== '—' ? (
+                            linkedOrder && onSelectOrder ? (
+                              <button
+                                type="button"
+                                onClick={() => onSelectOrder(linkedOrder)}
+                                className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer transition text-left"
+                                title={`Clique para visualizar o Pedido ${orderNumber}`}
+                              >
+                                {orderNumber}
+                              </button>
+                            ) : (
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                {orderNumber}
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-slate-400 font-mono">—</span>
+                          )}
                         </td>
                         <td className="py-3 px-3 font-mono font-bold text-amber-600 dark:text-amber-400">
                           {item.parcelaDesc}

@@ -29,7 +29,13 @@ class FinancialRepository {
    * Suporta formato brasileiro DD/MM/YYYY e legado YYYY-MM-DD.
    */
   async findAll({ month, year, startDate, endDate, storeId, lojaNome, categoria, status, tipo, search, empresa, statusPrevisao, formaPagamento } = {}) {
-    let sql = 'SELECT * FROM financial_entries WHERE 1=1';
+    let sql = `
+      SELECT fe.*,
+        (SELECT po.numeroNotaFiscal FROM purchase_orders po WHERE po.id = fe.orderId) AS orderNumeroNotaFiscal,
+        (SELECT po.numeroPedido FROM purchase_orders po WHERE po.id = fe.orderId) AS orderNumeroPedido
+      FROM financial_entries fe
+      WHERE 1=1
+    `;
     const params = [];
 
     // Expressão SQL para normalizar dataVencimento para formato comparável YYYY-MM-DD
@@ -133,8 +139,15 @@ class FinancialRepository {
 
     if (search && search.trim()) {
       const term = `%${search.trim().toLowerCase()}%`;
-      sql += ' AND (LOWER(descricao) LIKE ? OR LOWER(fornecedor) LIKE ? OR LOWER(documentoRef) LIKE ? OR LOWER(observacao) LIKE ? OR LOWER(bancoConta) LIKE ?)';
-      params.push(term, term, term, term, term);
+      sql += ` AND (
+        LOWER(fe.descricao) LIKE ? 
+        OR LOWER(fe.fornecedor) LIKE ? 
+        OR LOWER(fe.documentoRef) LIKE ? 
+        OR LOWER(fe.observacao) LIKE ? 
+        OR LOWER(fe.bancoConta) LIKE ?
+        OR fe.orderId IN (SELECT id FROM purchase_orders WHERE LOWER(numeroNotaFiscal) LIKE ? OR LOWER(numeroPedido) LIKE ?)
+      )`;
+      params.push(term, term, term, term, term, term, term);
     }
 
     sql += ` ORDER BY 
@@ -149,12 +162,25 @@ class FinancialRepository {
   }
 
   async findById(id) {
-    const row = await queryOne('SELECT * FROM financial_entries WHERE id = ?', [id]);
+    const row = await queryOne(`
+      SELECT fe.*,
+        (SELECT po.numeroNotaFiscal FROM purchase_orders po WHERE po.id = fe.orderId) AS orderNumeroNotaFiscal,
+        (SELECT po.numeroPedido FROM purchase_orders po WHERE po.id = fe.orderId) AS orderNumeroPedido
+      FROM financial_entries fe
+      WHERE fe.id = ?
+    `, [id]);
     return row ? this._hydrate(row) : null;
   }
 
   async findByOrderId(orderId) {
-    const rows = await queryAll('SELECT * FROM financial_entries WHERE orderId = ? ORDER BY dataVencimento ASC', [orderId]);
+    const rows = await queryAll(`
+      SELECT fe.*,
+        (SELECT po.numeroNotaFiscal FROM purchase_orders po WHERE po.id = fe.orderId) AS orderNumeroNotaFiscal,
+        (SELECT po.numeroPedido FROM purchase_orders po WHERE po.id = fe.orderId) AS orderNumeroPedido
+      FROM financial_entries fe
+      WHERE fe.orderId = ?
+      ORDER BY fe.dataVencimento ASC
+    `, [orderId]);
     return rows.map(r => this._hydrate(r));
   }
 
@@ -899,6 +925,8 @@ class FinancialRepository {
         }
         return [];
       })(),
+      numeroNotaFiscal: row.orderNumeroNotaFiscal || row.numeroNotaFiscal || null,
+      numeroPedido: row.orderNumeroPedido || row.numeroPedido || null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt
     };

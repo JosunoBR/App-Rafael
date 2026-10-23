@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   FolderOpen, 
   Search, 
@@ -20,7 +20,9 @@ import {
   Scale,
   AlertTriangle,
   Clock,
-  Calendar
+  Calendar,
+  ChevronDown,
+  Layers
 } from 'lucide-react';
 import { PurchaseOrder } from '../shared/types';
 import { calculateOrderTotals } from '../shared/orderCalculationEngine';
@@ -115,27 +117,44 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     return ALL_PIPELINE_STATUSES.length > 0 && ALL_PIPELINE_STATUSES.every(st => selectedStatuses.has(st));
   }, [ALL_PIPELINE_STATUSES, selectedStatuses]);
 
-  // Alterna liga/desliga de um status individual (desliga apenas ele se estiver ligado, sem desativar os outros)
-  const handleToggleStatus = (status: string) => {
-    setSelectedStatuses(prev => {
-      const next = new Set(prev);
-      if (next.has(status)) {
-        next.delete(status);
-      } else {
-        next.add(status);
+  // Dropdown de Filtro de Status (Conceito 1: Command Pill Dropdown)
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setIsStatusDropdownOpen(false);
       }
-      return next;
-    });
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsStatusDropdownOpen(false);
+      }
+    };
+
+    if (isStatusDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isStatusDropdownOpen]);
+
+  // Seleciona status com 1 clique rápido (Conceito 1)
+  const handleSelectStatus = (status: string) => {
+    setSelectedStatuses(new Set([status]));
+    setIsStatusDropdownOpen(false);
   };
 
-  // Liga/desliga todos os status ao clicar em "Todos os Pedidos"
-  const handleToggleAll = () => {
-    if (isAllSelected) {
-      setSelectedStatuses(new Set());
-    } else {
-      setSelectedStatuses(new Set(ALL_PIPELINE_STATUSES));
-    }
+  // Seleciona todos os status
+  const handleSelectAllStatuses = () => {
+    setSelectedStatuses(new Set(ALL_PIPELINE_STATUSES));
+    setIsStatusDropdownOpen(false);
   };
+  const handleToggleAll = handleSelectAllStatuses;
 
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
@@ -355,6 +374,133 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     'Finalizado': orders.filter(o => o.header.status === 'Finalizado').length
   };
 
+  // Itens do menu da esteira para o Command Pill Dropdown (Conceito 1)
+  const PIPELINE_MENU_ITEMS = [
+    {
+      key: 'Em Cotação',
+      label: '1. Em Cotação',
+      dotColor: 'bg-amber-400',
+      activeBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/80',
+      badgeBg: 'bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200'
+    },
+    {
+      key: 'Aprovado',
+      label: '2. Aprovados',
+      dotColor: 'bg-blue-500',
+      activeBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 border border-blue-300/80 dark:border-blue-700/80',
+      badgeBg: 'bg-blue-200/80 dark:bg-blue-900/80 text-blue-900 dark:text-blue-200'
+    },
+    {
+      key: 'Em Separação',
+      label: '3. Separação',
+      dotColor: 'bg-purple-500',
+      activeBg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border border-purple-300/80 dark:border-purple-700/80',
+      badgeBg: 'bg-purple-200/80 dark:bg-purple-900/80 text-purple-900 dark:text-purple-200'
+    },
+    {
+      key: 'Faturamento',
+      label: '4. Faturamento',
+      dotColor: 'bg-amber-500',
+      activeBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/80',
+      badgeBg: 'bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200'
+    },
+    {
+      key: 'Finalizado',
+      label: '5. Finalizados',
+      dotColor: 'bg-emerald-500',
+      activeBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 border border-emerald-300/80 dark:border-emerald-700/80',
+      badgeBg: 'bg-emerald-200/80 dark:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200'
+    }
+  ];
+
+  const visiblePipelineMenuItems = useMemo(() => {
+    return PIPELINE_MENU_ITEMS.filter(item => 
+      !(item.key === 'Em Cotação' && currentUser?.role === 'faturamento')
+    );
+  }, [currentUser?.role]);
+
+  // Informações visuais do pill ativo no Conceito 1
+  const activeStatusInfo = useMemo(() => {
+    if (isAllSelected) {
+      return {
+        label: 'Todos os Pedidos',
+        count: countByStatus.todos,
+        isAll: true,
+        pillClass: 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 shadow-2xs font-semibold',
+        badgeClass: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold',
+        dotColor: null
+      };
+    }
+    if (selectedStatuses.size === 1) {
+      const current = Array.from(selectedStatuses)[0];
+      switch (current) {
+        case 'Em Cotação':
+          return {
+            label: '1. Em Cotação',
+            count: countByStatus['Em Cotação'] || 0,
+            isAll: false,
+            pillClass: 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700/80 font-bold shadow-2xs',
+            badgeClass: 'bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-100 font-bold',
+            dotColor: 'bg-amber-400'
+          };
+        case 'Aprovado':
+          return {
+            label: '2. Aprovados',
+            count: countByStatus['Aprovado'] || 0,
+            isAll: false,
+            pillClass: 'bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 border-blue-300 dark:border-blue-700/80 font-bold shadow-2xs',
+            badgeClass: 'bg-blue-200/80 dark:bg-blue-900/80 text-blue-900 dark:text-blue-100 font-bold',
+            dotColor: 'bg-blue-500'
+          };
+        case 'Em Separação':
+          return {
+            label: '3. Separação',
+            count: countByStatus['Em Separação'] || 0,
+            isAll: false,
+            pillClass: 'bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border-purple-300 dark:border-purple-700/80 font-bold shadow-2xs',
+            badgeClass: 'bg-purple-200/80 dark:bg-purple-900/80 text-purple-900 dark:text-purple-100 font-bold',
+            dotColor: 'bg-purple-500'
+          };
+        case 'Faturamento':
+          return {
+            label: '4. Faturamento',
+            count: countByStatus['Faturamento'] || 0,
+            isAll: false,
+            pillClass: 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700/80 font-bold shadow-2xs',
+            badgeClass: 'bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-100 font-bold',
+            dotColor: 'bg-amber-500'
+          };
+        case 'Finalizado':
+          return {
+            label: '5. Finalizados',
+            count: countByStatus['Finalizado'] || 0,
+            isAll: false,
+            pillClass: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700/80 font-bold shadow-2xs',
+            badgeClass: 'bg-emerald-200/80 dark:bg-emerald-900/80 text-emerald-900 dark:text-emerald-100 font-bold',
+            dotColor: 'bg-emerald-500'
+          };
+      }
+    }
+    if (selectedStatuses.size === 0) {
+      return {
+        label: 'Nenhum Status',
+        count: 0,
+        isAll: false,
+        pillClass: 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700/80 font-bold shadow-2xs',
+        badgeClass: 'bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-100 font-bold',
+        dotColor: 'bg-rose-500'
+      };
+    }
+    return {
+      label: `${selectedStatuses.size} Status Ativos`,
+      count: statusFilteredOrders.length,
+      isAll: false,
+      pillClass: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 border-indigo-300 dark:border-indigo-700/80 font-bold shadow-2xs',
+      badgeClass: 'bg-indigo-200 dark:bg-indigo-900 text-indigo-900 dark:text-indigo-100 font-bold',
+      dotColor: 'bg-indigo-500'
+    };
+  }, [isAllSelected, selectedStatuses, countByStatus, statusFilteredOrders.length]);
+
   const getStatusBadgeClass = (status?: string) => {
     switch (status) {
       case 'Finalizado':
@@ -434,175 +580,165 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         onSelectOrder={onSelectOrder}
       />
 
-      {/* 3. Abas de Status da Esteira Operacional Oficial (5 Etapas) - Liga e Desliga Dinâmico */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 select-none">
-        
-        {/* Botão: Todos os Pedidos (Liga / Desliga os botões ao lado) */}
-        <button
-          type="button"
-          onClick={handleToggleAll}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
-            isAllSelected
-              ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
-          }`}
-          title={isAllSelected ? "Todos ligados. Clique para desligar todos os botões ao lado" : "Clique para ligar todos os botões ao lado"}
-        >
-          <span>Todos os Pedidos</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-            isAllSelected 
-              ? 'bg-white/20 dark:bg-slate-200 text-white dark:text-slate-900' 
-              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
-          }`}>
-            {countByStatus.todos}
-          </span>
-        </button>
-
-        {/* 1. Em Cotação */}
-        {currentUser?.role !== 'faturamento' && (
-          <button
-            type="button"
-            onClick={() => handleToggleStatus('Em Cotação')}
-            className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
-              selectedStatuses.has('Em Cotação')
-                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 font-bold'
-                : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
-            }`}
-            title={selectedStatuses.has('Em Cotação') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
-          >
-            <span>🟡 1. Em Cotação</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-              selectedStatuses.has('Em Cotação') 
-                ? 'bg-amber-200/70 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-bold' 
-                : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
-            }`}>
-              {countByStatus['Em Cotação']}
-            </span>
-          </button>
-        )}
-
-        {/* 2. Aprovados */}
-        <button
-          type="button"
-          onClick={() => handleToggleStatus('Aprovado')}
-          className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
-            selectedStatuses.has('Aprovado')
-              ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-700/80 font-bold'
-              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
-          }`}
-          title={selectedStatuses.has('Aprovado') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
-        >
-          <span>🔵 2. Aprovados</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-            selectedStatuses.has('Aprovado') 
-              ? 'bg-blue-200/70 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 font-bold' 
-              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
-          }`}>
-            {countByStatus['Aprovado']}
-          </span>
-        </button>
-
-        {/* 3. Separação */}
-        <button
-          type="button"
-          onClick={() => handleToggleStatus('Em Separação')}
-          className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
-            selectedStatuses.has('Em Separação')
-              ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-700/80 font-bold'
-              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
-          }`}
-          title={selectedStatuses.has('Em Separação') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
-        >
-          <span>🟣 3. Separação</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-            selectedStatuses.has('Em Separação') 
-              ? 'bg-purple-200/70 dark:bg-purple-900/60 text-purple-900 dark:text-purple-200 font-bold' 
-              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
-          }`}>
-            {countByStatus['Em Separação'] || 0}
-          </span>
-        </button>
-
-        {/* 4. Faturamento */}
-        <button
-          type="button"
-          onClick={() => handleToggleStatus('Faturamento')}
-          className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
-            selectedStatuses.has('Faturamento')
-              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 font-bold'
-              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
-          }`}
-          title={selectedStatuses.has('Faturamento') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
-        >
-          <span>🟠 4. Faturamento</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-            selectedStatuses.has('Faturamento') 
-              ? 'bg-amber-200/70 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-bold' 
-              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
-          }`}>
-            {countByStatus['Faturamento'] || 0}
-          </span>
-        </button>
-
-        {/* 5. Finalizados */}
-        <button
-          type="button"
-          onClick={() => handleToggleStatus('Finalizado')}
-          className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs ${
-            selectedStatuses.has('Finalizado')
-              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/80 font-bold'
-              : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/80 dark:border-slate-700/80 opacity-40 hover:opacity-85 hover:bg-slate-50'
-          }`}
-          title={selectedStatuses.has('Finalizado') ? "Status ligado. Clique para desligar" : "Status desligado. Clique para ligar"}
-        >
-          <span>🟢 5. Finalizados</span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-            selectedStatuses.has('Finalizado') 
-              ? 'bg-emerald-200/70 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 font-bold' 
-              : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
-          }`}>
-            {countByStatus['Finalizado'] || 0}
-          </span>
-        </button>
-      </div>
-
-      {/* 4. Tabela de Pedidos Salvos */}
+      {/* 3. Tabela de Pedidos Salvos com Barra de Comandos Compacta */}
       <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-5 shadow-xs space-y-4">
         
-        {/* Barra Superior: Busca Global e Status dos Filtros */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="relative w-full max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por número (ex: PED-0001), fornecedor ou vendedor..."
-              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-            {searchTerm && (
+        {/* Barra Superior: Busca Global, Dropdown Pill de Status da Esteira e Métricas */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1 max-w-2xl">
+            
+            {/* Campo de Busca Global */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por número (ex: PED-0001), fornecedor ou vendedor..."
+                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Conceito 1: Command Pill Dropdown de Status da Esteira */}
+            <div ref={statusDropdownRef} className="relative shrink-0">
               <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                type="button"
+                onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                className={`w-full sm:w-auto inline-flex items-center justify-between sm:justify-start gap-2 px-3.5 py-2 rounded-xl text-xs border transition-all cursor-pointer ${activeStatusInfo.pillClass}`}
+                title="Filtrar pedidos por etapa da esteira operacional (1 clique)"
               >
-                <X className="w-4 h-4" />
+                <div className="flex items-center gap-2">
+                  {activeStatusInfo.isAll ? (
+                    <Layers className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
+                  ) : (
+                    <span className={`w-2.5 h-2.5 rounded-full ${activeStatusInfo.dotColor || 'bg-slate-400'} shrink-0`} />
+                  )}
+                  <span>{activeStatusInfo.label}</span>
+                </div>
+                
+                <div className="flex items-center gap-1.5 pl-1">
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${activeStatusInfo.badgeClass}`}>
+                    {activeStatusInfo.count}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 text-slate-400 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
+                </div>
               </button>
-            )}
+
+              {/* Popover Dropdown Menu Flutuante */}
+              {isStatusDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1.5 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/90 rounded-2xl shadow-xl shadow-slate-900/10 dark:shadow-black/40 p-1.5 z-40 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md">
+                  {/* Cabeçalho do Menu */}
+                  <div className="px-2.5 py-1.5 flex items-center justify-between text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                    <span>Etapa da Esteira</span>
+                    <span className="font-normal lowercase text-[10px]">1 clique para filtrar</span>
+                  </div>
+
+                  {/* Opção: Todos os Pedidos */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllStatuses}
+                      className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                        isAllSelected
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-bold shadow-xs'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Layers className={`w-3.5 h-3.5 ${isAllSelected ? 'text-white dark:text-slate-900' : 'text-slate-400'}`} />
+                        <span>Todos os Pedidos</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                          isAllSelected 
+                            ? 'bg-white/20 dark:bg-slate-200 text-white dark:text-slate-900' 
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                        }`}>
+                          {countByStatus.todos}
+                        </span>
+                        {isAllSelected && <Check className="w-3.5 h-3.5 text-current stroke-[2.5]" />}
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="h-px bg-slate-100 dark:bg-slate-800/80 my-1" />
+
+                  {/* Lista das Etapas da Esteira */}
+                  <div className="space-y-0.5">
+                    {visiblePipelineMenuItems.map(item => {
+                      const isSelected = !isAllSelected && selectedStatuses.size === 1 && selectedStatuses.has(item.key);
+                      const count = countByStatus[item.key] || 0;
+
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => handleSelectStatus(item.key)}
+                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer group ${
+                            isSelected
+                              ? `${item.activeBg} font-bold shadow-xs`
+                              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2.5 h-2.5 rounded-full ${item.dotColor} shrink-0 ring-2 ring-transparent group-hover:ring-current/20 transition-all`} />
+                            <span>{item.label}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                              isSelected 
+                                ? item.badgeBg 
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                            }`}>
+                              {count}
+                            </span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-current stroke-[2.5]" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Rodapé quando um filtro específico está ativo */}
+                  {!isAllSelected && (
+                    <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800 text-center">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllStatuses}
+                        className="w-full py-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                      >
+                        Ver todos os pedidos ({countByStatus.todos})
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 shrink-0">
             <span>
               Exibindo <strong className="text-slate-900 dark:text-white font-mono">{processedOrders.length}</strong> de <strong className="font-mono">{orders.length}</strong> pedidos
             </span>
-            {(sortField || hasActiveColumnFilters) && (
+            {(sortField || hasActiveColumnFilters || !isAllSelected) && (
               <button
                 onClick={() => {
                   setSortField(null);
                   setSortDirection(null);
                   handleClearAllColumnFilters();
+                  handleSelectAllStatuses();
                 }}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 transition cursor-pointer"
-                title="Limpar todas as ordenações e filtros de coluna"
+                title="Limpar todas as ordenações e filtros"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 Resetar Filtros
@@ -612,9 +748,21 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         </div>
 
         {/* Chips de Filtros Ativos */}
-        {(hasActiveColumnFilters || searchTerm) && (
+        {(hasActiveColumnFilters || searchTerm || !isAllSelected) && (
           <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs border-t border-slate-100 dark:border-slate-700/50">
             <span className="text-slate-400 text-[11px] font-semibold mr-1">Filtros ativos:</span>
+            {!isAllSelected && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium border border-slate-200 dark:border-slate-600">
+                Status: {activeStatusInfo.label}
+                <button 
+                  onClick={handleSelectAllStatuses} 
+                  className="hover:text-rose-500 cursor-pointer ml-0.5"
+                  title="Remover filtro de status e ver todos"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
             {searchTerm && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium">
                 Busca: "{searchTerm}"
@@ -1327,14 +1475,14 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                                 <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                 <span>Confirmar Recebimento</span>
                               </button>
-                            ) : !ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser, ord.header.status) ? (
+                            ) : (!ord.header.boletosLiberados || ord.header.status === 'Faturamento') && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser, ord.header.status) ? (
                               <button
                                 onClick={() => onAuthorizeFinancial(ord)}
                                 className="w-full h-7 px-2 bg-amber-50/90 hover:bg-amber-100/90 text-amber-800 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 rounded-lg text-[10.5px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 shadow-2xs active:scale-98"
-                                title="Liberar os boletos no Contas a Pagar e finalizar o pedido"
+                                title={ord.header.boletosLiberados ? "Finalizar o pedido na esteira" : "Liberar os boletos no Contas a Pagar e finalizar o pedido"}
                               >
                                 <CreditCard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                                <span>Liberar Boletos</span>
+                                <span>{ord.header.boletosLiberados ? "Finalizar Pedido" : "Liberar Boletos"}</span>
                               </button>
                             ) : ord.header.boletosLiberados ? (
                               <span className="w-full h-7 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-medium inline-flex items-center justify-center gap-1 border border-emerald-200/60 dark:border-emerald-800/40 rounded-lg bg-emerald-50/40 dark:bg-emerald-950/20">

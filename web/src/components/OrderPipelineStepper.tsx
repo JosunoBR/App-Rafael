@@ -240,14 +240,14 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
                   <span>Divergência de Doca Pendente de Resolução</span>
                 </div>
               ) : (
-                !order.header.boletosLiberados && onAuthorizeFinancial && (
+                onAuthorizeFinancial && (
                   <button
                     onClick={() => onAuthorizeFinancial(order)}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"
-                    title="Liberar os boletos no Contas a Pagar e finalizar o pedido"
+                    title={order.header.boletosLiberados ? "Finalizar o pedido na esteira" : "Liberar os boletos no Contas a Pagar e finalizar o pedido"}
                   >
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>Liberar Boletos & Finalizar</span>
+                    <span>{order.header.boletosLiberados ? "Finalizar Pedido" : "Liberar Boletos & Finalizar"}</span>
                   </button>
                 )
               )}

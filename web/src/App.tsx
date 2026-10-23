@@ -534,6 +534,7 @@ export function App() {
           };
         });
         setSavedOrders(hydratedOrders);
+        saveSavedOrdersList(hydratedOrders);
 
         // 🛡️ Sincroniza a sequência global de pedidos com os dados do banco
         getNextOrderNumber(hydratedOrders);
@@ -984,7 +985,15 @@ export function App() {
       const targetOrder: PurchaseOrder = orderToPersist;
       saveCurrentOrder(targetOrder);
       saveOrderToHistory(targetOrder);
-      setSavedOrders(loadSavedOrdersList());
+      setSavedOrders(prev => {
+        const idx = prev.findIndex(o => o.header.id === targetOrder.header.id || (o.header.numeroPedido && o.header.numeroPedido === targetOrder.header.numeroPedido));
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = targetOrder;
+          return next;
+        }
+        return [targetOrder, ...prev];
+      });
       saveOrderSilently(targetOrder).catch(() => {});
 
       if (rescheduleNotice) {
@@ -2360,6 +2369,25 @@ export function App() {
         datasVencimentoPersonalizadas: _oldCustomDates,
         deliveryRescheduleHistory: _oldResched,
         paymentConfigJson: _oldPJson,
+        boletosLiberados: _oldBL,
+        boletosLiberadosPor: _oldBLP,
+        boletosLiberadosEm: _oldBLE,
+        finalizadoPor: _oldFP,
+        dataFinalizacao: _oldDF,
+        aprovadoPor: _oldAP,
+        dataAprovacao: _oldDA,
+        recebidoMatriz: _oldRM,
+        dataRecebimentoMatriz: _oldDRM,
+        recebidoPor: _oldRP,
+        numeroNotaFiscal: _oldNNF,
+        distribuicaoConcluida: _oldDC,
+        distribuidoPor: _oldDP,
+        dataDistribuicao: _oldDD,
+        observacaoDistribuicao: _oldOD,
+        separacaoConcluida: _oldSC,
+        separadoPor: _oldSP,
+        dataSeparacao: _oldDS,
+        observacaoSeparacao: _oldOS,
         ...restHeader
       } = (order.header || {}) as any;
 
@@ -2375,28 +2403,28 @@ export function App() {
         isDraft: true,
         version: 1,
         boletosLiberados: false,
-        boletosLiberadosPor: undefined,
-        boletosLiberadosEm: undefined,
+        boletosLiberadosPor: null as any,
+        boletosLiberadosEm: null as any,
         recebidoMatriz: false,
-        dataRecebimentoMatriz: undefined,
-        recebidoPor: undefined,
-        numeroNotaFiscal: undefined,
+        dataRecebimentoMatriz: null as any,
+        recebidoPor: null as any,
+        numeroNotaFiscal: null as any,
         distribuicaoConcluida: false,
-        distribuidoPor: undefined,
-        dataDistribuicao: undefined,
-        observacaoDistribuicao: undefined,
+        distribuidoPor: null as any,
+        dataDistribuicao: null as any,
+        observacaoDistribuicao: null as any,
         separacaoConcluida: false,
-        separadoPor: undefined,
-        dataSeparacao: undefined,
-        observacaoSeparacao: undefined,
-        finalizadoPor: undefined,
-        dataFinalizacao: undefined,
-        aprovadoPor: undefined,
-        dataAprovacao: undefined,
+        separadoPor: null as any,
+        dataSeparacao: null as any,
+        observacaoSeparacao: null as any,
+        finalizadoPor: null as any,
+        dataFinalizacao: null as any,
+        aprovadoPor: null as any,
+        dataAprovacao: null as any,
         valorNotaFiscalEntregue: 0,
         ajusteFiscalDiferenca: 0,
-        ajusteFiscalData: undefined,
-        ajusteFiscalUsuario: undefined,
+        ajusteFiscalData: null as any,
+        ajusteFiscalUsuario: null as any,
         valoresParcelasPersonalizados: undefined,
         datasVencimentoPersonalizadas: undefined,
         deliveryRescheduleHistory: [],
@@ -2913,7 +2941,9 @@ export function App() {
     try {
       await saveOrderToDb(updated);
       saveOrderToHistory(updated);
-      setSavedOrders(loadSavedOrdersList());
+      const updatedOrders = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      setSavedOrders(updatedOrders);
+      saveSavedOrdersList(updatedOrders);
       if (order.header.numeroPedido === ord.header.numeroPedido || (order.header.id && order.header.id === ord.header.id)) {
         setOrder(updated);
       }

@@ -746,14 +746,14 @@ export const HomePage: React.FC<HomePageProps> = ({
                                 <span>Receber</span>
                               </button>
                             )}
-                            {!ord.header.boletosLiberados && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser, ord.header.status) && (
+                            {(!ord.header.boletosLiberados || ord.header.status === 'Faturamento') && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser, ord.header.status) && (
                               <button
                                 onClick={() => onAuthorizeFinancial(ord)}
                                 className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50/90 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
-                                title="Liberar os boletos no Contas a Pagar e finalizar o pedido"
+                                title={ord.header.boletosLiberados ? "Finalizar o pedido na esteira" : "Liberar os boletos no Contas a Pagar e finalizar o pedido"}
                               >
                                 <CreditCard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                                <span>Liberar Boletos</span>
+                                <span>{ord.header.boletosLiberados ? "Finalizar Pedido" : "Liberar Boletos"}</span>
                               </button>
                             )}
                             <button

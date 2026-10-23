@@ -67,7 +67,12 @@ async function handleIdempotency(req, res, next) {
           (idempotencyKey, requestFingerprint, responseStatus, responseJson, createdAt)
          VALUES (?, ?, ?, ?, ?)`,
         [key, fingerprint, status, JSON.stringify(body ?? null), new Date().toISOString()]
-      ).catch(error => console.error('Falha ao persistir idempotência:', error));
+      ).then(() => {
+        // 🛡️ Manutenção Contínua: limpeza assíncrona periódica (5% das gravações) para impedir inchaço do banco
+        if (Math.random() < 0.05) {
+          execute("DELETE FROM idempotency_records WHERE createdAt < datetime('now', '-24 hours')").catch(() => {});
+        }
+      }).catch(error => console.error('Falha ao persistir idempotência:', error));
     }
 
     resolveActive(result);

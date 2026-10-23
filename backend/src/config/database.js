@@ -880,6 +880,18 @@ async function getDatabase() {
     console.error("Aviso ao semear condições de pagamento padrão:", pcErr.message);
   }
 
+  // 🛡️ Manutenção Preventiva: Limpeza automática de registros de idempotência com mais de 24 horas
+  try {
+    const expiredRes = dbInstance.exec("SELECT count(*) FROM idempotency_records WHERE createdAt < datetime('now', '-24 hours')");
+    const expiredCount = expiredRes[0]?.values[0]?.[0] || 0;
+    if (expiredCount > 0) {
+      dbInstance.run("DELETE FROM idempotency_records WHERE createdAt < datetime('now', '-24 hours');");
+      console.log(`🧹 Limpeza preventiva: ${expiredCount} registro(s) expirados de idempotência expurgados.`);
+    }
+  } catch (cleanErr) {
+    console.warn('Aviso ao executar limpeza de idempotência:', cleanErr.message);
+  }
+
   saveDatabaseToDisk();
 
   return dbInstance;

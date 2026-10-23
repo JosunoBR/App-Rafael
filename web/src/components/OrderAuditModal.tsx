@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, History, User, Clock, CheckCircle2, Boxes, PackageCheck, Receipt, CheckCheck, Truck, ShieldCheck, FileText } from 'lucide-react';
 import { DistributionAuditLog, PurchaseOrder } from '../shared/types';
 import { fetchDistributionAuditLogs } from '../utils/api';
+import { formatAuditDateTime, toBrDate } from '../utils/masks';
 
 interface OrderAuditModalProps {
   order: PurchaseOrder;
@@ -249,7 +250,7 @@ export const OrderAuditModal: React.FC<OrderAuditModalProps> = ({ order, onClose
           <div>
             <span className="text-[10px] uppercase font-bold text-slate-400 block">Recebido Matriz</span>
             <span className="font-semibold text-slate-800 dark:text-slate-200">
-              {order.header.recebidoMatriz ? `✓ Sim (${order.header.dataRecebimentoMatriz || ''})` : 'Não recebido'}
+              {order.header.recebidoMatriz ? `✓ Sim (${order.header.dataRecebimentoMatriz ? toBrDate(order.header.dataRecebimentoMatriz) : ''})` : 'Não recebido'}
             </span>
           </div>
           <div>
@@ -292,7 +293,7 @@ export const OrderAuditModal: React.FC<OrderAuditModalProps> = ({ order, onClose
               {logs.map((log) => {
                 const badge = getActionBadge(log.acao);
                 const BadgeIcon = badge.icon;
-                const dateStr = log.timestamp ? new Date(log.timestamp).toLocaleString('pt-BR') : '';
+                const dateStr = log.timestamp ? formatAuditDateTime(log.timestamp) : '';
 
                 // Lojas afetadas
                 let lojasList: string[] = [];

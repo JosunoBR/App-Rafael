@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, History, User, Clock, CheckCircle2, AlertCircle, ShieldCheck, ArrowRight, FileText } from 'lucide-react';
 import { FinancialAuditLog } from '../shared/types';
 import { fetchFinancialAuditLogs } from '../utils/api';
+import { formatAuditDateTime } from '../utils/masks';
 
 interface FinancialAuditModalProps {
   entryId?: string;
@@ -90,7 +91,7 @@ export const FinancialAuditModal: React.FC<FinancialAuditModalProps> = ({
               {logs.map((log) => {
                 const isPaid = log.acao?.includes('BAIXA');
                 const isUpdate = log.acao?.includes('UPDATE');
-                const dateStr = log.timestamp ? new Date(log.timestamp).toLocaleString('pt-BR') : '';
+                const dateStr = log.timestamp ? formatAuditDateTime(log.timestamp) : '';
 
                 return (
                   <div key={log.id} className="relative group">

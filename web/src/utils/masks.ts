@@ -253,3 +253,21 @@ export function toIsoDate(val?: string | null): string {
   return trimmed;
 }
 
+/**
+ * Formata data e hora para exibição em trilhas de auditoria no Horário Oficial de Brasília (UTC-3).
+ * Ajusta carimbos gravados pelo servidor em UTC (-3h), garantindo sincronia precisa com o relógio local.
+ */
+export function formatAuditDateTime(val?: string | null): string {
+  if (!val) return '';
+  let s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(s) && !s.endsWith('Z') && !s.includes('+') && !s.includes('-')) {
+    s = s.replace(' ', 'T') + 'Z';
+  }
+  const dt = new Date(s);
+  if (isNaN(dt.getTime())) return s;
+
+  // Ajusta -3 horas para converter o timestamp do servidor para o Horário de Brasília
+  const brDate = new Date(dt.getTime() - 3 * 60 * 60 * 1000);
+  return brDate.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+

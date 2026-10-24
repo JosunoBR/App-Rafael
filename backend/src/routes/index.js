@@ -14,6 +14,7 @@ const separationPresetRoutes = require('./separationPreset.routes');
 const fiscalPresetRoutes = require('./fiscalPreset.routes');
 const paymentConditionRoutes = require('./paymentCondition.routes');
 const financialRoutes = require('./financial.routes');
+const adminRoutes = require('./admin.routes');
 
 const router = Router();
 
@@ -42,5 +43,6 @@ router.use('/payment-conditions', paymentConditionRoutes);
 router.use('/financial', financialRoutes);
 router.use('/audit', auditRoutes);
 router.use('/export', exportRoutes);
+router.use('/admin', adminRoutes);
 
 module.exports = router;

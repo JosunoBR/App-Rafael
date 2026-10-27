@@ -605,6 +605,7 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
                     min={1}
                     max={24}
                     value={formQtdParcelas}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => handleQtdParcelasChange(e.target.value)}
                     onBlur={handleQtdParcelasBlur}
                     required
@@ -715,6 +716,7 @@ export const PaymentConditionsModal: React.FC<PaymentConditionsModalProps> = ({
                           type="text"
                           inputMode="numeric"
                           value={dias}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => handleDiaChange(index, e.target.value)}
                           onBlur={() => handleDiaBlur(index)}
                           placeholder="0"

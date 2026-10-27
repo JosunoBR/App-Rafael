@@ -660,8 +660,21 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
                     <input
                       type="number"
                       min="1"
-                      value={avariaQtd}
-                      onChange={(e) => setAvariaQtd(Math.max(1, parseInt(e.target.value) || 1))}
+                      value={avariaQtd === 0 ? '' : avariaQtd}
+                      placeholder="1"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          setAvariaQtd(0);
+                        } else {
+                          const val = parseInt(raw, 10);
+                          if (!isNaN(val)) setAvariaQtd(Math.max(0, val));
+                        }
+                      }}
+                      onBlur={() => {
+                        if (avariaQtd < 1) setAvariaQtd(1);
+                      }}
                       className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black text-center text-slate-900 dark:text-white"
                     />
                   </div>

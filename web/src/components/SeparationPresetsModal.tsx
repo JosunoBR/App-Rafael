@@ -497,8 +497,10 @@ export const SeparationPresetsModal: React.FC<SeparationPresetsModalProps> = ({
                       min="0"
                       max="100"
                       step="1"
-                      value={formReservePercent}
-                      onChange={(e) => setFormReservePercent(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                      value={formReservePercent === 0 ? '' : formReservePercent}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setFormReservePercent(e.target.value === '' ? 0 : Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
                       className="w-full pl-2.5 pr-6 py-1 text-xs font-mono font-bold rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                     />
                     <span className="absolute right-2 top-1 text-xs font-bold text-slate-400 pointer-events-none">%</span>
@@ -609,6 +611,7 @@ export const SeparationPresetsModal: React.FC<SeparationPresetsModalProps> = ({
                                     step="0.1"
                                     value={val === 0 ? '' : val}
                                     placeholder="0"
+                                    onFocus={(e) => e.target.select()}
                                     onChange={(e) => handleStoreWeightChange(store.id, e.target.value)}
                                     className="w-full pl-1.5 pr-4 py-1 text-xs font-mono font-bold text-right rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-1 focus:ring-indigo-500"
                                   />

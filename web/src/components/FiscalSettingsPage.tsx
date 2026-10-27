@@ -619,9 +619,10 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                         step="0.01"
                         min="0"
                         max="100"
-                        value={store.defaultWeight}
+                        value={store.defaultWeight === 0 ? '' : store.defaultWeight}
+                        placeholder="0"
                         onFocus={(e) => e.target.select()}
-                        onChange={(e) => handleStoreWeightChange(store.id, parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleStoreWeightChange(store.id, e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                         className="w-14 px-1.5 py-0.5 text-center text-xs font-bold font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-hidden"
                       />
                       <span className="text-[10px] text-slate-400 font-bold">%</span>
@@ -691,9 +692,10 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                         step="0.01"
                         min="0"
                         max="100"
-                        value={store.defaultWeight}
+                        value={store.defaultWeight === 0 ? '' : store.defaultWeight}
+                        placeholder="0"
                         onFocus={(e) => e.target.select()}
-                        onChange={(e) => handleStoreWeightChange(store.id, parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleStoreWeightChange(store.id, e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                         className="w-14 px-1.5 py-0.5 text-center text-xs font-bold font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-hidden"
                       />
                       <span className="text-[10px] text-slate-400 font-bold">%</span>
@@ -763,9 +765,10 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                         step="0.01"
                         min="0"
                         max="100"
-                        value={store.defaultWeight}
+                        value={store.defaultWeight === 0 ? '' : store.defaultWeight}
+                        placeholder="0"
                         onFocus={(e) => e.target.select()}
-                        onChange={(e) => handleStoreWeightChange(store.id, parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleStoreWeightChange(store.id, e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                         className="w-14 px-1.5 py-0.5 text-center text-xs font-bold font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 outline-hidden"
                       />
                       <span className="text-[10px] text-slate-400 font-bold">%</span>
@@ -979,8 +982,10 @@ export const FiscalSettingsPage: React.FC<FiscalSettingsPageProps> = ({
                   step="0.01"
                   min="0.01"
                   max="100"
-                  value={modalStore.defaultWeight}
-                  onChange={e => setModalStore({ ...modalStore, defaultWeight: parseFloat(e.target.value) || 0 })}
+                  value={modalStore.defaultWeight === 0 ? '' : modalStore.defaultWeight}
+                  placeholder="0"
+                  onFocus={(e) => e.target.select()}
+                  onChange={e => setModalStore({ ...modalStore, defaultWeight: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold font-mono focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                   required
                 />

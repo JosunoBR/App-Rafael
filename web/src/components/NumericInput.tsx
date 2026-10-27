@@ -40,7 +40,7 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   const [text, setText] = useState<string>(() => {
     return value > 0
       ? value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-      : (value === 0 ? '0,' + '0'.repeat(decimals) : '');
+      : '';
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +50,7 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   useEffect(() => {
     if (!isFocused) {
       if (value === 0) {
-        setText('0,' + '0'.repeat(decimals));
+        setText('');
       } else {
         setText(value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }));
       }
@@ -104,11 +104,15 @@ export const NumericInput: React.FC<NumericInputProps> = ({
     if (max !== undefined && numVal > max) numVal = max;
 
     // Formata o número final com as casas decimais exigidas
-    const formatted = numVal.toLocaleString('pt-BR', {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals
-    });
-    setText(formatted);
+    if (numVal === 0) {
+      setText('');
+    } else {
+      const formatted = numVal.toLocaleString('pt-BR', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      });
+      setText(formatted);
+    }
     onChange(numVal);
     if (onCommit) {
       onCommit(numVal);

@@ -1037,12 +1037,25 @@ export const ProductsCatalogPage: React.FC<ProductsCatalogPageProps> = ({
                     type="number"
                     min="1"
                     required
-                    value={editingProduct.qtdPorPacote !== undefined ? editingProduct.qtdPorPacote : 12}
+                    value={editingProduct.qtdPorPacote === 0 || editingProduct.qtdPorPacote === undefined ? '' : editingProduct.qtdPorPacote}
+                    placeholder="12"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      setEditingProduct(prev => prev ? { ...prev, qtdPorPacote: isNaN(val) ? 1 : Math.max(1, val) } : null);
+                      const raw = e.target.value;
+                      if (raw === '') {
+                        setEditingProduct(prev => prev ? { ...prev, qtdPorPacote: 0 } : null);
+                      } else {
+                        const val = parseInt(raw, 10);
+                        if (!isNaN(val)) {
+                          setEditingProduct(prev => prev ? { ...prev, qtdPorPacote: Math.max(0, val) } : null);
+                        }
+                      }
                     }}
-                    placeholder="Ex: 12"
+                    onBlur={() => {
+                      if (!editingProduct?.qtdPorPacote || editingProduct.qtdPorPacote < 1) {
+                        setEditingProduct(prev => prev ? { ...prev, qtdPorPacote: 12 } : null);
+                      }
+                    }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 outline-hidden focus:ring-2 focus:ring-indigo-500"
                   />
                   <span className="text-[9px] text-slate-400 block mt-0.5">Unidades na embalagem</span>

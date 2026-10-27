@@ -146,6 +146,7 @@ export const StoreSalesInputModal: React.FC<StoreSalesInputModalProps> = ({
                         min="0"
                         placeholder="0"
                         value={val}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) => handleChange(store.id, e.target.value)}
                         className="w-24 px-2 py-1 text-right text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500"
                       />

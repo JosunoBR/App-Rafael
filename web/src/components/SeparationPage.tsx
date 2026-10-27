@@ -1400,9 +1400,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                             type="number"
                             min="0"
                             max={item.qtdTotalUnidades}
-                            value={item.qtdRecebida !== undefined ? item.qtdRecebida : item.qtdTotalUnidades}
+                            value={item.qtdRecebida === 0 ? '' : (item.qtdRecebida !== undefined ? item.qtdRecebida : item.qtdTotalUnidades)}
+                            placeholder="0"
                             onFocus={(e) => e.target.select()}
-                            onChange={(e) => handleUpdateItemReceivedUnits(item, parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleUpdateItemReceivedUnits(item, e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                             className={`w-14 h-7 px-1 text-center font-mono font-bold text-xs rounded-lg border outline-hidden transition ${
                               (item.qtdRecebida !== undefined && item.qtdRecebida < item.qtdTotalUnidades)
                                 ? 'border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 focus:ring-2 focus:ring-amber-500'
@@ -1932,9 +1933,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                           <input
                             type="number"
                             min="1"
-                            value={av.quantidade}
+                            value={av.quantidade === 0 ? '' : av.quantidade}
+                            placeholder="1"
                             onFocus={(e) => e.target.select()}
-                            onChange={(e) => handleUpdateAvaria(av.id, 'quantidade', Math.max(1, parseInt(e.target.value) || 1))}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              handleUpdateAvaria(av.id, 'quantidade', raw === '' ? 0 : Math.max(0, parseInt(raw, 10) || 0));
+                            }}
+                            onBlur={() => {
+                              if (av.quantidade < 1) handleUpdateAvaria(av.id, 'quantidade', 1);
+                            }}
                             className="w-full px-1.5 py-1 text-center font-mono font-extrabold rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
 

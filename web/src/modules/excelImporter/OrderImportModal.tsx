@@ -756,8 +756,10 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                         type="number"
                         min="0"
                         max="100"
-                        value={percentualNotaInput}
-                        onChange={(e) => setPercentualNotaInput(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                        value={percentualNotaInput === 0 ? '' : percentualNotaInput}
+                        placeholder="0"
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setPercentualNotaInput(e.target.value === '' ? 0 : Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
                         className="w-16 font-mono font-bold text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-center"
                       />
                       <span className="text-xs font-bold text-slate-600 dark:text-slate-400">%</span>
@@ -773,8 +775,10 @@ export const OrderImportModal: React.FC<OrderImportModalProps> = ({
                         type="number"
                         min="0"
                         max="100"
-                        value={percentualDescontoOffInput}
-                        onChange={(e) => setPercentualDescontoOffInput(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                        value={percentualDescontoOffInput === 0 ? '' : percentualDescontoOffInput}
+                        placeholder="0"
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setPercentualDescontoOffInput(e.target.value === '' ? 0 : Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
                         className="w-16 font-mono font-bold text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-center"
                       />
                       <span className="text-xs font-bold text-slate-600 dark:text-slate-400">%</span>

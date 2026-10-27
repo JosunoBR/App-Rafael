@@ -732,6 +732,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                       max={120}
                       step={1}
                       value={parcelasCount === 0 ? '' : parcelasCount}
+                      placeholder="2"
+                      onFocus={(e) => e.target.select()}
                       onChange={e => {
                         const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
                         if (!isNaN(val)) {
@@ -772,6 +774,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                         max={31}
                         step={1}
                         value={diaDoMes === 0 ? '' : diaDoMes}
+                        placeholder="1"
+                        onFocus={(e) => e.target.select()}
                         onChange={e => {
                           const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
                           if (!isNaN(val)) {
@@ -794,6 +798,8 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                         max={365}
                         step={1}
                         value={intervaloDias === 0 ? '' : intervaloDias}
+                        placeholder="30"
+                        onFocus={(e) => e.target.select()}
                         onChange={e => {
                           const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
                           if (!isNaN(val)) {

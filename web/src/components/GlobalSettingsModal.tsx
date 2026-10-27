@@ -296,9 +296,10 @@ export const GlobalSettingsModal: React.FC<GlobalSettingsModalProps> = ({
                       step="0.01"
                       min="0.1"
                       max="100"
-                      value={store.defaultWeight}
+                      value={store.defaultWeight === 0 ? '' : store.defaultWeight}
+                      placeholder="0"
                       onFocus={(e) => e.target.select()}
-                      onChange={(e) => handleStoreWeightChange(store.id, parseFloat(e.target.value) || 1)}
+                      onChange={(e) => handleStoreWeightChange(store.id, e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                       className="w-16 px-2 py-1 text-xs text-center font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
                     />
                     <span className="text-xs text-slate-400 font-bold">%</span>

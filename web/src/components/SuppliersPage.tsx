@@ -699,12 +699,23 @@ export const SuppliersPage: React.FC<SuppliersPageProps> = ({
                     type="number"
                     min="1"
                     required
-                    value={newProductData.qtdPorPacote !== undefined ? newProductData.qtdPorPacote : 12}
+                    value={newProductData.qtdPorPacote === 0 || newProductData.qtdPorPacote === undefined ? '' : newProductData.qtdPorPacote}
+                    placeholder="12"
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      setNewProductData(prev => ({ ...prev, qtdPorPacote: isNaN(val) ? 1 : Math.max(1, val) }));
+                      const raw = e.target.value;
+                      if (raw === '') {
+                        setNewProductData(prev => ({ ...prev, qtdPorPacote: 0 }));
+                      } else {
+                        const val = parseInt(raw, 10);
+                        if (!isNaN(val)) setNewProductData(prev => ({ ...prev, qtdPorPacote: Math.max(0, val) }));
+                      }
                     }}
-                    placeholder="Ex: 12"
+                    onBlur={() => {
+                      if (!newProductData.qtdPorPacote || newProductData.qtdPorPacote < 1) {
+                        setNewProductData(prev => ({ ...prev, qtdPorPacote: 12 }));
+                      }
+                    }}
                     className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 outline-hidden focus:ring-2 focus:ring-indigo-500"
                   />
                   <span className="text-[9px] text-slate-400 block mt-0.5">Unidades na embalagem</span>

@@ -899,7 +899,8 @@ export function createStockTransferOrder(
   const items: OrderItem[] = selectedItemsWithBoxes.map((sel, idx) => {
     const { stockItem, caixasParaSeparar, separacaoLojas } = sel;
     const pack = stockItem.qtdPorPacote || 1;
-    const qtdTotalUnidades = caixasParaSeparar * pack;
+    // Base de cálculo em estoque é estritamente 1:1 (unidades selecionadas pelo usuário; pack é meramente informativo)
+    const qtdTotalUnidades = Number(caixasParaSeparar) || 0;
     const valorTotalBruto = qtdTotalUnidades * stockItem.precoUnitario;
     const fiscal = calculateItemFiscal(stockItem.precoUnitario, stockItem.pdvSugerido, fiscalConfig);
 
@@ -920,7 +921,11 @@ export function createStockTransferOrder(
 
     return {
       id: `item_transf_${Date.now()}_${idx + 1}`,
+      productId: stockItem.productId || stockItem.id,
       codigo: stockItem.codigo,
+      codigoInterno: stockItem.codigoInterno || stockItem.codigo,
+      codigoFornecedor: stockItem.codigoFornecedor || '',
+      codigoBarras: stockItem.codigoBarras || '',
       descricao: stockItem.descricao,
       fotoUrl: stockItem.fotoUrl,
       qtdPorPacote: pack,
@@ -962,6 +967,10 @@ export function createStockTransferOrder(
       valorOutrasDespesasGlobal: 0,
       status: 'Em Separação',
       separationStatus: 'Pendente',
+      recebidoMatriz: true,
+      dataRecebimentoMatriz: today,
+      recebidoPor: 'Depósito Central Matriz',
+      boletosLiberados: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     },

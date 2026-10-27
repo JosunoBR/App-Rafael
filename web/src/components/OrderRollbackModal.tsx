@@ -83,8 +83,17 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
 
   const currentStatus = order?.header?.status || 'Em Cotação';
 
+  const isTransfer = order?.header?.supplierId === 'cd_matriz' ||
+    String(order?.header?.numeroPedido || '').startsWith('CD-') ||
+    String(order?.header?.id || '').startsWith('order_transf_cd_') ||
+    Boolean(order?.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+
   // Obter opções anteriores válidas baseado no status atual
   const availableOptions = ALL_ROLLBACK_OPTIONS.filter(opt => {
+    if (isTransfer) {
+      // Transferências possuem ciclo direto Separação -> Finalizado. Retrocesso de Finalizado vai estritamente para Em Separação
+      return opt.status === 'Em Separação' && currentStatus === 'Finalizado';
+    }
     const rankMap: Record<string, number> = {
       'Em Cotação': 0,
       'Rascunho': 0,
@@ -97,6 +106,17 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
     const currentRank = rankMap[currentStatus] ?? 0;
     const optRank = rankMap[opt.status] ?? 0;
     return optRank < currentRank;
+  }).map(opt => {
+    if (isTransfer && opt.status === 'Em Separação') {
+      return {
+        ...opt,
+        label: '1. Separação na Doca',
+        step: 'Etapa 1',
+        description: 'Reabre a transferência para a doca de conferência e separação.',
+        impactWarning: 'Estorna as unidades debitadas de volta para o Estoque Central da Matriz e reabre a conferência física.'
+      };
+    }
+    return opt;
   });
 
   useEffect(() => {

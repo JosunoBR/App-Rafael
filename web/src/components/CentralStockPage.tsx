@@ -26,7 +26,7 @@ import {
   Store,
   Bookmark
 } from 'lucide-react';
-import { CentralStockItem, StoreConfig, FiscalConfig, Product, Supplier, SeparationPreset } from '../shared/types';
+import { CentralStockItem, StoreConfig, FiscalConfig, Product, Supplier, SeparationPreset, PurchaseOrder } from '../shared/types';
 import { StockTransferPayloadItem } from '../utils/storage';
 import { applySeparationPreset, calculateAutomaticSeparation } from '../shared/separationEngine';
 
@@ -37,6 +37,7 @@ interface CentralStockPageProps {
   stores: StoreConfig[];
   fiscalConfig: FiscalConfig;
   presets?: SeparationPreset[];
+  orders?: PurchaseOrder[];
   onUpdateStockBalance: (stockId: string, deltaUnidades: number, newLocation?: string) => void;
   onSaveNewStockItem: (item: CentralStockItem) => void;
   onGenerateStockSeparation: (itemsToTransfer: StockTransferPayloadItem[]) => void;
@@ -50,6 +51,7 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
   stores = [],
   fiscalConfig,
   presets = [],
+  orders = [],
   onUpdateStockBalance,
   onSaveNewStockItem,
   onGenerateStockSeparation,
@@ -128,15 +130,66 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     };
   }, [stockItems]);
 
+  // Mapeamento de unidades empenhadas em romaneios ativos de transferência na doca
+  const committedStockMap = useMemo(() => {
+    const res = new Map<string, { totalCommitted: number; orderNumbers: string[] }>();
+
+    (stockItems || []).forEach(item => {
+      let totalCommitted = 0;
+      const orderNumbers: string[] = [];
+
+      (orders || []).forEach(o => {
+        const isTransfer = o.header?.supplierId === 'cd_matriz' || 
+                           String(o.header?.numeroPedido || '').startsWith('CD-') || 
+                           String(o.header?.id || '').startsWith('order_transf_cd_') ||
+                           (o.header?.fornecedor && o.header.fornecedor.toLowerCase().includes('transferência'));
+
+        if (isTransfer && o.header?.status === 'Em Separação') {
+          (o.items || []).forEach(it => {
+            const qty = Number(it.qtdTotalUnidades || 0);
+            if (qty > 0 && !it.ruptura) {
+              const code = String(it.codigo || it.codigoInterno || '').trim().toLowerCase();
+              const itemCode = String(item.codigo || item.codigoInterno || '').trim().toLowerCase();
+              const desc = String(it.descricao || '').trim().toLowerCase();
+              const itemDesc = String(item.descricao || '').trim().toLowerCase();
+
+              const itAny = it as any;
+              const match = 
+                (itAny.productId && (itAny.productId === item.id || itAny.productId === item.productId)) ||
+                (it.id && (it.id === item.id || it.id === item.productId)) ||
+                (code && itemCode && code === itemCode) ||
+                (desc && itemDesc && desc === itemDesc);
+
+              if (match) {
+                totalCommitted += qty;
+                if (o.header?.numeroPedido && !orderNumbers.includes(o.header.numeroPedido)) {
+                  orderNumbers.push(o.header.numeroPedido);
+                }
+              }
+            }
+          });
+        }
+      });
+
+      res.set(item.id, { totalCommitted, orderNumbers });
+    });
+
+    return res;
+  }, [stockItems, orders]);
+
   // Total selecionado para transferência
   const selectedCount = Object.keys(selectedTransferItems).length;
   const totalUnidadesTransferencia = Object.values(selectedTransferItems).reduce((sum, val) => sum + (Number(val) || 0), 0);
   const [selectionWarning, setSelectionWarning] = useState<string | null>(null);
 
-  // Itens com saldo positivo que podem ser selecionados
+  // Itens com saldo livre positivo que podem ser transferidos
   const selectableItems = useMemo(() => {
-    return filteredStock.filter(it => (it.saldoUnidades || 0) > 0);
-  }, [filteredStock]);
+    return filteredStock.filter(it => {
+      const comm = committedStockMap.get(it.id)?.totalCommitted || 0;
+      const freeBalance = Math.max(0, (it.saldoUnidades || 0) - comm);
+      return freeBalance > 0;
+    });
+  }, [filteredStock, committedStockMap]);
 
   const allSelected = selectableItems.length > 0 && selectableItems.every(it => selectedTransferItems[it.id] !== undefined);
 
@@ -147,21 +200,26 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
     } else {
       const next: Record<string, number> = {};
       selectableItems.forEach(it => {
-        next[it.id] = Math.min(Math.max(1, it.saldoUnidades || 1), 50);
+        const comm = committedStockMap.get(it.id)?.totalCommitted || 0;
+        const freeBalance = Math.max(0, (it.saldoUnidades || 0) - comm);
+        next[it.id] = Math.min(Math.max(1, freeBalance || 1), 50);
       });
       setSelectedTransferItems(next);
       setSelectionWarning(null);
     }
   };
 
-  // Handlers de Seleção e Transferência
+  // Handlers de Seleção e Transferência respeitando saldo livre
   const toggleItemSelection = (item: CentralStockItem) => {
+    const comm = committedStockMap.get(item.id)?.totalCommitted || 0;
+    const freeBalance = Math.max(0, (item.saldoUnidades || 0) - comm);
+
     setSelectedTransferItems(prev => {
       const next = { ...prev };
       if (next[item.id]) {
         delete next[item.id];
       } else {
-        next[item.id] = Math.min(Math.max(1, item.saldoUnidades), 100);
+        next[item.id] = Math.min(Math.max(1, freeBalance), 100);
       }
       return next;
     });
@@ -630,10 +688,29 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                         </div>
                       </td>
 
-                      {/* Saldo em Unidades */}
-                      <td className="py-3 px-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 whitespace-nowrap text-sm">
-                        {(item.saldoUnidades || 0).toLocaleString('pt-BR')} un
-                      </td>
+                      {/* Saldo em Unidades com Informativo de Empenhado */}
+                      {(() => {
+                        const comm = committedStockMap.get(item.id) || { totalCommitted: 0, orderNumbers: [] };
+                        const freeBalance = Math.max(0, (item.saldoUnidades || 0) - comm.totalCommitted);
+
+                        return (
+                          <td className="py-3 px-3 text-right bg-emerald-50/30 dark:bg-emerald-950/20 whitespace-nowrap">
+                            <div className="flex flex-col items-end">
+                              <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                                {(item.saldoUnidades || 0).toLocaleString('pt-BR')} un
+                              </span>
+                              {comm.totalCommitted > 0 && (
+                                <span
+                                  className="inline-flex items-center gap-1 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100/90 dark:bg-amber-950/80 px-1.5 py-0.5 rounded-md border border-amber-300 dark:border-amber-700 cursor-help mt-0.5 shadow-2xs"
+                                  title={`${comm.totalCommitted.toLocaleString('pt-BR')} unidades empenhadas no(s) romaneio(s) ${comm.orderNumbers.join(', ')} em separação na Doca.\nSaldo livre para novas transferências: ${freeBalance.toLocaleString('pt-BR')} un.`}
+                                >
+                                  [-{comm.totalCommitted} em separação]
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })()}
 
                       {/* Custo Unitário */}
                       <td className="py-3 px-3 text-right font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
@@ -803,48 +880,66 @@ export const CentralStockPage: React.FC<CentralStockPageProps> = ({
                             <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
                               {item.descricao}
                             </div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                              Saldo Disponível no CD: <strong className="text-slate-700 dark:text-slate-300">{(item.saldoUnidades || 0).toLocaleString('pt-BR')} un</strong>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                              <span>
+                                Saldo Total: <strong className="text-slate-700 dark:text-slate-300">{(item.saldoUnidades || 0).toLocaleString('pt-BR')} un</strong>
+                              </span>
+                              {(() => {
+                                const comm = committedStockMap.get(item.id)?.totalCommitted || 0;
+                                const free = Math.max(0, (item.saldoUnidades || 0) - comm);
+                                return comm > 0 ? (
+                                  <span className="text-amber-600 dark:text-amber-400 font-bold">
+                                    • Livre: {free.toLocaleString('pt-BR')} un ({comm} em separação)
+                                  </span>
+                                ) : null;
+                              })()}
                             </div>
                           </div>
                         </div>
 
                         {/* Controle de Unidades a Transferir */}
-                        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
-                          <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                            <button
-                              type="button"
-                              onClick={() => handleTransferUnitsChange(stockId, unidades - 10, item.saldoUnidades)}
-                              className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <input
-                              type="number"
-                              min="1"
-                              max={item.saldoUnidades}
-                              value={unidades === 0 ? '' : unidades}
-                              placeholder="0"
-                              onFocus={(e) => e.target.select()}
-                              onChange={(e) => handleTransferUnitsChange(stockId, parseInt(e.target.value, 10) || 0, item.saldoUnidades)}
-                              className="w-16 text-center font-mono font-bold text-xs bg-transparent text-slate-900 dark:text-white outline-hidden"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleTransferUnitsChange(stockId, unidades + 10, item.saldoUnidades)}
-                              className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                        {(() => {
+                          const comm = committedStockMap.get(item.id)?.totalCommitted || 0;
+                          const freeBalance = Math.max(0, (item.saldoUnidades || 0) - comm);
 
-                          <div className="text-right min-w-[70px]">
-                            <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 block">
-                              {unidades} un
-                            </span>
-                            <span className="text-[10px] text-slate-400">Total do CD</span>
-                          </div>
-                        </div>
+                          return (
+                            <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
+                              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTransferUnitsChange(stockId, unidades - 10, freeBalance)}
+                                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={freeBalance}
+                                  value={unidades === 0 ? '' : unidades}
+                                  placeholder="0"
+                                  onFocus={(e) => e.target.select()}
+                                  onChange={(e) => handleTransferUnitsChange(stockId, parseInt(e.target.value, 10) || 0, freeBalance)}
+                                  className="w-16 text-center font-mono font-bold text-xs bg-transparent text-slate-900 dark:text-white outline-hidden"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleTransferUnitsChange(stockId, unidades + 10, freeBalance)}
+                                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition cursor-pointer"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="text-right min-w-[70px]">
+                                <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 block">
+                                  {unidades} un
+                                </span>
+                                <span className="text-[10px] text-slate-400">Total do CD</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })}

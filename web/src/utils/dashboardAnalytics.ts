@@ -179,6 +179,13 @@ export function calculateDashboardMetrics(
 
   // 3. Processar cada pedido
   filteredOrders.forEach(order => {
+    // Transferências internas do CD para lojas não entram no BI de compras comerciais com fornecedores
+    const isTransfer = order.header?.supplierId === 'cd_matriz' || 
+                       String(order.header?.numeroPedido || '').startsWith('CD-') || 
+                       String(order.header?.id || '').startsWith('order_transf_cd_') ||
+                       (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+    if (isTransfer) return;
+
     const items = order.items || [];
     const totals = calculateOrderTotals(order);
     const pedidoInvestimentoLiquido = totals.totalGeral;

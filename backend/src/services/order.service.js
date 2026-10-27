@@ -684,24 +684,28 @@ class OrderService {
       authorizingDirector = directorUser;
     }
 
-    // Se for romaneio de transferência do CD, estorna o estoque central automaticamente
+    // Se for romaneio de transferência do CD que já havia sido baixado (Finalizado), estorna o estoque central
     const isTransfer = existing.header?.supplierId === 'cd_matriz' || 
                        String(existing.header?.numeroPedido || '').startsWith('CD-') || 
                        String(id).startsWith('order_transf_cd_') ||
                        (existing.header?.fornecedor && existing.header.fornecedor.toLowerCase().includes('transferência'));
 
+    const wasDeducted = isTransfer && (existing.header?.status === 'Finalizado' || existing.header?.status === 'Faturamento');
+
     let reversedUnits = 0;
-    if (isTransfer && Array.isArray(existing.items)) {
+    if (wasDeducted && Array.isArray(existing.items)) {
       try {
         const stockRepository = require('../repositories/stockRepository');
         const allStock = await stockRepository.findAll();
         for (const it of existing.items) {
           const qty = Number(it.qtdTotalUnidades || 0);
-          if (qty > 0) {
+          if (qty > 0 && !it.ruptura) {
+            const code = String(it.codigo || it.codigoInterno || '').trim().toLowerCase();
+            const desc = String(it.descricao || '').trim().toLowerCase();
             const match = allStock.find(s => 
-              (s.codigo && it.codigo && s.codigo.trim().toLowerCase() === it.codigo.trim().toLowerCase()) ||
-              (s.descricao && it.descricao && s.descricao.trim().toLowerCase() === it.descricao.trim().toLowerCase()) ||
-              (s.productId && (s.productId === it.id || s.productId === it.productId))
+              (s.productId && (s.productId === it.id || s.productId === it.productId)) ||
+              (code && [s.codigo, s.codigoInterno].some(val => String(val || '').trim().toLowerCase() === code)) ||
+              (desc && String(s.descricao || '').trim().toLowerCase() === desc)
             );
             if (match) {
               await stockRepository.updateBalance(match.id, qty);
@@ -710,7 +714,7 @@ class OrderService {
           }
         }
       } catch (stockErr) {
-        console.warn('Aviso ao estornar estoque de transferência:', stockErr.message);
+        console.warn('Aviso ao estornar estoque de transferência finalizada:', stockErr.message);
       }
     }
 
@@ -1391,9 +1395,13 @@ class OrderService {
                        String(order.header?.numeroPedido || '').startsWith('CD-') || 
                        (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
 
-    // Se o recebimento físico na matriz ainda não havia sido registrado, confirma automaticamente
-    // na conclusão da conferência física de doca pelo conferente/usuário
-    if (!isTransfer && !order.header.recebidoMatriz) {
+    // Transferência interna já está fisicamente na Matriz
+    if (isTransfer) {
+      order.header.recebidoMatriz = true;
+      order.header.recebidoMatrizPor = payload.conferente || currentUser.nome || 'Conferente Separação';
+      if (!order.header.dataRecebimentoMatriz) order.header.dataRecebimentoMatriz = new Date().toISOString();
+      order.header.boletosLiberados = true;
+    } else if (!order.header.recebidoMatriz) {
       order.header.recebidoMatriz = true;
       order.header.recebidoMatrizPor = payload.conferente || currentUser.nome || 'Conferente Separação';
       order.header.dataRecebimentoMatriz = new Date().toISOString();
@@ -1456,8 +1464,8 @@ class OrderService {
     db.run('BEGIN TRANSACTION');
     try {
       // Transferências internas entram na separação a partir do estoque da Matriz.
-      // A baixa e a mudança de etapa precisam ser uma única operação para impedir saldo duplicado em retentativas.
-      if (isTransfer && currentStatus !== 'Faturamento') {
+      // A baixa e a finalização ocorrem em uma única transação atômica.
+      if (isTransfer && currentStatus !== 'Finalizado') {
         const currentStock = await stockRepository.findAll();
         for (const item of items) {
           if (item.ruptura) continue;
@@ -1481,7 +1489,15 @@ class OrderService {
         }
       }
 
-      order.header.status = 'Faturamento';
+      if (isTransfer) {
+        // Transferências não passam por Faturamento: vão direto para Finalizado com baixa de estoque concluída
+        order.header.status = 'Finalizado';
+        order.header.finalizadoPor = conferenteNome;
+        order.header.dataFinalizacao = dataConferencia;
+        order.header.boletosLiberados = true;
+      } else {
+        order.header.status = 'Faturamento';
+      }
       order.header.separacaoConcluida = true;
       order.header.separadoPor = conferenteNome;
       order.header.dataSeparacao = dataConferencia;
@@ -1515,18 +1531,20 @@ class OrderService {
       usuarioId: currentUser.id || null,
       usuarioNome: currentUser.nome || 'Separação',
       usuarioRole: currentUser.role,
-      acao: 'CONFERENCIA_SEPARACAO',
+      acao: isTransfer ? 'EXPEDICAO_TRANSFERENCIA_FINALIZADA' : 'CONFERENCIA_SEPARACAO',
       detalhesJson: { 
         avarias: payload.avarias || [],
         missingChecks,
         forced: missingChecks > 0 && isDiretoriaOrRoot && payload.forceIncomplete === true
       },
-      observacoes: payload.observacoes || 'Conferência física e separação concluídas, pedido encaminhado para Faturamento'
+      observacoes: payload.observacoes || (isTransfer ? 'Conferência física concluída e transferência expedida para as filiais' : 'Conferência física e separação concluídas, pedido encaminhado para Faturamento')
     }).catch(e => console.error('Erro ao registrar log de auditoria:', e));
 
     return {
       success: true,
-      message: `Conferência concluída! Pedido ${saved.header.numeroPedido} encaminhado para Faturamento.`,
+      message: isTransfer
+        ? `Separação concluída! Romaneio ${saved.header.numeroPedido} finalizado e expedido com sucesso para as filiais.`
+        : `Conferência concluída! Pedido ${saved.header.numeroPedido} encaminhado para Faturamento.`,
       order: saved,
       version: saved.header.version
     };
@@ -1600,7 +1618,11 @@ class OrderService {
       throw err;
     }
 
-    if (!order.header.recebidoMatriz) {
+    const isTransfer = order.header?.supplierId === 'cd_matriz' || 
+                       String(order.header?.numeroPedido || '').startsWith('CD-') || 
+                       (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+
+    if (!isTransfer && !order.header.recebidoMatriz) {
       const err = new Error('O pedido precisa estar fisicamente recebido na Matriz antes de liberar os boletos.');
       err.statusCode = 400;
       err.code = 'RECEIPT_REQUIRED';
@@ -1714,26 +1736,59 @@ class OrderService {
       throw err;
     }
 
-    // Estorno de Estoque Central do CD se retroceder de Distribuição/Separação para Aprovado/Cotação
-    if (order.header.distribuicaoConcluida && targetRank <= 1 && Array.isArray(order.items)) {
-      try {
-        const stockRepository = require('../repositories/stockRepository');
-        const allStock = await stockRepository.findAll();
-        for (const it of order.items) {
-          const reserveQty = Number(it.qtdReservaEstoque || 0);
-          if (reserveQty > 0) {
-            const match = allStock.find(s =>
-              (s.codigo && it.codigo && s.codigo.trim().toLowerCase() === it.codigo.trim().toLowerCase()) ||
-              (s.descricao && it.descricao && s.descricao.trim().toLowerCase() === it.descricao.trim().toLowerCase()) ||
-              (s.productId && (s.productId === it.id || s.productId === it.productId))
-            );
-            if (match) {
-              await stockRepository.updateBalance(match.id, -reserveQty);
+    const isTransfer = order.header?.supplierId === 'cd_matriz' || 
+                       String(order.header?.numeroPedido || '').startsWith('CD-') || 
+                       String(order.header?.id || orderId).startsWith('order_transf_cd_') ||
+                       (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+
+    // Estorno de Estoque
+    if (isTransfer) {
+      // Se estava Finalizado e retrocedeu para Separação/Cotação, devolve as unidades debitadas ao estoque central
+      if (currentStatus === 'Finalizado' && targetRank < 4 && Array.isArray(order.items)) {
+        try {
+          const stockRepository = require('../repositories/stockRepository');
+          const allStock = await stockRepository.findAll();
+          for (const it of order.items) {
+            const qty = Number(it.qtdTotalUnidades || 0);
+            if (qty > 0 && !it.ruptura) {
+              const code = String(it.codigo || it.codigoInterno || '').trim().toLowerCase();
+              const desc = String(it.descricao || '').trim().toLowerCase();
+              const match = allStock.find(s =>
+                (s.productId && (s.productId === it.id || s.productId === it.productId)) ||
+                (code && [s.codigo, s.codigoInterno].some(val => String(val || '').trim().toLowerCase() === code)) ||
+                (desc && String(s.descricao || '').trim().toLowerCase() === desc)
+              );
+              if (match) {
+                await stockRepository.updateBalance(match.id, qty);
+              }
             }
           }
+        } catch (stockErr) {
+          console.warn('Aviso ao estornar baixa de transferência no retrocesso:', stockErr.message);
         }
-      } catch (stockErr) {
-        console.warn('Aviso ao estornar reserva de estoque no retrocesso:', stockErr.message);
+      }
+    } else {
+      // Pedido comercial padrão: Estorno de Estoque Central do CD se retroceder de Distribuição/Separação para Aprovado/Cotação
+      if (order.header.distribuicaoConcluida && targetRank <= 1 && Array.isArray(order.items)) {
+        try {
+          const stockRepository = require('../repositories/stockRepository');
+          const allStock = await stockRepository.findAll();
+          for (const it of order.items) {
+            const reserveQty = Number(it.qtdReservaEstoque || 0);
+            if (reserveQty > 0) {
+              const match = allStock.find(s =>
+                (s.codigo && it.codigo && s.codigo.trim().toLowerCase() === it.codigo.trim().toLowerCase()) ||
+                (s.descricao && it.descricao && s.descricao.trim().toLowerCase() === it.descricao.trim().toLowerCase()) ||
+                (s.productId && (s.productId === it.id || s.productId === it.productId))
+              );
+              if (match) {
+                await stockRepository.updateBalance(match.id, -reserveQty);
+              }
+            }
+          }
+        } catch (stockErr) {
+          console.warn('Aviso ao estornar reserva de estoque no retrocesso:', stockErr.message);
+        }
       }
     }
 

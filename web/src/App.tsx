@@ -2614,11 +2614,16 @@ export function App() {
         }
       };
       saveOrderToHistory(updatedOrder);
-      const refreshed = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
+      const [refreshed, refreshedStock] = await Promise.all([
+        fetchOrdersFromDb().catch(() => loadSavedOrdersList()),
+        fetchStockFromDb().catch(() => centralStock)
+      ]);
       setSavedOrders(refreshed);
+      setCentralStock(refreshedStock);
+      saveCentralStock(refreshedStock);
       setOrder(updatedOrder);
       confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
-      showToast(`Separação concluída! Pedido ${updatedOrder.header.numeroPedido} encaminhado para Faturamento.`, 'success');
+      showToast(res?.message || `Separação concluída! Pedido ${updatedOrder.header.numeroPedido} processado com sucesso.`, 'success');
     } catch (err: any) {
       showPersistenceError(err, `Não foi possível encaminhar o pedido ${orderToSend.header.numeroPedido} para faturamento`);
     }
@@ -3912,6 +3917,7 @@ export function App() {
                   stores={storeConfigs}
                   fiscalConfig={fiscalConfig}
                   presets={separationPresets}
+                  orders={savedOrders}
                   onUpdateStockBalance={handleUpdateStockBalance}
                   onSaveNewStockItem={handleSaveNewStockItem}
                   onGenerateStockSeparation={handleGenerateStockSeparation}

@@ -86,64 +86,90 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
 
   const currentIndex = getStepIndex(currentStatus);
 
+  const isTransfer = order.header?.supplierId === 'cd_matriz' ||
+    String(order.header?.numeroPedido || '').startsWith('CD-') ||
+    String(order.header?.id || '').startsWith('order_transf_cd_') ||
+    Boolean(order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs px-4 py-3 mb-5 transition-all">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         
-        {/* Lado Esquerdo: Barra Visual dos 5 Passos da Esteira */}
+        {/* Lado Esquerdo: Barra Visual da Esteira */}
         <div className="flex items-center gap-3 overflow-x-auto scrollbar-none py-1">
           <div className="flex items-center gap-1.5 shrink-0 text-xs font-bold text-slate-400 dark:text-slate-500">
-            <span>ESTEIRA:</span>
+            <span>{isTransfer ? 'TRANSFERÊNCIA CD:' : 'ESTEIRA:'}</span>
             <span className="px-2 py-0.5 rounded-lg font-mono font-extrabold text-[11px] bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
               {order?.header?.numeroPedido || 'PED-0001'}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {/* 1. Cotação */}
-            <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex > 0 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 0 ? 'text-amber-700 dark:text-amber-300 font-black' : 'text-slate-400'}`}>
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 0 ? 'bg-emerald-600 text-white' : currentIndex === 0 ? 'bg-amber-600 text-white ring-2 ring-amber-300 dark:ring-amber-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
-                {currentIndex > 0 ? '✓' : '1'}
-              </span>
-              <span>1. Cotação</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
-            </div>
+          {isTransfer ? (
+            <div className="flex items-center gap-2 shrink-0">
+              {/* 1. Separação na Doca */}
+              <div className={`flex items-center gap-1.5 text-xs font-bold ${currentIndex >= 4 ? 'text-emerald-600 dark:text-emerald-400' : 'text-purple-700 dark:text-purple-300 font-black'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex >= 4 ? 'bg-emerald-600 text-white' : 'bg-purple-600 text-white ring-2 ring-purple-300 dark:ring-purple-700'}`}>
+                  {currentIndex >= 4 ? '✓' : '1'}
+                </span>
+                <span>1. Separação na Doca</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+              </div>
 
-            {/* 2. Aprovado */}
-            <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex > 1 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 1 ? 'text-blue-700 dark:text-blue-300 font-black' : 'text-slate-400'}`}>
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 1 ? 'bg-emerald-600 text-white' : currentIndex === 1 ? 'bg-blue-600 text-white ring-2 ring-blue-300 dark:ring-blue-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
-                {currentIndex > 1 ? '✓' : '2'}
-              </span>
-              <span>2. Aprovado</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+              {/* 2. Expedição Concluída */}
+              <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex >= 4 ? 'text-emerald-600 dark:text-emerald-400 font-black' : 'text-slate-400 dark:text-slate-500'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex >= 4 ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                  {currentIndex >= 4 ? '✓' : '2'}
+                </span>
+                <span>2. Expedição Concluída</span>
+              </div>
             </div>
+          ) : (
+            <div className="flex items-center gap-2 shrink-0">
+              {/* 1. Cotação */}
+              <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex > 0 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 0 ? 'text-amber-700 dark:text-amber-300 font-black' : 'text-slate-400'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 0 ? 'bg-emerald-600 text-white' : currentIndex === 0 ? 'bg-amber-600 text-white ring-2 ring-amber-300 dark:ring-amber-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                  {currentIndex > 0 ? '✓' : '1'}
+                </span>
+                <span>1. Cotação</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+              </div>
 
-            {/* 3. Separação */}
-            <div className={`flex items-center gap-1.5 text-xs font-bold ${currentIndex > 2 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 2 ? 'text-purple-700 dark:text-purple-300 font-black' : 'text-slate-400'}`}>
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 2 ? 'bg-emerald-600 text-white' : currentIndex === 2 ? 'bg-purple-600 text-white ring-2 ring-purple-300 dark:ring-purple-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
-                {currentIndex > 2 ? '✓' : '3'}
-              </span>
-              <span>3. Separação</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
-            </div>
+              {/* 2. Aprovado */}
+              <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex > 1 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 1 ? 'text-blue-700 dark:text-blue-300 font-black' : 'text-slate-400'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 1 ? 'bg-emerald-600 text-white' : currentIndex === 1 ? 'bg-blue-600 text-white ring-2 ring-blue-300 dark:ring-blue-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                  {currentIndex > 1 ? '✓' : '2'}
+                </span>
+                <span>2. Aprovado</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+              </div>
 
-            {/* 4. Faturamento */}
-            <div className={`flex items-center gap-1.5 text-xs font-bold ${currentIndex > 3 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 3 ? 'text-amber-700 dark:text-amber-300 font-black' : 'text-slate-400'}`}>
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 3 ? 'bg-emerald-600 text-white' : currentIndex === 3 ? 'bg-amber-600 text-white ring-2 ring-amber-300 dark:ring-amber-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
-                {currentIndex > 3 ? '✓' : '4'}
-              </span>
-              <span>4. Faturamento</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
-            </div>
+              {/* 3. Separação */}
+              <div className={`flex items-center gap-1.5 text-xs font-bold ${currentIndex > 2 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 2 ? 'text-purple-700 dark:text-purple-300 font-black' : 'text-slate-400'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 2 ? 'bg-emerald-600 text-white' : currentIndex === 2 ? 'bg-purple-600 text-white ring-2 ring-purple-300 dark:ring-purple-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                  {currentIndex > 2 ? '✓' : '3'}
+                </span>
+                <span>3. Separação</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+              </div>
 
-            {/* 5. Finalizado */}
-            <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex >= 4 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex >= 4 ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
-                {currentIndex >= 4 ? '✓' : '5'}
-              </span>
-              <span>5. Finalizado</span>
+              {/* 4. Faturamento */}
+              <div className={`flex items-center gap-1.5 text-xs font-bold ${currentIndex > 3 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 3 ? 'text-amber-700 dark:text-amber-300 font-black' : 'text-slate-400'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 3 ? 'bg-emerald-600 text-white' : currentIndex === 3 ? 'bg-amber-600 text-white ring-2 ring-amber-300 dark:ring-amber-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                  {currentIndex > 3 ? '✓' : '4'}
+                </span>
+                <span>4. Faturamento</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+              </div>
+
+              {/* 5. Finalizado */}
+              <div className={`flex items-center gap-1 text-xs font-bold ${currentIndex >= 4 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex >= 4 ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                  {currentIndex >= 4 ? '✓' : '5'}
+                </span>
+                <span>5. Finalizado</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Lado Direito: Ações rápidas de esteira e recebimento */}
@@ -175,10 +201,8 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </button>
           )}
 
-
-
-          {/* Tag informativa de recebido na Matriz */}
-          {order.header.recebidoMatriz && (
+          {/* Tag informativa de recebido na Matriz (somente pedidos de fornecedor externo) */}
+          {!isTransfer && order.header.recebidoMatriz && (
             <span className="px-2.5 py-1 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1">
               <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Recebido Matriz ✓</span>
@@ -186,7 +210,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
           )}
 
           {/* AÇÃO ETAPA 1 -> 2: Aprovar Pedido */}
-          {currentIndex === 0 && onApproveOrder && (
+          {!isTransfer && currentIndex === 0 && onApproveOrder && (
             <button
               onClick={() => onApproveOrder(order)}
               className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
@@ -197,7 +221,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
           )}
 
           {/* AÇÃO ETAPA 2 (Aprovados): Fazer a Distribuição / Enviar p/ Separação */}
-          {currentIndex === 1 && (onOpenDistribution || onSendToDistribution || onReleaseToSeparation) && (
+          {!isTransfer && currentIndex === 1 && (onOpenDistribution || onSendToDistribution || onReleaseToSeparation) && (
             <button
               onClick={() => {
                 if (onOpenDistribution) onOpenDistribution(order);
@@ -212,7 +236,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </button>
           )}
 
-          {/* AÇÃO ETAPA 3 (Separação): Efetua a conferência física e libera para Faturamento */}
+          {/* AÇÃO ETAPA 3 (Separação): Efetua a conferência física e conclui a expedição / libera faturamento */}
           {currentIndex === 2 && (onOpenSeparation || onSendToFaturamento || onFinalizeSeparation) && (
             <button
               onClick={() => {
@@ -221,15 +245,15 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
                 else if (onFinalizeSeparation) onFinalizeSeparation(order);
               }}
               className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-              title="Acessar conferência de doca / apontamento de avarias e liberar para Faturamento"
+              title={isTransfer ? "Acessar conferência de doca e concluir expedição para as lojas" : "Acessar conferência de doca / apontamento de avarias e liberar para Faturamento"}
             >
               <PackageCheck className="w-3.5 h-3.5" />
-              <span>Conferir Doca & Liberar p/ Faturamento</span>
+              <span>{isTransfer ? "Conferir Doca & Finalizar Expedição" : "Conferir Doca & Liberar p/ Faturamento"}</span>
             </button>
           )}
 
-          {/* AÇÃO ETAPA 4 (Faturamento): Confere e libera os boletos */}
-          {currentIndex === 3 && (
+          {/* AÇÃO ETAPA 4 (Faturamento): Confere e libera os boletos (somente compras comerciais de fornecedores) */}
+          {!isTransfer && currentIndex === 3 && (
             <div className="flex items-center gap-1.5">
               {order.header.possuiDivergenciaFaturamento && !order.header.divergenciaResolvida ? (
                 <div 
@@ -258,7 +282,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
           {currentIndex === 4 && (
             <span className="px-2.5 py-1 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1">
               <CheckCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Pedido Finalizado ✓</span>
+              <span>{isTransfer ? "Expedição Concluída ✓" : "Pedido Finalizado ✓"}</span>
             </span>
           )}
         </div>
@@ -266,35 +290,42 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
 
       {/* Rastreio Rápido de Auditoria Expansível */}
       {showAuditTrail && (
-        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px] text-slate-600 dark:text-slate-400 animate-in fade-in duration-200">
-          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-            <UserIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            <div>
-              <span className="font-semibold text-slate-700 dark:text-slate-300 block">Aprovação:</span>
-              <span>{order.header.aprovadoPor || 'Pendente'} {order.header.dataAprovacao ? `(${new Date(order.header.dataAprovacao).toLocaleDateString('pt-BR')})` : ''}</span>
+        <div className={`mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 ${isTransfer ? 'lg:grid-cols-2' : 'lg:grid-cols-4'} gap-2 text-[11px] text-slate-600 dark:text-slate-400 animate-in fade-in duration-200`}>
+          {!isTransfer && (
+            <div className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+              <UserIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <div>
+                <span className="font-semibold text-slate-700 dark:text-slate-300 block">Aprovação:</span>
+                <span>{order.header.aprovadoPor || 'Pendente'} {order.header.dataAprovacao ? `(${new Date(order.header.dataAprovacao).toLocaleDateString('pt-BR')})` : ''}</span>
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-            <Boxes className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-            <div>
-              <span className="font-semibold text-slate-700 dark:text-slate-300 block">Distribuição CD:</span>
-              <span>{order.header.distribuidoPor || 'Pendente'} {order.header.dataDistribuicao ? `(${new Date(order.header.dataDistribuicao).toLocaleDateString('pt-BR')})` : ''}</span>
+          {!isTransfer && (
+            <div className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+              <Boxes className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <div>
+                <span className="font-semibold text-slate-700 dark:text-slate-300 block">Distribuição CD:</span>
+                <span>{order.header.distribuidoPor || 'Pendente'} {order.header.dataDistribuicao ? `(${new Date(order.header.dataDistribuicao).toLocaleDateString('pt-BR')})` : ''}</span>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
             <PackageCheck className="w-3.5 h-3.5 text-purple-500 shrink-0" />
             <div>
-              <span className="font-semibold text-slate-700 dark:text-slate-300 block">Separação / Doca:</span>
-              <span>{order.header.separadoPor || 'Pendente'} {order.header.dataSeparacao ? `(${new Date(order.header.dataSeparacao).toLocaleDateString('pt-BR')})` : ''}</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300 block">{isTransfer ? 'Criação / Romaneio:' : 'Separação / Doca:'}</span>
+              <span>
+                {order.header.separadoPor || (order.header as any).usuario || 'Pendente'} 
+                {(order.header.dataSeparacao || order.header.dataPedido) ? ` (${new Date(order.header.dataSeparacao || order.header.dataPedido!).toLocaleDateString('pt-BR')})` : ''}
+              </span>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
             <CheckCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             <div>
-              <span className="font-semibold text-slate-700 dark:text-slate-300 block">Finalização:</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300 block">{isTransfer ? 'Expedição Concluída:' : 'Finalização:'}</span>
               <span>{order.header.finalizadoPor || 'Pendente'} {order.header.dataFinalizacao ? `(${new Date(order.header.dataFinalizacao).toLocaleDateString('pt-BR')})` : ''}</span>
             </div>
           </div>

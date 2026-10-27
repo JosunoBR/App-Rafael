@@ -163,9 +163,21 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const pendingSummary = useMemo(() => ({
     approval: savedOrders.filter(order => ['Em Cotação', 'Rascunho'].includes(order.header.status || 'Em Cotação')).length,
-    receipt: savedOrders.filter(order => ['Em Distribuição', 'Em Separação', 'Faturamento'].includes(order.header.status) && !order.header.recebidoMatriz).length,
+    receipt: savedOrders.filter(order => {
+      const isTransfer = order.header.supplierId === 'cd_matriz' ||
+        String(order.header.numeroPedido || '').startsWith('CD-') ||
+        String(order.header.id || '').startsWith('order_transf_cd_') ||
+        Boolean(order.header.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+      return !isTransfer && ['Em Distribuição', 'Em Separação', 'Faturamento'].includes(order.header.status) && !order.header.recebidoMatriz;
+    }).length,
     separation: savedOrders.filter(order => order.header.status === 'Em Separação').length,
-    billing: savedOrders.filter(order => order.header.status === 'Faturamento' && !order.header.boletosLiberados).length
+    billing: savedOrders.filter(order => {
+      const isTransfer = order.header.supplierId === 'cd_matriz' ||
+        String(order.header.numeroPedido || '').startsWith('CD-') ||
+        String(order.header.id || '').startsWith('order_transf_cd_') ||
+        Boolean(order.header.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+      return !isTransfer && order.header.status === 'Faturamento' && !order.header.boletosLiberados;
+    }).length
   }), [savedOrders]);
 
   // Filtragem da Fila de Pedidos
@@ -198,11 +210,23 @@ export const HomePage: React.FC<HomePageProps> = ({
     if (operationalFilter === 'approval') {
       list = list.filter(order => ['Em Cotação', 'Rascunho'].includes(order.header.status || 'Em Cotação'));
     } else if (operationalFilter === 'receipt') {
-      list = list.filter(order => ['Em Distribuição', 'Em Separação', 'Faturamento'].includes(order.header.status) && !order.header.recebidoMatriz);
+      list = list.filter(order => {
+        const isTransfer = order.header.supplierId === 'cd_matriz' ||
+          String(order.header.numeroPedido || '').startsWith('CD-') ||
+          String(order.header.id || '').startsWith('order_transf_cd_') ||
+          Boolean(order.header.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+        return !isTransfer && ['Em Distribuição', 'Em Separação', 'Faturamento'].includes(order.header.status) && !order.header.recebidoMatriz;
+      });
     } else if (operationalFilter === 'separation') {
       list = list.filter(order => order.header.status === 'Em Separação');
     } else if (operationalFilter === 'billing') {
-      list = list.filter(order => order.header.status === 'Faturamento' && !order.header.boletosLiberados);
+      list = list.filter(order => {
+        const isTransfer = order.header.supplierId === 'cd_matriz' ||
+          String(order.header.numeroPedido || '').startsWith('CD-') ||
+          String(order.header.id || '').startsWith('order_transf_cd_') ||
+          Boolean(order.header.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+        return !isTransfer && order.header.status === 'Faturamento' && !order.header.boletosLiberados;
+      });
     }
 
     if (searchTerm.trim()) {
@@ -687,6 +711,10 @@ export const HomePage: React.FC<HomePageProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                   {filteredOrders.slice(0, 6).map((ord) => {
+                    const isTransfer = ord.header.supplierId === 'cd_matriz' ||
+                      String(ord.header.numeroPedido || '').startsWith('CD-') ||
+                      String(ord.header.id || '').startsWith('order_transf_cd_') ||
+                      Boolean(ord.header.fornecedor && ord.header.fornecedor.toLowerCase().includes('transferência'));
                     const totalVal = ord.items?.reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0) || 0;
                     const totalPecas = ord.items?.reduce((sum, it) => sum + (it.qtdTotalUnidades || 0), 0) || 0;
 
@@ -715,10 +743,14 @@ export const HomePage: React.FC<HomePageProps> = ({
                         )}
                         <td className="py-3.5 px-4 text-center">
                           <span className={`px-2.5 py-0.8 rounded-full text-[10px] font-extrabold border ${getStatusBadge(ord.header.status)}`}>
-                            {ord.header.status}
+                            {isTransfer && ord.header.status === 'Finalizado' ? 'Expedido' : ord.header.status}
                           </span>
                           <div className="mt-1 flex flex-col items-center gap-0.5">
-                            {ord.header.recebidoMatriz ? (
+                            {isTransfer ? (
+                              <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400">
+                                📦 Transferência CD
+                              </span>
+                            ) : ord.header.recebidoMatriz ? (
                               <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
                                 ✓ Recebido Matriz
                               </span>
@@ -727,7 +759,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                                 Aguardando entrega
                               </span>
                             ) : null}
-                            {ord.header.recebidoMatriz && !ord.header.boletosLiberados && (
+                            {!isTransfer && ord.header.recebidoMatriz && !ord.header.boletosLiberados && (
                               <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
                                 🔒 Boletos retidos
                               </span>
@@ -736,7 +768,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                         </td>
                         <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
-                            {!ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser, ord.header.status) && (
+                            {!isTransfer && !ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser, ord.header.status) && (
                               <button
                                 onClick={() => onConfirmReceipt(ord)}
                                 className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
@@ -746,7 +778,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                                 <span>Receber</span>
                               </button>
                             )}
-                            {(!ord.header.boletosLiberados || ord.header.status === 'Faturamento') && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser, ord.header.status) && (
+                            {!isTransfer && (!ord.header.boletosLiberados || ord.header.status === 'Faturamento') && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser, ord.header.status) && (
                               <button
                                 onClick={() => onAuthorizeFinancial(ord)}
                                 className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50/90 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
@@ -760,7 +792,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                               onClick={() => handleSelectOrder(ord)}
                               className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition cursor-pointer inline-flex items-center gap-1 shadow-2xs"
                             >
-                              <span>{getActionButtonLabel(ord.header.status)}</span>
+                              <span>{isTransfer && ord.header.status === 'Em Separação' ? 'Conferir Doca' : getActionButtonLabel(ord.header.status)}</span>
                               <ArrowRight className="w-3 h-3" />
                             </button>
                           </div>

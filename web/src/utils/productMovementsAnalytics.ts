@@ -288,69 +288,76 @@ export function calculateProductMovementsMetrics(
       globalPedidosPrevistosCount++;
     }
 
-    const fornecedorNome = order.header.fornecedor || 'Fornecedor Diversos';
-    if (!suppliersMap.has(fornecedorNome)) {
-      suppliersMap.set(fornecedorNome, {
-        pecasEntregues: 0,
-        pecasPrevistas: 0,
-        totalPecas: 0,
-        pedidosSet: new Set(),
-        produtos: [],
-        pedidosNoPrazo: 0,
-        pedidosAtrasados: 0,
-        totalDiasAtraso: 0,
-        totalPecasSolicitadas: 0,
-        pecasCortadas: 0
-      });
-    }
-    const supAcc = suppliersMap.get(fornecedorNome)!;
+    const isTransfOrder = order.header?.supplierId === 'cd_matriz' || 
+                          String(order.header?.numeroPedido || '').startsWith('CD-') || 
+                          String(order.id || '').startsWith('order_transf_cd_') ||
+                          Boolean(order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
 
-    const orderNumber = order.id ? (order.id.startsWith('ord_') ? order.id.replace('ord_', '') : order.id.slice(-6)) : 'S/N';
+    const orderNumber = order.id ? (order.id.startsWith('ord_') ? order.id.replace('ord_', '') : order.id.slice(-6)) : (order.header?.numeroPedido || 'S/N');
     const orderKey = order.id || orderNumber;
 
-    // Avaliação de prazo de entrega do pedido
-    const dataPrevista = parseDeliveryDate(order.header.dataEntregaPrevista);
-    let isOrderLate = false;
-    let daysLate = 0;
+    const fornecedorNome = order.header.fornecedor || 'Fornecedor Diversos';
+    if (!isTransfOrder) {
+      if (!suppliersMap.has(fornecedorNome)) {
+        suppliersMap.set(fornecedorNome, {
+          pecasEntregues: 0,
+          pecasPrevistas: 0,
+          totalPecas: 0,
+          pedidosSet: new Set(),
+          produtos: [],
+          pedidosNoPrazo: 0,
+          pedidosAtrasados: 0,
+          totalDiasAtraso: 0,
+          totalPecasSolicitadas: 0,
+          pecasCortadas: 0
+        });
+      }
+      const supAcc = suppliersMap.get(fornecedorNome)!;
 
-    if (dataPrevista) {
-      if (isDelivered) {
-        const dataReal = parseDeliveryDate(order.header.dataRecebimentoMatriz || order.header.dataFinalizacao || order.header.updatedAt);
-        if (dataReal) {
-          const diffMs = dataReal.getTime() - dataPrevista.getTime();
+      // Avaliação de prazo de entrega do pedido
+      const dataPrevista = parseDeliveryDate(order.header.dataEntregaPrevista);
+      let isOrderLate = false;
+      let daysLate = 0;
+
+      if (dataPrevista) {
+        if (isDelivered) {
+          const dataReal = parseDeliveryDate(order.header.dataRecebimentoMatriz || order.header.dataFinalizacao || order.header.updatedAt);
+          if (dataReal) {
+            const diffMs = dataReal.getTime() - dataPrevista.getTime();
+            const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+            if (diffDays > 0) {
+              isOrderLate = true;
+              daysLate = diffDays;
+            }
+          }
+        } else {
+          const diffMs = todayMidnight.getTime() - dataPrevista.getTime();
           const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
           if (diffDays > 0) {
             isOrderLate = true;
             daysLate = diffDays;
           }
         }
-      } else {
-        const diffMs = todayMidnight.getTime() - dataPrevista.getTime();
-        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-        if (diffDays > 0) {
-          isOrderLate = true;
-          daysLate = diffDays;
+      }
+
+      if (!supAcc.pedidosSet.has(orderKey)) {
+        if (isOrderLate) {
+          supAcc.pedidosAtrasados++;
+          supAcc.totalDiasAtraso += daysLate;
+        } else {
+          supAcc.pedidosNoPrazo++;
         }
       }
-    }
 
-    if (!supAcc.pedidosSet.has(orderKey)) {
-      if (isOrderLate) {
-        supAcc.pedidosAtrasados++;
-        supAcc.totalDiasAtraso += daysLate;
-      } else {
-        supAcc.pedidosNoPrazo++;
-      }
+      // Contabiliza peças solicitadas e rupturas do pedido
+      (order.items || []).forEach(it => {
+        const pecasIt = Number(it.qtdTotalUnidades) || ((Number(it.qtdNoPacote) || 1) * (Number(it.qtdPacotes) || 0)) || 0;
+        supAcc.totalPecasSolicitadas += pecasIt;
+        if (it.ruptura) {
+          supAcc.pecasCortadas += pecasIt;
+        }
+      });
     }
-
-    // Contabiliza peças solicitadas e rupturas do pedido
-    (order.items || []).forEach(it => {
-      const pecasIt = Number(it.qtdTotalUnidades) || ((Number(it.qtdNoPacote) || 1) * (Number(it.qtdPacotes) || 0)) || 0;
-      supAcc.totalPecasSolicitadas += pecasIt;
-      if (it.ruptura) {
-        supAcc.pecasCortadas += pecasIt;
-      }
-    });
     const rawDate = isDelivered 
       ? (order.header.dataRecebimentoMatriz || order.header.dataEntregaPrevista || order.header.dataPedido || order.header.createdAt)
       : (order.header.dataEntregaPrevista || order.header.dataPedido || order.header.createdAt);
@@ -422,34 +429,43 @@ export function calculateProductMovementsMetrics(
       }
 
       if (pecasDoItemParaEscopo > 0) {
-        supAcc.totalPecas += pecasDoItemParaEscopo;
-        if (isDelivered) {
-          supAcc.pecasEntregues += pecasDoItemParaEscopo;
-          storeFilteredPecasEntregues += pecasDoItemParaEscopo;
-          storeFilteredPedidosEntreguesSet.add(order.id || orderNumber);
-        } else {
-          supAcc.pecasPrevistas += pecasDoItemParaEscopo;
-          storeFilteredPecasPrevistas += pecasDoItemParaEscopo;
-          storeFilteredPedidosPrevistosSet.add(order.id || orderNumber);
-        }
-        supAcc.pedidosSet.add(order.id || orderNumber);
+        if (!isTransfOrder) {
+          const supAcc = suppliersMap.get(fornecedorNome);
+          if (supAcc) {
+            supAcc.totalPecas += pecasDoItemParaEscopo;
+            if (isDelivered) {
+              supAcc.pecasEntregues += pecasDoItemParaEscopo;
+            } else {
+              supAcc.pecasPrevistas += pecasDoItemParaEscopo;
+            }
+            supAcc.pedidosSet.add(orderKey);
 
-        supAcc.produtos.push({
-          orderId: order.id || '',
-          orderNumber,
-          orderStatus: st,
-          isDelivered,
-          orderDateBr: dateBr,
-          dateType,
-          itemId: item.id || '',
-          productDescription: item.descricao || 'Produto sem descrição',
-          productCode: item.codigoInterno || item.codigo || item.codigoFornecedor || '-',
-          productBarcode: item.codigoBarras,
-          photoUrl: item.fotoUrl,
-          quantidadeLoja: pecasDoItemParaEscopo,
-          quantidadeTotalPedido: pecasTotalItem,
-          storeName: filter.storeId !== 'all' ? (storeMap.get(filter.storeId)?.name || 'Filial') : 'Todas as Lojas'
-        });
+            supAcc.produtos.push({
+              orderId: order.id || '',
+              orderNumber,
+              orderStatus: st,
+              isDelivered,
+              orderDateBr: dateBr,
+              dateType,
+              itemId: item.id || '',
+              productDescription: item.descricao || 'Produto sem descrição',
+              productCode: item.codigoInterno || item.codigo || item.codigoFornecedor || '-',
+              productBarcode: item.codigoBarras,
+              photoUrl: item.fotoUrl,
+              quantidadeLoja: pecasDoItemParaEscopo,
+              quantidadeTotalPedido: pecasTotalItem,
+              storeName: filter.storeId !== 'all' ? (storeMap.get(filter.storeId)?.name || 'Filial') : 'Todas as Lojas'
+            });
+          }
+        }
+
+        if (isDelivered) {
+          storeFilteredPecasEntregues += pecasDoItemParaEscopo;
+          storeFilteredPedidosEntreguesSet.add(orderKey);
+        } else {
+          storeFilteredPecasPrevistas += pecasDoItemParaEscopo;
+          storeFilteredPedidosPrevistosSet.add(orderKey);
+        }
       }
     });
   });

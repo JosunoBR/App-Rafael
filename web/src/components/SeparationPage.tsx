@@ -312,13 +312,6 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   const isCurrentFinalized = order.header.status === 'Finalizado';
   const [viewArchivedReadOnly, setViewArchivedReadOnly] = useState(false);
 
-  // Se o pedido atual for finalizado mas existirem outros pendentes, seleciona automaticamente o primeiro pendente
-  useEffect(() => {
-    if (isCurrentFinalized && pendingSeparationOrders.length > 0 && onSelectOrder && !viewArchivedReadOnly) {
-      onSelectOrder(pendingSeparationOrders[0]);
-    }
-  }, [isCurrentFinalized, pendingSeparationOrders, onSelectOrder, viewArchivedReadOnly]);
-
   // Estados do Apontamento de Doca
   const [conferente, setConferente] = useState(order.inspection?.conferente || '');
   const [possuiAvarias, setPossuiAvarias] = useState<'nao' | 'sim'>(order.inspection?.possuiAvarias ? 'sim' : 'nao');
@@ -2057,6 +2050,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             )}
 
             {/* Botão Etapa 3 (Separação): Concluir Separação e Liberar para Faturamento */}
+            {/* Botão Etapa 3 (Separação): Concluir Separação (ou Finalizar Expedição se for Transferência) */}
             {order.header.status === 'Em Separação' && (
               <button
                 type="button"
@@ -2068,13 +2062,16 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                     ...order,
                     header: {
                       ...order.header,
-                      status: 'Faturamento',
+                      status: isTransfer ? 'Finalizado' : 'Faturamento',
                       recebidoMatriz: true,
                       recebidoPor: order.header.recebidoPor || conferenteNome,
                       dataRecebimentoMatriz: order.header.dataRecebimentoMatriz || now,
                       separacaoConcluida: true,
                       separadoPor: conferenteNome,
                       dataSeparacao: now,
+                      finalizadoPor: isTransfer ? conferenteNome : order.header.finalizadoPor,
+                      dataFinalizacao: isTransfer ? now : order.header.dataFinalizacao,
+                      boletosLiberados: isTransfer ? true : order.header.boletosLiberados,
                       updatedAt: now
                     },
                     inspection: {
@@ -2089,11 +2086,15 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                   if (onSendToFaturamento) onSendToFaturamento(updated);
                   else if (onFinalizeOrder) onFinalizeOrder(updated);
                 }}
-                className="w-full sm:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
-                title="Concluir conferência física na doca e encaminhar pedido para o Faturamento"
+                className={`w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                  isTransfer
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 hover:scale-102'
+                    : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
+                }`}
+                title={isTransfer ? "Concluir conferência física e finalizar expedição da transferência" : "Concluir conferência física na doca e encaminhar pedido para o Faturamento"}
               >
                 <PackageCheck className="w-4 h-4" />
-                <span>Concluir Separação & Liberar p/ Faturamento</span>
+                <span>{isTransfer ? 'Concluir Separação & Finalizar Expedição' : 'Concluir Separação & Liberar p/ Faturamento'}</span>
               </button>
             )}
           </div>

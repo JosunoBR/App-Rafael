@@ -15,7 +15,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { FinancialEntry, FinancialCategory, FinancialPaymentMethod, FinancialStatus } from '../shared/types';
-import { toBrDate, formatCurrency } from '../utils/masks';
+import { toBrDate, formatCurrency, handleCurrencyInput } from '../utils/masks';
 import { fetchRecurringSeriesEntriesFromDb, terminateRecurringSeriesInDb } from '../utils/api';
 
 interface FinancialEditModalProps {
@@ -68,10 +68,12 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
   // 1. Agendamento Original (Lançado)
   const [dataVencimento, setDataVencimento] = useState(entry?.dataVencimento ? entry.dataVencimento.substring(0, 10) : '');
   const [valorLancado, setValorLancado] = useState<number>(Number(entry?.valor) || 0);
+  const [editingValorLancado, setEditingValorLancado] = useState<string | null>(null);
 
   // Escopo de reajuste de valor da recorrência
   const [escopoRecorrencia, setEscopoRecorrencia] = useState<'all_open' | 'single'>('all_open');
   const [novoValorRecorrencia, setNovoValorRecorrencia] = useState<number>(Number(entry?.valor) || 0);
+  const [editingNovoValorRecorrencia, setEditingNovoValorRecorrencia] = useState<string | null>(null);
 
   // 2. Liquidação (Pago)
   const [status, setStatus] = useState<FinancialStatus>(entry?.status || 'A Vencer');
@@ -79,6 +81,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
   const [valorPago, setValorPago] = useState<number>(
     entry?.valorPago !== undefined && entry?.valorPago !== null ? Number(entry.valorPago) : Number(entry?.valor) || 0
   );
+  const [editingValorPago, setEditingValorPago] = useState<string | null>(null);
   const [observacao, setObservacao] = useState(entry?.observacao || '');
 
   const [saving, setSaving] = useState(false);
@@ -104,13 +107,16 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
       setStatusPrevisao(entry.statusPrevisao || 'CONFIRMADO');
       setDataVencimento(entry.dataVencimento ? entry.dataVencimento.substring(0, 10) : '');
       setValorLancado(Number(entry.valor) || 0);
+      setEditingValorLancado(null);
       setNovoValorRecorrencia(Number(entry.valor) || 0);
+      setEditingNovoValorRecorrencia(null);
       setEscopoRecorrencia('all_open');
       setStatus(entry.status || 'A Vencer');
       setDataPagamento(entry.dataPagamento ? entry.dataPagamento.substring(0, 10) : '');
       setValorPago(
         entry.valorPago !== undefined && entry.valorPago !== null ? Number(entry.valorPago) : Number(entry.valor) || 0
       );
+      setEditingValorPago(null);
       setObservacao(entry.observacao || '');
       setErrorMsg(null);
       setShowTerminationPanel(false);
@@ -185,6 +191,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
       setDataPagamento(new Date().toISOString().substring(0, 10));
       if (!valorPago || valorPago === 0) {
         setValorPago(valorLancado);
+        setEditingValorPago(null);
       }
     }
   };
@@ -486,10 +493,42 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
                   Valor Lançado (R$) *
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
-                  value={valorLancado}
-                  onChange={e => setValorLancado(parseFloat(e.target.value) || 0)}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={
+                    editingValorLancado !== null
+                      ? editingValorLancado
+                      : (valorLancado > 0 ? formatCurrency(valorLancado, false) : (valorLancado === 0 ? '' : ''))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === '.') {
+                      e.preventDefault();
+                      const target = e.currentTarget;
+                      const currentVal = target.value;
+                      if (!currentVal.includes(',')) {
+                        const selStart = target.selectionStart ?? currentVal.length;
+                        const selEnd = target.selectionEnd ?? currentVal.length;
+                        const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                        const { formatted, value } = handleCurrencyInput(newVal, true);
+                        setEditingValorLancado(formatted);
+                        setValorLancado(value);
+                      }
+                      return;
+                    }
+                  }}
+                  onFocus={(e) => {
+                    setEditingValorLancado(valorLancado > 0 ? formatCurrency(valorLancado, false) : '');
+                    e.target.select();
+                  }}
+                  onBlur={() => {
+                    setEditingValorLancado(null);
+                  }}
+                  onChange={(e) => {
+                    const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                    setEditingValorLancado(formatted);
+                    setValorLancado(value);
+                  }}
                   disabled={isAlreadyPaid}
                   className={`w-full px-3 py-2 rounded-xl border font-mono font-bold text-sm ${
                     isAlreadyPaid
@@ -543,11 +582,42 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
                 <div className="flex items-center gap-3">
                   <div className="flex-1">
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="Novo valor das parcelas a pagar"
-                      value={novoValorRecorrencia}
-                      onChange={e => setNovoValorRecorrencia(parseFloat(e.target.value) || 0)}
+                      value={
+                        editingNovoValorRecorrencia !== null
+                          ? editingNovoValorRecorrencia
+                          : (novoValorRecorrencia > 0 ? formatCurrency(novoValorRecorrencia, false) : '')
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === '.') {
+                          e.preventDefault();
+                          const target = e.currentTarget;
+                          const currentVal = target.value;
+                          if (!currentVal.includes(',')) {
+                            const selStart = target.selectionStart ?? currentVal.length;
+                            const selEnd = target.selectionEnd ?? currentVal.length;
+                            const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                            const { formatted, value } = handleCurrencyInput(newVal, true);
+                            setEditingNovoValorRecorrencia(formatted);
+                            setNovoValorRecorrencia(value);
+                          }
+                          return;
+                        }
+                      }}
+                      onFocus={(e) => {
+                        setEditingNovoValorRecorrencia(novoValorRecorrencia > 0 ? formatCurrency(novoValorRecorrencia, false) : '');
+                        e.target.select();
+                      }}
+                      onBlur={() => {
+                        setEditingNovoValorRecorrencia(null);
+                      }}
+                      onChange={(e) => {
+                        const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                        setEditingNovoValorRecorrencia(formatted);
+                        setNovoValorRecorrencia(value);
+                      }}
                       className="w-full px-3 py-2 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 font-mono font-bold text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
@@ -613,10 +683,42 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
                       Valor Pago (R$) *
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
-                      value={valorPago}
-                      onChange={e => setValorPago(parseFloat(e.target.value) || 0)}
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      value={
+                        editingValorPago !== null
+                          ? editingValorPago
+                          : (valorPago > 0 ? formatCurrency(valorPago, false) : (valorPago === 0 ? '' : ''))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === '.') {
+                          e.preventDefault();
+                          const target = e.currentTarget;
+                          const currentVal = target.value;
+                          if (!currentVal.includes(',')) {
+                            const selStart = target.selectionStart ?? currentVal.length;
+                            const selEnd = target.selectionEnd ?? currentVal.length;
+                            const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                            const { formatted, value } = handleCurrencyInput(newVal, true);
+                            setEditingValorPago(formatted);
+                            setValorPago(value);
+                          }
+                          return;
+                        }
+                      }}
+                      onFocus={(e) => {
+                        setEditingValorPago(valorPago > 0 ? formatCurrency(valorPago, false) : '');
+                        e.target.select();
+                      }}
+                      onBlur={() => {
+                        setEditingValorPago(null);
+                      }}
+                      onChange={(e) => {
+                        const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                        setEditingValorPago(formatted);
+                        setValorPago(value);
+                      }}
                       className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 font-mono font-bold text-sm text-emerald-700 dark:text-emerald-400 focus:ring-2 focus:ring-emerald-500"
                       required
                     />

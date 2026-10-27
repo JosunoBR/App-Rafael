@@ -56,7 +56,7 @@ import {
   batchPayFinancialEntriesInDb,
   FinancialFilters
 } from '../utils/api';
-import { toBrDate, formatCurrency } from '../utils/masks';
+import { toBrDate, formatCurrency, handleCurrencyInput } from '../utils/masks';
 import { exportFinancialToExcel, exportFinancialToPdf } from '../utils/financialExporter';
 import { getEntryOrderAndNf } from '../utils/financialHelper';
 import { compressImage, isImageFile, formatFileSize } from '../utils/imageUtils';
@@ -189,6 +189,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     valorPago: 0,
     observacao: ''
   });
+  const [editingPayValorPago, setEditingPayValorPago] = useState<string | null>(null);
 
   // Estados para anexo obrigatório de comprovante (suporte a múltiplos anexos)
   interface AttachedComprovanteItem {
@@ -539,6 +540,7 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     setPayingEntry(entry);
     setAttachedComprovantes([]);
     setUploadError('');
+    setEditingPayValorPago(null);
     setPayForm({
       dataPagamento: new Date().toISOString().substring(0, 10),
       valorPago: entry.valor,
@@ -1901,14 +1903,47 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Valor Pago (R$)
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={payForm.valorPago}
-                  onChange={e => setPayForm({ ...payForm, valorPago: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-base font-bold font-mono"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={
+                      editingPayValorPago !== null
+                        ? editingPayValorPago
+                        : (payForm.valorPago > 0 ? formatCurrency(payForm.valorPago, false) : (payForm.valorPago === 0 ? '' : ''))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === '.') {
+                        e.preventDefault();
+                        const target = e.currentTarget;
+                        const currentVal = target.value;
+                        if (!currentVal.includes(',')) {
+                          const selStart = target.selectionStart ?? currentVal.length;
+                          const selEnd = target.selectionEnd ?? currentVal.length;
+                          const newVal = currentVal.slice(0, selStart) + ',' + currentVal.slice(selEnd);
+                          const { formatted, value } = handleCurrencyInput(newVal, true);
+                          setEditingPayValorPago(formatted);
+                          setPayForm(prev => ({ ...prev, valorPago: value }));
+                        }
+                      }
+                    }}
+                    onFocus={(e) => {
+                      setEditingPayValorPago(payForm.valorPago > 0 ? formatCurrency(payForm.valorPago, false) : '');
+                      e.target.select();
+                    }}
+                    onBlur={() => {
+                      setEditingPayValorPago(null);
+                    }}
+                    onChange={(e) => {
+                      const { formatted, value } = handleCurrencyInput(e.target.value, true);
+                      setEditingPayValorPago(formatted);
+                      setPayForm(prev => ({ ...prev, valorPago: value }));
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-base font-bold font-mono focus:ring-2 focus:ring-emerald-500"
+                    required
+                  />
+                </div>
               </div>
 
               {/* Anexo de Comprovante de Pagamento (Múltiplos Arquivos - Opcional) */}

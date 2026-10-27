@@ -286,7 +286,8 @@ class FinancialService {
         valor: montanteTotal,
         dataVencimento: dataBase,
         lojaNome: lojaNome || storeId || 'ALS',
-        documentoRef
+        documentoRef,
+        formaPagamento
       });
 
       if (duplicate) {
@@ -370,7 +371,8 @@ class FinancialService {
         valor: montanteTotal,
         dataVencimento: dataBase,
         lojaNome: lojaNome || storeId || 'ALS',
-        documentoRef
+        documentoRef,
+        formaPagamento
       });
 
       if (duplicate) {
@@ -494,7 +496,8 @@ class FinancialService {
       valor: montanteTotal,
       dataVencimento: dataBase,
       lojaNome: lojaNome || storeId || 'ALS',
-      documentoRef
+      documentoRef,
+      formaPagamento
     });
     if (dupTotal) {
       const valorFmt = Number(dupTotal.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -558,6 +561,9 @@ class FinancialService {
         dataVencimento: data.dataVencimento || before.dataVencimento,
         lojaNome: data.lojaNome || before.lojaNome,
         documentoRef: data.documentoRef !== undefined ? data.documentoRef : before.documentoRef,
+        parcelaDesc: data.parcelaDesc || before.parcelaDesc,
+        parcelaNumero: data.parcelaNumero !== undefined ? data.parcelaNumero : before.parcelaNumero,
+        formaPagamento: data.formaPagamento || before.formaPagamento,
         excludeId: id
       });
 

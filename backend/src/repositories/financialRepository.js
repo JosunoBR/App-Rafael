@@ -269,13 +269,19 @@ class FinancialRepository {
     const cleanLoja = String(lojaNome || '').trim().toUpperCase();
     const cleanDoc = String(documentoRef || '').trim().toUpperCase();
     const cleanParc = parcelaDesc ? String(parcelaDesc).trim().toUpperCase() : null;
+    const cleanForma = formaPagamento ? String(formaPagamento).trim().toUpperCase() : null;
+
+    const isGenericDoc = (d) => {
+      const s = String(d || '').trim().toUpperCase();
+      return !s || s.length < 3 || ['S/N', 'SEM NOTA', 'BOLETO', 'DEPOSITO', 'DEPÓSITO', 'PIX', 'DINHEIRO', 'ÚNICA', 'UNICA'].includes(s);
+    };
 
     // 1. Verificação por número de documento (NF, Boleto, Linha digitável) se informado
     // Nota: Parcelas de um mesmo pedido possuem o mesmo documentoRef e podem ter o mesmo valor,
     // mas com vencimentos diferentes. Portanto, para ser duplicidade real, o vencimento também deve coincidir.
-    if (cleanDoc && cleanDoc.length >= 3 && !['S/N', 'SEM NOTA', 'BOLETO', 'DEPOSITO', 'PIX', 'DINHEIRO', 'ÚNICA', 'UNICA'].includes(cleanDoc)) {
+    if (!isGenericDoc(cleanDoc)) {
       let docSql = `
-        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, parcelaDesc, parcelaNumero, status
+        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, parcelaDesc, parcelaNumero, formaPagamento, status
         FROM financial_entries
         WHERE UPPER(TRIM(documentoRef)) = ?
           AND ROUND(valor, 2) = ROUND(?, 2)
@@ -303,7 +309,7 @@ class FinancialRepository {
     // 2. Verificação por Descrição + Valor + Vencimento (+ Loja)
     if (cleanDesc && val > 0 && normalizedVenc) {
       let sql = `
-        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, parcelaDesc, parcelaNumero, status
+        SELECT id, descricao, valor, dataVencimento, lojaNome, documentoRef, parcelaDesc, parcelaNumero, formaPagamento, status
         FROM financial_entries
         WHERE (UPPER(TRIM(descricao)) = ? ${checkParcelPattern ? 'OR UPPER(TRIM(descricao)) LIKE ?' : ''})
           AND (dataVencimento = ? OR dataVencimento LIKE ?)
@@ -330,8 +336,27 @@ class FinancialRepository {
         sql += ' AND id != ?';
         params.push(excludeId);
       }
-      const matchEntry = await queryOne(sql, params);
-      if (matchEntry) return matchEntry;
+      const matches = await queryAll(sql, params);
+      for (const matchEntry of matches) {
+        const matchDoc = String(matchEntry.documentoRef || '').trim().toUpperCase();
+        const matchForma = String(matchEntry.formaPagamento || '').trim().toUpperCase();
+
+        // 🛡️ Prevenção de Falso Positivo:
+        // Se ambos os lançamentos possuírem documentos válidos (não-genéricos) e esses documentos
+        // forem comprovadamente DISTINTOS (ex: '166564' vs '166564/E' ou faturas diferentes),
+        // NÃO se trata de duplicidade, e sim de documentos/faturas distintas do fornecedor no mesmo vencimento.
+        if (!isGenericDoc(cleanDoc) && !isGenericDoc(matchDoc) && cleanDoc !== matchDoc) {
+          continue;
+        }
+
+        // Se ambos possuírem formaPagamento definida e comprovadamente distintas (ex: BOLETO vs DEPOSITO),
+        // e os documentos não forem idênticos, também não é duplicidade.
+        if (cleanForma && matchForma && cleanForma !== matchForma && cleanDoc !== matchDoc) {
+          continue;
+        }
+
+        return matchEntry;
+      }
     }
 
     return null;

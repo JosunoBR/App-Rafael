@@ -30,7 +30,7 @@ export interface OrderTotalsResult {
   valorOutrasDespesas: number;     // Despesas acessórias adicionais
 
   // Ajuste Fiscal da NF (Conciliação da Nota Fiscal no Total)
-  totalComercialSemAjuste: number; // Total antes do ajuste fiscal: Bruto + IPI - Desconto
+  totalComercialSemAjuste: number; // Total antes do ajuste fiscal: Bruto + IPI + ST - Desconto
   ajusteFiscalValor: number;       // Diferença aplicada direto no valor final (+ acréscimo ou - desconto)
   valorNotaFiscalEntregue?: number; // Valor da NF informada
 
@@ -172,13 +172,17 @@ export function calculateOrderTotals(
           : (ipiAliq > 0 ? Number((liquidoItem * (ipiAliq / 100)).toFixed(2)) : 0));
 
     // Determinação de ST do item
-    const stAliq = (it.fiscalOverride?.useCustomFiscal && it.fiscalOverride?.aliquotaSt !== undefined)
-      ? Number(it.fiscalOverride.aliquotaSt)
-      : headerStPct;
+    const stAliq = (it.aliquotaSt !== undefined && it.aliquotaSt !== null && Number(it.aliquotaSt) > 0)
+      ? Number(it.aliquotaSt)
+      : (it.fiscalOverride?.useCustomFiscal && it.fiscalOverride?.aliquotaSt !== undefined
+          ? Number(it.fiscalOverride.aliquotaSt)
+          : headerStPct);
 
-    const stVal = (it.stUnitario !== undefined && it.stUnitario !== null && Number(it.stUnitario) > 0 && !isRupturaParcial)
-      ? Number((Number(it.stUnitario) * pecas).toFixed(2))
-      : (stAliq > 0 ? Number((liquidoItem * (stAliq / 100)).toFixed(2)) : 0);
+    const stVal = (it.valorSt !== undefined && it.valorSt !== null && Number(it.valorSt) > 0 && !isRupturaParcial)
+      ? Number(it.valorSt)
+      : (it.stUnitario !== undefined && it.stUnitario !== null && Number(it.stUnitario) > 0 && !isRupturaParcial
+          ? Number((Number(it.stUnitario) * pecas).toFixed(2))
+          : (stAliq > 0 ? Number((liquidoItem * (stAliq / 100)).toFixed(2)) : 0));
 
     // Apuração de Margem Ponderada do Pedido (considera apenas itens com PDV >= PDV_MINIMO_MEDIAS)
     const pdv = Number(it.pdvAlvo) || 0;
@@ -216,15 +220,20 @@ export function calculateOrderTotals(
     ? Number(((valorDescontoTotal / valorBruto) * 100).toFixed(2))
     : 0;
 
+  // 🛡️ Se totalSt for zero nos itens mas houver alíquota de ST global configurada no cabeçalho
+  if (totalSt === 0 && headerStPct > 0 && valorLiquido > 0) {
+    totalSt = Number((valorLiquido * (headerStPct / 100)).toFixed(2));
+  }
+
   // Frete e Despesas Adicionais (informativos/rastreabilidade)
   const rawValorFrete = Number(header?.valorFrete ?? header?.valorFreteGlobal) || 0;
   const isCif = String(header?.tipoFrete || (rawValorFrete > 0 ? 'FOB' : 'CIF')).toUpperCase().includes('CIF') && rawValorFrete <= 0;
   const valorFrete = isCif ? 0 : rawValorFrete;
   const valorOutrasDespesas = Number(header?.valorOutrasDespesasGlobal) || 0;
 
-  // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Comercial Base
+  // Regra Oficial Central: Total (Bruto) + IPI + ST - Desconto Comercial = Total Comercial Base
   // Frete não é considerado no Total Comercial das mercadorias.
-  const totalComercialSemAjuste = Number((valorBruto + totalIpi - valorDescontoTotal).toFixed(2));
+  const totalComercialSemAjuste = Number((valorBruto + totalIpi + totalSt - valorDescontoTotal).toFixed(2));
 
   // 🛡️ Ajuste Fiscal da Entrega (Conciliação da Nota Fiscal no Total):
   // O acréscimo ou desconto é lançado DIRETAMENTE no valor final do pedido, sem alterar os produtos.

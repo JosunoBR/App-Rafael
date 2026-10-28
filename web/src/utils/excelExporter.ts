@@ -525,7 +525,8 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
         ? ` | +${formatCurrency(orderTotals.ajusteFiscalValor)} - Acréscimo NF` 
         : ` | -${formatCurrency(Math.abs(orderTotals.ajusteFiscalValor))} - Desconto NF`)
     : '';
-  detCell.value = `(${formatCurrency(orderTotals.valorBruto)} - Total | ${formatCurrency(orderTotals.totalIpi)} - IPI | ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto Comercial${adjText})`;
+  const stText = orderTotals.totalSt > 0 ? ` | +${formatCurrency(orderTotals.totalSt)} - ST` : '';
+  detCell.value = `(${formatCurrency(orderTotals.valorBruto)} - Total | +${formatCurrency(orderTotals.totalIpi)} - IPI${stText} | -${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto Comercial${adjText})`;
   detCell.font = { name: 'Segoe UI', size: 8, color: { argb: 'FF475569' } };
   detCell.alignment = { vertical: 'middle', horizontal: 'center' };
   ws.getRow(detRow).height = 16;

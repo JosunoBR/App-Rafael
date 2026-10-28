@@ -159,6 +159,7 @@ class OrderRepository {
     let totalBruto = 0;
     let totalDescontoItens = 0;
     let totalIpi = 0;
+    let totalSt = 0;
     let totalVolumes = 0;
     let totalPecas = 0;
 
@@ -177,10 +178,12 @@ class OrderRepository {
       const bruto = Number(item.valorTotalBruto !== undefined && !hasQtdRecebida ? item.valorTotalBruto : (pecas * preco));
       const desc = Number(item.valorDescontoItem || 0);
       const ipi = Number(item.valorIpi || 0);
+      const st = Number(item.valorSt || (item.stUnitario ? item.stUnitario * pecas : 0));
 
       totalBruto += bruto;
       totalDescontoItens += desc;
       totalIpi += ipi;
+      totalSt += st;
       totalVolumes += pacotes;
       totalPecas += pecas;
     });
@@ -200,8 +203,19 @@ class OrderRepository {
       }
     }
 
-    // Regra Oficial Central: Total (Bruto) + IPI - Desconto Comercial = Total Comercial Base
-    const totalBase = Number((totalBruto + totalIpi - totalDesconto).toFixed(2));
+    // 🛡️ Se totalSt for zero nos itens mas houver alíquota no cabeçalho ou fiscalConfig
+    if (totalSt === 0) {
+      const headerSt = Number(order.header?.aliquotaSt || 0);
+      const fiscalSt = Number(fiscal?.aliquotaSt || 0);
+      const aliqSt = headerSt > 0 ? headerSt : fiscalSt;
+      if (aliqSt > 0) {
+        const pctSt = aliqSt > 1 ? aliqSt / 100 : aliqSt;
+        totalSt = Number((totalLiquido * pctSt).toFixed(2));
+      }
+    }
+
+    // Regra Oficial Central: Total (Bruto) + IPI + ST - Desconto Comercial = Total Comercial Base
+    const totalBase = Number((totalBruto + totalIpi + totalSt - totalDesconto).toFixed(2));
 
     // Ajuste Fiscal da Entrega (NF): Acréscimo ou desconto direto no valor final do pedido
     // 🛡️ Aplicável exclusivamente para notas entregues/conferidas fisicamente
@@ -887,6 +901,7 @@ class OrderRepository {
       let calcVolumes = 0;
       let calcDesc = 0;
       let calcIpi = 0;
+      let calcSt = 0;
       for (const it of items) {
         if (it.ruptura) continue;
         const pecas = Number(it.qtdTotalUnidades || 0);
@@ -897,6 +912,7 @@ class OrderRepository {
         calcVolumes += Number(it.qtdPacotes || 0);
         calcDesc += Number(it.valorDescontoItem || 0);
         calcIpi += Number(it.valorIpi || 0);
+        calcSt += Number(it.valorSt || (it.stUnitario ? it.stUnitario * pecas : 0));
       }
       calcBruto = Number(calcBruto.toFixed(2));
       const headerDesc = Number(r.descontoComercialTotal || 0);
@@ -906,7 +922,16 @@ class OrderRepository {
       totalVolumes = calcVolumes;
       totalDesconto = Number(finalDesc.toFixed(2));
       totalIpi = Number(calcIpi.toFixed(2));
-      const baseCalc = Number(Math.max(0, calcBruto + totalIpi - totalDesconto).toFixed(2));
+      let totalSt = Number(calcSt.toFixed(2));
+      if (totalSt === 0) {
+        const aliqSt = Number(r.aliquotaSt || 0);
+        if (aliqSt > 0) {
+          const pctSt = aliqSt > 1 ? aliqSt / 100 : aliqSt;
+          const totalLiq = Math.max(0, totalBruto - totalDesconto);
+          totalSt = Number((totalLiq * pctSt).toFixed(2));
+        }
+      }
+      const baseCalc = Number(Math.max(0, calcBruto + totalIpi + totalSt - totalDesconto).toFixed(2));
       const rawFallbackNf = Number(paymentConfig.valorNotaFiscalEntregue);
       const rawFallbackDiff = paymentConfig.ajusteFiscalDiferenca !== undefined && paymentConfig.ajusteFiscalDiferenca !== null
         ? Number(paymentConfig.ajusteFiscalDiferenca)

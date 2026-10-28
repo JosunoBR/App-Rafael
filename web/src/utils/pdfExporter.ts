@@ -624,14 +624,27 @@ export function exportCommercialOrderPDF(rawOrder: PurchaseOrder) {
       doc.setFontSize(6.2);
       doc.text(`  ${formatCurrency(orderTotals.valorBruto)} - Total Bruto`, boxX + 3.5, boxY + 4.2);
       doc.text(`+ ${formatCurrency(orderTotals.totalIpi)} - IPI`, boxX + 3.5, boxY + 7.8);
-      doc.text(`- ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto`, boxX + 3.5, boxY + 11.4);
-      const adjSignal = orderTotals.ajusteFiscalValor > 0 ? '+' : '-';
-      const adjLabel = orderTotals.ajusteFiscalValor > 0 ? 'Acréscimo NF' : 'Desconto NF';
-      doc.text(`${adjSignal} ${formatCurrency(Math.abs(orderTotals.ajusteFiscalValor))} - ${adjLabel}`, boxX + 3.5, boxY + 15.0);
+      if (orderTotals.totalSt > 0) {
+        doc.text(`+ ${formatCurrency(orderTotals.totalSt)} - ST`, boxX + 3.5, boxY + 11.4);
+        doc.text(`- ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto`, boxX + 3.5, boxY + 15.0);
+        const adjSignal = orderTotals.ajusteFiscalValor > 0 ? '+' : '-';
+        const adjLabel = orderTotals.ajusteFiscalValor > 0 ? 'Acréscimo NF' : 'Desconto NF';
+        doc.text(`${adjSignal} ${formatCurrency(Math.abs(orderTotals.ajusteFiscalValor))} - ${adjLabel}`, boxX + 3.5, boxY + 18.6);
+      } else {
+        doc.text(`- ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto`, boxX + 3.5, boxY + 11.4);
+        const adjSignal = orderTotals.ajusteFiscalValor > 0 ? '+' : '-';
+        const adjLabel = orderTotals.ajusteFiscalValor > 0 ? 'Acréscimo NF' : 'Desconto NF';
+        doc.text(`${adjSignal} ${formatCurrency(Math.abs(orderTotals.ajusteFiscalValor))} - ${adjLabel}`, boxX + 3.5, boxY + 15.0);
+      }
     } else {
       doc.text(`  ${formatCurrency(orderTotals.valorBruto)} - Total`, boxX + 3.5, boxY + 5.2);
-      doc.text(`+ ${formatCurrency(orderTotals.totalIpi)} - IPI`, boxX + 3.5, boxY + 9.5);
-      doc.text(`- ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto comercial`, boxX + 3.5, boxY + 13.8);
+      doc.text(`+ ${formatCurrency(orderTotals.totalIpi)} - IPI`, boxX + 3.5, boxY + 8.5);
+      if (orderTotals.totalSt > 0) {
+        doc.text(`+ ${formatCurrency(orderTotals.totalSt)} - ST`, boxX + 3.5, boxY + 11.8);
+        doc.text(`- ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto comercial`, boxX + 3.5, boxY + 15.1);
+      } else {
+        doc.text(`- ${formatCurrency(orderTotals.valorDescontoTotal)} - Desconto comercial`, boxX + 3.5, boxY + 12.8);
+      }
     }
 
     // Lado Direito: Badge de Destaque Master do Total Geral

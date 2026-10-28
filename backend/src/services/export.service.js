@@ -591,9 +591,18 @@ class ExportService {
     doc.roundedRect(rightX + 3, finalY + 3, rightW - 6, 12, 1.5, 1.5, 'F');
 
     const valorFrete = Number(order.header?.valorFrete) || 0;
-    const totalGeralFinal = Math.max(0, subtotalGeral + totalIpiGeral - totalDescontoComercial);
+    const totalStGeral = (order.items || []).reduce((acc, it) => {
+      const pack = Number(it.qtdNoPacote) || Number(it.qtdPorPacote) || 1;
+      const pecas = Number(it.qtdTotalUnidades) || (Number(it.qtdPacotes || 0) * pack);
+      return acc + (Number(it.valorSt) || (Number(it.stUnitario || 0) * pecas));
+    }, 0);
+    const headerAliqSt = Number(order.header?.aliquotaSt || 0);
+    const finalStGeral = totalStGeral > 0 ? totalStGeral : (headerAliqSt > 0 ? Number(((Math.max(0, subtotalGeral - totalDescontoComercial) * (headerAliqSt > 1 ? headerAliqSt / 100 : headerAliqSt)).toFixed(2))) : 0);
 
-    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)} - Desconto comercial: ${formatCurrency(totalDescontoComercial)} =`;
+    const totalIpiGeral = Number(order.header?.totalIpi) || 0;
+    const totalGeralFinal = Math.max(0, subtotalGeral + totalIpiGeral + finalStGeral - totalDescontoComercial);
+
+    let formulaText = `Total: ${formatCurrency(subtotalGeral)} + IPI: ${formatCurrency(totalIpiGeral)}${finalStGeral > 0 ? ` + ST: ${formatCurrency(finalStGeral)}` : ''} - Desconto comercial: ${formatCurrency(totalDescontoComercial)} =`;
 
 
     doc.setTextColor(255, 255, 255);

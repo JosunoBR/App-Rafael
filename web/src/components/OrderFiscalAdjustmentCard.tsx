@@ -39,7 +39,7 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
   onRestoreOriginals,
   disabled = false
 }) => {
-  // Total base comercial sem ajuste fiscal (Produtos + IPI - Desconto Comercial)
+  // Total base comercial sem ajuste fiscal (Produtos + IPI + ST - Desconto Comercial)
   const baseTotal = orderTotals.totalComercialSemAjuste;
   const currentFinalTotal = orderTotals.totalGeral;
 
@@ -390,6 +390,12 @@ export const OrderFiscalAdjustmentCard: React.FC<OrderFiscalAdjustmentCardProps>
                 <span>(+) IPI dos Produtos:</span>
                 <span className="font-mono font-medium">+{formatCurrency(orderTotals.totalIpi)}</span>
               </div>
+              {orderTotals.totalSt > 0 && (
+                <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                  <span>(+) ST dos Produtos:</span>
+                  <span className="font-mono font-medium">+{formatCurrency(orderTotals.totalSt)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-slate-600 dark:text-slate-400">
                 <span>(-) Descontos Comerciais:</span>
                 <span className="font-mono font-medium">-{formatCurrency(orderTotals.valorDescontoTotal)}</span>

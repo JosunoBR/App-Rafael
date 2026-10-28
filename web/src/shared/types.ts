@@ -157,6 +157,8 @@ export interface OrderItem {
   // Acréscimos rateados ou específicos
   freteUnitario?: number;
   stUnitario?: number;
+  aliquotaSt?: number;
+  valorSt?: number;
   ipiUnitario?: number;
   aliquotaIpi?: number;         // % Alíquota de IPI (ex: 5 para 5%)
   valorIpi?: number;            // R$ Valor total de IPI calculado deste item

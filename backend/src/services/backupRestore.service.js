@@ -212,7 +212,8 @@ class BackupRestoreService {
       const totalIpi = Number(ord.header.totalIpi) || 0;
       const totalDesconto = Number(ord.header.totalDesconto) || 0;
       const totalLiquido = Number(ord.header.totalLiquido) || 0;
-      const totalGeral = Number(ord.header.totalGeral) || (totalBruto + totalIpi - totalDesconto);
+      const totalSt = Number(ord.header.totalSt || 0);
+      const totalGeral = Number(ord.header.totalGeral) || (totalBruto + totalIpi + totalSt - totalDesconto);
       const totalVolumes = Number(ord.header.totalVolumes) || 0;
       const totalPecas = Number(ord.header.totalPecas) || 0;
 

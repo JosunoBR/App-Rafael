@@ -15,7 +15,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { FinancialEntry, FinancialCategory, FinancialPaymentMethod, FinancialStatus } from '../shared/types';
-import { toBrDate, formatCurrency, handleCurrencyInput } from '../utils/masks';
+import { toBrDate, toIsoDate, formatCurrency, handleCurrencyInput } from '../utils/masks';
 import { fetchRecurringSeriesEntriesFromDb, terminateRecurringSeriesInDb } from '../utils/api';
 
 interface FinancialEditModalProps {
@@ -66,7 +66,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
   const [statusPrevisao, setStatusPrevisao] = useState<'PREVISTO' | 'CONFIRMADO'>(entry?.statusPrevisao || 'CONFIRMADO');
   
   // 1. Agendamento Original (Lançado)
-  const [dataVencimento, setDataVencimento] = useState(entry?.dataVencimento ? entry.dataVencimento.substring(0, 10) : '');
+  const [dataVencimento, setDataVencimento] = useState(entry?.dataVencimento ? toIsoDate(entry.dataVencimento) : '');
   const [valorLancado, setValorLancado] = useState<number>(Number(entry?.valor) || 0);
   const [editingValorLancado, setEditingValorLancado] = useState<string | null>(null);
 
@@ -77,7 +77,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
 
   // 2. Liquidação (Pago)
   const [status, setStatus] = useState<FinancialStatus>(entry?.status || 'A Vencer');
-  const [dataPagamento, setDataPagamento] = useState(entry?.dataPagamento ? entry.dataPagamento.substring(0, 10) : '');
+  const [dataPagamento, setDataPagamento] = useState(entry?.dataPagamento ? toIsoDate(entry.dataPagamento) : '');
   const [valorPago, setValorPago] = useState<number>(
     entry?.valorPago !== undefined && entry?.valorPago !== null ? Number(entry.valorPago) : Number(entry?.valor) || 0
   );
@@ -105,14 +105,14 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
       setFormaPagamento(normalizeForma(entry.formaPagamento));
       setDocumentoRef(entry.documentoRef || '');
       setStatusPrevisao(entry.statusPrevisao || 'CONFIRMADO');
-      setDataVencimento(entry.dataVencimento ? entry.dataVencimento.substring(0, 10) : '');
+      setDataVencimento(entry.dataVencimento ? toIsoDate(entry.dataVencimento) : '');
       setValorLancado(Number(entry.valor) || 0);
       setEditingValorLancado(null);
       setNovoValorRecorrencia(Number(entry.valor) || 0);
       setEditingNovoValorRecorrencia(null);
       setEscopoRecorrencia('all_open');
       setStatus(entry.status || 'A Vencer');
-      setDataPagamento(entry.dataPagamento ? entry.dataPagamento.substring(0, 10) : '');
+      setDataPagamento(entry.dataPagamento ? toIsoDate(entry.dataPagamento) : '');
       setValorPago(
         entry.valorPago !== undefined && entry.valorPago !== null ? Number(entry.valorPago) : Number(entry.valor) || 0
       );
@@ -120,7 +120,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
       setObservacao(entry.observacao || '');
       setErrorMsg(null);
       setShowTerminationPanel(false);
-      setSelectedCutoffDate(entry.dataVencimento ? entry.dataVencimento.substring(0, 10) : '');
+      setSelectedCutoffDate(entry.dataVencimento ? toIsoDate(entry.dataVencimento) : '');
       setSeriesEntries([]);
     }
   }, [entry]);
@@ -137,9 +137,9 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
           if (openList.length > 0) {
             const currentInOpen = openList.find(e => e.id === entry.id);
             if (currentInOpen) {
-              setSelectedCutoffDate(currentInOpen.dataVencimento ? currentInOpen.dataVencimento.substring(0, 10) : '');
+              setSelectedCutoffDate(currentInOpen.dataVencimento ? toIsoDate(currentInOpen.dataVencimento) : '');
             } else {
-              setSelectedCutoffDate(openList[0].dataVencimento ? openList[0].dataVencimento.substring(0, 10) : '');
+              setSelectedCutoffDate(openList[0].dataVencimento ? toIsoDate(openList[0].dataVencimento) : '');
             }
           }
         })
@@ -253,7 +253,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
         documentoRef: documentoRef.trim(),
         statusPrevisao,
         valor: targetValor,
-        dataVencimento,
+        dataVencimento: toBrDate(dataVencimento) || dataVencimento,
         status,
         observacao: observacao.trim()
       };
@@ -270,7 +270,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
 
       // Se for pago, inclui os dados de quitação
       if (status === 'Pago') {
-        payload.dataPagamento = dataPagamento || new Date().toISOString().substring(0, 10);
+        payload.dataPagamento = dataPagamento ? toBrDate(dataPagamento) : toBrDate(new Date().toISOString());
         payload.valorPago = valorPago > 0 ? valorPago : targetValor;
       } else {
         payload.dataPagamento = null;
@@ -779,7 +779,7 @@ export const FinancialEditModal: React.FC<FinancialEditModalProps> = ({
                     {openSeriesEntries.map(op => {
                       const due = op.dataVencimento || '';
                       return (
-                        <option key={op.id} value={due.substring(0, 10)}>
+                        <option key={op.id} value={toIsoDate(due)}>
                           Vencimento em {toBrDate(due)} — R$ {formatCurrency(op.valor)} ({op.parcelaDesc || 'Em Aberto'})
                         </option>
                       );

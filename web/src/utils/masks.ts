@@ -239,8 +239,9 @@ export function toIsoDate(val?: string | null): string {
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
     return trimmed.split('T')[0].slice(0, 10);
   }
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
-    const [d, m, y] = trimmed.split('/');
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(trimmed)) {
+    const datePart = trimmed.split(' ')[0].split('T')[0];
+    const [d, m, y] = datePart.split('/');
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
   const dt = new Date(trimmed);

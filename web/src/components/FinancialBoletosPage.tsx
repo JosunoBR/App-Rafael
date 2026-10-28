@@ -1456,6 +1456,8 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
               <optgroup label="Empresas Matriz">
                 <option value="ALS">ALS (Geral)</option>
                 <option value="CONECTA">CONECTA</option>
+                <option value="MEGA 12 MATRIZ">MEGA 12 MATRIZ</option>
+                <option value="MEGA 12">MEGA 12</option>
               </optgroup>
               <optgroup label="Rede Mega 12 (Lojas Físicas)">
                 {stores.map(st => (
@@ -1670,7 +1672,12 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                           </span>
                         </td>
                         <td className="py-3 px-3 text-slate-700 dark:text-slate-300 font-medium">
-                          {item.lojaNome || item.empresa || 'ALS'}
+                          <div>{item.lojaNome || item.empresa || 'ALS'}</div>
+                          {item.empresa && item.lojaNome && item.empresa !== item.lojaNome && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal block">
+                              Pagadora: {item.empresa}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-300 uppercase">
                           {item.formaPagamento}

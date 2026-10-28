@@ -72,8 +72,8 @@ class FinancialRepository {
     }
 
     if (lojaNome) {
-      sql += ' AND (lojaNome = ? OR storeId = ?)';
-      params.push(lojaNome, lojaNome);
+      sql += ' AND (lojaNome = ? OR storeId = ? OR empresa = ?)';
+      params.push(lojaNome, lojaNome, lojaNome);
     }
 
     if (categoria && categoria !== 'all') {

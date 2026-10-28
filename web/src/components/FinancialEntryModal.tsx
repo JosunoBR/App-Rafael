@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { FinancialEntry, FinancialCategory, FinancialPaymentMethod, Supplier, StoreConfig } from '../shared/types';
 import { toBrDate, handleCurrencyInput, formatCurrency, parseCurrency } from '../utils/masks';
+import { fetchStoresFromDb } from '../utils/api';
 
 interface FinancialEntryModalProps {
   isOpen: boolean;
@@ -66,7 +67,34 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
   const [fornecedor, setFornecedor] = useState('');
   const [categoria, setCategoria] = useState<FinancialCategory>('FIXO');
   const [lojaSelecionada, setLojaSelecionada] = useState<string>('ALS');
-  const [empresa, setEmpresa] = useState<'ALS' | 'CONECTA' | 'MEGA 12 MATRIZ'>('ALS');
+  const [empresa, setEmpresa] = useState<string>('ALS');
+
+  // Lojas carregadas dinamicamente do SQLite
+  const [dbStoresList, setDbStoresList] = useState<StoreConfig[]>(stores || []);
+
+  useEffect(() => {
+    if (stores && stores.length > 0) {
+      setDbStoresList(stores);
+    }
+  }, [stores]);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Sincroniza dinamicamente todas as lojas cadastradas no SQLite ao abrir o modal
+      fetchStoresFromDb()
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0) {
+            setDbStoresList(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
+  const availableStores = useMemo(() => {
+    const list = dbStoresList && dbStoresList.length > 0 ? dbStoresList : (stores || []);
+    return list.filter(s => s.active !== false && (s as any).active !== 0);
+  }, [dbStoresList, stores]);
   const [formaPagamento, setFormaPagamento] = useState<FinancialPaymentMethod>('BOLETO');
   const [bancoConta, setBancoConta] = useState('Banco Santander');
   const [documentoRef, setDocumentoRef] = useState('');
@@ -132,7 +160,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
         setFornecedor(initialTemplate.fornecedor || '');
         setCategoria((initialTemplate.categoria as FinancialCategory) || 'FIXO');
         setLojaSelecionada(initialTemplate.lojaNome || initialTemplate.empresa || 'ALS');
-        setEmpresa((initialTemplate.empresa as any) || 'ALS');
+        setEmpresa(initialTemplate.empresa || 'ALS');
         setFormaPagamento((initialTemplate.formaPagamento as FinancialPaymentMethod) || 'BOLETO');
         setBancoConta(initialTemplate.bancoConta || 'Banco Santander');
         setDocumentoRef('');
@@ -578,7 +606,7 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
                   <option value="MEGA 12 MATRIZ">Mega 12 Matriz</option>
                 </optgroup>
                 <optgroup label="Lojas Físicas da Rede Mega 12">
-                  {stores.map(st => (
+                  {availableStores.map(st => (
                     <option key={st.id} value={st.name}>
                       Loja {st.name} ({st.id})
                     </option>
@@ -594,12 +622,29 @@ export const FinancialEntryModal: React.FC<FinancialEntryModalProps> = ({
               </label>
               <select
                 value={empresa}
-                onChange={e => setEmpresa(e.target.value as any)}
+                onChange={e => setEmpresa(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               >
-                <option value="ALS">ALS</option>
-                <option value="CONECTA">CONECTA</option>
-                <option value="MEGA 12 MATRIZ">MEGA 12 MATRIZ</option>
+                <optgroup label="Empresas de Faturamento / Matriz">
+                  <option value="ALS">ALS</option>
+                  <option value="CONECTA">CONECTA</option>
+                  <option value="MEGA 12 MATRIZ">MEGA 12 MATRIZ</option>
+                  <option value="MEGA 12">MEGA 12</option>
+                </optgroup>
+                <optgroup label="Lojas Cadastradas (Rede Mega 12)">
+                  {availableStores
+                    .filter(st => !['ALS', 'CONECTA', 'MEGA 12 MATRIZ', 'MEGA 12'].includes((st.name || '').toUpperCase()))
+                    .map(st => (
+                      <option key={st.id} value={st.name}>
+                        {st.name}
+                      </option>
+                    ))}
+                </optgroup>
+                {empresa &&
+                  !['ALS', 'CONECTA', 'MEGA 12 MATRIZ', 'MEGA 12'].includes(empresa.toUpperCase()) &&
+                  !availableStores.some(st => st.name === empresa || st.id === empresa) && (
+                    <option value={empresa}>{empresa}</option>
+                  )}
               </select>
             </div>
 

@@ -141,7 +141,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 1 ? 'bg-emerald-600 text-white' : currentIndex === 1 ? 'bg-blue-600 text-white ring-2 ring-blue-300 dark:ring-blue-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
                   {currentIndex > 1 ? '✓' : '2'}
                 </span>
-                <span>2. {currentStatus === 'Em Distribuição' ? 'Distribuição' : 'Aprovado'}</span>
+                <span>2. Aprovado</span>
                 <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
               </div>
 

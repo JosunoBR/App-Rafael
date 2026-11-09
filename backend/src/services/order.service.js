@@ -467,7 +467,7 @@ class OrderService {
           'Rascunho': 0,
           'Em Cotação': 1,
           'Aprovado': 2,
-          'Em Distribuição': 2.5,
+          'Em Distribuição': 2,
           'Em Separação': 3,
           'Faturamento': 4,
           'Finalizado': 5
@@ -1041,10 +1041,10 @@ class OrderService {
 
       checkPipelineVersion(order, expectedVersion);
 
-      // Validação de Regra de Negócio: Não pode confirmar recebimento em Cotação ou Aprovado
+      // Validação de Regra de Negócio: Permite confirmar recebimento a partir de Aprovado
       const currentStatus = order.header.status || 'Em Cotação';
-      if (!['Em Distribuição', 'Em Separação', 'Faturamento'].includes(currentStatus)) {
-        const err = new Error(`Não é permitido confirmar o recebimento de pedidos no status "${currentStatus}". O pedido deve estar em Distribuição, Separação ou Faturamento.`);
+      if (!['Aprovado', 'Em Distribuição', 'Em Separação', 'Faturamento'].includes(currentStatus)) {
+        const err = new Error(`Não é permitido confirmar o recebimento de pedidos no status "${currentStatus}". O pedido precisa estar Aprovado, em Separação ou Faturamento.`);
         err.statusCode = 400;
         throw err;
       }
@@ -1143,15 +1143,15 @@ class OrderService {
         throw err;
       }
 
-      if (order.header.status === 'Em Distribuição') return { saved: order, transitioned: false };
-      if (order.header.status !== 'Aprovado') {
+      if (order.header.status !== 'Aprovado' && order.header.status !== 'Em Distribuição') {
         const error = new Error('O pedido precisa estar aprovado para iniciar a Distribuição.');
         error.statusCode = 409;
         error.code = 'INVALID_PIPELINE_STATE';
         throw error;
       }
 
-      order.header.status = 'Em Distribuição';
+      // O pedido permanece Aprovado (etapa 2 oficial da esteira de 5 fases)
+      order.header.status = 'Aprovado';
       order.header.updatedAt = new Date().toISOString();
 
       return { saved: await orderRepository.save(order), transitioned: true };
@@ -1166,7 +1166,7 @@ class OrderService {
       usuarioNome: currentUser.nome || 'Operador',
       usuarioRole: currentUser.role,
       acao: 'ENVIO_DISTRIBUICAO',
-      observacoes: 'Pedido enviado para a esteira de Distribuição entre as lojas'
+      observacoes: 'Pedido preparado na esteira de Distribuição entre as lojas'
     }).catch(e => console.error('Erro ao registrar log de auditoria:', e));
 
     return {
@@ -1195,8 +1195,8 @@ class OrderService {
         throw err;
       }
 
-      if (order.header.status !== 'Em Distribuição') {
-        const err = new Error('Inicie a Distribuição antes de liberar o pedido para Separação.');
+      if (order.header.status !== 'Aprovado' && order.header.status !== 'Em Distribuição') {
+        const err = new Error('O pedido precisa estar aprovado para ser liberado para Separação.');
         err.statusCode = 409;
         err.code = 'INVALID_PIPELINE_STATE';
         throw err;

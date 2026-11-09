@@ -532,6 +532,9 @@ async function getDatabase() {
           END 
           WHERE status = 'Em Distribuição';
         `);
+        if (typeof dbInstance.getRowsModified === 'function' && dbInstance.getRowsModified() > 0) {
+          scheduleDatabaseSave(0);
+        }
       } catch (sepMigErr) {
         console.warn('Aviso ao migrar status Em Distribuição para 5 etapas:', sepMigErr.message);
       }

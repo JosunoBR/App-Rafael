@@ -413,8 +413,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                      Boolean(order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
 
   const isReceiptPending = !isTransfer && !order.header.recebidoMatriz;
-  const isInDistribution = order.header.status === 'Em Distribuição';
-  const isInSeparation = order.header.status === 'Em Separação';
+  const isInDistribution = (order.header.status === 'Aprovado' || order.header.status === 'Em Distribuição') && !order.header.distribuicaoConcluida;
+  const isInSeparation = order.header.status === 'Em Separação' || (Boolean(order.header.distribuicaoConcluida) && order.header.status !== 'Finalizado' && order.header.status !== 'Faturamento');
 
   // Inclui pedidos em andamento na esteira
   const availableDepositOrders = useMemo(() => {

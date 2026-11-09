@@ -2579,7 +2579,7 @@ export function App() {
 
   // Liberação transacional da distribuição para a doca. Estoque e status são confirmados pelo backend.
   const handleReleaseToSeparation = async (orderToRelease: PurchaseOrder) => {
-    if (orderToRelease.header.status !== 'Em Distribuição' || !orderToRelease.header.recebidoMatriz) {
+    if ((orderToRelease.header.status !== 'Aprovado' && orderToRelease.header.status !== 'Em Distribuição') || !orderToRelease.header.recebidoMatriz) {
       showToast('Confirme o recebimento físico na Distribuição antes de liberar para Separação.', 'info');
       return;
     }
@@ -2620,7 +2620,7 @@ export function App() {
         ...orderToSend,
         header: {
           ...orderToSend.header,
-          status: 'Em Distribuição',
+          status: 'Aprovado',
           distribuicaoConcluida: false,
           updatedAt: new Date().toISOString()
         }

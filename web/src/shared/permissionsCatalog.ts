@@ -135,7 +135,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     codigo: 'pipeline:confirm_receipt',
     categoria: '2. Esteira, CD & Separação',
     nome: 'Confirmar Recebimento Físico na Matriz (Entrega Fornecedor)',
-    obs: 'Disponível a partir da fase de Separação na doca',
+    obs: 'Disponível na Distribuição, antes de liberar o pedido para Separação',
     roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: false, faturamento: false }
   },
   {

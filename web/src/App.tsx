@@ -2351,6 +2351,9 @@ export function App() {
         const itemCopy = {
           ...it,
           id: it.id && it.id.startsWith('it_') ? it.id : ('it_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
+          qtdRecebida: null,
+          ruptura: false,
+          motivoRuptura: undefined,
           precoUnitario: origPrice,
           valorTotalBruto: bruto,
           valorDescontoItem: descVal,
@@ -2545,9 +2548,21 @@ export function App() {
 
   // Liberação transacional da distribuição para a doca. Estoque e status são confirmados pelo backend.
   const handleReleaseToSeparation = async (orderToRelease: PurchaseOrder) => {
+    if (orderToRelease.header.status !== 'Em Distribuição' || !orderToRelease.header.recebidoMatriz) {
+      showToast('Confirme o recebimento físico na Distribuição antes de liberar para Separação.', 'info');
+      return;
+    }
     try {
       const res = await releaseOrderToSeparationApi(orderToRelease.header.id, {
-        observacoes: orderToRelease.header.observacaoDistribuicao || ''
+        observacoes: orderToRelease.header.observacaoDistribuicao || '',
+        expectedVersion: orderToRelease.header.version,
+        items: orderToRelease.items.filter(item => !isOrderItemBlank(item)).map(item => ({
+          id: item.id,
+          qtdRecebida: item.qtdRecebida,
+          qtdReservaEstoque: Number(item.qtdReservaEstoque) || 0,
+          separacaoLojas: item.separacaoLojas || {},
+          separacaoManual: item.separacaoManual
+        }))
       });
       const updated = res.order;
       saveOrderToHistory(updated);
@@ -2582,7 +2597,9 @@ export function App() {
       saveOrderToHistory(updatedOrder);
       const refreshed = await fetchOrdersFromDb().catch(() => loadSavedOrdersList());
       setSavedOrders(refreshed);
-      setOrder(updatedOrder);
+      setOrder(previous => previous.header.id === updatedOrder.header.id
+        ? { ...previous, header: { ...previous.header, ...updatedOrder.header } }
+        : previous);
       showToast(`Pedido ${updatedOrder.header.numeroPedido} enviado para a Distribuição das Lojas!`, 'success');
     } catch (err: any) {
       showPersistenceError(err, `Não foi possível enviar o pedido ${orderToSend.header.numeroPedido} para distribuição`);
@@ -2608,8 +2625,6 @@ export function App() {
         header: {
           ...orderToSend.header,
           status: 'Faturamento',
-          recebidoMatriz: true,
-          recebidoPor: orderToSend.header?.recebidoPor || conferente,
           separacaoConcluida: true,
           separadoPor: conferente,
           dataSeparacao: new Date().toISOString(),
@@ -2792,14 +2807,20 @@ export function App() {
     const targetOrder = receiptModalOrder;
 
     try {
-      const res = await confirmReceiptInDb(targetOrder.header.id, payload);
+      const res = await confirmReceiptInDb(targetOrder.header.id, {
+        ...payload,
+        expectedVersion: targetOrder.header.version
+      });
       const updatedOrder = res.order;
       saveOrderToHistory(updatedOrder);
       setSavedOrders(prev => prev.map(item => item.header.id === updatedOrder.header.id ? updatedOrder : item));
 
-      if (order.header.id === targetOrder.header.id) {
-        setOrder(updatedOrder);
-      }
+      setOrder(previous => {
+        if (previous.header.id !== targetOrder.header.id) return previous;
+        if (previous.header.status !== 'Em Distribuição') return updatedOrder;
+        // Mantém a grade em edição. Ela será persistida junto da liberação.
+        return { ...previous, header: { ...previous.header, ...updatedOrder.header }, installments: updatedOrder.installments };
+      });
 
       setReceiptModalOrder(null);
       confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
@@ -3695,7 +3716,6 @@ export function App() {
                       setOrder(ord);
                       setActiveNav('separation');
                     }}
-                    onReleaseToSeparation={handleReleaseToSeparation}
                     onOpenSeparation={(ord) => {
                       setOrder(ord);
                       setActiveNav('separation');
@@ -4028,6 +4048,10 @@ export function App() {
                       stores={storeConfigs}
                       presets={separationPresets}
                       currentUser={currentUser}
+                      products={products}
+                      suppliers={suppliers}
+                      onSaveProduct={handleSaveProduct}
+                      onUpdateOrder={handleSaveOrderDirect}
                       onExportPDF={handleExportSeparationPDF}
                       onExportExcel={handleExportSeparationExcel}
                       isExportingExcel={isExportingRomaneioExcel}

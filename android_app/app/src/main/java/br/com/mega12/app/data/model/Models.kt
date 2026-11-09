@@ -62,7 +62,10 @@ data class Product(
     val ncm: String? = null,
     val eanBarcode: String? = null,
     val ativo: Int = 1
-)
+) {
+    val safeCodigoInterno: String
+        get() = (codigoInterno as String?).orEmpty().ifBlank { (codigo as String?).orEmpty() }
+}
 
 // Fornecedor
 data class Supplier(
@@ -103,13 +106,18 @@ data class OrderItem(
     val photoUrl: String? = null,
     @SerializedName("separacaoLojas", alternate = ["storeDistribution"])
     val storeDistribution: Map<String, Int> = emptyMap(),
+    @SerializedName("qtdNoPacote", alternate = ["qtdPorCaixa"])
     val qtdPorCaixa: Int = 1,
     val qtdPorPacote: Int = 1,
+    val qtdPacotes: Double? = null,
     val qtdRecebida: Int? = null,
     val motivoRuptura: String? = null,
     val qtdReservaEstoque: Int = 0,
     val embalagem: String? = null
 ) {
+    val safeCodigoInterno: String
+        get() = (codigoInterno as String?).orEmpty().ifBlank { (codigo as String?).orEmpty() }
+
     val fotoUrl: String?
         get() = photoUrl
 
@@ -197,6 +205,8 @@ data class OrderHeader(
     val vendedor: String? = null,
     val contatoVendedor: String? = null,
     val condicaoPagamento: String? = null,
+    val formaPagamento: String? = null,
+    val tipoFrete: String? = null,
     val dataEmissao: String? = null,
     val dataPedido: String? = null,
     val dataEntregaPrevista: String? = null,
@@ -204,6 +214,7 @@ data class OrderHeader(
     val percentualNota: Double = 100.0,
     val aliquotaSt: Double = 0.0,
     val observacoes: String? = null,
+    val separationStatus: String? = null,
     val recebidoMatriz: Boolean = false,
     val recebidoPor: String? = null,
     val dataRecebimentoMatriz: String? = null,
@@ -234,7 +245,7 @@ data class OrderHeader(
     val ajusteFiscalData: String? = null,
     val ajusteFiscalUsuario: String? = null,
     val totalPecas: Int = 0,
-    val totalVolumes: Int = 0,
+    val totalVolumes: Double = 0.0,
     val version: Int = 1,
     val createdAt: String? = null
 )
@@ -249,14 +260,44 @@ data class PurchaseOrder(
     val storeConfigs: List<StoreConfig>? = null,
     val fiscalConfig: FiscalConfig? = null,
     val version: Int = 1,
+    @SerializedName("numeroPedido") val topNumeroPedido: String? = null,
+    @SerializedName("fornecedor") val topFornecedor: String? = null,
+    @SerializedName("supplierId") val topSupplierId: String? = null,
+    @SerializedName("vendedor") val topVendedor: String? = null,
+    @SerializedName("contatoVendedor") val topContatoVendedor: String? = null,
+    @SerializedName("condicaoPagamento") val topCondicaoPagamento: String? = null,
+    @SerializedName("formaPagamento") val topFormaPagamento: String? = null,
+    @SerializedName("previsaoPagamento") val topPrevisaoPagamento: String? = null,
+    @SerializedName("tipoFrete") val topTipoFrete: String? = null,
+    @SerializedName("valorFrete") val topValorFrete: Double? = null,
+    @SerializedName("dataPedido") val topDataPedido: String? = null,
+    @SerializedName("dataEmissao") val topDataEmissao: String? = null,
+    @SerializedName("dataEntregaPrevista") val topDataEntregaPrevista: String? = null,
+    @SerializedName("observacoes") val topObservacoes: String? = null,
+    @SerializedName("recebidoMatriz") val topRecebidoMatriz: Boolean? = null,
+    @SerializedName("recebidoPor") val topRecebidoPor: String? = null,
+    @SerializedName("dataRecebimentoMatriz") val topDataRecebimentoMatriz: String? = null,
+    @SerializedName("numeroNotaFiscal") val topNumeroNotaFiscal: String? = null,
+    @SerializedName("boletosLiberados") val topBoletosLiberados: Boolean? = null,
+    @SerializedName("boletosLiberadosPor") val topBoletosLiberadosPor: String? = null,
+    @SerializedName("boletosLiberadosEm") val topBoletosLiberadosEm: String? = null,
+    @SerializedName("distribuicaoConcluida") val topDistribuicaoConcluida: Boolean? = null,
+    @SerializedName("separacaoConcluida") val topSeparacaoConcluida: Boolean? = null,
+    @SerializedName("valorNotaFiscalEntregue") val topValorNotaFiscalEntregue: Double? = null,
+    @SerializedName("ajusteFiscalDiferenca") val topAjusteFiscalDiferenca: Double? = null,
     @SerializedName("status")
     val status: String = "Em Cotação",
     @SerializedName("separationStatus")
     val separationStatus: String = "Pendente",
+    @SerializedName("totalBruto") val topTotalBruto: Double? = null,
+    @SerializedName("totalIpi") val topTotalIpi: Double? = null,
+    @SerializedName("totalDesconto") val topTotalDesconto: Double? = null,
     @SerializedName("totalLiquido")
     val totalLiquido: Double = 0.0,
+    @SerializedName("totalGeral") val topTotalGeral: Double? = null,
     @SerializedName("totalPecas")
     val totalPecas: Int = 0,
+    @SerializedName("totalVolumes") val topTotalVolumes: Double? = null,
     val createdAt: String? = null
 ) {
     val finalId: String
@@ -284,7 +325,6 @@ data class PurchaseOrder(
             totalPecas > 0 -> totalPecas
             header.totalPecas > 0 -> header.totalPecas
             items.isNotEmpty() -> items.sumOf { it.totalPecas }
-            header.totalVolumes > 0 -> header.totalVolumes
             else -> 0
         }
 }

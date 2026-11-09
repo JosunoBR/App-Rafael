@@ -2,9 +2,73 @@ const orderRepository = require('../repositories/orderRepository');
 const fiscalRepository = require('../repositories/fiscalRepository');
 const distributionAuditRepo = require('../repositories/distributionAuditRepository');
 const stockRepository = require('../repositories/stockRepository');
-const { getDatabase, scheduleDatabaseSave, withTransaction, queryOne } = require('../config/database');
+const { getDatabase, scheduleDatabaseSave, withTransaction, queryOne, queryAll } = require('../config/database');
 const supplierService = require('./supplier.service');
 const productService = require('./product.service');
+
+function requireConfirmedReceipt(order) {
+  if (order.header.recebidoMatriz === true) return;
+  const error = new Error('Confirme o recebimento físico na Matriz antes de avançar com o pedido.');
+  error.statusCode = 409;
+  error.code = 'RECEIPT_REQUIRED';
+  throw error;
+}
+
+function isStockTransfer(header) {
+  return header?.supplierId === 'cd_matriz' &&
+    String(header.id || '').startsWith('order_transf_cd_') &&
+    String(header.numeroPedido || '').startsWith('CD-');
+}
+
+function checkPipelineVersion(order, expectedVersion) {
+  if (expectedVersion == null || Number(expectedVersion) === Number(order.header.version || 1)) return;
+  const error = new Error('O pedido foi alterado por outro usuário. Atualize os dados antes de prosseguir.');
+  error.statusCode = 409;
+  error.code = 'CONCURRENCY_CONFLICT';
+  throw error;
+}
+
+async function applyDistributionItems(order, changes) {
+  if (changes === undefined) return;
+  const items = new Map((order.items || []).map(item => [item.id, item]));
+  const invalid = () => {
+    const error = new Error('A distribuição contém itens ou quantidades inválidas. Confira a grade antes de liberar.');
+    error.statusCode = 400;
+    error.code = 'INVALID_DISTRIBUTION';
+    throw error;
+  };
+  if (!Array.isArray(changes) || changes.length > items.size) invalid();
+  const activeStores = new Set((await queryAll('SELECT id FROM stores WHERE active = 1')).map(store => store.id));
+  for (const change of changes) {
+    const item = items.get(change?.id);
+    if (!item || !change.separacaoLojas || typeof change.separacaoLojas !== 'object' ||
+        Array.isArray(change.separacaoLojas)) invalid();
+    items.delete(item.id);
+
+    const purchased = Number(item.qtdTotalUnidades) || 0;
+    const received = change.qtdRecebida ?? item.qtdRecebida ?? (item.ruptura ? 0 : purchased);
+    const reserve = change.qtdReservaEstoque;
+    const allocations = Object.entries(change.separacaoLojas);
+    const validUnits = value => Number.isSafeInteger(value) && value >= 0;
+    if ((change.qtdRecebida != null && (!validUnits(change.qtdRecebida) || change.qtdRecebida > purchased)) ||
+        !validUnits(reserve) ||
+        allocations.some(([storeId, quantity]) => !validUnits(quantity) || (quantity > 0 && !activeStores.has(storeId))) ||
+        reserve + allocations.reduce((sum, [, quantity]) => sum + quantity, 0) > received) invalid();
+
+    item.separacaoLojas = Object.fromEntries(allocations.filter(([storeId]) => activeStores.has(storeId)));
+    item.grade = { ...item.separacaoLojas };
+    item.qtdReservaEstoque = reserve;
+    item.separacaoManual = change.separacaoManual === true;
+    if (change.qtdRecebida != null) {
+      item.qtdRecebida = change.qtdRecebida;
+      item.ruptura = change.qtdRecebida === 0;
+    }
+  }
+  order.header.possuiDivergenciaFaturamento = (order.items || []).some(item =>
+    item.ruptura || (item.qtdRecebida != null && item.qtdRecebida < item.qtdTotalUnidades)
+  );
+  if (order.header.possuiDivergenciaFaturamento) order.header.divergenciaResolvida = false;
+}
 
 class OrderService {
   async listOrders(currentUser) {
@@ -451,6 +515,20 @@ class OrderService {
           }
         }
       }
+    }
+
+    // A edição comum não confirma recebimento nem substitui a liberação que movimenta o estoque.
+    const persistedHeader = existingForAuthorization?.header;
+    if (!isStockTransfer(persistedHeader || orderData.header)) {
+      if (orderData.header.status === 'Em Separação' && persistedHeader?.status !== 'Em Separação') {
+        const error = new Error('Use a opção Liberar para Separação após confirmar o recebimento na Distribuição.');
+        error.statusCode = 409;
+        error.code = 'USE_SEPARATION_RELEASE';
+        throw error;
+      }
+      orderData.header.recebidoMatriz = persistedHeader?.recebidoMatriz === true;
+      orderData.header.recebidoPor = persistedHeader?.recebidoPor ?? null;
+      orderData.header.dataRecebimentoMatriz = persistedHeader?.dataRecebimentoMatriz ?? null;
     }
 
     // Validação de integridade financeira antes de salvar
@@ -946,86 +1024,90 @@ class OrderService {
    * Confirma o recebimento físico de um pedido na Matriz (entrega do fornecedor).
    * Permitido para: diretoria, comprador, deposito. Bloqueado para: separacao.
    */
-  async confirmReceipt(orderId, { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos }, currentUser) {
+  async confirmReceipt(orderId, { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos, expectedVersion }, currentUser) {
     if (!currentUser) {
       const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
       err.statusCode = 401;
       throw err;
     }
 
-    const order = await orderRepository.findById(orderId);
-    if (!order) {
-      const err = new Error('Pedido não encontrado.');
-      err.statusCode = 404;
-      throw err;
-    }
-
-    // Validação de Regra de Negócio: Não pode confirmar recebimento em Cotação ou Aprovado
-    const currentStatus = order.header.status || 'Em Cotação';
-    if (currentStatus === 'Em Cotação' || currentStatus === 'Rascunho' || currentStatus === 'Aprovado') {
-      const err = new Error(`Não é permitido confirmar o recebimento de pedidos no status "${currentStatus}". O pedido deve estar em Distribuição, Separação ou Faturamento.`);
-      err.statusCode = 400;
-      throw err;
-    }
-
-    // Atualizar campos de recebimento no cabeçalho
-    order.header.recebidoMatriz = true;
-    order.header.dataRecebimentoMatriz = dataRecebimento || new Date().toISOString().split('T')[0];
-    order.header.recebidoPor = recebidoPor || currentUser.nome || 'Operador';
-    order.header.numeroNotaFiscal = numeroNotaFiscal || order.header.numeroNotaFiscal || '';
-    order.header.updatedAt = new Date().toISOString();
-
-    const receiptRole = String(currentUser.role || '').toLowerCase();
-    const canAuthorizeWithReceipt = ['diretoria', 'root', 'admin'].includes(receiptRole);
-    if (autorizarBoletos === true && canAuthorizeWithReceipt) {
-      order.header.boletosLiberados = true;
-      order.header.boletosLiberadosPor = currentUser.nome || 'Diretoria';
-      order.header.boletosLiberadosEm = new Date().toISOString();
-      if (currentStatus === 'Faturamento') {
-        order.header.status = 'Finalizado';
-        order.header.finalizadoPor = currentUser.nome || 'Diretoria';
-        order.header.dataFinalizacao = new Date().toISOString();
+    const { saved, canAuthorizeWithReceipt } = await withTransaction(async () => {
+      const order = await orderRepository.findById(orderId);
+      if (!order) {
+        const err = new Error('Pedido não encontrado.');
+        err.statusCode = 404;
+        throw err;
       }
-    }
 
-    // Recalcular as datas de vencimento das parcelas a partir da data de recebimento na Matriz
-    const dataRecebimentoEfetiva = order.header.dataRecebimentoMatriz;
-    if (dataRecebimentoEfetiva && Array.isArray(order.installments) && order.installments.length > 0) {
-      const baseDt = new Date(`${dataRecebimentoEfetiva}T12:00:00Z`);
-      order.installments = order.installments.map((inst, index) => {
-        // Se a parcela já foi baixada como paga, preserva seus dados
-        if (inst.status === 'Pago') return inst;
+      checkPipelineVersion(order, expectedVersion);
 
-        let offsetDays = Number(inst.dias);
-        if (isNaN(offsetDays) || offsetDays <= 0) {
-          if (inst.vencimento && (order.header.dataPedido || order.header.previsaoEntrega)) {
-            const originalBase = new Date(`${order.header.previsaoEntrega || order.header.dataPedido}T12:00:00Z`);
-            const originalDue = new Date(`${inst.vencimento}T12:00:00Z`);
-            const diff = Math.round((originalDue.getTime() - originalBase.getTime()) / (1000 * 60 * 60 * 24));
-            if (diff > 0) offsetDays = diff;
+      // Validação de Regra de Negócio: Não pode confirmar recebimento em Cotação ou Aprovado
+      const currentStatus = order.header.status || 'Em Cotação';
+      if (!['Em Distribuição', 'Em Separação', 'Faturamento'].includes(currentStatus)) {
+        const err = new Error(`Não é permitido confirmar o recebimento de pedidos no status "${currentStatus}". O pedido deve estar em Distribuição, Separação ou Faturamento.`);
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // Atualizar campos de recebimento no cabeçalho
+      order.header.recebidoMatriz = true;
+      order.header.dataRecebimentoMatriz = dataRecebimento || new Date().toISOString().split('T')[0];
+      order.header.recebidoPor = recebidoPor || currentUser.nome || 'Operador';
+      order.header.numeroNotaFiscal = numeroNotaFiscal || order.header.numeroNotaFiscal || '';
+      order.header.updatedAt = new Date().toISOString();
+
+      const receiptRole = String(currentUser.role || '').toLowerCase();
+      const canAuthorizeWithReceipt = ['diretoria', 'root', 'admin'].includes(receiptRole);
+      if (autorizarBoletos === true && canAuthorizeWithReceipt) {
+        order.header.boletosLiberados = true;
+        order.header.boletosLiberadosPor = currentUser.nome || 'Diretoria';
+        order.header.boletosLiberadosEm = new Date().toISOString();
+        if (currentStatus === 'Faturamento') {
+          order.header.status = 'Finalizado';
+          order.header.finalizadoPor = currentUser.nome || 'Diretoria';
+          order.header.dataFinalizacao = new Date().toISOString();
+        }
+      }
+
+      // Recalcular as datas de vencimento das parcelas a partir da data de recebimento na Matriz
+      const dataRecebimentoEfetiva = order.header.dataRecebimentoMatriz;
+      if (dataRecebimentoEfetiva && Array.isArray(order.installments) && order.installments.length > 0) {
+        const baseDt = new Date(`${dataRecebimentoEfetiva}T12:00:00Z`);
+        order.installments = order.installments.map((inst, index) => {
+          // Se a parcela já foi baixada como paga, preserva seus dados
+          if (inst.status === 'Pago') return inst;
+
+          let offsetDays = Number(inst.dias);
+          if (isNaN(offsetDays) || offsetDays <= 0) {
+            if (inst.vencimento && (order.header.dataPedido || order.header.previsaoEntrega)) {
+              const originalBase = new Date(`${order.header.previsaoEntrega || order.header.dataPedido}T12:00:00Z`);
+              const originalDue = new Date(`${inst.vencimento}T12:00:00Z`);
+              const diff = Math.round((originalDue.getTime() - originalBase.getTime()) / (1000 * 60 * 60 * 24));
+              if (diff > 0) offsetDays = diff;
+            }
           }
-        }
-        if (isNaN(offsetDays) || offsetDays <= 0) {
-          offsetDays = (index + 1) * 30;
-        }
+          if (isNaN(offsetDays) || offsetDays <= 0) {
+            offsetDays = (index + 1) * 30;
+          }
 
-        const newDue = new Date(baseDt.getTime() + offsetDays * 24 * 60 * 60 * 1000);
-        const y = newDue.getUTCFullYear();
-        const m = String(newDue.getUTCMonth() + 1).padStart(2, '0');
-        const d = String(newDue.getUTCDate()).padStart(2, '0');
-        const newDueIso = `${y}-${m}-${d}`;
+          const newDue = new Date(baseDt.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+          const y = newDue.getUTCFullYear();
+          const m = String(newDue.getUTCMonth() + 1).padStart(2, '0');
+          const d = String(newDue.getUTCDate()).padStart(2, '0');
+          const newDueIso = `${y}-${m}-${d}`;
 
-        return {
-          ...inst,
-          vencimento: newDueIso,
-          dataVencimento: newDueIso,
-          dias: offsetDays,
-          status: 'Previsto' // Conforme diretriz Mega 12: permanece Previsto até efetivo pagamento
-        };
-      });
-    }
+          return {
+            ...inst,
+            vencimento: newDueIso,
+            dataVencimento: newDueIso,
+            dias: offsetDays,
+            status: 'Previsto' // Conforme diretriz Mega 12: permanece Previsto até efetivo pagamento
+          };
+        });
+      }
 
-    const saved = await orderRepository.save(order);
+      return { saved: await orderRepository.save(order), canAuthorizeWithReceipt };
+    });
 
     // Sincronizar com o financeiro (só vai efetivamente criar títulos se recebido + autorizado)
     try {
@@ -1053,17 +1135,28 @@ class OrderService {
       throw err;
     }
 
-    const order = await orderRepository.findById(orderId);
-    if (!order) {
-      const err = new Error('Pedido não encontrado.');
-      err.statusCode = 404;
-      throw err;
-    }
+    const { saved, transitioned } = await withTransaction(async () => {
+      const order = await orderRepository.findById(orderId);
+      if (!order) {
+        const err = new Error('Pedido não encontrado.');
+        err.statusCode = 404;
+        throw err;
+      }
 
-    order.header.status = 'Em Distribuição';
-    order.header.updatedAt = new Date().toISOString();
+      if (order.header.status === 'Em Distribuição') return { saved: order, transitioned: false };
+      if (order.header.status !== 'Aprovado') {
+        const error = new Error('O pedido precisa estar aprovado para iniciar a Distribuição.');
+        error.statusCode = 409;
+        error.code = 'INVALID_PIPELINE_STATE';
+        throw error;
+      }
 
-    const saved = await orderRepository.save(order);
+      order.header.status = 'Em Distribuição';
+      order.header.updatedAt = new Date().toISOString();
+
+      return { saved: await orderRepository.save(order), transitioned: true };
+    });
+    if (!transitioned) return { success: true, order: saved };
 
     await distributionAuditRepo.create({
       orderId: saved.header.id,
@@ -1094,48 +1187,43 @@ class OrderService {
       throw err;
     }
 
-    const order = await orderRepository.findById(orderId);
-    if (!order) {
-      const err = new Error('Pedido não encontrado.');
-      err.statusCode = 404;
-      throw err;
-    }
+    const { saved, totalPecasEstoqueEntrada, lojasSet, totalPecas } = await withTransaction(async () => {
+      const order = await orderRepository.findById(orderId);
+      if (!order) {
+        const err = new Error('Pedido não encontrado.');
+        err.statusCode = 404;
+        throw err;
+      }
 
-    const validReleaseStatuses = ['Aprovado', 'Em Distribuição'];
-    if (!validReleaseStatuses.includes(order.header.status)) {
-      const err = new Error(`O pedido não pode ser liberado para separação no status "${order.header.status}". O status atual precisa ser "Aprovado" ou "Em Distribuição".`);
-      err.statusCode = 409;
-      err.code = 'INVALID_PIPELINE_STATE';
-      throw err;
-    }
-    // Garantir que a distribuição esteja marcada como concluída ao liberar para separação
-    order.header.distribuicaoConcluida = true;
-    if (!order.header.dataDistribuicao) order.header.dataDistribuicao = new Date().toISOString();
-    if (!order.header.distribuidoPor) order.header.distribuidoPor = currentUser.nome || 'Distribuição';
+      if (order.header.status !== 'Em Distribuição') {
+        const err = new Error('Inicie a Distribuição antes de liberar o pedido para Separação.');
+        err.statusCode = 409;
+        err.code = 'INVALID_PIPELINE_STATE';
+        throw err;
+      }
+      requireConfirmedReceipt(order);
+      checkPipelineVersion(order, payload.expectedVersion);
+      await applyDistributionItems(order, payload.items);
 
-    // Calcular estatísticas de lojas afetadas e peças totais
-    let totalPecas = 0;
-    const lojasSet = new Set();
-    if (Array.isArray(order.items)) {
-      order.items.forEach(item => {
-        const grade = item.grade || item.separacaoLojas || item.gradeDistribucao || {};
-        if (grade && typeof grade === 'object') {
-          Object.entries(grade).forEach(([loja, q]) => {
-            const qtd = Number(q) || 0;
-            if (qtd > 0) {
-              lojasSet.add(loja);
-              totalPecas += qtd;
-            }
-          });
-        }
-      });
-    }
+      // Calcular estatísticas de lojas afetadas e peças totais
+      let totalPecas = 0;
+      const lojasSet = new Set();
+      if (Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          const grade = item.grade || item.separacaoLojas || item.gradeDistribucao || {};
+          if (grade && typeof grade === 'object') {
+            Object.entries(grade).forEach(([loja, q]) => {
+              const qtd = Number(q) || 0;
+              if (qtd > 0) {
+                lojasSet.add(loja);
+                totalPecas += qtd;
+              }
+            });
+          }
+        });
+      }
 
-    const db = await getDatabase();
-    let saved;
-    let totalPecasEstoqueEntrada = 0;
-    db.run('BEGIN TRANSACTION');
-    try {
+      let totalPecasEstoqueEntrada = 0;
       const currentStock = await stockRepository.findAll();
       for (const item of order.items || []) {
         const qtdEntrada = Number(item.qtdReservaEstoque || 0);
@@ -1186,13 +1274,9 @@ class OrderService {
       order.header.updatedAt = new Date().toISOString();
       if (payload.observacoes) order.header.observacaoDistribuicao = payload.observacoes;
 
-      saved = await orderRepository.save(order);
-      db.run('COMMIT');
-      scheduleDatabaseSave(0);
-    } catch (error) {
-      try { db.run('ROLLBACK'); } catch (_) { /* transação já encerrada */ }
-      throw error;
-    }
+      const saved = await orderRepository.save(order);
+      return { saved, totalPecasEstoqueEntrada, lojasSet, totalPecas };
+    });
 
     await distributionAuditRepo.create({
       orderId: saved.header.id,
@@ -1401,10 +1485,8 @@ class OrderService {
       order.header.recebidoMatrizPor = payload.conferente || currentUser.nome || 'Conferente Separação';
       if (!order.header.dataRecebimentoMatriz) order.header.dataRecebimentoMatriz = new Date().toISOString();
       order.header.boletosLiberados = true;
-    } else if (!order.header.recebidoMatriz) {
-      order.header.recebidoMatriz = true;
-      order.header.recebidoMatrizPor = payload.conferente || currentUser.nome || 'Conferente Separação';
-      order.header.dataRecebimentoMatriz = new Date().toISOString();
+    } else {
+      requireConfirmedReceipt(order);
     }
 
     // Inicializar estrutura de inspeção caso não exista
@@ -1723,6 +1805,7 @@ class OrderService {
       err.statusCode = 400;
       throw err;
     }
+    if (targetStatus === 'Em Separação') requireConfirmedReceipt(order);
 
     // Trava de Segurança Financeira: impedir se houver qualquer parcela paga
     const financialRepo = require('../repositories/financialRepository');

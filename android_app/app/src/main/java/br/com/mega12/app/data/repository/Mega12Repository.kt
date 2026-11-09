@@ -3,6 +3,7 @@ package br.com.mega12.app.data.repository
 import br.com.mega12.app.data.api.ApiClient
 import br.com.mega12.app.data.local.PreferencesManager
 import br.com.mega12.app.data.model.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -139,18 +140,71 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             val response = api.getOrders()
             if (response.isSuccessful && response.body() != null) {
                 val normalizedList = response.body()!!.map { order ->
-                    val totalLiq = order.totalLiquidoEfetivo
-                    val totalPcs = order.totalPecasEfetivo
-                    val st = order.statusEfetivo
                     val finalId = order.id.ifBlank { order.header.id }
+                    val finalNum = order.topNumeroPedido?.takeIf { it.isNotBlank() } ?: order.header.numeroPedido
+                    val finalForn = order.topFornecedor?.takeIf { it.isNotBlank() } ?: order.header.fornecedor
+                    val finalVend = order.topVendedor ?: order.header.vendedor
+                    val finalContatoVend = order.topContatoVendedor ?: order.header.contatoVendedor
+                    val finalCond = order.topCondicaoPagamento?.takeIf { it.isNotBlank() } ?: order.header.condicaoPagamento
+                    val finalForma = order.topFormaPagamento ?: order.header.formaPagamento
+                    val finalFrete = order.topTipoFrete ?: order.header.tipoFrete
+                    val finalDataPed = order.topDataPedido ?: order.topDataEmissao ?: order.header.dataPedido
+                    val finalDataEmis = order.topDataEmissao ?: order.topDataPedido ?: order.header.dataEmissao
+                    val finalDataEntr = order.topDataEntregaPrevista ?: order.header.dataEntregaPrevista
+                    val finalObs = order.topObservacoes ?: order.header.observacoes
+                    val rawStatus = order.status.ifBlank { order.header.status }
+                    val finalStatus = if (rawStatus.isBlank() || rawStatus.equals("Confirmado", ignoreCase = true)) "Em Cotação" else rawStatus
+                    val finalSepStatus = order.separationStatus.ifBlank { order.header.separationStatus ?: "Pendente" }
+
+                    val totalLiq = if (order.totalLiquido > 0) order.totalLiquido else if (order.header.totalLiquido > 0) order.header.totalLiquido else (order.topTotalGeral ?: 0.0)
+                    val totalPcs = if (order.totalPecas > 0) order.totalPecas else order.header.totalPecas
+
+                    val effectiveHeader = order.header.copy(
+                        id = finalId,
+                        numeroPedido = finalNum,
+                        fornecedor = finalForn,
+                        supplierId = order.topSupplierId ?: order.header.supplierId,
+                        vendedor = finalVend ?: "",
+                        contatoVendedor = finalContatoVend ?: "",
+                        condicaoPagamento = finalCond,
+                        formaPagamento = finalForma ?: "Boleto",
+                        tipoFrete = finalFrete ?: "CIF",
+                        dataPedido = finalDataPed ?: "",
+                        dataEmissao = finalDataEmis ?: "",
+                        dataEntregaPrevista = finalDataEntr ?: "",
+                        observacoes = finalObs ?: "",
+                        status = finalStatus,
+                        totalLiquido = totalLiq,
+                        totalPecas = totalPcs,
+                        totalBruto = order.topTotalBruto ?: order.header.totalBruto,
+                        totalIpi = order.topTotalIpi ?: order.header.totalIpi,
+                        totalDesconto = order.topTotalDesconto ?: order.header.totalDesconto,
+                        totalGeral = order.topTotalGeral ?: order.header.totalGeral,
+                        totalVolumes = order.topTotalVolumes ?: order.header.totalVolumes,
+                        recebidoMatriz = order.topRecebidoMatriz ?: order.header.recebidoMatriz,
+                        recebidoPor = order.topRecebidoPor ?: order.header.recebidoPor,
+                        dataRecebimentoMatriz = order.topDataRecebimentoMatriz ?: order.header.dataRecebimentoMatriz,
+                        numeroNotaFiscal = order.topNumeroNotaFiscal ?: order.header.numeroNotaFiscal,
+                        boletosLiberados = order.topBoletosLiberados ?: order.header.boletosLiberados,
+                        boletosLiberadosPor = order.topBoletosLiberadosPor ?: order.header.boletosLiberadosPor,
+                        boletosLiberadosEm = order.topBoletosLiberadosEm ?: order.header.boletosLiberadosEm,
+                        distribuicaoConcluida = order.topDistribuicaoConcluida ?: order.header.distribuicaoConcluida,
+                        separacaoConcluida = order.topSeparacaoConcluida ?: order.header.separacaoConcluida,
+                        valorNotaFiscalEntregue = order.topValorNotaFiscalEntregue ?: order.header.valorNotaFiscalEntregue,
+                        ajusteFiscalDiferenca = order.topAjusteFiscalDiferenca ?: order.header.ajusteFiscalDiferenca
+                    )
+
                     val fixedItems = order.items.map { itm ->
                         if (itm.subtotal <= 0 && itm.totalPecas > 0 && itm.precoCompraUnitario > 0) {
                             itm.copy(subtotal = itm.totalPecas * itm.precoCompraUnitario)
                         } else itm
                     }
+
                     order.copy(
                         id = finalId,
-                        status = st,
+                        header = effectiveHeader,
+                        status = finalStatus,
+                        separationStatus = finalSepStatus,
                         totalLiquido = totalLiq,
                         totalPecas = totalPcs,
                         items = fixedItems
@@ -160,6 +214,8 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
             } else {
                 Result.failure(Exception("Erro ao buscar pedidos da API"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

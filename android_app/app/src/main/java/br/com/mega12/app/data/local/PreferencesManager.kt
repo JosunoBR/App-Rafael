@@ -21,8 +21,8 @@ class PreferencesManager(context: Context) {
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
 
-        // IP padrão para desenvolvimento no emulador Android (10.0.2.2 aponta para o localhost da máquina host)
-        const val DEFAULT_SERVER_URL = "http://10.0.2.2:3001/api/"
+        // Servidor Oficial da Nuvem Hostinger
+        const val DEFAULT_SERVER_URL = "http://grupomega.cloud/api/"
     }
 
     var themeMode: String

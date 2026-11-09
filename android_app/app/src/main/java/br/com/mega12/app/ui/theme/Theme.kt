@@ -80,18 +80,18 @@ fun Mega12AppTheme(
  */
 @Composable
 fun mega12TextFieldColors(
-    containerColor: Color = Slate800
+    containerColor: Color = MaterialTheme.colorScheme.surface
 ): TextFieldColors {
     return OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        focusedLabelColor = Emerald400,
-        unfocusedLabelColor = Slate300,
-        focusedBorderColor = Emerald400,
-        unfocusedBorderColor = Slate600,
-        focusedPlaceholderColor = Slate400,
-        unfocusedPlaceholderColor = Slate400,
-        cursorColor = Emerald400,
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+        focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        cursorColor = MaterialTheme.colorScheme.primary,
         focusedContainerColor = containerColor,
         unfocusedContainerColor = containerColor
     )

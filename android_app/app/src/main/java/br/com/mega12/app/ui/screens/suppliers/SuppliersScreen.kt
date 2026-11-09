@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,17 +56,17 @@ fun SuppliersScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Buscar fornecedor, vendedor ou CNPJ...", color = Slate300, fontSize = 13.sp) },
+                placeholder = { Text("Buscar fornecedor, vendedor ou CNPJ...", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Emerald400) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Limpar", tint = Slate300)
+                            Icon(Icons.Default.Clear, contentDescription = "Limpar", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 },
                 singleLine = true,
-                colors = mega12TextFieldColors(containerColor = Slate800),
+                colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -76,7 +75,7 @@ fun SuppliersScreen(
 
             Text(
                 text = "${filtered.size} fornecedores encontrados (Somente Consulta)",
-                style = MaterialTheme.typography.bodySmall.copy(color = Slate400, fontSize = 11.sp)
+                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -87,14 +86,16 @@ fun SuppliersScreen(
                 }
             } else if (filtered.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nenhum fornecedor encontrado.", color = Slate400)
+                    Text("Nenhum fornecedor encontrado.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(filtered) { sup ->
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = Slate800),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
@@ -107,7 +108,7 @@ fun SuppliersScreen(
                                         Text(
                                             text = sup.razaoSocial,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color.White,
+                                            color = MaterialTheme.colorScheme.onSurface,
                                             fontSize = 15.sp
                                         )
                                         if (!sup.nomeFantasia.isNullOrBlank() && sup.nomeFantasia != sup.razaoSocial) {

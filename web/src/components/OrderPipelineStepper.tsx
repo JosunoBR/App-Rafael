@@ -19,7 +19,7 @@ import {
 import { PurchaseOrder, User, OrderStatus } from '../shared/types';
 import { OrderRollbackModal } from './OrderRollbackModal';
 import { 
-  canManagePipelineDistribution, 
+  hasPermission,
   canConfirmReceipt, 
   canAuthorizeFinancialRelease,
   canApproveOrder,
@@ -33,7 +33,6 @@ interface OrderPipelineStepperProps {
   onApproveOrder?: (order: PurchaseOrder) => void;
   onSendToDistribution?: (order: PurchaseOrder) => void;
   onOpenDistribution?: (order: PurchaseOrder) => void;
-  onReleaseToSeparation?: (order: PurchaseOrder) => void;
   onOpenSeparation?: (order: PurchaseOrder) => void;
   onSendToFaturamento?: (order: PurchaseOrder) => void;
   onFinalizeSeparation?: (order: PurchaseOrder) => void;
@@ -49,7 +48,6 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
   onApproveOrder,
   onSendToDistribution,
   onOpenDistribution,
-  onReleaseToSeparation,
   onOpenSeparation,
   onSendToFaturamento,
   onFinalizeSeparation,
@@ -71,8 +69,8 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
       case 'Em Cotação':
         return 0;
       case 'Aprovado':
+      case 'Em Distribuição':
         return 1;
-      case 'Em Distribuição': // Retrocompatibilidade temporária caso algum resquício exista
       case 'Em Separação':
         return 2;
       case 'Faturamento':
@@ -90,6 +88,9 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
     String(order.header?.numeroPedido || '').startsWith('CD-') ||
     String(order.header?.id || '').startsWith('order_transf_cd_') ||
     Boolean(order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+  const isReceiptPending = !isTransfer && !order.header.recebidoMatriz;
+  const canStartDistribution = currentStatus === 'Aprovado' && onSendToDistribution &&
+    hasPermission(currentUser, 'pipeline:send_distribution');
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs px-4 py-3 mb-5 transition-all">
@@ -139,7 +140,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 1 ? 'bg-emerald-600 text-white' : currentIndex === 1 ? 'bg-blue-600 text-white ring-2 ring-blue-300 dark:ring-blue-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
                   {currentIndex > 1 ? '✓' : '2'}
                 </span>
-                <span>2. Aprovado</span>
+                <span>2. {currentStatus === 'Em Distribuição' ? 'Distribuição' : 'Aprovado'}</span>
                 <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
               </div>
 
@@ -220,24 +221,33 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </button>
           )}
 
-          {/* AÇÃO ETAPA 2 (Aprovados): Fazer a Distribuição / Enviar p/ Separação */}
-          {!isTransfer && currentIndex === 1 && (onOpenDistribution || onSendToDistribution || onReleaseToSeparation) && (
+          {!isTransfer && currentIndex === 1 && (onOpenDistribution || canStartDistribution) && (
             <button
               onClick={() => {
                 if (onOpenDistribution) onOpenDistribution(order);
-                else if (onSendToDistribution) onSendToDistribution(order);
-                else if (onReleaseToSeparation) onReleaseToSeparation(order);
+                else if (canStartDistribution) onSendToDistribution(order);
               }}
               className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-              title="Acessar tela de rateio entre as 20 lojas e enviar para a Separação"
+              title="Acessar a Distribuição e confirmar o recebimento físico"
             >
               <Boxes className="w-3.5 h-3.5" />
-              <span>Distribuir Lojas</span>
+              <span>{onOpenDistribution ? 'Abrir Distribuição' : 'Iniciar Distribuição'}</span>
+            </button>
+          )}
+
+          {isReceiptPending && onConfirmReceipt && canConfirmReceipt(currentUser, currentStatus) && (
+            <button
+              type="button"
+              onClick={() => onConfirmReceipt(order)}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Truck className="w-3.5 h-3.5" />
+              <span>Confirmar Recebimento Físico</span>
             </button>
           )}
 
           {/* AÇÃO ETAPA 3 (Separação): Efetua a conferência física e conclui a expedição / libera faturamento */}
-          {currentIndex === 2 && (onOpenSeparation || onSendToFaturamento || onFinalizeSeparation) && (
+          {currentIndex === 2 && !isReceiptPending && (onOpenSeparation || onSendToFaturamento || onFinalizeSeparation) && (
             <button
               onClick={() => {
                 if (onOpenSeparation) onOpenSeparation(order);

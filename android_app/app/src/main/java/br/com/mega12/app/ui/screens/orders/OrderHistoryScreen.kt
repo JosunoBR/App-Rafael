@@ -29,6 +29,7 @@ import br.com.mega12.app.ui.components.ProductThumbnail
 import br.com.mega12.app.ui.navigation.Screen
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
+import br.com.mega12.app.ui.components.OrdersLoadError
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -39,6 +40,7 @@ fun OrderHistoryScreen(
     viewModel: Mega12ViewModel
 ) {
     val orders by viewModel.orders.collectAsState()
+    val ordersLoadFailed by viewModel.ordersLoadFailed.collectAsState()
     val isRefreshing by viewModel.isLoading.collectAsState()
     val initialFilter by viewModel.selectedStatusFilter.collectAsState()
     var selectedStatus by remember(initialFilter) { mutableStateOf(initialFilter) }
@@ -60,7 +62,7 @@ fun OrderHistoryScreen(
             else {
                 order.header.numeroPedido.lowercase().contains(query) ||
                 order.header.fornecedor.lowercase().contains(query) ||
-                order.items.any { it.descricao.lowercase().contains(query) || it.codigoInterno.lowercase().contains(query) }
+                order.items.any { it.descricao.lowercase().contains(query) || it.safeCodigoInterno.lowercase().contains(query) }
             }
 
             matchesStatus && matchesQuery
@@ -95,7 +97,7 @@ fun OrderHistoryScreen(
                     .fillMaxWidth()
                     .height(50.dp),
                 singleLine = true,
-                colors = mega12TextFieldColors(containerColor = Slate800),
+                colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(12.dp)
             )
 
@@ -106,7 +108,7 @@ fun OrderHistoryScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(listOf("TODOS", "Em Cotação", "Aprovado", "Em Separação", "Finalizado")) { status ->
+                items(listOf("TODOS", "Em Cotação", "Aprovado", "Em Distribuição", "Em Separação", "Faturamento", "Finalizado")) { status ->
                     FilterChip(
                         selected = selectedStatus == status,
                         onClick = { selectedStatus = status },
@@ -114,8 +116,8 @@ fun OrderHistoryScreen(
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Emerald500,
                             selectedLabelColor = Slate900,
-                            containerColor = Slate800,
-                            labelColor = Color.White
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface
                         )
                     )
                 }
@@ -123,8 +125,14 @@ fun OrderHistoryScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Lista de Pedidos (Ocupa o espaço logo abaixo dos chips, sem espaço vazio residual)
-            if (filteredOrders.isEmpty()) {
+            if (ordersLoadFailed) {
+                OrdersLoadError(isRefreshing, viewModel::retryOrders)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            if (filteredOrders.isEmpty() && isRefreshing && !ordersLoadFailed) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else if (filteredOrders.isEmpty() && !ordersLoadFailed) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -134,10 +142,10 @@ fun OrderHistoryScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = null, tint = Slate600, modifier = Modifier.size(54.dp))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Nenhum pedido encontrado.", color = Slate400, fontWeight = FontWeight.Medium)
+                        Text("Nenhum pedido encontrado.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
                     }
                 }
-            } else {
+            } else if (filteredOrders.isNotEmpty()) {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
@@ -147,21 +155,27 @@ fun OrderHistoryScreen(
                     items(filteredOrders, key = { it.finalId }) { order ->
                         val statusBg = when (order.status.lowercase()) {
                             "aprovado" -> Emerald500.copy(alpha = 0.2f)
-                            "finalizado" -> Color(0xFF38BDF8).copy(alpha = 0.2f)
+                            "em distribuição", "em distribuicao" -> Color(0xFF3B82F6).copy(alpha = 0.2f)
                             "em separação", "em separacao" -> Color(0xFFA855F7).copy(alpha = 0.2f)
+                            "faturamento" -> Color(0xFFF59E0B).copy(alpha = 0.2f)
+                            "finalizado" -> Color(0xFF38BDF8).copy(alpha = 0.2f)
                             else -> Amber500.copy(alpha = 0.2f)
                         }
                         val statusTextColor = when (order.status.lowercase()) {
                             "aprovado" -> Emerald400
-                            "finalizado" -> Color(0xFF38BDF8)
+                            "em distribuição", "em distribuicao" -> Color(0xFF60A5FA)
                             "em separação", "em separacao" -> Color(0xFFA855F7)
+                            "faturamento" -> Color(0xFFFBBF24)
+                            "finalizado" -> Color(0xFF38BDF8)
                             else -> Amber400
                         }
 
                         Card(
                             onClick = { selectedOrderForDetail = order },
-                            colors = CardDefaults.cardColors(containerColor = Slate800),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
@@ -178,7 +192,7 @@ fun OrderHistoryScreen(
                                             text = order.header.numeroPedido.ifEmpty { "PED-RASCUNHO" },
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 16.sp,
-                                            color = Color.White
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                         val temAjusteFiscal = (order.header.valorNotaFiscalEntregue > 0.0) || Math.abs(order.header.ajusteFiscalDiferenca) > 0.001
                                         if (temAjusteFiscal) {
@@ -230,20 +244,20 @@ fun OrderHistoryScreen(
                                     Icon(
                                         imageVector = Icons.Default.Business,
                                         contentDescription = null,
-                                        tint = Slate400,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = fornecedorNome,
-                                        color = Slate300,
-                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.SemiBold,
                                         fontSize = 14.sp
                                     )
                                 }
 
                                 Spacer(modifier = Modifier.height(8.dp))
-                                HorizontalDivider(color = Slate700.copy(alpha = 0.6f), thickness = 1.dp)
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Row(
@@ -254,13 +268,13 @@ fun OrderHistoryScreen(
                                     Column {
                                         Text(
                                             text = "${order.items.size} itens • ${order.totalPecas} pçs",
-                                            color = Slate400,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 12.sp
                                         )
                                         if (!order.header.dataPedido.isNullOrBlank()) {
                                             Text(
                                                 text = "Data: ${order.header.dataPedido}",
-                                                color = Slate500,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontSize = 11.sp
                                             )
                                         }
@@ -273,13 +287,13 @@ fun OrderHistoryScreen(
                                         Column(horizontalAlignment = Alignment.End) {
                                             Text(
                                                 text = currencyFormat.format(order.totalLiquido),
-                                                color = Emerald400,
+                                                color = Emerald600,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 16.sp
                                             )
                                             Text(
                                                 text = "Toque para detalhes",
-                                                color = Slate500,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontSize = 10.sp
                                             )
                                         }
@@ -291,12 +305,12 @@ fun OrderHistoryScreen(
                                                 navController.navigate(Screen.OrderCreation.route)
                                             },
                                             modifier = Modifier.size(36.dp),
-                                            colors = IconButtonDefaults.iconButtonColors(containerColor = Slate700)
+                                            colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                         ) {
                                             Icon(
                                                 Icons.Default.Edit,
                                                 contentDescription = "Editar Pedido",
-                                                tint = Emerald400,
+                                                tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -324,34 +338,7 @@ fun OrderHistoryScreen(
                     navController.navigate(Screen.OrderCreation.route)
                 },
                 onShareWhatsApp = {
-                    val sb = StringBuilder()
-                    sb.appendLine("📋 *PEDIDO DE COMPRA - REDE MEGA 12*")
-                    sb.appendLine("🔢 *Número:* ${order.header.numeroPedido.ifEmpty { "PED-RASCUNHO" }}")
-                    sb.appendLine("🏢 *Fornecedor:* ${order.header.fornecedor.ifBlank { "Fornecedor Matriz" }}")
-                    if (!order.header.dataPedido.isNullOrBlank()) {
-                        sb.appendLine("📅 *Data:* ${order.header.dataPedido}")
-                    }
-                    if (!order.header.condicaoPagamento.isNullOrBlank()) {
-                        sb.appendLine("💳 *Condição:* ${order.header.condicaoPagamento}")
-                    }
-                    sb.appendLine("📦 *Total de Peças:* ${order.totalPecas}")
-                    sb.appendLine("💰 *TOTAL DO PEDIDO: ${currencyFormat.format(order.totalLiquido)}*")
-                    sb.appendLine("---")
-                    sb.appendLine("*ITENS DO PEDIDO:*")
-                    order.items.forEachIndexed { idx, item ->
-                        sb.appendLine("${idx + 1}. ${item.descricao} (Cód: ${item.codigoInterno.ifEmpty { item.codigo }})")
-                        sb.appendLine("   ${item.totalPecas} un (R$ %.2f/un) -> R$ %.2f".format(item.precoCompraUnitario, item.subtotal))
-                    }
-                    sb.appendLine("---")
-                    sb.appendLine("Gerado via App Mobile Rede Mega 12")
-
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, sb.toString())
-                        type = "text/plain"
-                    }
-                    val shareIntent = Intent.createChooser(sendIntent, "Enviar Pedido via WhatsApp")
-                    context.startActivity(shareIntent)
+                    br.com.mega12.app.domain.utils.PdfExporter.shareOrderPdfToWhatsApp(context, order)
                 }
             )
         }
@@ -366,10 +353,12 @@ private fun OrderDetailsDialog(
     onEditOrder: () -> Unit,
     onShareWhatsApp: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Slate900),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.88f)
@@ -390,21 +379,21 @@ private fun OrderDetailsDialog(
                             text = order.header.numeroPedido.ifEmpty { "PED-RASCUNHO" },
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         Text(
                             text = order.header.fornecedor.ifBlank { "Fornecedor Matriz" },
-                            style = MaterialTheme.typography.bodyMedium.copy(color = Slate300)
+                            style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Fechar", tint = Slate400)
+                        Icon(Icons.Default.Close, contentDescription = "Fechar", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
-                HorizontalDivider(color = Slate800)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Conteúdo Rolável
@@ -416,44 +405,44 @@ private fun OrderDetailsDialog(
                 ) {
                     // Informações Gerais
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Slate800),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Status:", color = Slate400, fontSize = 12.sp)
-                                Text(order.status.uppercase(), color = Emerald400, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Status:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                Text(order.status.uppercase(), color = Emerald600, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                             if (!order.header.condicaoPagamento.isNullOrBlank()) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Condição Pagamento:", color = Slate400, fontSize = 12.sp)
-                                    Text(order.header.condicaoPagamento, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                                    Text("Condição Pagamento:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                    Text(order.header.condicaoPagamento, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, fontSize = 12.sp)
                                 }
                             }
                             if (!order.header.dataPedido.isNullOrBlank()) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Data do Pedido:", color = Slate400, fontSize = 12.sp)
-                                    Text(order.header.dataPedido, color = Color.White, fontSize = 12.sp)
+                                    Text("Data do Pedido:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                    Text(order.header.dataPedido, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
                                 }
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Total de Peças:", color = Slate400, fontSize = 12.sp)
-                                Text("${order.totalPecas} un", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Total de Peças:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                Text("${order.totalPecas} un", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Total Líquido:", color = Slate400, fontSize = 12.sp)
-                                Text(currencyFormat.format(order.totalLiquido), color = Emerald400, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Total Líquido:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                Text(currencyFormat.format(order.totalLiquido), color = Emerald600, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                             if ((order.header.valorNotaFiscalEntregue > 0.0) || Math.abs(order.header.ajusteFiscalDiferenca) > 0.001) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Ajuste Fiscal NF:", color = Amber400, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("Ajuste Fiscal NF:", color = Amber500, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     val sinal = if (order.header.ajusteFiscalDiferenca > 0) "+" else ""
-                                    Text("$sinal${currencyFormat.format(order.header.ajusteFiscalDiferenca)}", color = Amber400, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("$sinal${currencyFormat.format(order.header.ajusteFiscalDiferenca)}", color = Amber500, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 }
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Total Final NF:", color = Amber300, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("Total Final NF:", color = Amber500, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     val nfVal = if (order.header.valorNotaFiscalEntregue > 0.0) order.header.valorNotaFiscalEntregue else (order.totalLiquido + order.header.ajusteFiscalDiferenca)
-                                    Text(currencyFormat.format(nfVal), color = Amber300, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(currencyFormat.format(nfVal), color = Amber500, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 }
                             }
                         }
@@ -462,17 +451,17 @@ private fun OrderDetailsDialog(
                     // Lista de Itens do Pedido
                     Text(
                         text = "Itens do Pedido (${order.items.size})",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
 
                     if (order.items.isEmpty()) {
-                        Text("Nenhum item lançado neste pedido.", color = Slate500, fontSize = 12.sp)
+                        Text("Nenhum item lançado neste pedido.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     } else {
                         order.items.forEachIndexed { index, item ->
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Slate800.copy(alpha = 0.7f)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -493,12 +482,12 @@ private fun OrderDetailsDialog(
                                         Text(
                                             text = "${index + 1}. ${item.descricao.ifBlank { "Produto Sem Descrição" }}",
                                             fontWeight = FontWeight.SemiBold,
-                                            color = Color.White,
+                                            color = MaterialTheme.colorScheme.onSurface,
                                             fontSize = 13.sp
                                         )
-                                        val cod = item.codigoInterno.ifEmpty { item.codigo }
+                                        val cod = item.safeCodigoInterno
                                         if (cod.isNotEmpty()) {
-                                            Text("Cód: $cod", color = Slate400, fontSize = 11.sp)
+                                            Text("Cód: $cod", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                         }
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Row(
@@ -507,7 +496,7 @@ private fun OrderDetailsDialog(
                                         ) {
                                             Text(
                                                 text = "${item.totalPecas} un x ${currencyFormat.format(item.precoCompraUnitario)}",
-                                                color = Slate300,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontSize = 12.sp
                                             )
                                             Text(
@@ -526,38 +515,77 @@ private fun OrderDetailsDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Botões de Ação Inferiores (Fechar, Editar e WhatsApp)
+                // Fileira Única de Ações Otimizada (Fechar, Editar e WhatsApp PDF)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(0.8f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Slate300),
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("Fechar")
+                        Text(
+                            text = "Fechar",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            softWrap = false
+                        )
                     }
 
-                    // Botão Editar Pedido
                     Button(
                         onClick = onEditOrder,
-                        modifier = Modifier.weight(1.3f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Emerald500),
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                        modifier = Modifier
+                            .weight(1.1f)
+                            .height(44.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, tint = Slate900, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Editar Pedido", color = Slate900, fontWeight = FontWeight.Bold)
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Editar",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            softWrap = false
+                        )
                     }
 
-                    IconButton(
+                    // Botão WhatsApp PDF (Símbolos Combinados: Compartilhar + PDF)
+                    Button(
                         onClick = onShareWhatsApp,
-                        modifier = Modifier.size(44.dp),
-                        colors = IconButtonDefaults.iconButtonColors(containerColor = Slate800)
+                        colors = ButtonDefaults.buttonColors(containerColor = Emerald500),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                        modifier = Modifier
+                            .weight(0.9f)
+                            .height(44.dp)
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = "WhatsApp", tint = Emerald400, modifier = Modifier.size(18.dp))
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Compartilhar",
+                            tint = Slate900,
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = "PDF WhatsApp",
+                            tint = Slate900,
+                            modifier = Modifier.size(17.dp)
+                        )
                     }
                 }
             }

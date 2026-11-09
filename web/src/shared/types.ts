@@ -185,7 +185,7 @@ export interface OrderItem {
   separacaoManual?: boolean;    // Se foi editado manualmente
   qtdReservaEstoque?: number;   // Quantidade retida no Estoque Central / Matriz / CD
   ruptura?: boolean;            // Item em ruptura (não será entregue pelo fornecedor - descontado de todos os cálculos do pedido)
-  qtdRecebida?: number;         // Quantidade física/faturada recebida na doca (se menor que qtdTotalUnidades, gera ruptura parcial)
+  qtdRecebida?: number | null;  // Quantidade conferida na doca. Nulo indica conferência pendente.
   motivoRuptura?: string;       // Motivo da divergência/falta apontada na conferência de doca
   precoUnitarioOriginal?: number; // Preço unitário antes do Ajuste Fiscal (para permitir reversão)
   valorTotalBrutoOriginal?: number; // Total bruto antes do Ajuste Fiscal

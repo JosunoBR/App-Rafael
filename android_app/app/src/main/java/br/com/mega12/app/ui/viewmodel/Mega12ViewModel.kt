@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -45,6 +47,12 @@ class Mega12ViewModel : ViewModel() {
     // Pedidos do Sistema
     private val _orders = MutableStateFlow<List<PurchaseOrder>>(emptyList())
     val orders: StateFlow<List<PurchaseOrder>> = _orders.asStateFlow()
+    private val _ordersLoadFailed = MutableStateFlow(false)
+    val ordersLoadFailed: StateFlow<Boolean> = _ordersLoadFailed.asStateFlow()
+    private val ordersRefreshMutex = Mutex()
+    private val _docaOperationInProgress = MutableStateFlow(false)
+    val docaOperationInProgress: StateFlow<Boolean> = _docaOperationInProgress.asStateFlow()
+    private var docaMutationRevision = 0L
 
     // Lançamentos Financeiros (Boletos - Somente Leitura)
     private val _installments = MutableStateFlow<List<PaymentInstallment>>(emptyList())
@@ -126,17 +134,18 @@ class Mega12ViewModel : ViewModel() {
     fun logout() {
         repository.logout()
         _currentUser.value = null
+        _orders.value = emptyList()
+        _ordersLoadFailed.value = false
     }
 
     fun refreshData() {
         viewModelScope.launch {
+            if (_isLoading.value) return@launch
             _isLoading.value = true
 
             val role = _currentUser.value?.role?.lowercase()
             if (role == "separacao" || role == "conferente") {
-                repository.getOrders().onSuccess { orders ->
-                    _orders.value = orders.filter { it.status == "Em Separação" }
-                }
+                loadOrders()
                 _isLoading.value = false
                 return@launch
             }
@@ -154,8 +163,7 @@ class Mega12ViewModel : ViewModel() {
             supRes.onSuccess { _suppliers.value = it }
 
             // Carregar Pedidos
-            val orderRes = repository.getOrders()
-            orderRes.onSuccess { _orders.value = it }
+            loadOrders()
 
             // Carregar Lançamentos Financeiros (Boletos)
             val finRes = repository.getFinancialEntries()
@@ -173,10 +181,48 @@ class Mega12ViewModel : ViewModel() {
         }
     }
 
-    fun refreshSeparationOrdersSilently() {
+    fun retryOrders() {
         viewModelScope.launch {
-            repository.getOrders().onSuccess { orders ->
-                _orders.value = orders.filter { it.status == "Em Separação" }
+            if (_isLoading.value) return@launch
+            _isLoading.value = true
+            try {
+                loadOrders()
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    suspend fun refreshSeparationOrders() {
+        if (!_isLoading.value && !_docaOperationInProgress.value) loadOrders()
+    }
+
+    private suspend fun loadOrders() = ordersRefreshMutex.withLock {
+        val user = _currentUser.value ?: return@withLock
+        val revision = docaMutationRevision
+        val result = repository.getOrders()
+        if (_currentUser.value !== user || docaMutationRevision != revision) return@withLock
+        result.onSuccess { orders ->
+            val role = user.role.lowercase()
+            _orders.value = if (role == "separacao" || role == "conferente") {
+                orders.filter { it.status == "Em Separação" }
+            } else {
+                orders
+            }
+        }
+        _ordersLoadFailed.value = result.isFailure
+    }
+
+    private fun launchDocaOperation(operation: suspend () -> Unit) {
+        viewModelScope.launch {
+            if (_docaOperationInProgress.value) return@launch
+            _docaOperationInProgress.value = true
+            docaMutationRevision++
+            try {
+                operation()
+            } finally {
+                docaMutationRevision++
+                _docaOperationInProgress.value = false
             }
         }
     }
@@ -200,8 +246,8 @@ class Mega12ViewModel : ViewModel() {
     }
 
     fun toggleSeparationCheck(orderId: String, storeId: String, itemId: String, conferido: Boolean) {
-        viewModelScope.launch {
-            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launch
+        launchDocaOperation {
+            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launchDocaOperation
             val checkKey = "${storeId}_$itemId"
             val currentChecks = order.inspection?.conferenciaLojas ?: emptyMap()
             val oldCheck = currentChecks[checkKey]
@@ -277,7 +323,8 @@ class Mega12ViewModel : ViewModel() {
                 }
 
                 if (err is ConcurrencyConflictException) {
-                    refreshSeparationOrdersSilently()
+                    loadOrders()
+                    _errorMessage.value = "O pedido foi atualizado por outro operador. Confira a cota e tente novamente."
                 } else {
                     _errorMessage.value = err.message ?: "Erro ao atualizar conferência"
                 }
@@ -295,8 +342,8 @@ class Mega12ViewModel : ViewModel() {
         observacao: String? = null,
         onSuccess: (() -> Unit)? = null
     ) {
-        viewModelScope.launch {
-            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launch
+        launchDocaOperation {
+            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launchDocaOperation
             val expectedVersion = order.version
 
             val req = DamageCreateRequest(
@@ -328,7 +375,8 @@ class Mega12ViewModel : ViewModel() {
                 onSuccess?.invoke()
             }.onFailure { err ->
                 if (err is ConcurrencyConflictException) {
-                    refreshSeparationOrdersSilently()
+                    loadOrders()
+                    _errorMessage.value = "O pedido foi atualizado por outro operador. Revise a avaria e tente novamente."
                 } else {
                     _errorMessage.value = err.message ?: "Erro ao registrar avaria"
                 }
@@ -360,7 +408,7 @@ class Mega12ViewModel : ViewModel() {
                 onSuccess?.invoke()
             }.onFailure { err ->
                 if (err is ConcurrencyConflictException) {
-                    refreshSeparationOrdersSilently()
+                    refreshSeparationOrders()
                 } else {
                     _errorMessage.value = err.message ?: "Erro ao excluir avaria"
                 }
@@ -369,21 +417,20 @@ class Mega12ViewModel : ViewModel() {
     }
 
     fun sendOrderToFaturamento(orderId: String, onSuccess: (() -> Unit)? = null) {
-        viewModelScope.launch {
-            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launch
+        launchDocaOperation {
+            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launchDocaOperation
             val expectedVersion = order.version
 
-            _isLoading.value = true
             val result = repository.sendToFaturamento(order.id.ifBlank { order.finalId }, expectedVersion)
-            _isLoading.value = false
 
             result.onSuccess { res ->
                 _successMessage.value = res.message ?: "Pedido encaminhado para Faturamento!"
-                refreshData()
+                _orders.value = _orders.value.filterNot { it.finalId == order.finalId }
                 onSuccess?.invoke()
             }.onFailure { err ->
                 if (err is ConcurrencyConflictException) {
-                    refreshSeparationOrdersSilently()
+                    loadOrders()
+                    _errorMessage.value = "O pedido foi atualizado por outro operador. Confira o progresso antes de concluir."
                 } else {
                     _errorMessage.value = err.message ?: "Erro ao encaminhar para faturamento"
                 }
@@ -458,7 +505,8 @@ class Mega12ViewModel : ViewModel() {
             statusMargem = fiscal.statusMargem.name.lowercase(),
             photoUrl = photoUrl,
             storeDistribution = sep.allocations,
-            qtdPorCaixa = qtdPorCaixa
+            qtdPorCaixa = qtdPorCaixa,
+            qtdPacotes = totalUnidades.toDouble() / qtdPorCaixa.coerceAtLeast(1)
         )
 
         val updatedItems = _currentDraftOrder.value.items + newItem
@@ -514,7 +562,10 @@ class Mega12ViewModel : ViewModel() {
             margemCalculada = fiscal.margemPercentual,
             statusMargem = fiscal.statusMargem.name.lowercase(),
             storeDistribution = sep.allocations,
-            qtdPorCaixa = qtdPorCaixa
+            qtdPorCaixa = qtdPorCaixa,
+            qtdPacotes = existing.qtdPacotes
+                ?.takeIf { existing.totalPecas == totalUnidades && existing.qtdPorCaixa == qtdPorCaixa }
+                ?: totalUnidades.toDouble() / qtdPorCaixa.coerceAtLeast(1)
         )
 
         val updatedItems = _currentDraftOrder.value.items.map {
@@ -594,7 +645,12 @@ class Mega12ViewModel : ViewModel() {
     }
 
     fun loadOrderForEdit(order: PurchaseOrder) {
-        _currentDraftOrder.value = order
+        val rawSt = if (order.status.isNotBlank()) order.status else order.header.status
+        val cleanStatus = if (rawSt.isBlank() || rawSt.equals("Confirmado", ignoreCase = true)) "Em Cotação" else rawSt
+        _currentDraftOrder.value = order.copy(
+            status = cleanStatus,
+            header = order.header.copy(status = cleanStatus)
+        )
     }
 
     fun startNewDraftOrder() {
@@ -615,7 +671,8 @@ class Mega12ViewModel : ViewModel() {
 
             val finalId = if (isEditing) existing.id else UUID.randomUUID().toString()
             val orderNum = if (isEditing) existing.header.numeroPedido else "PED-${String.format("%04d", (_orders.value.size + 1))}"
-            val existingStatus = if (isEditing && existing.status.isNotBlank()) existing.status else "Confirmado"
+            val rawStatus = if (isEditing && existing.status.isNotBlank()) existing.status else "Em Cotação"
+            val existingStatus = if (rawStatus.equals("Confirmado", ignoreCase = true)) "Em Cotação" else rawStatus
             val existingSepStatus = if (isEditing && existing.separationStatus.isNotBlank()) existing.separationStatus else "Pendente"
 
             val finalOrder = existing.copy(

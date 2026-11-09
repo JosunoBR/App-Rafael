@@ -16,6 +16,7 @@ dist-ssr/
 mega12.db
 backend/data/*.db
 backup_*.json
+/orders_dump.json
 
 # Logs & Media
 logs/
@@ -60,6 +61,7 @@ backend/data/comprovantes/*
 !backend/data/comprovantes/.gitkeep
 backend/data/produtos/*
 !backend/data/produtos/.gitkeep
+produtos/
 backend/data/backups/*
 !backend/data/backups/.gitkeep
 

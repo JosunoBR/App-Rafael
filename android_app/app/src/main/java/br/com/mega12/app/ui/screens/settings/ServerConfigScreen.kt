@@ -5,7 +5,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,7 +30,7 @@ fun ServerConfigScreen(
             )
         },
         contentWindowInsets = WindowInsets.systemBars,
-        containerColor = Slate900
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -43,7 +42,7 @@ fun ServerConfigScreen(
                 text = "Endereço da API Backend",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             )
 
@@ -51,7 +50,7 @@ fun ServerConfigScreen(
 
             Text(
                 text = "Informe o endereço IP do computador onde o backend Node.js está rodando.",
-                style = MaterialTheme.typography.bodyMedium.copy(color = Slate400)
+                style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -64,7 +63,7 @@ fun ServerConfigScreen(
                 },
                 label = { Text("URL Base da API") },
                 singleLine = true,
-                colors = mega12TextFieldColors(containerColor = Slate800),
+                colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -73,8 +72,8 @@ fun ServerConfigScreen(
 
             // Presets Rápidos
             Text(
-                text = "Atalhos rápidos:",
-                style = MaterialTheme.typography.labelMedium.copy(color = Slate400)
+                text = "Atalhos rápidos de conexão:",
+                style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -84,21 +83,21 @@ fun ServerConfigScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
-                    onClick = { serverUrl = "http://10.0.2.2:3001/api/" },
+                    onClick = { serverUrl = "http://grupomega.cloud/api/" },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Emerald400),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1.2f)
                 ) {
-                    Text("Emulador (10.0.2.2)", fontSize = 11.sp)
+                    Text("Nuvem Hostinger", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
                 OutlinedButton(
-                    onClick = { serverUrl = "http://192.168.1.100:3001/api/" },
+                    onClick = { serverUrl = "http://10.0.2.2:3001/api/" },
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Emerald400),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Rede Wi-Fi Local", fontSize = 11.sp)
+                    Text("Local PC", fontSize = 11.sp)
                 }
             }
 
@@ -124,7 +123,8 @@ fun ServerConfigScreen(
                 onClick = {
                     viewModel.preferencesManager.serverUrl = serverUrl
                     ApiClient.resetClient()
-                    savedMessage = "Configuração salva com sucesso!"
+                    viewModel.refreshData()
+                    savedMessage = "Servidor atualizado! Conectado a $serverUrl"
                 },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Emerald500),

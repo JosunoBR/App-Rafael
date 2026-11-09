@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import br.com.mega12.app.ui.components.HomeSkeletonScreen
 import br.com.mega12.app.ui.components.Mega12AppShell
+import br.com.mega12.app.ui.components.OrdersLoadError
 import br.com.mega12.app.ui.navigation.Screen
 import br.com.mega12.app.ui.theme.*
 import br.com.mega12.app.ui.viewmodel.Mega12ViewModel
@@ -31,10 +32,12 @@ fun BuyerHomeScreen(
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
     val orders by viewModel.orders.collectAsState()
+    val ordersLoadFailed by viewModel.ordersLoadFailed.collectAsState()
     val installments by viewModel.installments.collectAsState()
     val products by viewModel.products.collectAsState()
     val suppliers by viewModel.suppliers.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val ordersUnavailable = ordersLoadFailed && orders.isEmpty()
 
     val todayStr = remember {
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -79,7 +82,7 @@ fun BuyerHomeScreen(
         viewModel = viewModel,
         title = "Mega 12 Matriz"
     ) { padding ->
-        if (isLoading && orders.isEmpty()) {
+        if (isLoading && orders.isEmpty() && !ordersLoadFailed) {
             Box(modifier = Modifier.padding(padding)) {
                 HomeSkeletonScreen()
             }
@@ -94,8 +97,10 @@ fun BuyerHomeScreen(
                 // 1. Saudação do Usuário
                 item {
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Slate800),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -110,12 +115,12 @@ fun BuyerHomeScreen(
                                     text = "Olá, ${currentUser?.nome ?: "Comprador"}",
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 )
                                 Text(
                                     text = "Portal Mobile de Compras & Operação",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = Slate400)
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 )
                             }
 
@@ -137,12 +142,16 @@ fun BuyerHomeScreen(
                 }
 
                 // 2. Resumo de Pendências da Esteira (Paridade com Web: 4 cards clicáveis)
+                if (ordersLoadFailed) {
+                    item { OrdersLoadError(isLoading, viewModel::retryOrders) }
+                }
+
                 item {
                     Text(
                         text = "Resumo de Pendências da Esteira",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     )
                 }
@@ -155,7 +164,7 @@ fun BuyerHomeScreen(
                         PipelineSummaryCard(
                             title = "Em Cotação",
                             subtitle = "Aprovação",
-                            count = pendingApprovalCount,
+                            count = pendingApprovalCount.takeUnless { ordersUnavailable },
                             badgeColor = Amber500,
                             icon = Icons.Default.Edit,
                             modifier = Modifier.weight(1f),
@@ -168,7 +177,7 @@ fun BuyerHomeScreen(
                         PipelineSummaryCard(
                             title = "Recebimento",
                             subtitle = "Pendente Matriz",
-                            count = pendingReceiptCount,
+                            count = pendingReceiptCount.takeUnless { ordersUnavailable },
                             badgeColor = Color(0xFF38BDF8),
                             icon = Icons.Default.LocalShipping,
                             modifier = Modifier.weight(1f),
@@ -188,7 +197,7 @@ fun BuyerHomeScreen(
                         PipelineSummaryCard(
                             title = "Em Separação",
                             subtitle = "Conferência Doca",
-                            count = pendingSeparationCount,
+                            count = pendingSeparationCount.takeUnless { ordersUnavailable },
                             badgeColor = Color(0xFFA855F7),
                             icon = Icons.Default.Inventory2,
                             modifier = Modifier.weight(1f),
@@ -201,7 +210,7 @@ fun BuyerHomeScreen(
                         PipelineSummaryCard(
                             title = "Faturamento",
                             subtitle = "Liberação",
-                            count = pendingBillingCount,
+                            count = pendingBillingCount.takeUnless { ordersUnavailable },
                             badgeColor = Emerald400,
                             icon = Icons.Default.ReceiptLong,
                             modifier = Modifier.weight(1f),
@@ -266,7 +275,7 @@ fun BuyerHomeScreen(
                         text = "Operação & Consultas",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     )
                 }
@@ -279,7 +288,7 @@ fun BuyerHomeScreen(
                         // Card Histórico de Pedidos
                         HomeQuickActionCard(
                             title = "Meus Pedidos",
-                            subtitle = "${orders.size} pedidos",
+                            subtitle = if (ordersUnavailable) "Consulta indisponível" else "${orders.size} pedidos",
                             badge = if (pendingApprovalCount > 0) "$pendingApprovalCount em cotação" else null,
                             badgeColor = Amber500,
                             icon = Icons.Default.FolderOpen,
@@ -360,8 +369,10 @@ private fun HomeQuickActionCard(
 ) {
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = Slate800),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
     ) {
         Column(
@@ -408,13 +419,13 @@ private fun HomeQuickActionCard(
                 text = title,
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = Slate400,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp
                 )
             )
@@ -426,7 +437,7 @@ private fun HomeQuickActionCard(
 private fun PipelineSummaryCard(
     title: String,
     subtitle: String,
-    count: Int,
+    count: Int?,
     badgeColor: Color,
     icon: ImageVector,
     modifier: Modifier = Modifier,
@@ -434,9 +445,10 @@ private fun PipelineSummaryCard(
 ) {
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = Slate800),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(14.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Slate700.copy(alpha = 0.6f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
     ) {
         Column(
@@ -460,10 +472,10 @@ private fun PipelineSummaryCard(
                 }
 
                 Text(
-                    text = count.toString(),
+                    text = count?.toString() ?: "—",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Black,
-                        color = if (count > 0) Color.White else Slate500
+                        color = if (count != null && count > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
             }
@@ -474,13 +486,13 @@ private fun PipelineSummaryCard(
                 text = title,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = Slate400,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp
                 )
             )

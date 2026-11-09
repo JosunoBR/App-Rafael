@@ -46,7 +46,7 @@ fun LoginScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets.systemBars,
-        containerColor = Slate900
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Box(
             modifier = Modifier
@@ -74,18 +74,17 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Logo & Ícone
+                // Logo do Sistema Mega 12
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Emerald500.copy(alpha = 0.15f),
-                    modifier = Modifier.size(72.dp)
+                    color = Emerald500.copy(alpha = 0.12f),
+                    modifier = Modifier.size(80.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.ShoppingCart,
-                            contentDescription = "Mega 12",
-                            tint = Emerald400,
-                            modifier = Modifier.size(36.dp)
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(10.dp)) {
+                        Image(
+                            painter = painterResource(id = R.drawable.logomega12),
+                            contentDescription = "Logo Mega 12",
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -96,13 +95,9 @@ fun LoginScreen(
                     text = "REDE MEGA 12",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         letterSpacing = 1.sp
                     )
-                )
-                Text(
-                    text = "App Nativo de Compras & Galpão",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = Slate400)
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -137,7 +132,7 @@ fun LoginScreen(
                     },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    colors = mega12TextFieldColors(containerColor = Slate800),
+                    colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -158,7 +153,7 @@ fun LoginScreen(
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    colors = mega12TextFieldColors(containerColor = Slate800),
+                    colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )

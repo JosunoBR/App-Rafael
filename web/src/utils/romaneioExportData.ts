@@ -93,7 +93,8 @@ export function prepareRomaneio(
     return {
       ...values,
       foto: typeof item.fotoUrl === 'string' && item.fotoUrl.startsWith('data:image') ? '' : '-',
-      produto: code ? `${code}\n${description}` : description,
+      produto: description,
+      codInterno: code || '-',
       refFabrica: item.codigoFornecedor || '-',
       pdv: Number(item.pdvAlvo) > 0 ? Number(item.pdvAlvo) : '-',
       qtdPac: Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1,
@@ -105,7 +106,8 @@ export function prepareRomaneio(
 
   const columns: RomaneioColumn[] = ([
     { key: 'foto', header: 'Foto', widthMm: 10 },
-    { key: 'produto', header: 'Cód / Descrição', widthMm: isVisible('refFabrica') || isVisible('pdv') ? 42 : 55, align: 'left', bold: true },
+    { key: 'produto', header: 'Descrição', widthMm: isVisible('codInterno') || isVisible('refFabrica') || isVisible('pdv') ? 42 : 55, align: 'left', bold: true },
+    { key: 'codInterno', header: 'Cód. Interno', widthMm: 16 },
     { key: 'refFabrica', header: 'Ref. Fábrica', widthMm: 16 },
     { key: 'pdv', header: 'PDV', widthMm: 14, format: 'currency' },
     { key: 'qtdPac', header: 'Qtd Pac', widthMm: 12, format: 'units' },

@@ -77,15 +77,15 @@ fun Mega12AppShell(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = Slate900,
-                drawerContentColor = Color.White,
+                drawerContainerColor = MaterialTheme.colorScheme.background,
+                drawerContentColor = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.width(300.dp)
             ) {
                 // Cabecalho Drawer
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Slate800)
+                        .background(MaterialTheme.colorScheme.surface)
                         .padding(20.dp)
                 ) {
                     Column {
@@ -94,7 +94,7 @@ fun Mega12AppShell(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Surface(
-                                color = Slate900,
+                                color = MaterialTheme.colorScheme.primaryContainer,
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.size(40.dp)
                             ) {
@@ -111,12 +111,12 @@ fun Mega12AppShell(
                                     text = "Mega 12 Matriz",
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 )
                                 Text(
                                     text = currentUser?.nome ?: "Usuário",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = Slate400)
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 )
                             }
                         }
@@ -139,7 +139,7 @@ fun Mega12AppShell(
                     }
                 }
 
-                HorizontalDivider(color = Slate700)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                 // Subgrupos de Navegação
                 val grouped = availableItems.groupBy { it.section }
@@ -153,7 +153,7 @@ fun Mega12AppShell(
                         Text(
                             text = section,
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = Slate400,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp
                             ),
@@ -167,14 +167,14 @@ fun Mega12AppShell(
                                     Icon(
                                         imageVector = item.icon,
                                         contentDescription = item.title,
-                                        tint = if (isSelected) Emerald400 else Slate400
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 },
                                 label = {
                                     Text(
                                         text = item.title,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) Emerald400 else Color.White
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                     )
                                 },
                                 selected = isSelected,
@@ -187,7 +187,7 @@ fun Mega12AppShell(
                                     }
                                 },
                                 colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = Emerald500.copy(alpha = 0.15f),
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                     unselectedContainerColor = Color.Transparent
                                 ),
                                 shape = RoundedCornerShape(12.dp),
@@ -198,7 +198,7 @@ fun Mega12AppShell(
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    HorizontalDivider(color = Slate700)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     // Botao Sair
                     NavigationDrawerItem(
@@ -227,7 +227,7 @@ fun Mega12AppShell(
                         Text(
                             text = title,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     },
                     navigationIcon = {
@@ -235,59 +235,16 @@ fun Mega12AppShell(
                             Icon(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = "Abrir Menu",
-                                tint = Color.White
+                                tint = MaterialTheme.colorScheme.onBackground
                             )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Slate900
+                        containerColor = MaterialTheme.colorScheme.background
                     )
                 )
             },
-            bottomBar = {
-                // Barra Inferior com Atalhos Principais
-                val bottomBarItems = availableItems.take(4)
-                if (bottomBarItems.isNotEmpty()) {
-                    NavigationBar(
-                        containerColor = Slate900,
-                        contentColor = Color.White,
-                        windowInsets = WindowInsets.navigationBars
-                    ) {
-                        bottomBarItems.forEach { item ->
-                            val isSelected = currentRoute == item.route
-                            NavigationBarItem(
-                                icon = {
-                                    Icon(
-                                        imageVector = item.icon,
-                                        contentDescription = item.title,
-                                        tint = if (isSelected) Emerald400 else Slate400
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = item.title,
-                                        fontSize = 10.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) Emerald400 else Slate400
-                                    )
-                                },
-                                selected = isSelected,
-                                onClick = {
-                                    if (currentRoute != item.route) {
-                                        navController.navigate(item.route) {
-                                            launchSingleTop = true
-                                        }
-                                    }
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = Emerald500.copy(alpha = 0.2f)
-                                )
-                            )
-                        }
-                    }
-                }
-            },
-            containerColor = Slate900
+            containerColor = MaterialTheme.colorScheme.background
         ) { paddingValues ->
             content(paddingValues)
         }

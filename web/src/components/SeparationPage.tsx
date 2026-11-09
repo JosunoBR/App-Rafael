@@ -29,14 +29,16 @@ import {
   ChevronDown,
   Loader2,
   Truck,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Edit3
 } from 'lucide-react';
-import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User, SeparationPreset } from '../shared/types';
+import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User, SeparationPreset, Product, Supplier } from '../shared/types';
 import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations, adjustSeparationReserveProportionally } from '../shared/separationEngine';
 import { SeparationMatrixModal } from './SeparationMatrixModal';
 import { SeparationPresetsModal } from './SeparationPresetsModal';
+import { ProductQuickEditModal } from './ProductQuickEditModal';
 import { OrderPipelineStepper } from './OrderPipelineStepper';
-import { canCreateOrEditOrders } from '../shared/permissions';
+import { canCreateOrEditOrders, hasPermission } from '../shared/permissions';
 
 interface SeparationPageProps {
   order: PurchaseOrder;
@@ -44,6 +46,10 @@ interface SeparationPageProps {
   stores: StoreConfig[];
   presets?: SeparationPreset[];
   currentUser?: User | null;
+  products?: Product[];
+  suppliers?: Supplier[];
+  onSaveProduct?: (product: Product) => void | Promise<void>;
+  onUpdateOrder?: (updatedOrder: PurchaseOrder) => void | Promise<void>;
   onExportPDF: (visibleColumns?: Record<string, boolean>) => void | Promise<void>;
   onExportExcel?: (visibleColumns: Record<string, boolean>) => void | Promise<void>;
   isExportingExcel?: boolean;
@@ -52,7 +58,7 @@ interface SeparationPageProps {
   onChangeOrder?: (updatedOrder: PurchaseOrder) => void;
   onSelectOrder?: (order: PurchaseOrder) => void;
   onFinalizeOrder?: (order: PurchaseOrder) => void;
-  onReleaseToSeparation?: (order: PurchaseOrder) => void;
+  onReleaseToSeparation?: (order: PurchaseOrder) => void | Promise<void>;
   onApproveOrder?: (order: PurchaseOrder) => void;
   onSendToDistribution?: (order: PurchaseOrder) => void;
   onSendToFaturamento?: (order: PurchaseOrder) => void;
@@ -92,8 +98,8 @@ export interface SeparationColumnMeta {
 
 const SEPARATION_BASE_COLUMNS: SeparationColumnMeta[] = [
   { key: 'foto', label: 'Foto do Produto', category: 'produto', width: 50, title: 'Miniatura com ampliação da foto' },
-  { key: 'produto', label: 'Dados do Produto', category: 'produto', width: 220, title: 'Descrição, código interno e tags' },
-  { key: 'refFabrica', label: 'Referência Fábrica', category: 'produto', width: 95, title: 'Código de fábrica informado pelo fornecedor' },
+  { key: 'produto', label: 'Dados do Produto', category: 'produto', width: 220, title: 'Descrição, referência de fábrica e tags' },
+  { key: 'codInterno', label: 'Código Interno', category: 'produto', width: 95, title: 'Código interno de produto Mega 12 (SKU Rede)' },
   { key: 'pdv', label: 'Preço Venda (PDV)', category: 'produto', width: 80, title: 'Preço de venda sugerido (PDV Alvo)' },
   { key: 'qtdPac', label: 'Qtd no Pacote', category: 'produto', width: 80, title: 'Quantidade de peças na embalagem/pacote' },
   { key: 'comprado', label: 'Total Comprado', category: 'balanco', width: 75, title: 'Total bruto de unidades compradas' },
@@ -105,7 +111,7 @@ const SEPARATION_BASE_COLUMNS: SeparationColumnMeta[] = [
 const FROZEN_COLUMNS_CONFIG = [
   { key: 'foto', width: 50 },
   { key: 'produto', width: 220 },
-  { key: 'refFabrica', width: 95 },
+  { key: 'codInterno', width: 95 },
   { key: 'pdv', width: 80 },
   { key: 'qtdPac', width: 80 },
 ] as const;
@@ -115,6 +121,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   orders = [],
   stores,
   currentUser,
+  products = [],
+  suppliers = [],
+  onSaveProduct,
+  onUpdateOrder,
   onExportPDF,
   onExportExcel,
   isExportingExcel = false,
@@ -136,12 +146,62 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 }) => {
   const activeStores = stores.filter(s => s.active);
 
+  // Estados de Edição Rápida de Produto via Box Modal
+  const [editingItemForModal, setEditingItemForModal] = useState<OrderItem | null>(null);
+
+  // Buscar produto correspondente no catálogo central para sincronização
+  const catalogProductForModal = useMemo(() => {
+    if (!editingItemForModal) return null;
+    const itCod = (editingItemForModal.codigoInterno || editingItemForModal.codigo || '').trim().toUpperCase();
+    const itDesc = (editingItemForModal.descricao || '').trim().toLowerCase();
+    const itRef = (editingItemForModal.codigoFornecedor || '').trim().toUpperCase();
+
+    return products.find(p => {
+      const pCod = (p.codigoInterno || p.codigo || '').trim().toUpperCase();
+      if (itCod && pCod && itCod === pCod) return true;
+      const pDesc = (p.descricao || '').trim().toLowerCase();
+      if (itDesc && pDesc && itDesc === pDesc) return true;
+      const pRef = (p.codigoFornecedor || '').trim().toUpperCase();
+      if (itRef && pRef && itRef === pRef && (!order.header.supplierId || p.supplierId === order.header.supplierId)) return true;
+      return false;
+    }) || null;
+  }, [editingItemForModal, products, order.header.supplierId]);
+
+  // Handler para persistir alterações feitas no Box de Edição do Produto
+  const handleSaveProductQuickEdit = async (updatedItem: OrderItem, updatedProduct: Product) => {
+    try {
+      const updatedItems = order.items.map(it => it.id === updatedItem.id ? updatedItem : it);
+      const updatedOrder: PurchaseOrder = {
+        ...order,
+        items: updatedItems
+      };
+
+      if (onUpdateOrder) {
+        await onUpdateOrder(updatedOrder);
+      } else if (onChangeOrder) {
+        onChangeOrder(updatedOrder);
+      }
+
+      if (onSaveProduct) {
+        await onSaveProduct(updatedProduct);
+      }
+
+      showFeedback(`Produto "${updatedItem.descricao}" atualizado e salvo com sucesso!`, 'success');
+      setEditingItemForModal(null);
+    } catch (err: any) {
+      console.error('Erro ao salvar produto pela tela de distribuição:', err);
+      showFeedback('Erro ao salvar alterações do produto.', 'error');
+      throw err;
+    }
+  };
+
   // Estados de Modelos / Presets de Separação (Saves)
   const [selectedPresetId, setSelectedPresetId] = useState<string>(() => presets[0]?.id || 'preset_default_clusters');
   const [presetInputValue, setPresetInputValue] = useState<string>(() => presets[0]?.name || 'Padrão Rede (Clusters A, B e C)');
   const [isPresetsModalOpen, setIsPresetsModalOpen] = useState<boolean>(false);
   const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState<boolean>(false);
   const [isSavingPreset, setIsSavingPreset] = useState<boolean>(false);
+  const [isReleasing, setIsReleasing] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   const showFeedback = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
@@ -294,6 +354,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                      Boolean(order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
 
   const isReceiptPending = !isTransfer && !order.header.recebidoMatriz;
+  const isInDistribution = order.header.status === 'Em Distribuição';
+  const isInSeparation = order.header.status === 'Em Separação';
 
   // Inclui pedidos em andamento na esteira
   const availableDepositOrders = useMemo(() => {
@@ -341,7 +403,12 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     return {};
   });
 
-  const isColVisible = (key: string): boolean => visibleColumns[key] !== false;
+  const isColVisible = (key: string): boolean => {
+    if (key === 'codInterno' && visibleColumns['codInterno'] === undefined && visibleColumns['refFabrica'] !== undefined) {
+      return visibleColumns['refFabrica'] !== false;
+    }
+    return visibleColumns[key] !== false;
+  };
 
   const toggleColumnVisibility = (key: string) => {
     setVisibleColumns(prev => {
@@ -494,7 +561,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     return order.items.map(item => {
       const allocatedUnits = activeStores.reduce((acc, store) => acc + (Number(item.separacaoLojas?.[store.id]) || 0), 0);
       const totalCompradoUnits = Number(item.qtdTotalUnidades) || 0;
-      const effectiveReceivedUnits = item.qtdRecebida !== undefined ? Math.max(0, Number(item.qtdRecebida)) : (item.ruptura ? 0 : totalCompradoUnits);
+      const effectiveReceivedUnits = item.qtdRecebida != null ? Math.max(0, Number(item.qtdRecebida)) : (item.ruptura ? 0 : totalCompradoUnits);
       const ruptureUnits = Math.max(0, totalCompradoUnits - effectiveReceivedUnits);
       const reserveStockUnits = Math.max(0, effectiveReceivedUnits - allocatedUnits);
 
@@ -627,7 +694,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
     const hasAnyShortage = updatedItems.some(it => {
       const original = Number(it.qtdTotalUnidades) || 0;
-      const rec = it.qtdRecebida !== undefined ? it.qtdRecebida : original;
+      const rec = it.qtdRecebida ?? original;
       return it.ruptura || rec < original;
     });
 
@@ -873,7 +940,6 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         currentUser={currentUser}
         onApproveOrder={onApproveOrder}
         onSendToDistribution={onSendToDistribution}
-        onReleaseToSeparation={onReleaseToSeparation}
         onOpenSeparation={(ord) => {
           if (onSelectOrder) onSelectOrder(ord);
         }}
@@ -974,13 +1040,13 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           <div className="flex flex-wrap items-center gap-6">
             {/* Status */}
             <div className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center ${!hasAnyOverAllocation ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400' : 'bg-rose-100 text-rose-600'}`}>
-                <CheckCircle2 className="w-4 h-4" />
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isReceiptPending ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : hasAnyOverAllocation ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'}`}>
+                {isReceiptPending ? <Truck className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
               </div>
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">STATUS</span>
-                <span className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400">
-                  {!hasAnyOverAllocation ? '100% Válido' : 'Excedente Detectado'}
+                <span className={`text-xs font-extrabold ${isReceiptPending ? 'text-amber-700 dark:text-amber-400' : hasAnyOverAllocation ? 'text-rose-600' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                  {isReceiptPending ? 'Aguardando recebimento' : hasAnyOverAllocation ? 'Excedente Detectado' : '100% Válido'}
                 </span>
               </div>
             </div>
@@ -991,7 +1057,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 <Store className="w-3.5 h-3.5" />
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">ENVIADO ÀS LOJAS</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">{isReceiptPending ? 'PLANEJADO PARA AS LOJAS' : 'ENVIADO ÀS LOJAS'}</span>
                 <span className="text-xs font-extrabold text-slate-800 dark:text-slate-100">
                   {totalPecasDistribuidoLojasLiquido.toLocaleString('pt-BR')} un <span className="font-normal text-slate-400">de {totalPecasGeralBruto.toLocaleString('pt-BR')} un</span>
                 </span>
@@ -1216,14 +1282,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                     DADOS DO PRODUTO
                   </th>
                 )}
-                {isColVisible('refFabrica') && (
+                {isColVisible('codInterno') && (
                   <th 
                     rowSpan={2} 
-                    style={{ left: `${getStickyLeft('refFabrica')}px` }}
+                    style={{ left: `${getStickyLeft('codInterno')}px` }}
                     className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 sticky top-0 z-50 w-[95px] min-w-[95px] max-w-[95px] uppercase shadow-xs select-none" 
-                    title="Referência de Fábrica / Código Fornecedor"
+                    title="Código Interno de Produto Mega 12 (SKU Rede)"
                   >
-                    REF. FÁBRICA
+                    CÓD. INTERNO
                   </th>
                 )}
                 {isColVisible('pdv') && (
@@ -1320,8 +1386,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                         <div className="flex items-center justify-center">
                           <div 
                             className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center cursor-pointer shadow-2xs hover:ring-2 hover:ring-indigo-500/40 transition"
-                            onClick={() => item.fotoUrl && setZoomedImage({ url: item.fotoUrl, title: item.descricao })}
-                            title={item.fotoUrl ? "Clique para ver a foto ampliada" : "Sem foto"}
+                            onClick={() => {
+                              if (item.fotoUrl) {
+                                setZoomedImage({ url: item.fotoUrl, title: item.descricao });
+                              } else {
+                                setEditingItemForModal(item);
+                              }
+                            }}
+                            title={item.fotoUrl ? "Clique para ver a foto ampliada" : "Sem foto - Clique para editar e adicionar"}
                           >
                             {item.fotoUrl ? (
                               <img 
@@ -1332,26 +1404,38 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                                 className="w-full h-full object-cover hover:scale-110 transition" 
                               />
                             ) : (
-                              <ImageIcon className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+                              <ImageIcon className="w-4 h-4 text-slate-300 dark:text-slate-600 hover:text-indigo-500 transition" />
                             )}
                           </div>
                         </div>
                       </td>
                     )}
 
-                    {/* 2. Descrição e Código Interno (Congelada 2) */}
+                    {/* 2. Descrição e Referência de Fábrica (Congelada 2) */}
                     {isColVisible('produto') && (
                       <td 
                         style={{ left: `${getStickyLeft('produto')}px` }}
                         className="py-2 px-3 border-r border-slate-200 dark:border-slate-700 sticky bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[220px] min-w-[220px] max-w-[220px] shadow-xs"
                       >
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-900 dark:text-white truncate max-w-[200px] text-xs" title={item.descricao}>
-                            {item.descricao || 'Item sem descrição'}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setEditingItemForModal(item)}
+                            className="group/prod flex items-center gap-1.5 text-left w-full hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                            title="Clique no produto para abrir o box de edição rápida"
+                          >
+                            <span className="font-bold text-slate-900 dark:text-white group-hover/prod:text-indigo-600 dark:group-hover/prod:text-indigo-400 truncate max-w-[185px] text-xs transition-colors">
+                              {item.descricao || 'Item sem descrição'}
+                            </span>
+                            <Edit3 className="w-3 h-3 text-slate-400 group-hover/prod:text-indigo-500 opacity-60 group-hover/prod:opacity-100 shrink-0 transition" />
+                          </button>
                           <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
-                            <span className="px-1.5 py-0.2 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800" title="Código Interno">
-                              {item.codigoInterno || item.codigo || 'S/ CÓD'}
+                            <span 
+                              className="px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold border border-amber-200 dark:border-amber-800 hover:border-amber-400 transition cursor-pointer" 
+                              title={`Referência de Fábrica: ${item.codigoFornecedor || 'Não informada'} (Clique para editar)`}
+                              onClick={() => setEditingItemForModal(item)}
+                            >
+                              Ref: {item.codigoFornecedor || '-'}
                             </span>
                             <span className="font-semibold text-slate-600 dark:text-slate-400" title="Total Comprado">
                               {item.qtdTotalUnidades.toLocaleString('pt-BR')} un
@@ -1366,15 +1450,20 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       </td>
                     )}
 
-                    {/* 3. Referência de Fábrica (Congelada 3) */}
-                    {isColVisible('refFabrica') && (
+                    {/* 3. Código Interno (Congelada 3) */}
+                    {isColVisible('codInterno') && (
                       <td 
-                        style={{ left: `${getStickyLeft('refFabrica')}px` }}
+                        style={{ left: `${getStickyLeft('codInterno')}px` }}
                         className="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 sticky bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[95px] min-w-[95px] max-w-[95px] shadow-xs"
                       >
-                        <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300 truncate block" title={`Ref. Fábrica: ${item.codigoFornecedor || 'Não informada'}`}>
-                          {item.codigoFornecedor || '-'}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingItemForModal(item)}
+                          className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 truncate w-full text-center transition cursor-pointer hover:underline"
+                          title={`Código Interno Mega 12: ${item.codigoInterno || item.codigo || 'Não informado'} (Clique para editar)`}
+                        >
+                          {item.codigoInterno || item.codigo || '-'}
+                        </button>
                       </td>
                     )}
 
@@ -1417,20 +1506,20 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                             type="number"
                             min="0"
                             max={item.qtdTotalUnidades}
-                            value={item.qtdRecebida === 0 ? '' : (item.qtdRecebida !== undefined ? item.qtdRecebida : item.qtdTotalUnidades)}
-                            placeholder="0"
+                            value={item.qtdRecebida === 0 ? '' : (item.qtdRecebida ?? (isReceiptPending && !item.ruptura ? '' : status.effectiveReceivedUnits))}
+                            placeholder={isReceiptPending && item.qtdRecebida == null && !item.ruptura ? '—' : '0'}
                             onFocus={(e) => e.target.select()}
                             onChange={(e) => handleUpdateItemReceivedUnits(item, e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                             className={`w-14 h-7 px-1 text-center font-mono font-bold text-xs rounded-lg border outline-hidden transition ${
-                              (item.qtdRecebida !== undefined && item.qtdRecebida < item.qtdTotalUnidades)
+                              status.ruptureUnits > 0
                                 ? 'border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 focus:ring-2 focus:ring-amber-500'
                                 : 'border-emerald-300 bg-emerald-50/50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500'
                             }`}
                             title={`Quantidade física conferida na doca (Comprado: ${item.qtdTotalUnidades})`}
                           />
-                          {item.qtdRecebida !== undefined && item.qtdRecebida < item.qtdTotalUnidades && (
+                          {status.ruptureUnits > 0 && (
                             <span className="text-[9px] font-extrabold text-amber-600 dark:text-amber-400 font-mono">
-                              -{item.qtdTotalUnidades - item.qtdRecebida} un
+                              -{status.ruptureUnits} un
                             </span>
                           )}
                         </div>
@@ -1543,10 +1632,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                     TOTAL GERAL
                   </td>
                 )}
-                {/* 3. Ref Fábrica */}
-                {isColVisible('refFabrica') && (
+                {/* 3. Código Interno */}
+                {isColVisible('codInterno') && (
                   <td 
-                    style={{ left: `${getStickyLeft('refFabrica')}px` }}
+                    style={{ left: `${getStickyLeft('codInterno')}px` }}
                     className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-400 sticky bg-slate-50 dark:bg-slate-900 z-40 w-[95px] min-w-[95px] max-w-[95px]"
                   >
                     -
@@ -1579,7 +1668,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 {/* 6.1 Total Recebido na Doca */}
                 {isColVisible('recebido') && (
                   <td className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-slate-50 dark:bg-slate-900 min-w-[90px]" title="Total físico recebido na doca">
-                    {totalPecasRecebidasGeral.toLocaleString('pt-BR')}
+                    {isReceiptPending ? '—' : totalPecasRecebidasGeral.toLocaleString('pt-BR')}
                   </td>
                 )}
                 {/* 7. Estoque CD */}
@@ -2036,47 +2125,45 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5">
                 <PackageCheck className="w-4 h-4" /> Conferência física e separação concluídas. Aguardando liberação de boletos no Faturamento.
               </span>
-            ) : (!order.header.distribuicaoConcluida || order.header.status === 'Aprovado') ? (
+            ) : order.header.status === 'Aprovado' ? (
+              <span>Inicie a Distribuição para registrar o recebimento físico.</span>
+            ) : (isInDistribution || isInSeparation) && isReceiptPending ? (
+              <span>Confirme o recebimento físico na Matriz para avançar com o pedido.</span>
+            ) : isInDistribution ? (
               <span>
-                <b>Etapa 2 - Distribuição CD:</b> Defina as quantidades de cada filial. Ao salvar, <b>{totalPecasGuardadasEstoque.toLocaleString('pt-BR')} unidades</b> darão entrada no <b>Estoque Central</b> e o pedido avançará para a <b>Etapa 3 (Separação na Doca)</b>.
+                <b>Distribuição CD:</b> Confira as quantidades de cada filial e libere o pedido para Separação na Doca.
               </span>
-            ) : (
+            ) : isInSeparation ? (
               <span>
-                <b>Etapa 3 - Separação na Doca:</b> Informe o recebimento da carga e realize a contagem física. Ao concluir, o pedido será liberado para o <b>Faturamento (Etapa 4)</b>.
+                <b>Separação na Doca:</b> Conclua a conferência e o registro de avarias para encaminhar o pedido ao Faturamento.
               </span>
-            )}
+            ) : null}
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            {/* Botão Etapa 2 (Depósito): Salvar Distribuição & Enviar para Separação */}
-            {order.header.status !== 'Finalizado' && order.header.status !== 'Faturamento' && (!order.header.distribuicaoConcluida || order.header.status === 'Aprovado') && onReleaseToSeparation && (
+            {isInDistribution && onReleaseToSeparation && hasPermission(currentUser, 'pipeline:release_separation') && (
               <button
                 type="button"
-                onClick={() => onReleaseToSeparation(order)}
-                className="w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-indigo-600/30 cursor-pointer hover:scale-102"
-                title="Concluir rateio entre as lojas e enviar pedido para a equipe de Separação na Doca"
+                disabled={isReceiptPending || hasAnyOverAllocation || isReleasing}
+                onClick={async () => {
+                  setIsReleasing(true);
+                  try {
+                    await onReleaseToSeparation(order);
+                  } finally {
+                    setIsReleasing(false);
+                  }
+                }}
+                className="w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-indigo-600/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                title={isReceiptPending ? 'Confirme o recebimento físico primeiro' : hasAnyOverAllocation ? 'Corrija o excedente da grade antes de liberar' : 'Concluir o rateio e liberar para Separação'}
               >
                 <Boxes className="w-4 h-4" />
-                <span>Salvar Distribuição & Enviar p/ Separação</span>
-              </button>
-            )}
-
-            {/* Botão Etapa 3 (Separação): Confirmar Recebimento Físico se ainda pendente */}
-            {order.header.status === 'Em Separação' && isReceiptPending && onConfirmReceipt && (
-              <button
-                type="button"
-                onClick={() => onConfirmReceipt(order)}
-                className="w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 cursor-pointer hover:scale-102"
-                title="Registrar recebimento da carga entregue pelo fornecedor na Matriz"
-              >
-                <Truck className="w-4 h-4" />
-                <span>Confirmar Recebimento Físico</span>
+                <span>{isReleasing ? 'Liberando…' : 'Salvar Distribuição e Liberar para Separação'}</span>
               </button>
             )}
 
             {/* Botão Etapa 3 (Separação): Concluir Separação e Liberar para Faturamento */}
             {/* Botão Etapa 3 (Separação): Concluir Separação (ou Finalizar Expedição se for Transferência) */}
-            {order.header.status === 'Em Separação' && (
+            {isInSeparation && !isReceiptPending && (
               <button
                 type="button"
                 onClick={() => {
@@ -2088,9 +2175,6 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                     header: {
                       ...order.header,
                       status: isTransfer ? 'Finalizado' : 'Faturamento',
-                      recebidoMatriz: true,
-                      recebidoPor: order.header.recebidoPor || conferenteNome,
-                      dataRecebimentoMatriz: order.header.dataRecebimentoMatriz || now,
                       separacaoConcluida: true,
                       separadoPor: conferenteNome,
                       dataSeparacao: now,
@@ -2107,7 +2191,6 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       avarias: avariasList
                     }
                   };
-                  if (onChangeOrder) onChangeOrder(updated);
                   if (onSendToFaturamento) onSendToFaturamento(updated);
                   else if (onFinalizeOrder) onFinalizeOrder(updated);
                 }}
@@ -2190,6 +2273,21 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           setIsPresetsModalOpen(false);
         }}
       />
+
+      {/* Modal / Box de Edição Rápida do Produto */}
+      {editingItemForModal && (
+        <ProductQuickEditModal
+          isOpen={!!editingItemForModal}
+          onClose={() => setEditingItemForModal(null)}
+          item={editingItemForModal}
+          catalogProduct={catalogProductForModal}
+          products={products}
+          suppliers={suppliers}
+          defaultSupplierId={order.header.supplierId}
+          defaultSupplierName={order.header.fornecedor}
+          onSave={handleSaveProductQuickEdit}
+        />
+      )}
 
     </div>
   );

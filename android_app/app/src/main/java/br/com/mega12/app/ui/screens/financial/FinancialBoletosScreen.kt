@@ -1,8 +1,10 @@
 package br.com.mega12.app.ui.screens.financial
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -23,6 +25,7 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FinancialBoletosScreen(
     navController: NavHostController,
@@ -31,7 +34,10 @@ fun FinancialBoletosScreen(
     val installments by viewModel.installments.collectAsState()
     val orders by viewModel.orders.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+
     var selectedFilter by remember { mutableStateOf("TODOS") }
+    var customSelectedDate by remember { mutableStateOf<String?>(null) }
+    var showDatePickerDialog by remember { mutableStateOf(false) }
 
     val ordersMap = remember(orders) {
         val map = mutableMapOf<String, br.com.mega12.app.data.model.PurchaseOrder>()
@@ -51,7 +57,7 @@ fun FinancialBoletosScreen(
         NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
     }
 
-    val filteredInstallments = remember(installments, selectedFilter, todayStr) {
+    val filteredInstallments = remember(installments, selectedFilter, customSelectedDate, todayStr) {
         when (selectedFilter) {
             "HOJE" -> installments.filter { it.dataVencimento.startsWith(todayStr) && it.status != "Pago" }
             "VENCIDOS" -> installments.filter { 
@@ -59,11 +65,62 @@ fun FinancialBoletosScreen(
             }
             "A VENCER" -> installments.filter { it.status == "A Vencer" || it.status == "Pendente" }
             "PAGOS" -> installments.filter { it.status == "Pago" }
+            "DATA" -> {
+                val target = customSelectedDate
+                if (target.isNullOrBlank()) installments
+                else installments.filter { it.dataVencimento.startsWith(target) }
+            }
             else -> installments
         }
     }
 
     val totalValorFiltrado = filteredInstallments.sumOf { it.valor }
+
+    // Modal Seletor de Data (DatePickerDialog Material 3)
+    if (showDatePickerDialog) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = System.currentTimeMillis()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePickerDialog = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+                                timeZone = TimeZone.getTimeZone("UTC")
+                            }
+                            customSelectedDate = sdf.format(Date(millis))
+                            selectedFilter = "DATA"
+                        }
+                        showDatePickerDialog = false
+                    }
+                ) {
+                    Text("OK", fontWeight = FontWeight.Bold, color = Emerald500)
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (customSelectedDate != null) {
+                        TextButton(
+                            onClick = {
+                                customSelectedDate = null
+                                selectedFilter = "TODOS"
+                                showDatePickerDialog = false
+                            }
+                        ) {
+                            Text("Limpar Filtro", color = Rose500)
+                        }
+                    }
+                    TextButton(onClick = { showDatePickerDialog = false }) {
+                        Text("Cancelar", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 
     Mega12AppShell(
         navController = navController,
@@ -78,8 +135,10 @@ fun FinancialBoletosScreen(
         ) {
             // Card de Resumo de Vencimentos (Somente Leitura)
             Card(
-                colors = CardDefaults.cardColors(containerColor = Slate800),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -92,7 +151,7 @@ fun FinancialBoletosScreen(
                     Column {
                         Text(
                             text = "TOTAL NESTA VISÃO",
-                            style = MaterialTheme.typography.labelSmall.copy(color = Slate400, fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
                         )
                         Text(
                             text = currencyFormat.format(totalValorFiltrado),
@@ -100,18 +159,18 @@ fun FinancialBoletosScreen(
                         )
                         Text(
                             text = "${filteredInstallments.size} títulos listados (Somente Consulta)",
-                            style = MaterialTheme.typography.bodySmall.copy(color = Slate400, fontSize = 11.sp)
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                         )
                     }
 
                     Surface(
-                        color = Slate700,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = "Proteção de Baixa",
-                            tint = Slate400,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(10.dp)
                         )
                     }
@@ -120,16 +179,22 @@ fun FinancialBoletosScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Filtros Rápidos de Status
+            // Filtros Rápidos de Status e Seletor de Data via Calendário
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
             ) {
                 listOf("TODOS", "HOJE", "A VENCER", "VENCIDOS").forEach { filter ->
                     val isSelected = selectedFilter == filter
                     FilterChip(
                         selected = isSelected,
-                        onClick = { selectedFilter = filter },
+                        onClick = {
+                            selectedFilter = filter
+                            customSelectedDate = null
+                        },
                         label = {
                             Text(
                                 text = filter,
@@ -140,10 +205,33 @@ fun FinancialBoletosScreen(
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = if (filter == "HOJE") Amber500 else Emerald500,
                             selectedLabelColor = Slate900,
-                            containerColor = Slate800,
-                            labelColor = Color.White
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface
                         )
                     )
+                }
+
+                // Botão de Calendário (Apenas Ícone / Símbolo do Calendário)
+                val isDataSelected = selectedFilter == "DATA" && !customSelectedDate.isNullOrBlank()
+
+                Surface(
+                    onClick = { showDatePickerDialog = true },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isDataSelected) Emerald500 else MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.dp,
+                        color = if (isDataSelected) Emerald500 else MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = "Filtrar por Data",
+                            tint = if (isDataSelected) Slate900 else Emerald400,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
@@ -156,7 +244,7 @@ fun FinancialBoletosScreen(
                 }
             } else if (filteredInstallments.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nenhum boleto encontrado para este filtro.", color = Slate400)
+                    Text("Nenhum boleto encontrado para este filtro.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -165,8 +253,10 @@ fun FinancialBoletosScreen(
                         val isVencido = inst.dataVencimento < todayStr && inst.status != "Pago"
 
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = Slate800),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -180,7 +270,7 @@ fun FinancialBoletosScreen(
                                     Text(
                                         text = inst.displayFornecedor,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 14.sp
                                     )
                                     val docLabel = if (inst.numeroPedido?.startsWith("PED-") == true) "Pedido" else "Doc"

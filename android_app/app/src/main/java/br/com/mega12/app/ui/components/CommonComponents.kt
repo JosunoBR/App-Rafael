@@ -20,6 +20,29 @@ import br.com.mega12.app.Mega12Application
 import br.com.mega12.app.domain.MarginStatus
 import br.com.mega12.app.ui.theme.*
 
+@Composable
+fun OrdersLoadError(isLoading: Boolean, onRetry: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text("Não foi possível atualizar os pedidos.")
+            TextButton(
+                onClick = onRetry,
+                enabled = !isLoading,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                )
+            ) {
+                Text(if (isLoading) "Consultando pedidos…" else "Tentar novamente")
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Mega12TopBar(
@@ -35,14 +58,14 @@ fun Mega12TopBar(
                     text = title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 )
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.labelMedium.copy(
-                            color = Slate400
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
                 }
@@ -54,14 +77,14 @@ fun Mega12TopBar(
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Voltar",
-                        tint = Color.White
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
             }
         },
         actions = actions,
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Slate900
+            containerColor = MaterialTheme.colorScheme.background
         )
     )
 }
@@ -72,8 +95,8 @@ fun MetricCard(
     value: String,
     subtitle: String? = null,
     icon: ImageVector? = null,
-    containerColor: Color = Slate800,
-    contentColor: Color = Color.White,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -92,7 +115,7 @@ fun MetricCard(
                 Text(
                     text = title.uppercase(),
                     style = MaterialTheme.typography.labelMedium.copy(
-                        color = Slate400,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
                     )
@@ -287,7 +310,7 @@ fun ZoomableImageDialog(
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Slate900),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
@@ -304,7 +327,7 @@ fun ZoomableImageDialog(
                     Text(
                         text = title ?: "Foto do Produto",
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                         modifier = Modifier.weight(1f)
                     )

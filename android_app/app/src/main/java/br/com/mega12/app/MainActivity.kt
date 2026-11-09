@@ -47,12 +47,12 @@ class MainActivity : ComponentActivity() {
 
             Mega12AppTheme(darkTheme = isDarkTheme) {
                 val navController = rememberNavController()
-                val currentUser by viewModel.currentUser.collectAsState()
-                val startDestination = if (currentUser != null) {
-                    val isSeparacao = (currentUser?.role == "conferente" || currentUser?.role == "separacao")
-                    if (isSeparacao) Screen.DocaSeparation.route else Screen.BuyerHome.route
-                } else {
-                    Screen.Login.route
+                val startDestination = remember {
+                    when (viewModel.currentUser.value?.role?.lowercase()) {
+                        null -> Screen.Login.route
+                        "separacao", "conferente" -> Screen.DocaHome.route
+                        else -> Screen.BuyerHome.route
+                    }
                 }
 
                 val errorMessage by viewModel.errorMessage.collectAsState()

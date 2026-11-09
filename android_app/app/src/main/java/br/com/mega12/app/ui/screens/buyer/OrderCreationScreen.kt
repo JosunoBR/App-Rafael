@@ -112,36 +112,16 @@ fun OrderCreationScreen(
         }
     }
 
-    // Compartilhamento no WhatsApp
+    // Compartilhamento no WhatsApp com PDF em anexo
     fun shareOrderOnWhatsApp() {
         val supName = selectedSupplier.ifBlank { "Fornecedor Matriz" }
-        val sb = StringBuilder()
-        sb.appendLine("📋 *PEDIDO DE COMPRA - REDE MEGA 12*")
-        sb.appendLine("🏢 Fornecedor: $supName")
-        sb.appendLine("📅 Condição: $condicaoPagamento")
-        sb.appendLine("📦 Total de Peças: ${draftOrder.totalPecas}")
-        sb.appendLine("💰 *TOTAL GERAL: R$ %.2f*".format(draftOrder.totalLiquido))
-        sb.appendLine("---")
-        sb.appendLine("*ITENS DO PEDIDO:*")
-        draftOrder.items.forEachIndexed { idx, item ->
-            val desc = item.percentualDesconto
-            val ipi = item.ipiAliquota
-            sb.appendLine("${idx + 1}. ${item.descricao} (Cód: ${item.codigoInterno})")
-            sb.appendLine("   ${item.totalPecas} un (R$ %.2f/un) -> R$ %.2f".format(item.precoCompraUnitario, item.subtotal))
-            if (desc > 0 || ipi > 0) {
-                sb.appendLine("   Desc: $desc% | IPI: $ipi%")
-            }
-        }
-        sb.appendLine("---")
-        sb.appendLine("Gerado via App Mobile Rede Mega 12")
-
-        val sendIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, sb.toString())
-            type = "text/plain"
-        }
-        val shareIntent = Intent.createChooser(sendIntent, "Enviar Pedido via WhatsApp")
-        context.startActivity(shareIntent)
+        val orderToExport = draftOrder.copy(
+            header = draftOrder.header.copy(
+                fornecedor = supName,
+                condicaoPagamento = condicaoPagamento
+            )
+        )
+        br.com.mega12.app.domain.utils.PdfExporter.shareOrderPdfToWhatsApp(context, orderToExport)
     }
 
     Scaffold(
@@ -155,7 +135,7 @@ fun OrderCreationScreen(
         },
         bottomBar = {
             Surface(
-                color = Slate800,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -171,15 +151,15 @@ fun OrderCreationScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "TOTAL GERAL LÍQUIDO",
-                            style = MaterialTheme.typography.labelSmall.copy(color = Slate400, fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
                         )
                         Text(
                             text = currencyFormat.format(draftOrder.totalLiquido),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Emerald400)
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Emerald600)
                         )
                         Text(
                             text = "${draftOrder.totalPecas} peças • ${draftOrder.items.size} itens",
-                            style = MaterialTheme.typography.bodySmall.copy(color = Slate400, fontSize = 11.sp)
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                         )
                     }
 
@@ -188,9 +168,9 @@ fun OrderCreationScreen(
                         if (draftOrder.items.isNotEmpty()) {
                             IconButton(
                                 onClick = { shareOrderOnWhatsApp() },
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = Slate700)
+                                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                             ) {
-                                Icon(Icons.Default.Share, contentDescription = "Compartilhar", tint = Emerald400)
+                                Icon(Icons.Default.Share, contentDescription = "Compartilhar", tint = Emerald600)
                             }
                         }
 
@@ -205,7 +185,7 @@ fun OrderCreationScreen(
                             enabled = !isLoading && draftOrder.items.isNotEmpty(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Emerald500,
-                                disabledContainerColor = Slate700
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -221,7 +201,7 @@ fun OrderCreationScreen(
                 }
             }
         },
-        containerColor = Slate900
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -233,7 +213,7 @@ fun OrderCreationScreen(
             // 1. Dados do Fornecedor & Condições
             item {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Slate800),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -247,7 +227,7 @@ fun OrderCreationScreen(
                                 text = "Dados do Fornecedor & Condições",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                         }
@@ -264,7 +244,7 @@ fun OrderCreationScreen(
                                 onValueChange = { selectedSupplier = it },
                                 label = { Text("Nome do Fornecedor / Fabricante") },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isSupplierDropdownExpanded) },
-                                colors = mega12TextFieldColors(containerColor = Slate800),
+                                colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
                             )
@@ -325,7 +305,7 @@ fun OrderCreationScreen(
                                                 Icon(
                                                     Icons.Default.Clear,
                                                     contentDescription = "Limpar",
-                                                    tint = Slate400,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                             }
@@ -334,7 +314,7 @@ fun OrderCreationScreen(
                                     }
                                 },
                                 singleLine = true,
-                                colors = mega12TextFieldColors(containerColor = Slate800),
+                                colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -491,7 +471,7 @@ fun OrderCreationScreen(
                             text = "Itens do Pedido (${draftOrder.items.size})",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         )
                         if (draftOrder.items.isNotEmpty()) {
@@ -520,7 +500,7 @@ fun OrderCreationScreen(
             if (draftOrder.items.isEmpty()) {
                 item {
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Slate800),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -534,14 +514,14 @@ fun OrderCreationScreen(
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = "Nenhum produto no pedido ainda",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Abra o catálogo igual ao sistema web para buscar e ir adicionando produtos com agilidade.",
-                                color = Slate400,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall,
                                 textAlign = TextAlign.Center
                             )
@@ -565,7 +545,7 @@ fun OrderCreationScreen(
                     val boxes = (item.totalPecas / pcsPerBox).coerceAtLeast(1)
 
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Slate800),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -592,10 +572,10 @@ fun OrderCreationScreen(
                                         text = item.descricao,
                                         style = MaterialTheme.typography.titleSmall.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     )
-                                    val codInt = item.codigoInterno.ifBlank { item.codigo }
+                                    val codInt = item.safeCodigoInterno
                                     Row(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
@@ -751,14 +731,13 @@ fun OrderCreationScreen(
                 (it.codigo.isNotBlank() && it.codigo.equals(prod.codigo, ignoreCase = true))
             },
             onDismiss = { selectedProductForAdd = null },
-            onConfirm = { boxes, preco, desc, ipi, pdv ->
-                val pcsPorCaixa = if (prod.qtdPorPacote > 0) prod.qtdPorPacote else 12
-                val totalUnidades = boxes * pcsPorCaixa
-
+            onConfirm = { totalUnidades, preco, desc, ipi, pdv ->
                 val existing = draftOrder.items.find {
                     it.codigoInterno.equals(prod.codigoInterno, ignoreCase = true) ||
                     (it.codigo.isNotBlank() && it.codigo.equals(prod.codigo, ignoreCase = true))
                 }
+                val pcsPorCaixa = existing?.qtdPorCaixa?.takeIf { it > 0 }
+                    ?: prod.qtdPorPacote.takeIf { it > 0 } ?: 12
 
                 if (existing != null) {
                     // Atualiza item existente no pedido
@@ -775,8 +754,8 @@ fun OrderCreationScreen(
                     // Adiciona novo item ao pedido
                     viewModel.addItemToDraftOrder(
                         descricao = prod.descricao,
-                        codigo = prod.codigoInterno.ifBlank { prod.codigo },
-                        codigoInterno = prod.codigoInterno.ifBlank { prod.codigo },
+                        codigo = prod.safeCodigoInterno,
+                        codigoInterno = prod.safeCodigoInterno,
                         codigoFornecedor = prod.codigoFornecedor,
                         totalUnidades = totalUnidades,
                         precoCompra = preco,
@@ -800,9 +779,8 @@ fun OrderCreationScreen(
             item = item,
             fiscalConfig = fiscalConfig,
             onDismiss = { inspectingItemForFiscal = null },
-            onSave = { newBoxes, newPreco, newDesc, newIpi, newPdv ->
+            onSave = { newTotalPcs, newPreco, newDesc, newIpi, newPdv ->
                 val pcsPorCaixa = if (item.qtdPorCaixa > 0) item.qtdPorCaixa else 12
-                val newTotalPcs = newBoxes * pcsPorCaixa
                 viewModel.updateDraftOrderItem(
                     itemId = item.id,
                     totalUnidades = newTotalPcs,
@@ -1180,7 +1158,7 @@ private fun CatalogPickerModal(
                                                 color = Color.White,
                                                 fontSize = 14.sp
                                             )
-                                            val cod = prod.codigoInterno.ifBlank { prod.codigo }
+                                            val cod = prod.safeCodigoInterno
                                             Row(
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                                 verticalAlignment = Alignment.CenterVertically
@@ -1314,9 +1292,10 @@ private fun ProductQuantityDialog(
     fiscalConfig: FiscalConfig,
     existingItem: OrderItem?,
     onDismiss: () -> Unit,
-    onConfirm: (boxes: Int, precoCompra: Double, descPct: Double, ipiPct: Double, pdv: Double) -> Unit
+    onConfirm: (totalPecas: Int, precoCompra: Double, descPct: Double, ipiPct: Double, pdv: Double) -> Unit
 ) {
-    val pcsPorCaixa = if (product.qtdPorPacote > 0) product.qtdPorPacote else 12
+    val pcsPorCaixa = existingItem?.qtdPorCaixa?.takeIf { it > 0 }
+        ?: product.qtdPorPacote.takeIf { it > 0 } ?: 12
     val initialBoxes = if (existingItem != null) {
         (existingItem.totalPecas / pcsPorCaixa).coerceAtLeast(1)
     } else 10
@@ -1346,7 +1325,8 @@ private fun ProductQuantityDialog(
     }
 
     // Cálculos em tempo real
-    val totalPcs = boxesCount * pcsPorCaixa
+    val totalPcs = existingItem?.totalPecas?.takeIf { boxesCount == initialBoxes }
+        ?: boxesCount * pcsPorCaixa
     val preco = precoCompraStr.toDoubleOrNull() ?: 0.0
     val desc = descStr.toDoubleOrNull() ?: 0.0
     val ipi = ipiStr.toDoubleOrNull() ?: 0.0
@@ -1378,7 +1358,7 @@ private fun ProductQuantityDialog(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
                     )
                     Text(
-                        text = "Cód: ${product.codigoInterno.ifBlank { product.codigo }} • Embalagem: $pcsPorCaixa un/caixa",
+                        text = "Cód: ${product.safeCodigoInterno} • Embalagem: $pcsPorCaixa un/caixa",
                         style = MaterialTheme.typography.bodySmall.copy(color = Emerald400, fontWeight = FontWeight.Bold)
                     )
                 }
@@ -1568,7 +1548,7 @@ private fun ProductQuantityDialog(
 
                     Button(
                         onClick = {
-                            onConfirm(boxesCount, preco, desc, ipi, pdv)
+                            onConfirm(totalPcs, preco, desc, ipi, pdv)
                         },
                         enabled = boxesCount > 0 && preco > 0,
                         modifier = Modifier.weight(1.5f),
@@ -1597,7 +1577,7 @@ private fun ItemFiscalDetailDialog(
     item: OrderItem,
     fiscalConfig: FiscalConfig,
     onDismiss: () -> Unit,
-    onSave: (boxes: Int, precoCompra: Double, descPct: Double, ipiPct: Double, pdv: Double) -> Unit
+    onSave: (totalPecas: Int, precoCompra: Double, descPct: Double, ipiPct: Double, pdv: Double) -> Unit
 ) {
     val pcsPorCaixa = if (item.qtdPorCaixa > 0) item.qtdPorCaixa else 12
     val initialBoxes = (item.totalPecas / pcsPorCaixa).coerceAtLeast(1)
@@ -1612,7 +1592,7 @@ private fun ItemFiscalDetailDialog(
     val pdv = pdvStr.toDoubleOrNull() ?: 12.0
     val desc = descStr.toDoubleOrNull() ?: 0.0
     val ipi = ipiStr.toDoubleOrNull() ?: 0.0
-    val totalPcs = boxesCount * pcsPorCaixa
+    val totalPcs = if (boxesCount == initialBoxes) item.totalPecas else boxesCount * pcsPorCaixa
 
     val valorBruto = totalPcs * preco
     val valorDesc = valorBruto * (desc / 100.0)
@@ -1655,7 +1635,7 @@ private fun ItemFiscalDetailDialog(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
                         )
                         Text(
-                            text = "${item.descricao} (Cód: ${item.codigoInterno.ifBlank { item.codigo }})",
+                            text = "${item.descricao} (Cód: ${item.safeCodigoInterno})",
                             style = MaterialTheme.typography.bodySmall.copy(color = Emerald400, fontWeight = FontWeight.Bold)
                         )
                     }
@@ -1770,10 +1750,10 @@ private fun ItemFiscalDetailDialog(
                                     value = pdvStr,
                                     onValueChange = { pdvStr = it },
                                     label = { Text("PDV Sugerido de Venda (R$)") },
-                                    supportingText = { Text("Aumentar o PDV aumenta a margem na hora", color = Slate300) },
+                                    supportingText = { Text("Aumentar o PDV aumenta a margem na hora", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     singleLine = true,
-                                    colors = mega12TextFieldColors(containerColor = Slate800),
+                                    colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
@@ -1785,34 +1765,34 @@ private fun ItemFiscalDetailDialog(
                                         label = { Text("Preço Compra (R$)") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         singleLine = true,
-                                        colors = mega12TextFieldColors(containerColor = Slate800),
+                                        colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                                         modifier = Modifier.weight(1f)
                                     )
 
                                     // Stepper Caixas
                                     Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Qtd Caixas", color = Slate300, fontSize = 11.sp)
+                                        Text("Qtd Caixas", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             IconButton(
                                                 onClick = { if (boxesCount > 1) boxesCount-- },
-                                                modifier = Modifier.size(32.dp).background(Slate700, CircleShape)
+                                                modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                             ) {
-                                                Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                Icon(Icons.Default.Remove, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
                                             }
                                             Text(
                                                 text = "$boxesCount cx",
-                                                color = Color.White,
+                                                color = MaterialTheme.colorScheme.onSurface,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 14.sp
                                             )
                                             IconButton(
                                                 onClick = { boxesCount++ },
-                                                modifier = Modifier.size(32.dp).background(Slate700, CircleShape)
+                                                modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                             ) {
-                                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
                                             }
                                         }
                                     }
@@ -1826,7 +1806,7 @@ private fun ItemFiscalDetailDialog(
                                         label = { Text("Desc %") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         singleLine = true,
-                                        colors = mega12TextFieldColors(containerColor = Slate800),
+                                        colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                                         modifier = Modifier.weight(1f)
                                     )
 
@@ -1836,7 +1816,7 @@ private fun ItemFiscalDetailDialog(
                                         label = { Text("IPI %") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         singleLine = true,
-                                        colors = mega12TextFieldColors(containerColor = Slate800),
+                                        colors = mega12TextFieldColors(containerColor = MaterialTheme.colorScheme.surface),
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
@@ -1859,7 +1839,7 @@ private fun ItemFiscalDetailDialog(
 
                     Button(
                         onClick = {
-                            onSave(boxesCount, preco, desc, ipi, pdv)
+                            onSave(totalPcs, preco, desc, ipi, pdv)
                         },
                         enabled = boxesCount > 0 && preco > 0 && pdv > 0,
                         modifier = Modifier.weight(1.5f),

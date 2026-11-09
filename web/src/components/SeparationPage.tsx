@@ -1322,13 +1322,13 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                   setDivergenceInitialItemId(null);
                   setIsDivergenceModalOpen(true);
                 }}
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 border border-amber-400 shadow-xs hover:shadow-md transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 transition cursor-pointer shadow-2xs"
                 title="Ajustar divergência física de pack ou caixas recebidas na doca"
               >
-                <Scale className="w-4 h-4 text-slate-950" />
-                <span>Ajustar Divergência Física</span>
+                <Scale className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                <span>Divergência Física</span>
                 {(order.header.divergenciasFisicas || []).filter(d => d.status === 'aplicado').length > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950 text-amber-300 font-black">
+                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold">
                     {(order.header.divergenciasFisicas || []).filter(d => d.status === 'aplicado').length}
                   </span>
                 )}
@@ -1533,10 +1533,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                                   setDivergenceInitialItemId(item.id);
                                   setIsDivergenceModalOpen(true);
                                 }}
-                                className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-sans font-extrabold text-[9px] flex items-center gap-1 hover:bg-amber-200 transition cursor-pointer"
+                                className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-sans font-bold text-[9px] flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
                                 title="Divergência física de carga aplicada. Clique para ver ou ajustar."
                               >
-                                <Scale className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                <Scale className="w-2.5 h-2.5 text-slate-500 dark:text-slate-400" />
                                 Físico Ajustado
                               </button>
                             )}

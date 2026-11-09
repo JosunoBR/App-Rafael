@@ -136,6 +136,29 @@ export interface CentralStockItem {
   updatedAt: string;
 }
 
+export interface PhysicalDivergenceRecord {
+  id: string;
+  itemId: string;
+  codigoInterno?: string;
+  codigoFornecedor?: string;
+  descricao: string;
+  dataRegistro: string;
+  registradoPor: string;
+  registradoPorId?: string | null;
+  packOriginal: number;
+  packNovo: number;
+  qtdPacotesOriginal: number;
+  qtdPacotesNovo: number;
+  qtdTotalUnidadesOriginal: number;
+  qtdTotalUnidadesNovo: number;
+  separacaoLojasOriginal: Record<string, number>;
+  separacaoLojasNovo: Record<string, number>;
+  motivo: string;
+  status: 'aplicado' | 'revertido';
+  revertidoEm?: string;
+  revertidoPor?: string;
+}
+
 export interface OrderItem {
   id: string;
   codigoInterno?: string;       // Código de produto interno (visível em todas as telas)
@@ -189,6 +212,13 @@ export interface OrderItem {
   motivoRuptura?: string;       // Motivo da divergência/falta apontada na conferência de doca
   precoUnitarioOriginal?: number; // Preço unitário antes do Ajuste Fiscal (para permitir reversão)
   valorTotalBrutoOriginal?: number; // Total bruto antes do Ajuste Fiscal
+  divergenciaFisicaAtiva?: boolean; // Flag se o item possui ajuste de divergência física de carga
+  divergenciaFisicaId?: string;     // ID da divergência física aplicada
+  packOriginal?: number;            // Pack original antes de divergência física
+  qtdPacotesOriginal?: number;      // Caixas originais antes de divergência física
+  qtdTotalUnidadesOriginal?: number; // Total de peças original antes de divergência física
+  separacaoLojasOriginal?: Record<string, number>; // Grade original antes de divergência física
+  grade?: Record<string, number>;   // Sinônimo de separacaoLojas (compatibilidade com backend)
 }
 
 export type OrderStatus = 'Em Cotação' | 'Aprovado' | 'Em Distribuição' | 'Em Separação' | 'Faturamento' | 'Finalizado';
@@ -260,6 +290,8 @@ export interface OrderHeader {
   ajusteFiscalUsuario?: string;
 
   // Governança de Divergência de Faturamento & Ruptura de Doca
+  possuiDivergenciaFisica?: boolean;      // true = possui divergência física de carga (pack ou quantidade) ajustada na doca
+  divergenciasFisicas?: PhysicalDivergenceRecord[]; // Histórico completo de divergências físicas apontadas
   possuiDivergenciaFaturamento?: boolean; // true = doca apontou recebimento a menor que gerou divergência de faturamento
   divergenciaResolvida?: boolean;         // true = financeiro conferiu e aprovou rebalanceamento dos boletos
   divergenciaResolvidaPor?: string;       // Usuário financeiro que homologou

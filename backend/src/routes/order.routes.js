@@ -26,6 +26,8 @@ router.patch('/:id/separation/checks/:storeId/:itemId', authMiddleware, (req, re
 router.post('/:id/separation/damages', authMiddleware, (req, res, next) => orderController.addSeparationDamage(req, res, next));
 router.delete('/:id/separation/damages/:damageId', authMiddleware, (req, res, next) => orderController.deleteSeparationDamage(req, res, next));
 router.post('/:id/conclude-separation', authMiddleware, requirePermission('pipeline:conclude_separation', 'comprador', 'deposito', 'separacao'), (req, res, next) => orderController.concludeSeparation(req, res, next));
+router.post('/:id/physical-divergence', authMiddleware, requirePermission('pipeline:physical_divergence', 'comprador', 'deposito', 'separacao'), (req, res, next) => orderController.applyPhysicalDivergence(req, res, next));
+router.post('/:id/physical-divergence/:divergenceId/revert', authMiddleware, requirePermission('pipeline:physical_divergence', 'comprador', 'deposito', 'separacao'), (req, res, next) => orderController.revertPhysicalDivergence(req, res, next));
 router.post('/:id/send-to-faturamento', authMiddleware, requirePermission('pipeline:send_faturamento', 'comprador', 'deposito', 'faturamento'), (req, res, next) => orderController.sendToFaturamento(req, res, next));
 router.post('/:id/finalize', authMiddleware, (req, res, next) => orderController.finalizeOrder(req, res, next));
 router.post('/:id/authorize-financial', authMiddleware, requirePermission('financial:authorize_release', 'faturamento'), (req, res, next) => orderController.authorizeFinancial(req, res, next));

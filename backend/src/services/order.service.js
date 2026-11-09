@@ -2145,6 +2145,342 @@ class OrderService {
       order: saved
     };
   }
+
+  /**
+   * Registra um ajuste de divergência física de carga (pack ou quantidade de caixas/peças)
+   * recalculando as cotas das lojas e salvando auditoria.
+   */
+  async applyPhysicalDivergence(orderId, payload = {}, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const role = currentUser.role?.toLowerCase();
+    const isDiretoriaOrRoot = role === 'diretoria' || 
+                              role === 'root' || 
+                              role === 'admin' || 
+                              currentUser.id === 'usr_root' || 
+                              currentUser.email?.toLowerCase() === 'root' ||
+                              currentUser.nome?.toLowerCase() === 'root';
+    const isAuthorized = isDiretoriaOrRoot || role === 'comprador' || role === 'deposito' || role === 'separacao';
+    if (!isAuthorized) {
+      const err = new Error('Perfil não autorizado a ajustar divergências físicas.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const { itemId, novoPack, novasCaixas, novasUnidades, novaGrade, motivo, expectedVersion } = payload;
+
+    if (!itemId) {
+      const err = new Error('Identificador do produto (itemId) é obrigatório.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const packNum = Number(novoPack);
+    const caixasNum = Number(novasCaixas);
+    const unidadesNum = Number(novasUnidades !== undefined ? novasUnidades : caixasNum * packNum);
+
+    if (isNaN(packNum) || packNum <= 0) {
+      const err = new Error('O pack (unidades por embalagem) deve ser um número maior que zero.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (isNaN(caixasNum) || caixasNum < 0) {
+      const err = new Error('A quantidade de caixas físicas não pode ser negativa.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!motivo || !String(motivo).trim()) {
+      const err = new Error('O motivo da divergência física é obrigatório para fins de auditoria.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (expectedVersion !== undefined && expectedVersion !== null) {
+      const currentVersion = Number(order.header.version || 1);
+      const expected = Number(expectedVersion);
+      if (currentVersion !== expected) {
+        const err = new Error(`Conflito de concorrência: o pedido foi alterado por outro usuário (versão ${currentVersion} vs esperada ${expected}). Atualize os dados antes de prosseguir.`);
+        err.statusCode = 409;
+        err.code = 'CONCURRENCY_CONFLICT';
+        throw err;
+      }
+    }
+
+    const item = (order.items || []).find(it => it.id === itemId || String(it.id) === String(itemId));
+    if (!item) {
+      const err = new Error('Produto não encontrado neste pedido.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Preservar valores originais do item antes da primeira divergência
+    const packOriginal = Number(item.packOriginal || item.qtdNoPacote || item.qtdPorPacote || 1);
+    const qtdPacotesOriginal = Number(item.qtdPacotesOriginal !== undefined ? item.qtdPacotesOriginal : (item.qtdPacotes || 0));
+    const qtdTotalUnidadesOriginal = Number(item.qtdTotalUnidadesOriginal !== undefined ? item.qtdTotalUnidadesOriginal : (item.qtdTotalUnidades || (qtdPacotesOriginal * packOriginal)));
+    const separacaoLojasOriginal = item.separacaoLojasOriginal 
+      ? { ...item.separacaoLojasOriginal } 
+      : { ...(item.separacaoLojas || item.grade || {}) };
+
+    const divergenceId = 'div_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const record = {
+      id: divergenceId,
+      itemId: item.id,
+      codigoInterno: item.codigoInterno || item.codigo || '',
+      codigoFornecedor: item.codigoFornecedor || '',
+      descricao: item.descricao || '',
+      dataRegistro: new Date().toISOString(),
+      registradoPor: currentUser.nome || currentUser.email || 'Operador',
+      registradoPorId: currentUser.id || null,
+      packOriginal,
+      packNovo: packNum,
+      qtdPacotesOriginal,
+      qtdPacotesNovo: caixasNum,
+      qtdTotalUnidadesOriginal,
+      qtdTotalUnidadesNovo: unidadesNum,
+      separacaoLojasOriginal,
+      separacaoLojasNovo: novaGrade && typeof novaGrade === 'object' ? { ...novaGrade } : {},
+      motivo: String(motivo).trim(),
+      status: 'aplicado'
+    };
+
+    // Armazenar backup original no item se for o primeiro ajuste
+    if (item.packOriginal === undefined) item.packOriginal = packOriginal;
+    if (item.qtdPacotesOriginal === undefined) item.qtdPacotesOriginal = qtdPacotesOriginal;
+    if (item.qtdTotalUnidadesOriginal === undefined) item.qtdTotalUnidadesOriginal = qtdTotalUnidadesOriginal;
+    if (!item.separacaoLojasOriginal) item.separacaoLojasOriginal = separacaoLojasOriginal;
+
+    // Atualizar dados operacionais do item
+    item.qtdNoPacote = packNum;
+    item.qtdPorPacote = packNum;
+    item.qtdPacotes = caixasNum;
+    item.qtdTotalUnidades = unidadesNum;
+    if (novaGrade && typeof novaGrade === 'object') {
+      item.separacaoLojas = { ...novaGrade };
+      item.grade = { ...novaGrade };
+    }
+    const precoUnit = Number(item.precoUnitario) || 0;
+    item.valorTotalBruto = unidadesNum * precoUnit;
+    const descontoItem = Number(item.valorDescontoItem) || 0;
+    item.valorTotalLiquido = Math.max(0, item.valorTotalBruto - descontoItem);
+    item.divergenciaFisicaAtiva = true;
+    item.divergenciaFisicaId = divergenceId;
+
+    // Atualizar cabeçalho do pedido
+    if (!order.header.divergenciasFisicas || !Array.isArray(order.header.divergenciasFisicas)) {
+      order.header.divergenciasFisicas = [];
+    }
+    // Desativar registros anteriores do mesmo item caso já existisse
+    order.header.divergenciasFisicas.forEach(d => {
+      if (d.itemId === item.id && d.status === 'aplicado') {
+        d.status = 'substituido';
+      }
+    });
+    order.header.divergenciasFisicas.unshift(record);
+
+    order.header.possuiDivergenciaFisica = true;
+    order.header.possuiDivergenciaFaturamento = true;
+
+    // Recalcular totais globais do pedido
+    order.header.totalPecas = order.items.reduce((acc, it) => acc + (Number(it.qtdTotalUnidades) || 0), 0);
+    order.header.totalVolumes = order.items.reduce((acc, it) => acc + (Number(it.qtdPacotes) || 0), 0);
+    order.header.totalBruto = order.items.reduce((acc, it) => acc + (Number(it.valorTotalBruto) || 0), 0);
+    order.header.totalLiquido = order.items.reduce((acc, it) => acc + (Number(it.valorTotalLiquido) || 0), 0);
+    order.header.totalGeral = order.header.totalLiquido + (Number(order.header.totalIpi) || 0) + (Number(order.header.totalSt) || 0) + (Number(order.header.valorFrete) || 0);
+
+    order.header.version = (Number(order.header.version) || 1) + 1;
+    order.header.updatedAt = new Date().toISOString();
+    order.header.lastModifiedByName = currentUser.nome || 'Operador';
+    order.header.lastModifiedById = currentUser.id || null;
+
+    let saved;
+    const { getDb, scheduleDatabaseSave } = require('../config/database');
+    const db = getDb();
+    db.run('BEGIN TRANSACTION');
+    try {
+      saved = await orderRepository.save(order);
+      db.run('COMMIT');
+      scheduleDatabaseSave(0);
+    } catch (saveErr) {
+      try { db.run('ROLLBACK'); } catch (_) {}
+      throw saveErr;
+    }
+
+    // Log de auditoria
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || 'Operador',
+      usuarioRole: currentUser.role,
+      acao: 'DIVERGENCIA_FISICA_APLICADA',
+      detalhesJson: {
+        itemId: item.id,
+        produto: item.descricao,
+        packAnterior: packOriginal,
+        packNovo: packNum,
+        caixasAnteriores: qtdPacotesOriginal,
+        caixasNovas: caixasNum,
+        pecasAnteriores: qtdTotalUnidadesOriginal,
+        pecasNovas: unidadesNum,
+        motivo: record.motivo
+      },
+      observacoes: `Divergência física de carga aplicada para "${item.descricao}". Cx: ${qtdPacotesOriginal}➔${caixasNum}, Pack: ${packOriginal}➔${packNum}. Motivo: ${record.motivo}`
+    }).catch(e => console.error('Erro ao registrar log de auditoria da divergência física:', e));
+
+    return {
+      success: true,
+      message: `Divergência física do produto "${item.descricao}" aplicada com sucesso!`,
+      order: saved,
+      divergence: record
+    };
+  }
+
+  /**
+   * Reverte um ajuste de divergência física, restaurando os valores originais do item.
+   */
+  async revertPhysicalDivergence(orderId, divergenceId, payload = {}, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const role = currentUser.role?.toLowerCase();
+    const isDiretoriaOrRoot = role === 'diretoria' || 
+                              role === 'root' || 
+                              role === 'admin' || 
+                              currentUser.id === 'usr_root' || 
+                              currentUser.email?.toLowerCase() === 'root' ||
+                              currentUser.nome?.toLowerCase() === 'root';
+    const isAuthorized = isDiretoriaOrRoot || role === 'comprador' || role === 'deposito' || role === 'separacao';
+    if (!isAuthorized) {
+      const err = new Error('Perfil não autorizado a reverter divergências físicas.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (payload.expectedVersion !== undefined && payload.expectedVersion !== null) {
+      const currentVersion = Number(order.header.version || 1);
+      const expected = Number(payload.expectedVersion);
+      if (currentVersion !== expected) {
+        const err = new Error(`Conflito de concorrência: o pedido foi alterado por outro usuário (versão ${currentVersion} vs esperada ${expected}). Atualize os dados antes de prosseguir.`);
+        err.statusCode = 409;
+        err.code = 'CONCURRENCY_CONFLICT';
+        throw err;
+      }
+    }
+
+    const divergencias = order.header.divergenciasFisicas || [];
+    const divIndex = divergencias.findIndex(d => d.id === divergenceId);
+    if (divIndex === -1) {
+      const err = new Error('Registro de divergência não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const targetDiv = divergencias[divIndex];
+    const item = (order.items || []).find(it => it.id === targetDiv.itemId);
+
+    if (item) {
+      // Restaurar valores originais
+      item.qtdNoPacote = targetDiv.packOriginal;
+      item.qtdPorPacote = targetDiv.packOriginal;
+      item.qtdPacotes = targetDiv.qtdPacotesOriginal;
+      item.qtdTotalUnidades = targetDiv.qtdTotalUnidadesOriginal;
+      item.separacaoLojas = { ...(targetDiv.separacaoLojasOriginal || {}) };
+      item.grade = { ...(targetDiv.separacaoLojasOriginal || {}) };
+
+      const precoUnit = Number(item.precoUnitario) || 0;
+      item.valorTotalBruto = item.qtdTotalUnidades * precoUnit;
+      const descontoItem = Number(item.valorDescontoItem) || 0;
+      item.valorTotalLiquido = Math.max(0, item.valorTotalBruto - descontoItem);
+
+      delete item.divergenciaFisicaAtiva;
+      delete item.divergenciaFisicaId;
+      delete item.packOriginal;
+      delete item.qtdPacotesOriginal;
+      delete item.qtdTotalUnidadesOriginal;
+      delete item.separacaoLojasOriginal;
+    }
+
+    targetDiv.status = 'revertido';
+    targetDiv.revertidoEm = new Date().toISOString();
+    targetDiv.revertidoPor = currentUser.nome || 'Operador';
+
+    // Verificar se sobrou alguma divergência ativa
+    const hasRemainingActive = divergencias.some(d => d.status === 'aplicado');
+    order.header.possuiDivergenciaFisica = hasRemainingActive;
+
+    // Recalcular totais globais
+    order.header.totalPecas = order.items.reduce((acc, it) => acc + (Number(it.qtdTotalUnidades) || 0), 0);
+    order.header.totalVolumes = order.items.reduce((acc, it) => acc + (Number(it.qtdPacotes) || 0), 0);
+    order.header.totalBruto = order.items.reduce((acc, it) => acc + (Number(it.valorTotalBruto) || 0), 0);
+    order.header.totalLiquido = order.items.reduce((acc, it) => acc + (Number(it.valorTotalLiquido) || 0), 0);
+    order.header.totalGeral = order.header.totalLiquido + (Number(order.header.totalIpi) || 0) + (Number(order.header.totalSt) || 0) + (Number(order.header.valorFrete) || 0);
+
+    order.header.version = (Number(order.header.version) || 1) + 1;
+    order.header.updatedAt = new Date().toISOString();
+    order.header.lastModifiedByName = currentUser.nome || 'Operador';
+    order.header.lastModifiedById = currentUser.id || null;
+
+    let saved;
+    const { getDb, scheduleDatabaseSave } = require('../config/database');
+    const db = getDb();
+    db.run('BEGIN TRANSACTION');
+    try {
+      saved = await orderRepository.save(order);
+      db.run('COMMIT');
+      scheduleDatabaseSave(0);
+    } catch (saveErr) {
+      try { db.run('ROLLBACK'); } catch (_) {}
+      throw saveErr;
+    }
+
+    // Log de auditoria
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || 'Operador',
+      usuarioRole: currentUser.role,
+      acao: 'DIVERGENCIA_FISICA_REVERTIDA',
+      detalhesJson: {
+        divergenceId,
+        itemId: targetDiv.itemId,
+        produto: targetDiv.descricao,
+        revertidoPor: currentUser.nome
+      },
+      observacoes: `Divergência física do produto "${targetDiv.descricao}" revertida com sucesso aos valores originais.`
+    }).catch(e => console.error('Erro ao registrar log de auditoria da reversão:', e));
+
+    return {
+      success: true,
+      message: `Ajuste de divergência do produto "${targetDiv.descricao}" revertido com sucesso!`,
+      order: saved
+    };
+  }
 }
 
 module.exports = new OrderService();

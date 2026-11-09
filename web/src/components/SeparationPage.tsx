@@ -31,15 +31,18 @@ import {
   Truck,
   SlidersHorizontal,
   Edit3,
-  Receipt
+  Receipt,
+  Scale
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User, SeparationPreset, Product, Supplier } from '../shared/types';
 import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations, adjustSeparationReserveProportionally } from '../shared/separationEngine';
 import { SeparationMatrixModal } from './SeparationMatrixModal';
 import { SeparationPresetsModal } from './SeparationPresetsModal';
 import { ProductQuickEditModal } from './ProductQuickEditModal';
+import { PhysicalDivergenceModal } from './PhysicalDivergenceModal';
 import { OrderPipelineStepper } from './OrderPipelineStepper';
-import { canCreateOrEditOrders, hasPermission, canSendToFaturamento } from '../shared/permissions';
+import { canCreateOrEditOrders, hasPermission, canSendToFaturamento, canAdjustPhysicalDivergence } from '../shared/permissions';
+import { applyPhysicalDivergenceApi, revertPhysicalDivergenceApi } from '../utils/api';
 
 interface SeparationPageProps {
   order: PurchaseOrder;
@@ -194,6 +197,56 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
     } catch (err: any) {
       console.error('Erro ao salvar produto pela tela de distribuição:', err);
       showFeedback('Erro ao salvar alterações do produto.', 'error');
+      throw err;
+    }
+  };
+
+  // Estados do Modal de Divergência Física de Carga (Doca vs Pedido/NF)
+  const [isDivergenceModalOpen, setIsDivergenceModalOpen] = useState(false);
+  const [divergenceInitialItemId, setDivergenceInitialItemId] = useState<string | null>(null);
+
+  const handleApplyDivergence = async (payload: {
+    itemId: string;
+    novoPack: number;
+    novasCaixas: number;
+    novasUnidades: number;
+    novaGrade: Record<string, number>;
+    motivo: string;
+    expectedVersion?: number;
+  }) => {
+    try {
+      const res = await applyPhysicalDivergenceApi(order.header.id, payload);
+      if (res && res.order) {
+        if (onUpdateOrder) {
+          await onUpdateOrder(res.order);
+        } else if (onChangeOrder) {
+          onChangeOrder(res.order);
+        }
+      }
+      showFeedback(res.message || 'Divergência física aplicada com sucesso!', 'success');
+    } catch (err: any) {
+      console.error('Erro ao aplicar divergência física:', err);
+      showFeedback(err.message || 'Erro ao aplicar divergência física.', 'error');
+      throw err;
+    }
+  };
+
+  const handleRevertDivergence = async (divergenceId: string) => {
+    try {
+      const res = await revertPhysicalDivergenceApi(order.header.id, divergenceId, {
+        expectedVersion: order.header.version
+      });
+      if (res && res.order) {
+        if (onUpdateOrder) {
+          await onUpdateOrder(res.order);
+        } else if (onChangeOrder) {
+          onChangeOrder(res.order);
+        }
+      }
+      showFeedback(res.message || 'Ajuste de divergência revertido com sucesso!', 'success');
+    } catch (err: any) {
+      console.error('Erro ao reverter divergência física:', err);
+      showFeedback(err.message || 'Erro ao reverter divergência física.', 'error');
       throw err;
     }
   };
@@ -1214,16 +1267,17 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         
         {/* Cabeçalho da Tabela */}
         <div className="p-3.5 sm:p-4 border-b border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
-              <Boxes className="w-4 h-4" />
+          {/* Canto Esquerdo: Título + 2 Botões de Controle da Grade */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                <Boxes className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-800 dark:text-white mr-1">
+                GRADE DE DISTRIBUIÇÃO
+              </h3>
             </div>
-            <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-800 dark:text-white">
-              GRADE DE DISTRIBUIÇÃO
-            </h3>
-          </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
             {/* Botão de Controle de Colunas Visíveis */}
             <button
               ref={columnsButtonRef}
@@ -1257,6 +1311,29 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
               {activeStores.filter(s => isColVisible(`store_${s.id}`)).length} Lojas Visíveis • Rateio Direto
             </span>
+          </div>
+
+          {/* Canto Direito: Ação de Ajustar Divergência Física de Carga */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {canAdjustPhysicalDivergence(currentUser) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDivergenceInitialItemId(null);
+                  setIsDivergenceModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 border border-amber-400 shadow-xs hover:shadow-md transition cursor-pointer"
+                title="Ajustar divergência física de pack ou caixas recebidas na doca"
+              >
+                <Scale className="w-4 h-4 text-slate-950" />
+                <span>Ajustar Divergência Física</span>
+                {(order.header.divergenciasFisicas || []).filter(d => d.status === 'aplicado').length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950 text-amber-300 font-black">
+                    {(order.header.divergenciasFisicas || []).filter(d => d.status === 'aplicado').length}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -1447,6 +1524,21 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                               <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-sans font-semibold text-[9px]">
                                 Manual
                               </span>
+                            )}
+                            {item.divergenciaFisicaAtiva && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDivergenceInitialItemId(item.id);
+                                  setIsDivergenceModalOpen(true);
+                                }}
+                                className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-sans font-extrabold text-[9px] flex items-center gap-1 hover:bg-amber-200 transition cursor-pointer"
+                                title="Divergência física de carga aplicada. Clique para ver ou ajustar."
+                              >
+                                <Scale className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                Físico Ajustado
+                              </button>
                             )}
                           </div>
                         </div>
@@ -2345,6 +2437,20 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           onSave={handleSaveProductQuickEdit}
         />
       )}
+
+      {/* Modal / Box de Ajuste de Divergência Física de Carga */}
+      <PhysicalDivergenceModal
+        isOpen={isDivergenceModalOpen}
+        onClose={() => {
+          setIsDivergenceModalOpen(false);
+          setDivergenceInitialItemId(null);
+        }}
+        order={order}
+        stores={stores}
+        initialItemId={divergenceInitialItemId}
+        onApplyDivergence={handleApplyDivergence}
+        onRevertDivergence={handleRevertDivergence}
+      />
 
     </div>
   );

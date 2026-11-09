@@ -209,6 +209,25 @@ class OrderController {
     }
   }
 
+  async applyPhysicalDivergence(req, res, next) {
+    try {
+      const result = await orderService.applyPhysicalDivergence(req.params.id, req.body, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async revertPhysicalDivergence(req, res, next) {
+    try {
+      const { id, divergenceId } = req.params;
+      const result = await orderService.revertPhysicalDivergence(id, divergenceId, req.body, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async sendToFaturamento(req, res, next) {
     try {
       const result = await orderService.sendToFaturamento(req.params.id, req.body, req.user);

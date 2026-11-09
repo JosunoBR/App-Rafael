@@ -132,6 +132,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: false }
   },
   {
+    codigo: 'pipeline:physical_divergence',
+    categoria: '2. Esteira, CD & Separação',
+    nome: 'Ajustar divergência física de carga (pack ou quantidade)',
+    obs: 'Corrige quantidades ou acerta pack e redistribui automaticamente entre as lojas',
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: false }
+  },
+  {
     codigo: 'pipeline:send_faturamento',
     categoria: '2. Esteira, CD & Separação',
     nome: 'Liberar pedido para o Faturamento',

@@ -211,6 +211,16 @@ export function canSendToFaturamento(userOrRole?: UserLike): boolean {
 }
 
 /**
+ * Permite registrar ou reverter divergência física de carga (pack ou quantidade)
+ */
+export function canAdjustPhysicalDivergence(userOrRole?: UserLike): boolean {
+  if (!userOrRole) return false;
+  return hasPermission(userOrRole, 'pipeline:physical_divergence') || 
+         hasPermission(userOrRole, 'pipeline:distribute') || 
+         hasPermission(userOrRole, 'pipeline:separate_dock');
+}
+
+/**
  * Permite confirmar o recebimento físico de um pedido na Matriz (entrega do fornecedor).
  */
 export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | null): boolean {

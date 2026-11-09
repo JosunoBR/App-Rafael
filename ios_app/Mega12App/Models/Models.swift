@@ -166,6 +166,7 @@ struct OrderHeader: Codable {
     var separacaoConcluida: Bool = false
     var separadoPor: String? = nil
     var dataSeparacao: String? = nil
+    var possuiDivergenciaFisica: Bool = false
 }
 
 // MARK: - Avaria e Inspeção

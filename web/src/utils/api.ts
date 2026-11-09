@@ -941,6 +941,32 @@ export async function concludeSeparationApi(orderId: string, payload: any = {}):
   return res.json();
 }
 
+export async function applyPhysicalDivergenceApi(orderId: string, payload: {
+  itemId: string;
+  novoPack: number;
+  novasCaixas: number;
+  novasUnidades?: number;
+  novaGrade?: Record<string, number>;
+  motivo: string;
+  expectedVersion?: number;
+}): Promise<{ success: boolean; message: string; order: PurchaseOrder; divergence: any }> {
+  const res = await apiFetch(`/orders/${orderId}/physical-divergence`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+export async function revertPhysicalDivergenceApi(orderId: string, divergenceId: string, payload: { expectedVersion?: number } = {}): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
+  const res = await apiFetch(`/orders/${orderId}/physical-divergence/${divergenceId}/revert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
 export async function sendOrderToFaturamentoApi(orderId: string, payload: any = {}): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
   const res = await apiFetch(`/orders/${orderId}/send-to-faturamento`, {
     method: 'POST',

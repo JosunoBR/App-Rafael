@@ -113,6 +113,7 @@ data class OrderItem(
     val qtdRecebida: Int? = null,
     val motivoRuptura: String? = null,
     val qtdReservaEstoque: Int = 0,
+    val divergenciaFisicaAtiva: Boolean = false,
     val embalagem: String? = null
 ) {
     val safeCodigoInterno: String
@@ -226,6 +227,7 @@ data class OrderHeader(
     val separadoPor: String? = null,
     val dataSeparacao: String? = null,
     val observacoesDoca: String? = null,
+    val possuiDivergenciaFisica: Boolean = false,
     val possuiDivergenciaFaturamento: Boolean = false,
     val divergenciaResolvida: Boolean = false,
     val divergenciaResolvidaPor: String? = null,

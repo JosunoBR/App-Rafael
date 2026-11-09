@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   FileText, 
+  FileSpreadsheet,
   CheckCircle2, 
   AlertTriangle, 
   Sparkles, 
@@ -44,7 +45,8 @@ interface SeparationPageProps {
   presets?: SeparationPreset[];
   currentUser?: User | null;
   onExportPDF: (visibleColumns?: Record<string, boolean>) => void | Promise<void>;
-  onExportExcel?: () => void;
+  onExportExcel?: (visibleColumns: Record<string, boolean>) => void | Promise<void>;
+  isExportingExcel?: boolean;
   onNavigateToOrders: () => void;
   onNavigateToHistory?: () => void;
   onChangeOrder?: (updatedOrder: PurchaseOrder) => void;
@@ -115,6 +117,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   currentUser,
   onExportPDF,
   onExportExcel,
+  isExportingExcel = false,
   onNavigateToOrders,
   onNavigateToHistory,
   onChangeOrder,
@@ -941,15 +944,29 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             </div>
           </div>
 
-          {/* Botão Romaneio PDF */}
-          <button
-            onClick={() => onExportPDF(visibleColumns)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition cursor-pointer"
-            title="Gerar Romaneio PDF Paisagem A4 com tabela das lojas e volumes"
-          >
-            <FileText className="w-4 h-4" />
-            <span>Romaneio PDF</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {onExportExcel && (
+              <button
+                type="button"
+                onClick={() => onExportExcel(visibleColumns)}
+                disabled={isExportingExcel}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                title="Gerar Romaneio Excel com o layout do PDF"
+              >
+                {isExportingExcel ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                <span>{isExportingExcel ? 'Gerando Excel…' : 'Romaneio Excel'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onExportPDF(visibleColumns)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition cursor-pointer"
+              title="Gerar Romaneio PDF Paisagem A4 com tabela das lojas e volumes"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Romaneio PDF</span>
+            </button>
+          </div>
         </div>
 
         {/* Bottom Row: Metrics Pills & Action */}

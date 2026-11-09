@@ -188,6 +188,7 @@ import {
 } from './utils/api';
 import { exportCommercialOrderPDF, exportRomaneioPDF } from './utils/pdfExporter';
 import { exportOrderToExcel } from './utils/excelExporter';
+import { exportRomaneioExcel } from './utils/romaneioExcelExporter';
 import { calculateOrderNetTotal, calculateOrderMerchandiseTotal, generateOrderInstallments, rescheduleOrderDelivery } from './utils/installments';
 import { toBrDate } from './utils/masks';
 import { calculateItemFiscal, normalizeRateToDecimal } from './shared/fiscalEngine';
@@ -309,6 +310,8 @@ export function App() {
 
   // Snapshot base para Three-Way Merge e controle de concorrência
   const baseOrderRef = useRef<PurchaseOrder | null>(null);
+  const romaneioExportInProgress = useRef(false);
+  const [isExportingRomaneioExcel, setIsExportingRomaneioExcel] = useState(false);
   const [isSyncingRemote, setIsSyncingRemote] = useState(false);
   const [conflictMergeData, setConflictMergeData] = useState<{
     remote: PurchaseOrder;
@@ -3059,6 +3062,21 @@ export function App() {
     showToast('Romaneio PDF de Separação gerado com sucesso!', 'success');
   };
 
+  const handleExportSeparationExcel = async (visibleColumns?: Record<string, boolean>) => {
+    if (romaneioExportInProgress.current) return;
+    romaneioExportInProgress.current = true;
+    setIsExportingRomaneioExcel(true);
+    try {
+      await exportRomaneioExcel(order, storeConfigs, visibleColumns);
+      showToast('Romaneio de Separação em Excel gerado com sucesso!', 'success');
+    } catch {
+      showToast('Não foi possível gerar o romaneio em Excel. Tente novamente.', 'error');
+    } finally {
+      romaneioExportInProgress.current = false;
+      setIsExportingRomaneioExcel(false);
+    }
+  };
+
   // Supplier Page Handlers
   const handleSaveSupplier = async (sup: Supplier): Promise<Supplier> => {
     let savedSupplier = sup;
@@ -3584,7 +3602,8 @@ export function App() {
           onCloseOrder={handleCloseOrder}
           onDuplicateOrder={handleDuplicateCurrentOrder}
           onDiscardDraft={handleRequestDiscardOrDelete}
-          onExportExcel={handleExportExcel}
+          onExportExcel={activeNav === 'separation' ? () => handleExportSeparationExcel() : handleExportExcel}
+          isExportingRomaneioExcel={isExportingRomaneioExcel}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
           onImportExcel={() => setIsImportModalOpen(true)}
           onSelectNav={(tab) => {
@@ -4010,6 +4029,8 @@ export function App() {
                       presets={separationPresets}
                       currentUser={currentUser}
                       onExportPDF={handleExportSeparationPDF}
+                      onExportExcel={handleExportSeparationExcel}
+                      isExportingExcel={isExportingRomaneioExcel}
                       onNavigateToOrders={() => setActiveNav('orders')}
                       onNavigateToHistory={() => setActiveNav('separationHistory')}
                       onChangeOrder={setOrder}

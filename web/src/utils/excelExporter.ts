@@ -565,6 +565,11 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   // ===========================================================================
   // 8. DOWNLOAD DO ARQUIVO XLSX NO NAVEGADOR
   // ===========================================================================
+  await downloadExcelWorkbook(workbook, filename);
+  return true;
+}
+
+export async function downloadExcelWorkbook(workbook: ExcelJS.Workbook, filename: string): Promise<void> {
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = window.URL.createObjectURL(blob);
@@ -574,10 +579,8 @@ export async function exportOrderToExcel(order: PurchaseOrder, _fallbackStores?:
   document.body.appendChild(a);
   a.click();
   setTimeout(() => {
-    document.body.removeChild(a);
+    a.remove();
     window.URL.revokeObjectURL(url);
   }, 500);
-
-  return true;
 }
 

@@ -1,11 +1,14 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import { autoTable } from 'jspdf-autotable';
 import { PurchaseOrder, StoreConfig } from '../shared/types';
-import { DEFAULT_STORES } from '../shared/constants';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
 import { QUICK_PAYMENT_PRESETS, formatPaymentConditionString } from './installments';
 import { calculateOrderTotals, calculateItemIpi } from '../shared/orderCalculationEngine';
 import { toBrDate } from './masks';
+import {
+  formatRomaneioValue, prepareRomaneio, ROMANEIO_TITLE, ROMANEIO_SUBTITLE,
+  ROMANEIO_CONFERENCE_TITLE, ROMANEIO_SIGNATURES, ROMANEIO_FOOTER
+} from './romaneioExportData';
 
 function formatCurrency(val: number | string): string {
   const num = Number(val) || 0;
@@ -194,15 +197,6 @@ export function cleanPaymentFormDisplay(forma?: string): string {
   text = text.replace(/\s+/g, ' ').trim();
 
   return text || 'Boleto Bancário';
-}
-
-function getAvariaUnits(quantidade: number, unidadeMedida?: string, qtdPorPacote: number = 1): number {
-  const qtd = Number(quantidade) || 0;
-  const um = (unidadeMedida || 'UN').toUpperCase();
-  if (um === 'PACOTES' || um === 'CX' || um === 'CAIXA' || um === 'PCT') {
-    return qtd * (Number(qtdPorPacote) || 1);
-  }
-  return qtd;
 }
 
 // =========================================================================
@@ -714,25 +708,8 @@ export function exportRomaneioPDF(
   fallbackStores?: StoreConfig[], 
   visibleColumnsParam?: Record<string, boolean>
 ) {
-  let visibleColumns: Record<string, boolean> = visibleColumnsParam || {};
-  if (!visibleColumnsParam) {
-    try {
-      const saved = localStorage.getItem('mega12_separation_columns_visibility');
-      if (saved) {
-        visibleColumns = JSON.parse(saved);
-      }
-    } catch (e) {}
-  }
-  const isColVisible = (key: string): boolean => visibleColumns[key] !== false;
-
-  const order: PurchaseOrder = {
-    ...rawOrder,
-    items: (rawOrder.items || []).filter(it => Boolean(it.descricao?.trim() || it.codigo?.trim() || it.codigoInterno?.trim() || it.codigoFornecedor?.trim() || it.qtdTotalUnidades > 0 || it.precoUnitario > 0))
-  };
-
-  const numeroPedido = (order.header?.numeroPedido || 'PED-0001').replace(/[^a-zA-Z0-9_-]/g, '');
-  const cleanFornecedor = (order.header?.fornecedor || 'Fornecedor').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const filename = `Romaneio_${numeroPedido}_${cleanFornecedor}.pdf`;
+  const romaneio = prepareRomaneio(rawOrder, fallbackStores, visibleColumnsParam);
+  const { columns, items, numeroPedido } = romaneio;
 
   // Geração Local Direta via jsPDF em Paisagem (20 Lojas)
   try {
@@ -741,34 +718,6 @@ export function exportRomaneioPDF(
       unit: 'mm',
       format: 'a4'
     });
-
-    const storesList = (order.storeConfigs && order.storeConfigs.length > 0) 
-      ? order.storeConfigs 
-      : (fallbackStores && fallbackStores.length > 0 ? fallbackStores : DEFAULT_STORES);
-
-    const activeStores = storesList.filter(s => s.active);
-
-    // Mapear Avarias do Pedido
-    const avariasList = (order.inspection?.possuiAvarias && order.inspection?.avarias) ? order.inspection.avarias : [];
-    const avariasMap = new Map<string, number>();
-    let totalAvariasGeral = 0;
-    avariasList.forEach(a => {
-      const item = (order.items || []).find(i => i.id === a.itemId);
-      const pack = item?.qtdPorPacote || 1;
-      const units = getAvariaUnits(a.quantidade, a.unidadeMedida, pack);
-      const key = `${a.itemId}_${a.storeId}`;
-      avariasMap.set(key, (avariasMap.get(key) || 0) + units);
-      totalAvariasGeral += units;
-    });
-
-    const status = order.header?.status || 'Aprovado';
-    const dataEmissao = toBrDate(order.header?.dataEmissao) || new Date().toLocaleDateString('pt-BR');
-    const dataEntrega = toBrDate(order.header?.dataEntregaPrevista) || 'A Combinar';
-    const fornecedorNome = (order.header?.fornecedor || 'FORNECEDOR NÃO INFORMADO').toUpperCase();
-    const vendedor = order.header?.vendedor || 'N/A';
-    const contatoVendedor = order.header?.contatoVendedor || 'S/ Contato';
-    const { condicaoPagamento, formaPagamento } = resolveOrderPaymentCondition(order);
-    const tipoFrete = order.header?.tipoFrete || 'CIF (Por conta do Fornecedor)';
 
     // =========================================================================
     // 1. CABEÇALHO SUPERIOR (Logo Oficial + Título + Badge do Pedido)
@@ -785,11 +734,11 @@ export function exportRomaneioPDF(
     doc.setTextColor(15, 23, 42); // Slate-900
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
-    doc.text('MEGA 12 • ROMANEIO DE SEPARAÇÃO E EXPEDIÇÃO', 33, 12);
+    doc.text(ROMANEIO_TITLE, 33, 12);
 
     doc.setTextColor(5, 150, 105); // Emerald-600
     doc.setFontSize(8);
-    doc.text('ALS 10 BAZAR E BRINQUEDOS LTDA  •  CONFERÊNCIA OFICIAL DE DOCA & EXPEDIÇÃO', 33, 18.5);
+    doc.text(ROMANEIO_SUBTITLE, 33, 18.5);
 
     // Badge do Pedido (Canto Superior Direito)
     doc.setFillColor(15, 23, 42);
@@ -798,15 +747,15 @@ export function exportRomaneioPDF(
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(`PEDIDO Nº ${numeroPedido}`, 209, 11.5);
+    doc.text(romaneio.badge[0], 209, 11.5);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.text(`Emissão: ${dataEmissao}  |  Status: ${status}`, 209, 16);
+    doc.text(romaneio.badge[1], 209, 16);
 
     doc.setTextColor(253, 224, 71); // Yellow-300
     doc.setFont('helvetica', 'bold');
-    doc.text(`Previsão de Entrega: ${dataEntrega}`, 209, 21);
+    doc.text(romaneio.badge[2], 209, 21);
 
     // =========================================================================
     // 2. CARD DE DADOS: FORNECEDOR
@@ -824,10 +773,7 @@ export function exportRomaneioPDF(
     doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
 
-    const col1Fields = [
-      `Fornecedor: ${fornecedorNome}`,
-      `Vendedor: ${vendedor}  |  Contato: ${contatoVendedor}`
-    ];
+    const col1Fields = romaneio.supplier.slice(0, 2);
     const col1Lines: string[] = [];
     col1Fields.forEach(f => {
       const split = doc.splitTextToSize(f, col1MaxW);
@@ -838,9 +784,7 @@ export function exportRomaneioPDF(
       }
     });
 
-    const col2Fields = [
-      `Tipo de Frete: ${tipoFrete}`
-    ];
+    const col2Fields = romaneio.supplier.slice(2);
     const col2Lines: string[] = [];
     col2Fields.forEach(f => {
       const split = doc.splitTextToSize(f, col2MaxW);
@@ -882,221 +826,19 @@ export function exportRomaneioPDF(
     // =========================================================================
     // 4. TABELA DE SEPARAÇÃO (DINÂMICA CONFORME COLUNAS VISÍVEIS)
     // =========================================================================
-    // Pré-cálculo dos totais gerais
-    const totalGeralCompra = (order.items || []).reduce((acc, item) => acc + (Number(item.qtdTotalUnidades) || 0), 0);
-    const totalGeralEstoque = (order.items || []).reduce((acc, item) => {
-      const raw = activeStores.reduce((sum, s) => sum + (Number(item.separacaoLojas?.[s.id]) || 0), 0);
-      return acc + Math.max(0, (Number(item.qtdTotalUnidades) || 0) - raw);
-    }, 0);
-
-    const totaisLojasMap = new Map<string, number>();
-    activeStores.forEach(s => {
-      const somaLoja = (order.items || []).reduce((acc, item) => {
-        const raw = item.separacaoLojas?.[s.id] || 0;
-        const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
-        return acc + Math.max(0, raw - avUnits);
-      }, 0);
-      totaisLojasMap.set(s.id, somaLoja);
-    });
-    const totalGeralPecasEfetivas = Array.from(totaisLojasMap.values()).reduce((acc, val) => acc + val, 0);
-
-    // Definição das colunas possíveis com checagem de visibilidade
-    interface RomaneioColumnDef {
-      key: string;
-      header: string;
-      cellWidth?: number;
-      halign: 'left' | 'center' | 'right';
-      fontStyle?: 'normal' | 'bold';
-      fillColor?: [number, number, number];
-      textColor?: [number, number, number];
-      getValue: (item: any) => string;
-      getFooter: () => string;
-    }
-
-    const dynamicCols: RomaneioColumnDef[] = [];
-
-    // 1. Foto
-    if (isColVisible('foto')) {
-      dynamicCols.push({
-        key: 'foto',
-        header: 'Foto',
-        cellWidth: 10,
-        halign: 'center',
-        getValue: (item) => (item.fotoUrl && typeof item.fotoUrl === 'string' && item.fotoUrl.startsWith('data:image') ? '' : '-'),
-        getFooter: () => '-'
-      });
-    }
-
-    // 2. Produto (Cód / Descrição)
-    if (isColVisible('produto')) {
-      const hasExtraCols = isColVisible('refFabrica') || isColVisible('pdv');
-      dynamicCols.push({
-        key: 'produto',
-        header: 'Cód / Descrição',
-        cellWidth: hasExtraCols ? 42 : 55,
-        halign: 'left',
-        fontStyle: 'bold',
-        getValue: (item) => {
-          const cod = item.codigoInterno || item.codigo || '';
-          const desc = item.descricao || '';
-          return cod ? `${cod}\n${desc}` : desc;
-        },
-        getFooter: () => 'TOTAL GERAL EFETIVO'
-      });
-    }
-
-    // 3. Referência de Fábrica
-    if (isColVisible('refFabrica')) {
-      dynamicCols.push({
-        key: 'refFabrica',
-        header: 'Ref. Fábrica',
-        cellWidth: 16,
-        halign: 'center',
-        getValue: (item) => item.codigoFornecedor || '-',
-        getFooter: () => '-'
-      });
-    }
-
-    // 4. Preço PDV Alvo
-    if (isColVisible('pdv')) {
-      dynamicCols.push({
-        key: 'pdv',
-        header: 'PDV',
-        cellWidth: 14,
-        halign: 'center',
-        getValue: (item) => (item.pdvAlvo && Number(item.pdvAlvo) > 0 ? `R$ ${Number(item.pdvAlvo).toFixed(2).replace('.', ',')}` : '-'),
-        getFooter: () => '-'
-      });
-    }
-
-    // 5. Qtd por Pacote
-    if (isColVisible('qtdPac')) {
-      dynamicCols.push({
-        key: 'qtdPac',
-        header: 'Qtd Pac',
-        cellWidth: 12,
-        halign: 'center',
-        getValue: (item) => `${Number(item.qtdNoPacote) || Number(item.qtdPorPacote) || 1} un`,
-        getFooter: () => '-'
-      });
-    }
-
-    // 6. Total Compra
-    if (isColVisible('comprado')) {
-      dynamicCols.push({
-        key: 'comprado',
-        header: 'Total Compra',
-        cellWidth: 12,
-        halign: 'center',
-        fontStyle: 'bold',
-        fillColor: [241, 245, 249],
-        getValue: (item) => Number(item.qtdTotalUnidades || 0).toLocaleString('pt-BR'),
-        getFooter: () => totalGeralCompra.toLocaleString('pt-BR')
-      });
-    }
-
-    // 7. Estoque CD
-    if (isColVisible('estoqueCd')) {
-      dynamicCols.push({
-        key: 'estoqueCd',
-        header: 'Estoque CD',
-        cellWidth: 12,
-        halign: 'center',
-        fontStyle: 'bold',
-        fillColor: [254, 243, 199],
-        textColor: [146, 64, 14],
-        getValue: (item) => {
-          const rawAllocTotal = activeStores.reduce((sum, s) => sum + (Number(item.separacaoLojas?.[s.id]) || 0), 0);
-          const reserveCD = Math.max(0, (Number(item.qtdTotalUnidades) || 0) - rawAllocTotal);
-          return reserveCD > 0 ? reserveCD.toLocaleString('pt-BR') : '-';
-        },
-        getFooter: () => totalGeralEstoque.toLocaleString('pt-BR')
-      });
-    }
-
-    // 8. Total Lojas
-    if (isColVisible('lojasTotal')) {
-      dynamicCols.push({
-        key: 'lojasTotal',
-        header: 'Total Lojas',
-        cellWidth: 12,
-        halign: 'center',
-        fontStyle: 'bold',
-        fillColor: [236, 253, 245],
-        textColor: [6, 95, 70],
-        getValue: (item) => {
-          let totalItemAvarias = 0;
-          let rawAllocTotal = 0;
-          activeStores.forEach(s => {
-            const rawAlloc = item.separacaoLojas?.[s.id] || 0;
-            rawAllocTotal += rawAlloc;
-            const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
-            totalItemAvarias += avUnits;
-          });
-          const totalLiquidoLojas = Math.max(0, rawAllocTotal - totalItemAvarias);
-          return totalLiquidoLojas > 0 ? totalLiquidoLojas.toLocaleString('pt-BR') : '-';
-        },
-        getFooter: () => totalGeralPecasEfetivas.toLocaleString('pt-BR')
-      });
-    }
-
-    // 9. Lojas Ativas (Filtradas por isColVisible('store_' + s.id))
-    activeStores.forEach(s => {
-      const storeKey = `store_${s.id}`;
-      if (isColVisible(storeKey)) {
-        dynamicCols.push({
-          key: storeKey,
-          header: s.shortName || s.name,
-          halign: 'center',
-          getValue: (item) => {
-            const rawAlloc = item.separacaoLojas?.[s.id] || 0;
-            const avUnits = avariasMap.get(`${item.id}_${s.id}`) || 0;
-            const effective = Math.max(0, rawAlloc - avUnits);
-            if (avUnits > 0) {
-              return `${effective} (-${avUnits})`;
-            }
-            return effective > 0 ? effective.toLocaleString('pt-BR') : '-';
-          },
-          getFooter: () => {
-            const soma = totaisLojasMap.get(s.id) || 0;
-            return soma > 0 ? soma.toLocaleString('pt-BR') : '0';
-          }
-        });
-      }
-    });
-
-    // Se nenhuma coluna estiver selecionada (caso extremo), restaura produto e lojas
-    if (dynamicCols.length === 0) {
-      dynamicCols.push({
-        key: 'produto',
-        header: 'Cód / Descrição',
-        halign: 'left',
-        fontStyle: 'bold',
-        getValue: (item) => item.descricao || item.codigo || '',
-        getFooter: () => 'TOTAL GERAL'
-      });
-    }
-
-    const headCols = dynamicCols.map(c => c.header);
-    const bodyRows = (order.items || []).map(item => dynamicCols.map(c => c.getValue(item)));
-    const footerRow = dynamicCols.map(c => c.getFooter());
-
-    // Se a coluna de produto não estiver visível mas houver rodapé, garante que a 1ª coluna tenha o texto de total
-    if (!isColVisible('produto') && footerRow.length > 0) {
-      footerRow[0] = 'TOTAL GERAL';
-    }
-
-    const columnStyles: Record<number, any> = {};
-    const fotoColIdx = dynamicCols.findIndex(c => c.key === 'foto');
-
-    dynamicCols.forEach((col, idx) => {
-      const style: any = { halign: col.halign };
-      if (col.cellWidth) style.cellWidth = col.cellWidth;
-      if (col.fontStyle) style.fontStyle = col.fontStyle;
-      if (col.fillColor) style.fillColor = col.fillColor;
-      if (col.textColor) style.textColor = col.textColor;
-      columnStyles[idx] = style;
-    });
+    const headCols = columns.map(column => column.header);
+    const formatRow = (row: (number | string)[]) =>
+      row.map((value, index) => formatRomaneioValue(value, columns[index].format));
+    const bodyRows = romaneio.bodyRows.map(formatRow);
+    const footerRow = formatRow(romaneio.footerRow);
+    const fotoColIdx = columns.findIndex(column => column.key === 'foto');
+    const columnStyles = Object.fromEntries(columns.map((column, index) => [index, {
+      halign: column.align || 'center' as const,
+      ...(column.widthMm ? { cellWidth: column.widthMm } : {}),
+      ...(column.bold ? { fontStyle: 'bold' as const } : {}),
+      ...(column.fill ? { fillColor: column.fill } : {}),
+      ...(column.color ? { textColor: column.color } : {})
+    }]));
 
     autoTable(doc, {
       startY: cardY + cardH + 2.5,
@@ -1129,8 +871,8 @@ export function exportRomaneioPDF(
         }
       },
       didDrawCell: (data) => {
-        if (fotoColIdx !== -1 && data.column.index === fotoColIdx && data.section === 'body' && data.row.index < (order.items || []).length) {
-          const it = (order.items || [])[data.row.index];
+        if (fotoColIdx !== -1 && data.column.index === fotoColIdx && data.section === 'body' && data.row.index < items.length) {
+          const it = items[data.row.index];
           if (it?.fotoUrl && typeof it.fotoUrl === 'string' && it.fotoUrl.startsWith('data:image')) {
             try {
               const dim = Math.min(data.cell.width - 1.6, data.cell.height - 1.6);
@@ -1165,13 +907,13 @@ export function exportRomaneioPDF(
     doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.2);
-    doc.text('CONFERÊNCIA DE RECEBIMENTO & EXPEDIÇÃO DE DOCA (ALS 10 / MEGA 12):', 13, finalY + 3.8);
+    doc.text(ROMANEIO_CONFERENCE_TITLE, 13, finalY + 3.8);
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Conferente Responsável: ${order.inspection?.conferente || '____________________________________'}`, 13, finalY + 9.5);
-    doc.text(`Apontamento de Avarias: ${order.inspection?.possuiAvarias ? `SIM (${avariasList.length} ocorrências • ${totalAvariasGeral} peças descontadas)` : '[  ] NÃO HOUVE AVARIAS    [  ] COM AVARIAS APONTADAS'}`, 130, finalY + 9.5);
+    doc.text(romaneio.conference[0], 13, finalY + 9.5);
+    doc.text(romaneio.conference[1], 130, finalY + 9.5);
 
     // Linhas de Assinatura
     const sigY = finalY + 16.5;
@@ -1184,9 +926,9 @@ export function exportRomaneioPDF(
     doc.setFontSize(6);
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'bold');
-    doc.text('ASSINATURA CONFERENTE / DOCA', 15, sigY + 3.5);
-    doc.text('ASSINATURA MOTORISTA / TRANSPORTADORA', 105, sigY + 3.5);
-    doc.text('SUPERVISÃO / RECEBIMENTO MEGA 12', 195, sigY + 3.5);
+    doc.text(ROMANEIO_SIGNATURES[0], 15, sigY + 3.5);
+    doc.text(ROMANEIO_SIGNATURES[1], 105, sigY + 3.5);
+    doc.text(ROMANEIO_SIGNATURES[2], 195, sigY + 3.5);
 
     // =========================================================================
     // 6. RODAPÉ DE PÁGINA EM TODAS AS PÁGINAS
@@ -1201,11 +943,11 @@ export function exportRomaneioPDF(
       doc.setFontSize(6.5);
       doc.setTextColor(148, 163, 184);
       doc.setFont('helvetica', 'normal');
-      doc.text('Rede Mega 12 • Sistema de Gestão de Compras & Distribuição (ALS 10 Bazar e Brinquedos Ltda)', 10, 206.5);
+      doc.text(ROMANEIO_FOOTER, 10, 206.5);
       doc.text(`Romaneio: ${numeroPedido}  |  Página ${i} de ${totalPages}`, 240, 206.5);
     }
 
-    doc.save(filename);
+    doc.save(`${romaneio.filename}.pdf`);
     return true;
   } catch (err) {
     console.error('Erro ao gerar PDF local do romaneio:', err);

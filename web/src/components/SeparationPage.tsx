@@ -2223,10 +2223,10 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5">
                 <PackageCheck className="w-4 h-4" /> Conferência física e separação concluídas. Aguardando liberação de boletos no Faturamento.
               </span>
-            ) : order.header.status === 'Aprovado' ? (
-              <span>Inicie a Distribuição para registrar o recebimento físico.</span>
             ) : (isInDistribution || isInSeparation) && isReceiptPending ? (
-              <span>Confirme o recebimento físico na Matriz para avançar com o pedido.</span>
+              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                Confirme o recebimento físico na Matriz para avançar com o pedido.
+              </span>
             ) : isInDistribution ? (
               <span>
                 <b>Distribuição CD:</b> Confira as quantidades de cada filial e libere o pedido para Separação na Doca.

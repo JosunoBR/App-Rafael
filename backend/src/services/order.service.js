@@ -1022,9 +1022,10 @@ class OrderService {
 
   /**
    * Confirma o recebimento físico de um pedido na Matriz (entrega do fornecedor).
+   * Registra a conciliação do valor da NF no cabeçalho e sincroniza com o Ajuste Fiscal e parcelas.
    * Permitido para: diretoria, comprador, deposito. Bloqueado para: separacao.
    */
-  async confirmReceipt(orderId, { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos, expectedVersion }, currentUser) {
+  async confirmReceipt(orderId, { dataRecebimento, recebidoPor, numeroNotaFiscal, valorNotaFiscal, autorizarBoletos, expectedVersion }, currentUser) {
     if (!currentUser) {
       const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
       err.statusCode = 401;
@@ -1054,6 +1055,25 @@ class OrderService {
       order.header.dataRecebimentoMatriz = dataRecebimento || new Date().toISOString().split('T')[0];
       order.header.recebidoPor = recebidoPor || currentUser.nome || 'Operador';
       order.header.numeroNotaFiscal = numeroNotaFiscal || order.header.numeroNotaFiscal || '';
+
+      // Atualizar Valor da Nota Fiscal (Ajuste Fiscal da Entrega)
+      const numValorNf = valorNotaFiscal !== undefined && valorNotaFiscal !== null && valorNotaFiscal !== ''
+        ? Number(valorNotaFiscal)
+        : undefined;
+
+      if (numValorNf !== undefined && !isNaN(numValorNf) && numValorNf > 0) {
+        order.header.valorNotaFiscalEntregue = Number(numValorNf.toFixed(2));
+        order.header.totalGeral = order.header.valorNotaFiscalEntregue;
+
+        // Calcular diferença em relação ao total base comercial do pedido
+        const baseCalc = Number(order.header.totalBruto || order.header.totalLiquido || order.header.totalGeral || 0);
+        if (baseCalc > 0) {
+          order.header.ajusteFiscalDiferenca = Number((order.header.valorNotaFiscalEntregue - baseCalc).toFixed(2));
+        }
+        order.header.ajusteFiscalData = new Date().toISOString();
+        order.header.ajusteFiscalUsuario = currentUser.nome || 'Operador';
+      }
+
       order.header.updatedAt = new Date().toISOString();
 
       const receiptRole = String(currentUser.role || '').toLowerCase();
@@ -1069,10 +1089,27 @@ class OrderService {
         }
       }
 
-      // Recalcular as datas de vencimento das parcelas a partir da data de recebimento na Matriz
+      // Recalcular as parcelas a partir da data de recebimento na Matriz e sincronizar valor da NF
       const dataRecebimentoEfetiva = order.header.dataRecebimentoMatriz;
       if (dataRecebimentoEfetiva && Array.isArray(order.installments) && order.installments.length > 0) {
         const baseDt = new Date(`${dataRecebimentoEfetiva}T12:00:00Z`);
+
+        // Se houver valor da NF informado, ajusta proporcionalmente o valor das parcelas de mercadorias não baixadas
+        const nonFreteInsts = order.installments.filter(i => !i.isBoletoFrete && i.tipoTitulo !== 'frete' && i.status !== 'Pago');
+        let dividedVals = null;
+        if (numValorNf !== undefined && !isNaN(numValorNf) && numValorNf > 0 && nonFreteInsts.length > 0) {
+          const count = nonFreteInsts.length;
+          const valorParcelaBase = Math.floor((numValorNf / count) * 100) / 100;
+          const restoCentavos = Number((numValorNf - (valorParcelaBase * count)).toFixed(2));
+          dividedVals = nonFreteInsts.map((_, idx) => {
+            if (idx === count - 1) {
+              return Number((valorParcelaBase + restoCentavos).toFixed(2));
+            }
+            return valorParcelaBase;
+          });
+        }
+
+        let nonFreteIdx = 0;
         order.installments = order.installments.map((inst, index) => {
           // Se a parcela já foi baixada como paga, preserva seus dados
           if (inst.status === 'Pago') return inst;
@@ -1096,8 +1133,14 @@ class OrderService {
           const d = String(newDue.getUTCDate()).padStart(2, '0');
           const newDueIso = `${y}-${m}-${d}`;
 
+          let novoValor = inst.valor;
+          if (dividedVals && !inst.isBoletoFrete && inst.tipoTitulo !== 'frete') {
+            novoValor = dividedVals[nonFreteIdx++] ?? inst.valor;
+          }
+
           return {
             ...inst,
+            valor: novoValor,
             vencimento: newDueIso,
             dataVencimento: newDueIso,
             dias: offsetDays,

@@ -478,7 +478,14 @@ export async function updateInstallmentInDb(
 
 export async function confirmReceiptInDb(
   orderId: string,
-  payload: { dataRecebimento: string; recebidoPor?: string; numeroNotaFiscal?: string; autorizarBoletos?: boolean; expectedVersion?: number }
+  payload: {
+    dataRecebimento: string;
+    recebidoPor?: string;
+    numeroNotaFiscal?: string;
+    valorNotaFiscal?: number;
+    autorizarBoletos?: boolean;
+    expectedVersion?: number;
+  }
 ): Promise<any> {
   const res = await apiFetch(`/orders/${orderId}/confirm-receipt`, {
     method: 'POST',

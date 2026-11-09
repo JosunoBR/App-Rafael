@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { X, PackageCheck, FileText, Calendar, User, CreditCard, ShieldCheck, Truck, AlertTriangle } from 'lucide-react';
+import { X, PackageCheck, FileText, Calendar, User, CreditCard, ShieldCheck, Truck, AlertTriangle, DollarSign } from 'lucide-react';
 import { PurchaseOrder, User as UserType } from '../shared/types';
 import { canAuthorizeFinancialRelease } from '../shared/permissions';
+import { calculateOrderTotals } from '../shared/orderCalculationEngine';
+import { formatCurrency, parseCurrency } from '../utils/masks';
 
 interface ReceiptConfirmationModalProps {
   order: PurchaseOrder;
@@ -10,8 +12,9 @@ interface ReceiptConfirmationModalProps {
     dataRecebimento: string;
     recebidoPor: string;
     numeroNotaFiscal: string;
+    valorNotaFiscal?: number;
     autorizarBoletos: boolean;
-  }) => void;
+  }) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -22,23 +25,49 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
   onClose
 }) => {
   const [dataRecebimento, setDataRecebimento] = useState(new Date().toISOString().split('T')[0]);
-  const [numeroNotaFiscal, setNumeroNotaFiscal] = useState('');
+  const [numeroNotaFiscal, setNumeroNotaFiscal] = useState(order.header.numeroNotaFiscal || '');
+  const [valorNotaFiscalInput, setValorNotaFiscalInput] = useState(() => {
+    if (order.header.valorNotaFiscalEntregue && order.header.valorNotaFiscalEntregue > 0) {
+      return order.header.valorNotaFiscalEntregue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return '';
+  });
   const [autorizarBoletos, setAutorizarBoletos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isDiretoria = currentUser?.role === 'diretoria';
   const totalPecas = order.items?.reduce((s, it) => s + (it.qtdTotalUnidades || 0), 0) || 0;
   const totalVolumes = order.items?.reduce((s, it) => s + (it.qtdPacotes || 0), 0) || 0;
+  const orderTotals = calculateOrderTotals(order);
+  const totalBasePedido = orderTotals.totalComercialSemAjuste || orderTotals.totalGeral;
   const isStatusBlocked = order.header.status === 'Finalizado';
+
+  const handleValorNfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    if (!digits) {
+      setValorNotaFiscalInput('');
+      return;
+    }
+    const val = parseInt(digits, 10) / 100;
+    setValorNotaFiscalInput(val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  };
+
+  const handleCopyTotal = () => {
+    if (totalBasePedido > 0) {
+      setValorNotaFiscalInput(totalBasePedido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    }
+  };
 
   const handleSubmit = async () => {
     if (isStatusBlocked) return;
     setIsSubmitting(true);
     try {
+      const parsedValor = parseCurrency(valorNotaFiscalInput);
       await onConfirm({
         dataRecebimento,
         recebidoPor: currentUser?.nome || 'Operador',
         numeroNotaFiscal,
+        valorNotaFiscal: parsedValor > 0 ? parsedValor : undefined,
         autorizarBoletos: isDiretoria && autorizarBoletos
       });
     } finally {
@@ -83,8 +112,8 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
         )}
 
         {/* Resumo do Pedido */}
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase">Pedido</span>
               <p className="text-sm font-extrabold text-slate-900 dark:text-white font-mono">{order.header.numeroPedido}</p>
@@ -94,12 +123,18 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
               <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{order.header.fornecedor}</p>
             </div>
             <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Total Pedido</span>
+              <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                {formatCurrency(totalBasePedido)}
+              </p>
+            </div>
+            <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase">Total Peças</span>
-              <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">{totalPecas.toLocaleString('pt-BR')} un</p>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">{totalPecas.toLocaleString('pt-BR')} un</p>
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase">Total Volumes</span>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 font-mono">{totalVolumes.toLocaleString('pt-BR')} vol</p>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">{totalVolumes.toLocaleString('pt-BR')} vol</p>
             </div>
           </div>
         </div>
@@ -120,19 +155,61 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
             />
           </div>
 
-          {/* Número da NF */}
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              <FileText className="w-3.5 h-3.5 text-blue-600" />
-              Número da Nota Fiscal
-            </label>
-            <input
-              type="text"
-              value={numeroNotaFiscal}
-              onChange={(e) => setNumeroNotaFiscal(e.target.value)}
-              placeholder="Ex: 12345, 67890..."
-              className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-            />
+          {/* Grid: Número da NF e Valor da NF */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Número da NF */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                Número da Nota Fiscal
+              </label>
+              <input
+                type="text"
+                value={numeroNotaFiscal}
+                onChange={(e) => setNumeroNotaFiscal(e.target.value)}
+                placeholder="Ex: 12345, 67890..."
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Valor da NF */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                  Valor da Nota Fiscal (NF)
+                </label>
+                {totalBasePedido > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleCopyTotal}
+                    className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                    title="Copiar total do pedido"
+                  >
+                    Copiar Total
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                  R$
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={valorNotaFiscalInput}
+                  onChange={handleValorNfChange}
+                  placeholder="0,00"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Dica de Conciliação com o card Ajuste Fiscal */}
+          <div className="px-3 py-2 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-[11px] text-indigo-900 dark:text-indigo-300 flex items-start gap-2">
+            <span className="font-bold shrink-0">💡 Ajuste Fiscal:</span>
+            <span>Ao informar o valor da NF, ele será automaticamente preenchido no card <strong>Ajuste Fiscal da Entrega</strong> na tela de cotação.</span>
           </div>
 
           {/* Recebido Por (Exibição) */}

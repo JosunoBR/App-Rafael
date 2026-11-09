@@ -2832,6 +2832,7 @@ export function App() {
     dataRecebimento: string;
     recebidoPor: string;
     numeroNotaFiscal: string;
+    valorNotaFiscal?: number;
     autorizarBoletos: boolean;
   }) => {
     if (!receiptModalOrder) return;
@@ -2848,9 +2849,18 @@ export function App() {
 
       setOrder(previous => {
         if (previous.header.id !== targetOrder.header.id) return previous;
-        if (previous.header.status !== 'Em Distribuição') return updatedOrder;
-        // Mantém a grade em edição. Ela será persistida junto da liberação.
-        return { ...previous, header: { ...previous.header, ...updatedOrder.header }, installments: updatedOrder.installments };
+        return {
+          ...previous,
+          header: {
+            ...previous.header,
+            ...updatedOrder.header,
+            valorNotaFiscalEntregue: updatedOrder.header.valorNotaFiscalEntregue,
+            ajusteFiscalDiferenca: updatedOrder.header.ajusteFiscalDiferenca,
+            ajusteFiscalData: updatedOrder.header.ajusteFiscalData,
+            ajusteFiscalUsuario: updatedOrder.header.ajusteFiscalUsuario
+          },
+          installments: updatedOrder.installments || previous.installments
+        };
       });
 
       setReceiptModalOrder(null);

@@ -132,10 +132,10 @@ class OrderController {
 
   async confirmReceipt(req, res, next) {
     try {
-      const { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos, expectedVersion } = req.body;
+      const { dataRecebimento, recebidoPor, numeroNotaFiscal, valorNotaFiscal, autorizarBoletos, expectedVersion } = req.body;
       const result = await orderService.confirmReceipt(
         req.params.id,
-        { dataRecebimento, recebidoPor, numeroNotaFiscal, autorizarBoletos, expectedVersion },
+        { dataRecebimento, recebidoPor, numeroNotaFiscal, valorNotaFiscal, autorizarBoletos, expectedVersion },
         req.user
       );
       return res.json(result);

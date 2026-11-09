@@ -41,7 +41,7 @@ import { SeparationPresetsModal } from './SeparationPresetsModal';
 import { ProductQuickEditModal } from './ProductQuickEditModal';
 import { PhysicalDivergenceModal } from './PhysicalDivergenceModal';
 import { OrderPipelineStepper } from './OrderPipelineStepper';
-import { canCreateOrEditOrders, hasPermission, canSendToFaturamento, canAdjustPhysicalDivergence } from '../shared/permissions';
+import { canCreateOrEditOrders, hasPermission, canSendToFaturamento, canAdjustPhysicalDivergence, canConfirmReceipt } from '../shared/permissions';
 import { applyPhysicalDivergenceApi, revertPhysicalDivergenceApi } from '../utils/api';
 
 interface SeparationPageProps {
@@ -2239,6 +2239,18 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
+            {isReceiptPending && onConfirmReceipt && canConfirmReceipt(currentUser, order.header.status) && (
+              <button
+                type="button"
+                onClick={() => onConfirmReceipt(order)}
+                className="w-full sm:w-auto px-5 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-600/30 cursor-pointer"
+                title="Confirmar o recebimento físico da mercadoria na Matriz"
+              >
+                <Truck className="w-4 h-4" />
+                <span>Confirmar Recebimento Físico</span>
+              </button>
+            )}
+
             {isInDistribution && onReleaseToSeparation && hasPermission(currentUser, 'pipeline:release_separation') && (
               <button
                 type="button"

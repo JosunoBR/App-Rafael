@@ -1041,10 +1041,10 @@ class OrderService {
 
       checkPipelineVersion(order, expectedVersion);
 
-      // Validação de Regra de Negócio: Permite confirmar recebimento a partir de Aprovado
+      // Validação de Regra de Negócio: Permite confirmar recebimento de pedidos ativos (inclusive Aprovado)
       const currentStatus = order.header.status || 'Em Cotação';
-      if (!['Aprovado', 'Em Distribuição', 'Em Separação', 'Faturamento'].includes(currentStatus)) {
-        const err = new Error(`Não é permitido confirmar o recebimento de pedidos no status "${currentStatus}". O pedido precisa estar Aprovado, em Separação ou Faturamento.`);
+      if (currentStatus === 'Finalizado') {
+        const err = new Error('Não é permitido alterar o recebimento de pedidos já Finalizados.');
         err.statusCode = 400;
         throw err;
       }

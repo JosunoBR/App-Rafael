@@ -226,7 +226,7 @@ export function canAdjustPhysicalDivergence(userOrRole?: UserLike): boolean {
 export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | null): boolean {
   if (!hasPermission(userOrRole, 'pipeline:confirm_receipt')) return false;
   if (!orderStatus) return true;
-  return orderStatus === 'Aprovado' || orderStatus === 'Em Distribuição' || orderStatus === 'Em Separação' || orderStatus === 'Faturamento';
+  return orderStatus !== 'Finalizado';
 }
 
 /**

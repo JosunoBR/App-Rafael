@@ -29,7 +29,7 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
   const isDiretoria = currentUser?.role === 'diretoria';
   const totalPecas = order.items?.reduce((s, it) => s + (it.qtdTotalUnidades || 0), 0) || 0;
   const totalVolumes = order.items?.reduce((s, it) => s + (it.qtdPacotes || 0), 0) || 0;
-  const isStatusBlocked = order.header.status === 'Em Cotação' || order.header.status === 'Rascunho' || order.header.status === 'Aprovado';
+  const isStatusBlocked = order.header.status === 'Finalizado';
 
   const handleSubmit = async () => {
     if (isStatusBlocked) return;
@@ -71,13 +71,13 @@ export const ReceiptConfirmationModal: React.FC<ReceiptConfirmationModalProps> =
           </button>
         </div>
 
-        {/* Bloqueio de status anterior à distribuição */}
+        {/* Bloqueio apenas se já finalizado */}
         {isStatusBlocked && (
           <div className="m-4 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-center gap-2.5">
             <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
             <div>
               <p className="font-bold">Recebimento Bloqueado:</p>
-              <p>Pedidos em "{order.header.status || 'Em Cotação'}" não podem ter o recebimento confirmado. O pedido precisa ser aprovado e encaminhado para Distribuição.</p>
+              <p>Este pedido já foi finalizado e conferido.</p>
             </div>
           </div>
         )}

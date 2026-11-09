@@ -15,14 +15,23 @@ async function authMiddleware(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET);
-    if (!decoded.permissions && decoded.id) {
+    if (decoded && decoded.id) {
       try {
         const dbUser = await userRepository.findById(decoded.id);
-        if (dbUser && dbUser.permissions) {
-          decoded.permissions = dbUser.permissions;
+        if (dbUser) {
+          if (dbUser.ativo === 0) {
+            return res.status(401).json({ 
+              error: 'Usuário desativado pelo administrador. Contate o suporte.' 
+            });
+          }
+          // Garante permissões, cargo e dados sempre atualizados em tempo real direto do banco
+          decoded.permissions = dbUser.permissions || {};
+          decoded.role = dbUser.role || decoded.role;
+          decoded.nome = dbUser.nome || decoded.nome;
+          decoded.email = dbUser.email || decoded.email;
         }
-      } catch {
-        // Fallback seguro
+      } catch (dbErr) {
+        console.warn('[authMiddleware] Falha ao consultar usuário no banco:', dbErr.message);
       }
     }
     req.user = decoded;
@@ -42,11 +51,19 @@ async function optionalAuth(req, res, next) {
     const token = authHeader.split(' ')[1];
     try {
       const decoded = jwt.verify(token, config.JWT_SECRET);
-      if (!decoded.permissions && decoded.id) {
+      if (decoded && decoded.id) {
         try {
           const dbUser = await userRepository.findById(decoded.id);
-          if (dbUser && dbUser.permissions) {
-            decoded.permissions = dbUser.permissions;
+          if (dbUser) {
+            if (dbUser.ativo === 0) {
+              return res.status(401).json({ 
+                error: 'Usuário desativado pelo administrador.' 
+              });
+            }
+            decoded.permissions = dbUser.permissions || {};
+            decoded.role = dbUser.role || decoded.role;
+            decoded.nome = dbUser.nome || decoded.nome;
+            decoded.email = dbUser.email || decoded.email;
           }
         } catch {}
       }

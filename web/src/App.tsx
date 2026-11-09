@@ -436,7 +436,22 @@ export function App() {
       actionText: shouldLoginAgain ? 'Entrar novamente' : 'Recarregar dados',
       onAction: shouldLoginAgain
         ? () => setCurrentUser(null)
-        : () => { void loadFromSqlite(); }
+        : () => { 
+            void loadFromSqlite();
+            void verifyServerSession().then(s => {
+              if (s.valid && s.user) {
+                try {
+                  const raw = localStorage.getItem('mega12_user');
+                  const curr = raw ? JSON.parse(raw) : {};
+                  const up = { ...curr, ...s.user, token: curr.token };
+                  localStorage.setItem('mega12_user', JSON.stringify(up));
+                  setCurrentUser(up);
+                } catch {
+                  setCurrentUser(s.user);
+                }
+              }
+            });
+          }
     });
   };
 
@@ -636,7 +651,7 @@ export function App() {
     }
   }, [activeNav, savedOrders, order.header?.id, order.header?.numeroPedido, order.header?.supplierId]);
 
-  // 1. Validação DIRETA no servidor (SQLite /api/auth/me) na montagem do App
+  // 1. Validação DIRETA no servidor (SQLite /api/auth/me) na montagem do App e ao focar a tela
   useEffect(() => {
     let isMounted = true;
     async function checkServerSession() {
@@ -652,13 +667,27 @@ export function App() {
         }
         setCurrentUser(null);
       } else if (session.user) {
-        // Atualiza perfil oficial e consistente vindo do servidor
-        setCurrentUser(session.user);
+        // Atualiza perfil oficial e consistente vindo do servidor mantendo o token
+        try {
+          const currentStored = saved ? JSON.parse(saved) : {};
+          const updated = { ...currentStored, ...session.user, token: currentStored.token };
+          localStorage.setItem('mega12_user', JSON.stringify(updated));
+          setCurrentUser(updated);
+        } catch {
+          setCurrentUser(session.user);
+        }
       }
     }
 
     checkServerSession();
-    return () => { isMounted = false; };
+    const handleFocus = () => {
+      void checkServerSession();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => { 
+      isMounted = false; 
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   // 2. Escuta evento global de sessão expirada disparado pelo apiFetch ao tomar 401 do servidor

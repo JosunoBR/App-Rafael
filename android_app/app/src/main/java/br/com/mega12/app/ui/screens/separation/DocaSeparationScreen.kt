@@ -48,7 +48,7 @@ fun DocaSeparationScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val loadFailed by viewModel.ordersLoadFailed.collectAsState()
     val isWorking by viewModel.docaOperationInProgress.collectAsState()
-    val order = orders.firstOrNull { it.finalId == orderId && it.status == "Em Separação" }
+    val order = orders.firstOrNull { it.finalId == orderId && it.status == "Em Separação" && !it.header.separacaoConcluida }
 
     if (order == null) {
         Scaffold(
@@ -183,7 +183,7 @@ fun DocaSeparationScreen(
                         order = order,
                         work = work,
                         busy = busy,
-                        onFinish = { viewModel.sendOrderToFaturamento(orderId, onSuccess = onExitOrder) }
+                        onFinish = { viewModel.concludeSeparation(orderId, onSuccess = onExitOrder) }
                     )
                 }
             }
@@ -419,7 +419,7 @@ private fun DocaOrderProgress(order: PurchaseOrder, work: DocaWork, busy: Boolea
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Emerald500, contentColor = Slate900)
             ) {
-                Text("Concluir separação")
+                Text("Finalizar separação")
             }
         }
     }

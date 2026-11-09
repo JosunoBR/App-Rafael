@@ -202,6 +202,15 @@ export function getDefaultNavForRole(role?: UserRole | null): ActiveNavTab {
 }
 
 /**
+ * Permite liberar o pedido para o Faturamento
+ * Permitido: diretoria, root, comprador, deposito, faturamento
+ */
+export function canSendToFaturamento(userOrRole?: UserLike): boolean {
+  if (!userOrRole) return false;
+  return hasPermission(userOrRole, 'pipeline:send_faturamento');
+}
+
+/**
  * Permite confirmar o recebimento físico de um pedido na Matriz (entrega do fornecedor).
  */
 export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | null): boolean {

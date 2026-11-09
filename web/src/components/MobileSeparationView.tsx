@@ -27,7 +27,8 @@ import {
   updateSeparationCheckApi, 
   addSeparationDamageApi, 
   deleteSeparationDamageApi, 
-  sendOrderToFaturamentoApi 
+  sendOrderToFaturamentoApi,
+  concludeSeparationApi 
 } from '../utils/api';
 
 interface MobileSeparationViewProps {
@@ -48,15 +49,17 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
   onFinalizeOrder
 }) => {
   // Lista de pedidos aguardando separação física (status 'Em Separação' ou 'Em Distribuição')
+  // Conforme regra de negócio: ao concluir a separação, o pedido não é mais exibido no app e segue o fluxo na web
   const pendingSeparationOrders = useMemo(() => {
     return orders.filter(o => {
       const isInPipeline = o.header.status === 'Em Separação' || o.header.status === 'Em Distribuição';
-      return isInPipeline;
+      const isNotConcluded = !o.header.separacaoConcluida;
+      return isInPipeline && isNotConcluded;
     });
   }, [orders]);
 
   // Pedido ativo para separação
-  const isActiveEligible = (order.header.status === 'Em Distribuição' || order.header.status === 'Em Separação');
+  const isActiveEligible = (order.header.status === 'Em Distribuição' || order.header.status === 'Em Separação') && !order.header.separacaoConcluida;
 
   const activeOrder = isActiveEligible ? order : (pendingSeparationOrders[0] || order);
 
@@ -391,7 +394,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
 
     setIsSavingAction(true);
     try {
-      const res = await sendOrderToFaturamentoApi(activeOrder.header.id, {
+      const res = await concludeSeparationApi(activeOrder.header.id, {
         observacoes: activeOrder.inspection?.observacoesDoca || 'Separação física concluída na íntegra.',
         expectedVersion: (activeOrder.header as any)?.version
       });
@@ -403,7 +406,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
       }
       setShowConfirmModal(false);
     } catch (err: any) {
-      alert(`Erro ao encaminhar para Faturamento: ${err.message || 'Falha de conexão'}`);
+      alert(`Erro ao finalizar separação: ${err.message || 'Falha de conexão'}`);
     } finally {
       setIsSavingAction(false);
     }
@@ -897,7 +900,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
           {globalStats.isFullyChecked ? (
             <>
               <CheckCircle2 className="w-5 h-5 text-white" />
-              <span>Concluir separação</span>
+              <span>Finalizar separação</span>
             </>
           ) : (
             <>
@@ -926,10 +929,10 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
 
             <div className="text-center space-y-1">
               <h4 className="text-base font-black text-slate-900 dark:text-white uppercase">
-                Concluir Separação do Pedido?
+                Finalizar separação do Pedido?
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Todas as lojas foram 100% conferidas na doca. O pedido <b>{activeOrder.header.numeroPedido}</b> será encaminhado para o <b>Faturamento</b>.
+                Todas as lojas foram 100% conferidas na doca. O pedido <b>{activeOrder.header.numeroPedido}</b> terá a separação finalizada e seguirá o fluxo na web.
               </p>
             </div>
 
@@ -966,7 +969,7 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
                 className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Check className="w-4 h-4" />
-                <span>Concluir separação</span>
+                <span>Finalizar separação</span>
               </button>
             </div>
           </div>

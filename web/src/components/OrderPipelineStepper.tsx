@@ -24,7 +24,8 @@ import {
   canAuthorizeFinancialRelease,
   canApproveOrder,
   canManageFaturamento,
-  canRollbackOrderStatus
+  canRollbackOrderStatus,
+  canSendToFaturamento
 } from '../shared/permissions';
 
 interface OrderPipelineStepperProps {
@@ -145,13 +146,32 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
               </div>
 
               {/* 3. Separação */}
-              <div className={`flex items-center gap-1.5 text-xs font-bold ${currentIndex > 2 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 2 ? 'text-purple-700 dark:text-purple-300 font-black' : 'text-slate-400'}`}>
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${currentIndex > 2 ? 'bg-emerald-600 text-white' : currentIndex === 2 ? 'bg-purple-600 text-white ring-2 ring-purple-300 dark:ring-purple-700' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
-                  {currentIndex > 2 ? '✓' : '3'}
-                </span>
-                <span>3. Separação</span>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
-              </div>
+              {(() => {
+                const isSepConcluida = Boolean(order.header.separacaoConcluida);
+                const isCurrentSep = currentIndex === 2;
+                const isGreen = currentIndex > 2 || (isCurrentSep && isSepConcluida);
+                return (
+                  <div className={`flex items-center gap-1.5 text-xs font-bold ${
+                    isGreen
+                      ? 'text-emerald-600 dark:text-emerald-400 font-black'
+                      : isCurrentSep
+                      ? 'text-purple-700 dark:text-purple-300 font-black'
+                      : 'text-slate-400'
+                  }`}>
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+                      isGreen
+                        ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 dark:ring-emerald-700'
+                        : isCurrentSep
+                        ? 'bg-purple-600 text-white ring-2 ring-purple-300 dark:ring-purple-700'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                    }`}>
+                      {isGreen ? '✓' : '3'}
+                    </span>
+                    <span>3. {isCurrentSep && isSepConcluida ? 'Separação Concluída' : 'Separação'}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 ml-1" />
+                  </div>
+                );
+              })()}
 
               {/* 4. Faturamento */}
               <div className={`flex items-center gap-1.5 text-xs font-bold ${currentIndex > 3 ? 'text-emerald-600 dark:text-emerald-400' : currentIndex === 3 ? 'text-amber-700 dark:text-amber-300 font-black' : 'text-slate-400'}`}>
@@ -246,20 +266,48 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
             </button>
           )}
 
-          {/* AÇÃO ETAPA 3 (Separação): Efetua a conferência física e conclui a expedição / libera faturamento */}
-          {currentIndex === 2 && !isReceiptPending && (onOpenSeparation || onSendToFaturamento || onFinalizeSeparation) && (
-            <button
-              onClick={() => {
-                if (onOpenSeparation) onOpenSeparation(order);
-                else if (onSendToFaturamento) onSendToFaturamento(order);
-                else if (onFinalizeSeparation) onFinalizeSeparation(order);
-              }}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-              title={isTransfer ? "Acessar conferência de doca e concluir expedição para as lojas" : "Acessar conferência de doca / apontamento de avarias e liberar para Faturamento"}
-            >
-              <PackageCheck className="w-3.5 h-3.5" />
-              <span>{isTransfer ? "Conferir Doca & Finalizar Expedição" : "Conferir Doca & Liberar p/ Faturamento"}</span>
-            </button>
+          {/* AÇÃO ETAPA 3 (Separação): Conferência de Doca e Liberação para Faturamento */}
+          {currentIndex === 2 && !isReceiptPending && (
+            <div className="flex items-center gap-1.5">
+              {order.header.separacaoConcluida ? (
+                <>
+                  {canSendToFaturamento(currentUser) && onSendToFaturamento && (
+                    <button
+                      onClick={() => onSendToFaturamento(order)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer animate-in fade-in"
+                      title="Separação física concluída na doca. Clique para liberar este pedido para o Faturamento."
+                    >
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>Liberar p/ Faturamento</span>
+                    </button>
+                  )}
+                  {onOpenSeparation && (
+                    <button
+                      onClick={() => onOpenSeparation(order)}
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"
+                      title="Visualizar conferência de doca deste pedido"
+                    >
+                      <Boxes className="w-3.5 h-3.5 text-slate-500" />
+                      <span className="hidden sm:inline">Ver Separação</span>
+                    </button>
+                  )}
+                </>
+              ) : (
+                (onOpenSeparation || onFinalizeSeparation) && (
+                  <button
+                    onClick={() => {
+                      if (onOpenSeparation) onOpenSeparation(order);
+                      else if (onFinalizeSeparation) onFinalizeSeparation(order);
+                    }}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    title={isTransfer ? "Acessar conferência de doca e concluir expedição para as lojas" : "Acessar conferência de doca / apontamento de avarias"}
+                  >
+                    <PackageCheck className="w-3.5 h-3.5" />
+                    <span>{isTransfer ? "Conferir Doca & Finalizar Expedição" : "Acessar Separação / Doca"}</span>
+                  </button>
+                )
+              )}
+            </div>
           )}
 
           {/* AÇÃO ETAPA 4 (Faturamento): Confere e libera os boletos (somente compras comerciais de fornecedores) */}

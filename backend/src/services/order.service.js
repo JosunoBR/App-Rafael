@@ -1424,8 +1424,182 @@ class OrderService {
   }
 
   /**
-   * Conclui a conferência física/apontamento de avarias e encaminha o pedido para o Faturamento.
-   * Permitido: comprador, separacao, deposito, diretoria, root, admin
+   * Conclui a conferência física e o apontamento de avarias na doca / separação.
+   * Mantém o pedido no status "Em Separação", gravando separacaoConcluida = true.
+   * Permitido: separacao, deposito, comprador, diretoria, root, admin
+   */
+  async concludeSeparation(orderId, payload = {}, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const role = currentUser.role?.toLowerCase();
+    const isDiretoriaOrRoot = role === 'diretoria' || 
+                              role === 'root' || 
+                              role === 'admin' || 
+                              currentUser.id === 'usr_root' || 
+                              currentUser.email?.toLowerCase() === 'root' ||
+                              currentUser.nome?.toLowerCase() === 'root';
+    const isAuthorized = isDiretoriaOrRoot || role === 'comprador' || role === 'separacao' || role === 'deposito';
+    if (!isAuthorized) {
+      const err = new Error('Perfil não autorizado a concluir a separação de pedidos.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (payload.expectedVersion !== undefined && payload.expectedVersion !== null) {
+      const currentVersion = Number(order.header.version || 1);
+      const expected = Number(payload.expectedVersion);
+      if (currentVersion !== expected) {
+        const err = new Error(`Conflito de concorrência: o pedido foi alterado por outro usuário (versão ${currentVersion} vs esperada ${expected}). Atualize os dados antes de prosseguir.`);
+        err.statusCode = 409;
+        err.code = 'CONCURRENCY_CONFLICT';
+        throw err;
+      }
+    }
+
+    const currentStatus = order.header?.status || 'Em Cotação';
+    if (currentStatus !== 'Em Separação') {
+      const err = new Error(`Não é possível concluir a separação de um pedido com status "${currentStatus}". O pedido deve estar "Em Separação".`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const isTransfer = order.header?.supplierId === 'cd_matriz' || 
+                       String(order.header?.numeroPedido || '').startsWith('CD-') || 
+                       (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+
+    if (isTransfer) {
+      order.header.recebidoMatriz = true;
+      order.header.recebidoMatrizPor = payload.conferente || currentUser.nome || 'Conferente Separação';
+      if (!order.header.dataRecebimentoMatriz) order.header.dataRecebimentoMatriz = new Date().toISOString();
+      order.header.boletosLiberados = true;
+    } else {
+      requireConfirmedReceipt(order);
+    }
+
+    const conferenteNome = payload.conferente || currentUser.nome || 'Conferente Separação';
+    const dataConferencia = new Date().toISOString();
+
+    if (!order.inspection) {
+      order.inspection = {
+        conferente: conferenteNome,
+        dataConferencia: dataConferencia,
+        possuiAvarias: Array.isArray(payload.avarias) && payload.avarias.length > 0,
+        observacoesDoca: payload.observacoes || '',
+        avarias: payload.avarias || [],
+        conferenciaLojas: {}
+      };
+    }
+    if (!order.inspection.conferenciaLojas) {
+      order.inspection.conferenciaLojas = {};
+    }
+
+    const conferenciaLojas = order.inspection.conferenciaLojas;
+    const items = Array.isArray(order.items) ? order.items : [];
+    items.forEach(item => {
+      if (item.ruptura) return;
+      if (!item.checks || typeof item.checks !== 'object') {
+        item.checks = {};
+      }
+      const grade = item.grade || item.separacaoLojas || {};
+      Object.keys(grade).forEach(storeId => {
+        const qtdAlocada = Number(grade[storeId] || 0);
+        if (qtdAlocada > 0) {
+          const checkKey = `${storeId}_${item.id}`;
+          const isConferido = (conferenciaLojas[checkKey] && conferenciaLojas[checkKey].conferido === true) ||
+                              (item.checks[storeId] && item.checks[storeId].conferido === true);
+          if (!isConferido) {
+            conferenciaLojas[checkKey] = {
+              conferido: true,
+              conferente: conferenteNome,
+              dataConferencia
+            };
+            item.checks[storeId] = {
+              conferido: true,
+              conferente: conferenteNome,
+              dataConferencia
+            };
+          }
+        }
+      });
+    });
+
+    const db = await getDatabase();
+    let saved;
+    db.run('BEGIN TRANSACTION');
+    try {
+      if (isTransfer) {
+        order.header.status = 'Finalizado';
+        order.header.finalizadoPor = conferenteNome;
+        order.header.dataFinalizacao = dataConferencia;
+        order.header.boletosLiberados = true;
+      } else {
+        order.header.status = 'Em Separação';
+      }
+
+      order.header.separacaoConcluida = true;
+      order.header.separadoPor = conferenteNome;
+      order.header.dataSeparacao = dataConferencia;
+      order.header.updatedAt = dataConferencia;
+
+      if (payload.avarias) {
+        order.header.avariasApontadas = payload.avarias;
+        order.inspection.avarias = payload.avarias;
+        order.inspection.possuiAvarias = payload.avarias.length > 0;
+      }
+      if (payload.observacoes) {
+        order.header.observacaoSeparacao = payload.observacoes;
+        order.inspection.observacoesDoca = payload.observacoes;
+      }
+      if (payload.conferente) {
+        order.inspection.conferente = payload.conferente;
+      }
+
+      saved = await orderRepository.save(order);
+      db.run('COMMIT');
+      scheduleDatabaseSave(0);
+    } catch (error) {
+      try { db.run('ROLLBACK'); } catch (_) { /* transação já encerrada */ }
+      throw error;
+    }
+
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || 'Separação',
+      usuarioRole: currentUser.role,
+      acao: isTransfer ? 'EXPEDICAO_TRANSFERENCIA_FINALIZADA' : 'CONFERENCIA_SEPARACAO_CONCLUIDA',
+      detalhesJson: {
+        conferente: conferenteNome,
+        separacaoConcluida: true,
+        dataSeparacao: dataConferencia,
+        avariasCount: payload.avarias?.length || 0
+      },
+      observacoes: payload.observacoes || (isTransfer ? 'Transferência expedida com sucesso' : 'Conferência física finalizada na doca')
+    }).catch(e => console.error('Erro ao registrar log de auditoria:', e));
+
+    return {
+      message: `Separação do pedido ${saved.header.numeroPedido} concluída com sucesso!`,
+      order: saved
+    };
+  }
+
+  /**
+   * Encaminha o pedido formalmente para o Faturamento.
+   * Exclusivo para: comprador, deposito, faturamento, diretoria, root, admin (não permitido para apenas separacao).
+   * Exige que a conferência física (separacaoConcluida) já tenha sido realizada na doca.
    */
   async sendToFaturamento(orderId, payload = {}, currentUser) {
     if (!currentUser) {
@@ -1441,7 +1615,7 @@ class OrderService {
                               currentUser.id === 'usr_root' || 
                               currentUser.email?.toLowerCase() === 'root' ||
                               currentUser.nome?.toLowerCase() === 'root';
-    const isAuthorized = isDiretoriaOrRoot || role === 'comprador' || role === 'separacao' || role === 'deposito';
+    const isAuthorized = isDiretoriaOrRoot || role === 'comprador' || role === 'deposito' || role === 'faturamento';
     if (!isAuthorized) {
       const err = new Error('Perfil não autorizado a encaminhar pedidos para faturamento.');
       err.statusCode = 403;
@@ -1478,6 +1652,14 @@ class OrderService {
     const isTransfer = order.header?.supplierId === 'cd_matriz' || 
                        String(order.header?.numeroPedido || '').startsWith('CD-') || 
                        (order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+
+    // Trava de governança: a doca deve ter concluído a conferência física antes da liberação ao faturamento
+    if (!isTransfer && !order.header.separacaoConcluida && !(isDiretoriaOrRoot && payload.forceIncomplete === true)) {
+      const err = new Error('A separação física na doca ainda não foi concluída. Conclua a separação antes de liberar para o Faturamento.');
+      err.statusCode = 400;
+      err.code = 'SEPARATION_NOT_CONCLUDED';
+      throw err;
+    }
 
     // Transferência interna já está fisicamente na Matriz
     if (isTransfer) {
@@ -1579,10 +1761,12 @@ class OrderService {
         order.header.boletosLiberados = true;
       } else {
         order.header.status = 'Faturamento';
+        order.header.liberadoFaturamentoPor = currentUser.nome || 'Operador';
+        order.header.dataLiberacaoFaturamento = dataConferencia;
       }
       order.header.separacaoConcluida = true;
-      order.header.separadoPor = conferenteNome;
-      order.header.dataSeparacao = dataConferencia;
+      if (!order.header.separadoPor) order.header.separadoPor = conferenteNome;
+      if (!order.header.dataSeparacao) order.header.dataSeparacao = dataConferencia;
       order.header.updatedAt = dataConferencia;
 
       if (payload.avarias) {

@@ -59,8 +59,8 @@ fun BuyerHomeScreen(
     }
     val pendingSeparationCount = remember(orders) {
         orders.count { 
-            it.status.equals("Em Separação", ignoreCase = true) || 
-            it.status.equals("Em Separacao", ignoreCase = true) 
+            (it.status.equals("Em Separação", ignoreCase = true) || 
+            it.status.equals("Em Separacao", ignoreCase = true)) && !it.header.separacaoConcluida
         }
     }
     val pendingBillingCount = remember(orders) {

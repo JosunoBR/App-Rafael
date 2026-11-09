@@ -416,6 +416,28 @@ class Mega12ViewModel : ViewModel() {
         }
     }
 
+    fun concludeSeparation(orderId: String, observacoes: String? = null, onSuccess: (() -> Unit)? = null) {
+        launchDocaOperation {
+            val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launchDocaOperation
+            val expectedVersion = order.version
+
+            val result = repository.concludeSeparation(order.id.ifBlank { order.finalId }, expectedVersion, observacoes)
+
+            result.onSuccess { res ->
+                _successMessage.value = res.message ?: "✅ Separação concluída com sucesso!"
+                _orders.value = _orders.value.filterNot { it.finalId == order.finalId }
+                onSuccess?.invoke()
+            }.onFailure { err ->
+                if (err is ConcurrencyConflictException) {
+                    loadOrders()
+                    _errorMessage.value = "O pedido foi atualizado por outro operador. Confira o progresso antes de concluir."
+                } else {
+                    _errorMessage.value = err.message ?: "Erro ao concluir separação"
+                }
+            }
+        }
+    }
+
     fun sendOrderToFaturamento(orderId: String, onSuccess: (() -> Unit)? = null) {
         launchDocaOperation {
             val order = _orders.value.find { it.id == orderId || it.finalId == orderId } ?: return@launchDocaOperation

@@ -245,9 +245,11 @@ class Mega12ViewModel: ObservableObject {
 
     func concludeSeparation(orderId: String) {
         guard let idx = orders.firstIndex(where: { $0.id == orderId || $0.finalId == orderId }) else { return }
-        orders[idx].status = "Conferido na Doca"
+        orders[idx].header.separacaoConcluida = true
         orders[idx].inspection.concluido = true
         orders[idx].inspection.dataConclusao = ISO8601DateFormatter().string(from: Date())
+        orders[idx].header.separadoPor = currentUser?.nome ?? "Doca"
+        orders[idx].header.dataSeparacao = ISO8601DateFormatter().string(from: Date())
         successMessage = "Separação e conferência do pedido \(orders[idx].header.numeroPedido) concluída com sucesso!"
     }
 }

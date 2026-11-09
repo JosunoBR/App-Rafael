@@ -37,7 +37,7 @@ fun DocaHomeScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val loadFailed by viewModel.ordersLoadFailed.collectAsState()
     val availableOrders = remember(orders) {
-        orders.filter { it.status == "Em Separação" && it.finalId.isNotBlank() }
+        orders.filter { it.status == "Em Separação" && it.finalId.isNotBlank() && !it.header.separacaoConcluida }
     }
     var selectedOrderId by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedOrder = availableOrders.firstOrNull { it.finalId == selectedOrderId }

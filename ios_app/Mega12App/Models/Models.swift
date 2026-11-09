@@ -163,6 +163,9 @@ struct OrderHeader: Codable {
     var tipoFrete: String = "FOB"
     var recebidoMatriz: Bool = false
     var boletosLiberados: Bool = false
+    var separacaoConcluida: Bool = false
+    var separadoPor: String? = nil
+    var dataSeparacao: String? = nil
 }
 
 // MARK: - Avaria e Inspeção

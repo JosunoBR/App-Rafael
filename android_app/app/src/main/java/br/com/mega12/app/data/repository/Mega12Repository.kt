@@ -417,6 +417,21 @@ class Mega12Repository(private val preferencesManager: PreferencesManager) {
         }
     }
 
+    suspend fun concludeSeparation(orderId: String, expectedVersion: Int?, observacoes: String? = null): Result<ConcludeSeparationResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.concludeSeparation(orderId, ConcludeSeparationRequest(expectedVersion = expectedVersion, observacoes = observacoes))
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else if (response.code() == 409) {
+                Result.failure(ConcurrencyConflictException("Conflito de versão: o pedido foi alterado por outro operador."))
+            } else {
+                Result.failure(Exception(apiErrorMessage(response, "O servidor recusou a conclusão da separação")))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun sendToFaturamento(orderId: String, expectedVersion: Int?): Result<SendToFaturamentoResponse> = withContext(Dispatchers.IO) {
         try {
             val response = api.sendToFaturamento(orderId, SendToFaturamentoRequest(expectedVersion = expectedVersion))

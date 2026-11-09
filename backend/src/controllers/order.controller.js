@@ -200,6 +200,15 @@ class OrderController {
     }
   }
 
+  async concludeSeparation(req, res, next) {
+    try {
+      const result = await orderService.concludeSeparation(req.params.id, req.body, req.user);
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async sendToFaturamento(req, res, next) {
     try {
       const result = await orderService.sendToFaturamento(req.params.id, req.body, req.user);

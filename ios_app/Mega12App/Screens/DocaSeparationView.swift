@@ -15,8 +15,7 @@ struct DocaSeparationView: View {
     @State private var avariaMotivo = "Quebra na conferência de carga"
 
     var separationOrders: [PurchaseOrder] {
-        let list = viewModel.orders.filter { $0.status == "Em Separação" }
-        return list.isEmpty ? viewModel.orders : list
+        return viewModel.orders.filter { $0.status == "Em Separação" && !$0.header.separacaoConcluida }
     }
 
     var activeOrder: PurchaseOrder? {
@@ -228,7 +227,7 @@ struct DocaSeparationView: View {
                         }) {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
-                                Text("Finalizar Separação")
+                                Text("Finalizar separação")
                             }
                             .font(.system(size: 13, weight: .bold))
                             .foregroundColor(.white)

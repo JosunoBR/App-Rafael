@@ -30,7 +30,8 @@ import {
   Loader2,
   Truck,
   SlidersHorizontal,
-  Edit3
+  Edit3,
+  Receipt
 } from 'lucide-react';
 import { PurchaseOrder, StoreConfig, OrderItem, AvariaRecord, OrderInspection, User, SeparationPreset, Product, Supplier } from '../shared/types';
 import { calculateAutomaticSeparation, validateSeparation, applySeparationPreset, extractPresetFromAllocations, adjustSeparationReserveProportionally } from '../shared/separationEngine';
@@ -38,7 +39,7 @@ import { SeparationMatrixModal } from './SeparationMatrixModal';
 import { SeparationPresetsModal } from './SeparationPresetsModal';
 import { ProductQuickEditModal } from './ProductQuickEditModal';
 import { OrderPipelineStepper } from './OrderPipelineStepper';
-import { canCreateOrEditOrders, hasPermission } from '../shared/permissions';
+import { canCreateOrEditOrders, hasPermission, canSendToFaturamento } from '../shared/permissions';
 
 interface SeparationPageProps {
   order: PurchaseOrder;
@@ -50,6 +51,7 @@ interface SeparationPageProps {
   suppliers?: Supplier[];
   onSaveProduct?: (product: Product) => void | Promise<void>;
   onUpdateOrder?: (updatedOrder: PurchaseOrder) => void | Promise<void>;
+  onConcludeSeparation?: (order: PurchaseOrder) => void | Promise<void>;
   onExportPDF: (visibleColumns?: Record<string, boolean>) => void | Promise<void>;
   onExportExcel?: (visibleColumns: Record<string, boolean>) => void | Promise<void>;
   isExportingExcel?: boolean;
@@ -125,6 +127,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   suppliers = [],
   onSaveProduct,
   onUpdateOrder,
+  onConcludeSeparation,
   onExportPDF,
   onExportExcel,
   isExportingExcel = false,
@@ -2162,48 +2165,102 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             )}
 
             {/* Botão Etapa 3 (Separação): Concluir Separação e Liberar para Faturamento */}
-            {/* Botão Etapa 3 (Separação): Concluir Separação (ou Finalizar Expedição se for Transferência) */}
+            {/* Botão Etapa 3 (Separação): Concluir Separação (Doca) ou Liberar para Faturamento (Operador) */}
             {isInSeparation && !isReceiptPending && (
-              <button
-                type="button"
-                onClick={() => {
-                  const conferenteNome = conferente || currentUser?.nome || 'Conferente de Doca';
-                  const now = new Date().toISOString();
-
-                  const updated: PurchaseOrder = {
-                    ...order,
-                    header: {
-                      ...order.header,
-                      status: isTransfer ? 'Finalizado' : 'Faturamento',
-                      separacaoConcluida: true,
-                      separadoPor: conferenteNome,
-                      dataSeparacao: now,
-                      finalizadoPor: isTransfer ? conferenteNome : order.header.finalizadoPor,
-                      dataFinalizacao: isTransfer ? now : order.header.dataFinalizacao,
-                      boletosLiberados: isTransfer ? true : order.header.boletosLiberados,
-                      updatedAt: now
-                    },
-                    inspection: {
-                      conferente: conferenteNome,
-                      dataConferencia: now,
-                      possuiAvarias: avariasList.length > 0,
-                      observacoesDoca: observacoesDoca,
-                      avarias: avariasList
+              isTransfer ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const conferenteNome = conferente || currentUser?.nome || 'Conferente de Doca';
+                    const now = new Date().toISOString();
+                    const updated: PurchaseOrder = {
+                      ...order,
+                      header: {
+                        ...order.header,
+                        status: 'Finalizado',
+                        separacaoConcluida: true,
+                        separadoPor: conferenteNome,
+                        dataSeparacao: now,
+                        finalizadoPor: conferenteNome,
+                        dataFinalizacao: now,
+                        boletosLiberados: true,
+                        updatedAt: now
+                      },
+                      inspection: {
+                        conferente: conferenteNome,
+                        dataConferencia: now,
+                        possuiAvarias: avariasList.length > 0,
+                        observacoesDoca: observacoesDoca,
+                        avarias: avariasList
+                      }
+                    };
+                    if (onSendToFaturamento) onSendToFaturamento(updated);
+                    else if (onFinalizeOrder) onFinalizeOrder(updated);
+                  }}
+                  className="w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 hover:scale-102"
+                  title="Concluir conferência física e finalizar expedição da transferência"
+                >
+                  <PackageCheck className="w-4 h-4" />
+                  <span>Concluir Separação & Finalizar Expedição</span>
+                </button>
+              ) : order.header.separacaoConcluida ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1.5 shadow-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Separação Concluída {order.header.separadoPor ? `por ${order.header.separadoPor}` : ''}</span>
+                  </span>
+                  {canSendToFaturamento(currentUser) && onSendToFaturamento && (
+                    <button
+                      type="button"
+                      onClick={() => onSendToFaturamento(order)}
+                      className="w-full sm:w-auto px-5 py-2.5 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 animate-in fade-in active:scale-98"
+                      title="Liberar formalmente este pedido para o Faturamento"
+                    >
+                      <Receipt className="w-4 h-4" />
+                      <span>Liberar para Faturamento</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const conferenteNome = conferente || currentUser?.nome || 'Conferente de Doca';
+                    const now = new Date().toISOString();
+                    const updated: PurchaseOrder = {
+                      ...order,
+                      header: {
+                        ...order.header,
+                        status: 'Em Separação',
+                        separacaoConcluida: true,
+                        separadoPor: conferenteNome,
+                        dataSeparacao: now,
+                        updatedAt: now
+                      },
+                      inspection: {
+                        conferente: conferenteNome,
+                        dataConferencia: now,
+                        possuiAvarias: avariasList.length > 0,
+                        observacoesDoca: observacoesDoca,
+                        avarias: avariasList
+                      }
+                    };
+                    if (onConcludeSeparation) {
+                      await onConcludeSeparation(updated);
+                    } else if (onUpdateOrder) {
+                      await onUpdateOrder(updated);
+                    } else if (onChangeOrder) {
+                      onChangeOrder(updated);
                     }
-                  };
-                  if (onSendToFaturamento) onSendToFaturamento(updated);
-                  else if (onFinalizeOrder) onFinalizeOrder(updated);
-                }}
-                className={`w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer ${
-                  isTransfer
-                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 hover:scale-102'
-                    : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
-                }`}
-                title={isTransfer ? "Concluir conferência física e finalizar expedição da transferência" : "Concluir conferência física na doca e encaminhar pedido para o Faturamento"}
-              >
-                <PackageCheck className="w-4 h-4" />
-                <span>{isTransfer ? 'Concluir Separação & Finalizar Expedição' : 'Concluir Separação & Liberar p/ Faturamento'}</span>
-              </button>
+                    showFeedback("✅ Separação concluída com sucesso!", "success");
+                  }}
+                  className="w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30 active:scale-98"
+                  title="Concluir conferência física e apontamento de avarias na doca"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Concluir</span>
+                </button>
+              )
             )}
           </div>
         </div>

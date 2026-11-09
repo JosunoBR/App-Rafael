@@ -125,11 +125,18 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: false }
   },
   {
+    codigo: 'pipeline:conclude_separation',
+    categoria: '2. Esteira, CD & Separação',
+    nome: 'Concluir conferência física na doca',
+    obs: 'Registra a conferência física e avarias sem avançar para Faturamento',
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: false }
+  },
+  {
     codigo: 'pipeline:send_faturamento',
     categoria: '2. Esteira, CD & Separação',
-    nome: 'Concluir conferência física e enviar para Faturamento',
-    obs: 'Transição da Etapa 3 para Etapa 4',
-    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: true, faturamento: false }
+    nome: 'Liberar pedido para o Faturamento',
+    obs: 'Transição da Separação para a Etapa 4 (Faturamento)',
+    roleDefaults: { diretoria: true, comprador: true, deposito: true, separacao: false, faturamento: true }
   },
   {
     codigo: 'pipeline:confirm_receipt',

@@ -435,6 +435,17 @@ data class DamageResponse(
     val message: String? = null
 )
 
+data class ConcludeSeparationRequest(
+    val expectedVersion: Int? = null,
+    val observacoes: String? = null
+)
+
+data class ConcludeSeparationResponse(
+    val success: Boolean,
+    val order: PurchaseOrder?,
+    val message: String? = null
+)
+
 data class SendToFaturamentoRequest(
     val expectedVersion: Int? = null
 )

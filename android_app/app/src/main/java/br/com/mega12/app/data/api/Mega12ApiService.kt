@@ -89,6 +89,12 @@ interface Mega12ApiService {
         @Query("expectedVersion") expectedVersion: Int? = null
     ): Response<Map<String, Any>>
 
+    @POST("orders/{id}/conclude-separation")
+    suspend fun concludeSeparation(
+        @Path("id") orderId: String,
+        @Body request: ConcludeSeparationRequest
+    ): Response<ConcludeSeparationResponse>
+
     @POST("orders/{id}/send-to-faturamento")
     suspend fun sendToFaturamento(
         @Path("id") orderId: String,

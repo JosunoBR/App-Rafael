@@ -180,6 +180,7 @@ import {
   authorizeFinancialInDb,
   sendOrderToDistributionApi,
   releaseOrderToSeparationApi,
+  concludeSeparationApi,
   sendOrderToFaturamentoApi,
   finalizeOrderPipelineApi,
   checkOrderNumberInDb,
@@ -2927,6 +2928,27 @@ export function App() {
     }
   };
 
+  const handleConcludeSeparation = async (orderToConclude: PurchaseOrder, alreadyPersisted = false) => {
+    try {
+      const response = alreadyPersisted
+        ? { order: orderToConclude, message: 'Separação física concluída com sucesso!' }
+        : await concludeSeparationApi(orderToConclude.header.id, {
+            avarias: orderToConclude.header.avariasApontadas,
+            observacoes: orderToConclude.header.observacaoSeparacao,
+            expectedVersion: orderToConclude.header.version
+          });
+      const persistedOrder: PurchaseOrder = response.order;
+      saveOrderToHistory(persistedOrder);
+      const updatedOrders = await fetchOrdersFromDb();
+      setSavedOrders(updatedOrders);
+      setOrder(persistedOrder);
+
+      showToast('✅ Separação concluída com sucesso!', 'success');
+    } catch (err: any) {
+      showPersistenceError(err, `Não foi possível concluir a separação do pedido ${orderToConclude.header.numeroPedido}`);
+    }
+  };
+
   const handleFinalizeSeparation = async (finalizedOrder: PurchaseOrder, alreadyPersisted = false) => {
     try {
       const response = alreadyPersisted
@@ -3660,7 +3682,7 @@ export function App() {
               currentUser={currentUser}
               onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
               onUpdateOrder={handleSaveOrderDirect}
-              onFinalizeOrder={handleFinalizeSeparation}
+              onFinalizeOrder={handleConcludeSeparation}
             />
           )}
 
@@ -4039,7 +4061,7 @@ export function App() {
                       currentUser={currentUser}
                       onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
                       onUpdateOrder={handleSaveOrderDirect}
-                      onFinalizeOrder={handleFinalizeSeparation}
+                      onFinalizeOrder={handleConcludeSeparation}
                     />
                   ) : (
                     <SeparationPage
@@ -4052,6 +4074,7 @@ export function App() {
                       suppliers={suppliers}
                       onSaveProduct={handleSaveProduct}
                       onUpdateOrder={handleSaveOrderDirect}
+                      onConcludeSeparation={handleConcludeSeparation}
                       onExportPDF={handleExportSeparationPDF}
                       onExportExcel={handleExportSeparationExcel}
                       isExportingExcel={isExportingRomaneioExcel}

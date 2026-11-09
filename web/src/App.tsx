@@ -3452,7 +3452,8 @@ export function App() {
 
   const handleSetDefaultSeparationPreset = async (presetId: string) => {
     try {
-      const refreshed = await setDefaultSeparationPresetInDb(presetId);
+      const targetPreset = separationPresets.find(p => p.id === presetId);
+      const refreshed = await setDefaultSeparationPresetInDb(presetId, targetPreset);
       if (refreshed && refreshed.length > 0) {
         setSeparationPresets(refreshed);
         saveSeparationPresetsList(refreshed);
@@ -3466,8 +3467,7 @@ export function App() {
           return updated;
         });
       }
-      const chosen = separationPresets.find(p => p.id === presetId);
-      showToast(`⭐ "${chosen?.name || 'Modelo'}" agora é o padrão de distribuição!`, 'success');
+      showToast(`⭐ "${targetPreset?.name || 'Modelo'}" agora é o padrão de distribuição!`, 'success');
     } catch (err: any) {
       console.error('Erro ao definir padrão no SQLite:', err);
       showToast(`Erro ao definir modelo padrão: ${err.message || 'Falha de comunicação'}`, 'error');

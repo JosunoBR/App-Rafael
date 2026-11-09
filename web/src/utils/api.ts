@@ -530,12 +530,25 @@ export async function deleteSeparationPresetFromDb(id: string): Promise<void> {
   });
 }
 
-export async function setDefaultSeparationPresetInDb(id: string): Promise<SeparationPreset[]> {
-  const res = await apiFetch(`/separation-presets/${id}/set-default`, {
-    method: 'POST'
-  });
-  const data = await res.json();
-  return data?.presets || [];
+export async function setDefaultSeparationPresetInDb(id: string, preset?: SeparationPreset): Promise<SeparationPreset[]> {
+  try {
+    const res = await apiFetch(`/separation-presets/${id}/set-default`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: preset ? JSON.stringify(preset) : undefined
+    });
+    const data = await res.json();
+    if (Array.isArray(data?.presets)) return data.presets;
+  } catch (err: any) {
+    // Se a rota customizada der 404 ou o preset ainda não existia no backend,
+    // garantimos a persistência e marcação como padrão via POST /separation-presets
+    if (preset) {
+      await saveSeparationPresetToDb({ ...preset, isDefault: true });
+      return await fetchSeparationPresetsFromDb();
+    }
+    throw err;
+  }
+  return await fetchSeparationPresetsFromDb();
 }
 
 // MODELOS / PRESETS DE ENGENHARIA FISCAL (SAVES)

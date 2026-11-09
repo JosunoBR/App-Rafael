@@ -59,10 +59,16 @@ class SeparationPresetRepository {
     return await this.findById(presetId);
   }
 
-  async setDefault(id) {
-    const existing = await this.findById(id);
+  async setDefault(id, presetData = null) {
+    let existing = await this.findById(id);
+    if (!existing && presetData && presetData.name && presetData.storeWeights) {
+      existing = await this.upsert({ ...presetData, id, isDefault: true });
+    }
     if (!existing) {
-      throw new Error('Modelo de separação não encontrado.');
+      const err = new Error('Modelo de separação não encontrado no banco de dados.');
+      err.status = 404;
+      err.statusCode = 404;
+      throw err;
     }
     const now = new Date().toISOString();
     await execute("UPDATE separation_presets SET isDefault = 0");

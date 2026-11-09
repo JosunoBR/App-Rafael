@@ -356,12 +356,6 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
 
     const existingPreset = presets.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
 
-    // Não permitir sobrescrever o padrão oficial do sistema
-    if (existingPreset?.isDefault || name.toLowerCase() === 'padrão rede (clusters a, b e c)') {
-      showFeedback('O "Padrão Rede" é o modelo oficial fixo do sistema. Digite um nome personalizado para salvar seu modelo no banco.', 'error');
-      return;
-    }
-
     const { storeWeights, reserveStockPercent } = extractPresetFromAllocations(
       firstItem.separacaoLojas || {},
       firstItem.qtdTotalUnidades,
@@ -375,7 +369,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
       description: `Referência: 1ª linha (${firstItem.descricao || 'Item 1'})`,
       storeWeights,
       reserveStockPercent,
-      isDefault: false,
+      isDefault: existingPreset ? Boolean(existingPreset.isDefault) : false,
       createdAt: existingPreset ? existingPreset.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

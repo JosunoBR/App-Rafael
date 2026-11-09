@@ -50,7 +50,7 @@ class SeparationPresetController {
 
   async setDefault(req, res, next) {
     try {
-      const presets = await separationPresetRepository.setDefault(req.params.id);
+      const presets = await separationPresetRepository.setDefault(req.params.id, req.body);
       return res.json({ success: true, message: 'Modelo definido como padrão com sucesso.', presets });
     } catch (err) {
       next(err);

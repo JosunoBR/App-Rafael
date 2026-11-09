@@ -92,49 +92,49 @@ export const PhysicalDivergenceModal: React.FC<PhysicalDivergenceModalProps> = (
     return { pack, caixas, unidades, grade };
   }, [selectedItem]);
 
-  // Calculate proportional distribution whenever product or novasCaixas / novoPack changes
-  const calculateProportional = (targetBoxes: number, packSize: number, prevAlloc: Record<string, number>): Record<string, number> => {
+  // Calculate proportional distribution in UNITS whenever product or novasCaixas / novoPack changes
+  const calculateProportional = (targetUnits: number, prevAlloc: Record<string, number>): Record<string, number> => {
     const totalPrevUnits = Object.values(prevAlloc).reduce((sum, v) => sum + (Number(v) || 0), 0);
     const newAlloc: Record<string, number> = {};
 
     activeStores.forEach(s => { newAlloc[s.id] = 0; });
 
-    if (targetBoxes <= 0 || packSize <= 0) {
+    if (targetUnits <= 0) {
       return newAlloc;
     }
 
-    // If there were previous allocations, calculate proportionally in boxes
+    // If there were previous allocations, calculate proportionally in UNITS
     if (totalPrevUnits > 0) {
       const remainders: { storeId: string; remainder: number }[] = [];
-      let distributedBoxes = 0;
+      let distributedUnits = 0;
 
       activeStores.forEach(s => {
         const prevUnits = Number(prevAlloc[s.id] || 0);
         const share = prevUnits / totalPrevUnits;
-        const exactBoxes = targetBoxes * share;
-        const floorBoxes = Math.floor(exactBoxes);
-        newAlloc[s.id] = floorBoxes * packSize;
-        distributedBoxes += floorBoxes;
-        remainders.push({ storeId: s.id, remainder: exactBoxes - floorBoxes });
+        const exactUnits = targetUnits * share;
+        const floorUnits = Math.floor(exactUnits);
+        newAlloc[s.id] = floorUnits;
+        distributedUnits += floorUnits;
+        remainders.push({ storeId: s.id, remainder: exactUnits - floorUnits });
       });
 
-      // Distribute remaining boxes to stores with largest remainder
+      // Distribute remaining units to stores with largest remainder (Hare-Niemeyer method)
       remainders.sort((a, b) => b.remainder - a.remainder);
-      let left = targetBoxes - distributedBoxes;
+      let left = targetUnits - distributedUnits;
       let i = 0;
       while (left > 0 && remainders.length > 0) {
         const sId = remainders[i % remainders.length].storeId;
-        newAlloc[sId] = (newAlloc[sId] || 0) + packSize;
+        newAlloc[sId] = (newAlloc[sId] || 0) + 1;
         left--;
         i++;
       }
     } else {
-      // Fallback: distribute evenly among active stores
-      const boxesPerStore = Math.floor(targetBoxes / activeStores.length);
-      let left = targetBoxes % activeStores.length;
+      // Fallback: distribute units evenly among active stores
+      const unitsPerStore = Math.floor(targetUnits / activeStores.length);
+      let left = targetUnits % activeStores.length;
       activeStores.forEach((s, idx) => {
-        const b = boxesPerStore + (idx < left ? 1 : 0);
-        newAlloc[s.id] = b * packSize;
+        const u = unitsPerStore + (idx < left ? 1 : 0);
+        newAlloc[s.id] = u;
       });
     }
 
@@ -150,8 +150,9 @@ export const PhysicalDivergenceModal: React.FC<PhysicalDivergenceModalProps> = (
       setNovasCaixas(currentCaixas);
       setMotivo('');
 
-      const baseAlloc = selectedItem.separacaoLojas || selectedItem.grade || {};
-      setGradeLojas(calculateProportional(currentCaixas, currentPack, baseAlloc));
+      const baseAlloc = selectedItem.separacaoLojasOriginal || selectedItem.separacaoLojas || selectedItem.grade || {};
+      const targetUnits = currentCaixas * currentPack;
+      setGradeLojas(calculateProportional(targetUnits, baseAlloc));
     }
   }, [selectedItem]);
 
@@ -161,7 +162,8 @@ export const PhysicalDivergenceModal: React.FC<PhysicalDivergenceModalProps> = (
     setNovasCaixas(val);
     if (selectedItem) {
       const baseAlloc = selectedItem.separacaoLojasOriginal || selectedItem.separacaoLojas || {};
-      setGradeLojas(calculateProportional(val, novoPack, baseAlloc));
+      const targetUnits = val * novoPack;
+      setGradeLojas(calculateProportional(targetUnits, baseAlloc));
     }
   };
 
@@ -170,7 +172,8 @@ export const PhysicalDivergenceModal: React.FC<PhysicalDivergenceModalProps> = (
     setNovoPack(val);
     if (selectedItem) {
       const baseAlloc = selectedItem.separacaoLojasOriginal || selectedItem.separacaoLojas || {};
-      setGradeLojas(calculateProportional(novasCaixas, val, baseAlloc));
+      const targetUnits = novasCaixas * val;
+      setGradeLojas(calculateProportional(targetUnits, baseAlloc));
     }
   };
 
@@ -561,10 +564,14 @@ export const PhysicalDivergenceModal: React.FC<PhysicalDivergenceModalProps> = (
                     <span className="text-xs font-bold text-slate-900 dark:text-white">
                       Prévia da Distribuição por Loja ({activeStores.length} filiais)
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                      isBalanced 
+                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                    }`}>
                       {isBalanced 
-                        ? `Rateado: ${totalCaixasAlocadas} cx / ${totalAlocadoGrade} un` 
-                        : `Diferença: ${totalAlocadoGrade - novasUnidadesCalculadas} un`}
+                        ? `Rateado: ${totalAlocadoGrade} un (${Number(totalCaixasAlocadas.toFixed(1))} cx)` 
+                        : `Diferença: ${totalAlocadoGrade - novasUnidadesCalculadas > 0 ? '+' : ''}${totalAlocadoGrade - novasUnidadesCalculadas} un`}
                     </span>
                   </div>
 
@@ -576,49 +583,73 @@ export const PhysicalDivergenceModal: React.FC<PhysicalDivergenceModalProps> = (
                 {isGradeExpanded && (
                   <div className="p-3.5 bg-white dark:bg-slate-900">
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                      Cotas recalculadas proporcionalmente. Ajuste caixas por filial se desejar:
+                      Cotas recalculadas proporcionalmente por <strong className="text-slate-700 dark:text-slate-200">unidade</strong>. Ajuste a quantidade por filial se desejar (as caixas são apenas informativas):
                     </p>
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-56 overflow-y-auto p-1 scrollbar-thin">
                       {activeStores.map(store => {
                         const units = gradeLojas[store.id] || 0;
-                        const boxes = novoPack > 0 ? units / novoPack : 0;
+                        const boxes = novoPack > 0 ? (units / novoPack) : 0;
+                        const formattedBoxes = Number.isInteger(boxes)
+                          ? `${boxes} cx`
+                          : `~${boxes.toFixed(1).replace('.', ',')} cx`;
 
                         return (
                           <div 
                             key={store.id} 
                             className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex flex-col justify-between"
                           >
-                            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate" title={store.name}>
-                              {store.name}
-                            </span>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate" title={store.name}>
+                                {store.name}
+                              </span>
+                              <span 
+                                className="text-[10px] font-mono text-slate-400 dark:text-slate-400 shrink-0 font-medium" 
+                                title={`Equivalente informativo: ${boxes.toFixed(2)} caixas`}
+                              >
+                                {formattedBoxes}
+                              </span>
+                            </div>
 
                             <div className="flex items-center justify-between gap-1 mt-2">
                               <button
                                 type="button"
                                 disabled={units <= 0}
                                 onClick={() => {
-                                  const updated = { ...gradeLojas, [store.id]: Math.max(0, units - novoPack) };
+                                  const updated = { ...gradeLojas, [store.id]: Math.max(0, units - 1) };
                                   setGradeLojas(updated);
                                 }}
-                                className="p-1.5 rounded-lg bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 disabled:opacity-30 cursor-pointer transition"
-                                title="Diminuir 1 caixa"
+                                className="p-1.5 rounded-lg bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 disabled:opacity-30 cursor-pointer transition shrink-0"
+                                title="Diminuir 1 unidade"
                               >
                                 <Minus className="w-3 h-3" />
                               </button>
 
-                              <span className="font-extrabold text-xs text-slate-900 dark:text-white">
-                                {boxes} cx <span className="text-[10px] font-normal text-slate-400">({units} un)</span>
-                              </span>
+                              <div className="flex items-center justify-center gap-0.5 flex-1 px-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={units === 0 ? '' : units}
+                                  placeholder="0"
+                                  onFocus={e => e.target.select()}
+                                  onChange={e => {
+                                    const val = Math.max(0, parseInt(e.target.value) || 0);
+                                    setGradeLojas({ ...gradeLojas, [store.id]: val });
+                                  }}
+                                  className="w-14 h-7 text-center font-extrabold text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/30 outline-none"
+                                  title="Quantidade em unidades desta filial"
+                                />
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">un</span>
+                              </div>
 
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const updated = { ...gradeLojas, [store.id]: units + novoPack };
+                                  const updated = { ...gradeLojas, [store.id]: units + 1 };
                                   setGradeLojas(updated);
                                 }}
-                                className="p-1.5 rounded-lg bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 cursor-pointer transition"
-                                title="Aumentar 1 caixa"
+                                className="p-1.5 rounded-lg bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 cursor-pointer transition shrink-0"
+                                title="Aumentar 1 unidade"
                               >
                                 <Plus className="w-3 h-3" />
                               </button>

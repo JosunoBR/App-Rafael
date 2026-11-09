@@ -530,6 +530,14 @@ export async function deleteSeparationPresetFromDb(id: string): Promise<void> {
   });
 }
 
+export async function setDefaultSeparationPresetInDb(id: string): Promise<SeparationPreset[]> {
+  const res = await apiFetch(`/separation-presets/${id}/set-default`, {
+    method: 'POST'
+  });
+  const data = await res.json();
+  return data?.presets || [];
+}
+
 // MODELOS / PRESETS DE ENGENHARIA FISCAL (SAVES)
 export async function fetchFiscalPresetsFromDb(): Promise<FiscalPreset[]> {
   const res = await apiFetch('/fiscal-presets');

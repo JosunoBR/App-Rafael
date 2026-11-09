@@ -19,6 +19,11 @@ class SeparationPresetRepository {
       ? preset.storeWeights
       : JSON.stringify(preset.storeWeights || {});
 
+    // Se este modelo está sendo definido como padrão, desmarca os demais
+    if (preset.isDefault) {
+      await execute("UPDATE separation_presets SET isDefault = 0 WHERE id != ?", [presetId]);
+    }
+
     if (existing) {
       await execute(`
         UPDATE separation_presets SET
@@ -54,11 +59,22 @@ class SeparationPresetRepository {
     return await this.findById(presetId);
   }
 
+  async setDefault(id) {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw new Error('Modelo de separação não encontrado.');
+    }
+    const now = new Date().toISOString();
+    await execute("UPDATE separation_presets SET isDefault = 0");
+    await execute("UPDATE separation_presets SET isDefault = 1, updatedAt = ? WHERE id = ?", [now, id]);
+    return await this.findAll();
+  }
+
   async delete(id) {
-    // Não permitir deletar o padrão oficial da rede
+    // Não permitir deletar o padrão ativo diretamente
     const existing = await this.findById(id);
     if (existing && existing.isDefault) {
-      throw new Error('O modelo padrão do sistema não pode ser excluído.');
+      throw new Error('O modelo padrão atual não pode ser excluído diretamente. Defina outro modelo como padrão antes de excluí-lo.');
     }
     await execute("DELETE FROM separation_presets WHERE id = ?", [id]);
     return true;

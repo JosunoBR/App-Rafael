@@ -167,6 +167,7 @@ import {
   fetchSeparationPresetsFromDb,
   saveSeparationPresetToDb,
   deleteSeparationPresetFromDb,
+  setDefaultSeparationPresetInDb,
   fetchFiscalPresetsFromDb,
   saveFiscalPresetToDb,
   deleteFiscalPresetFromDb,
@@ -3449,6 +3450,31 @@ export function App() {
     }
   };
 
+  const handleSetDefaultSeparationPreset = async (presetId: string) => {
+    try {
+      const refreshed = await setDefaultSeparationPresetInDb(presetId);
+      if (refreshed && refreshed.length > 0) {
+        setSeparationPresets(refreshed);
+        saveSeparationPresetsList(refreshed);
+      } else {
+        setSeparationPresets(prev => {
+          const updated = prev.map(p => ({
+            ...p,
+            isDefault: p.id === presetId
+          }));
+          saveSeparationPresetsList(updated);
+          return updated;
+        });
+      }
+      const chosen = separationPresets.find(p => p.id === presetId);
+      showToast(`⭐ "${chosen?.name || 'Modelo'}" agora é o padrão de distribuição!`, 'success');
+    } catch (err: any) {
+      console.error('Erro ao definir padrão no SQLite:', err);
+      showToast(`Erro ao definir modelo padrão: ${err.message || 'Falha de comunicação'}`, 'error');
+      throw err;
+    }
+  };
+
   // Handlers para Modelos / Saves de Engenharia Fiscal
   const handleSaveFiscalPreset = async (preset: FiscalPreset) => {
     try {
@@ -4092,6 +4118,7 @@ export function App() {
                       onViewAuditLogs={(ord) => setPipelineAuditOrder(ord)}
                       onSavePreset={handleSaveSeparationPreset}
                       onDeletePreset={handleDeleteSeparationPreset}
+                      onSetDefaultPreset={handleSetDefaultSeparationPreset}
                     />
                   )}
                 </div>

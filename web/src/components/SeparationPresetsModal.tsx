@@ -15,7 +15,9 @@ import {
   Percent,
   CheckCircle2,
   AlertCircle,
-  Copy
+  Copy,
+  Star,
+  Loader2
 } from 'lucide-react';
 import { StoreConfig, SeparationPreset } from '../shared/types';
 
@@ -27,6 +29,7 @@ interface SeparationPresetsModalProps {
   onSavePreset?: (preset: SeparationPreset) => Promise<any> | void;
   onDeletePreset?: (id: string) => Promise<any> | void;
   onSelectPreset?: (preset: SeparationPreset) => void;
+  onSetDefaultPreset?: (id: string) => Promise<any> | void;
   firstRowAllocations?: {
     storeWeights: Record<string, number>;
     reserveStockPercent: number;
@@ -41,6 +44,7 @@ export const SeparationPresetsModal: React.FC<SeparationPresetsModalProps> = ({
   onSavePreset,
   onDeletePreset,
   onSelectPreset,
+  onSetDefaultPreset,
   firstRowAllocations
 }) => {
   // Modo de visualização: 'list' (listagem) ou 'form' (cadastro/edição)
@@ -55,6 +59,7 @@ export const SeparationPresetsModal: React.FC<SeparationPresetsModalProps> = ({
   const [formStoreWeights, setFormStoreWeights] = useState<Record<string, number>>({});
   const [formIsDefault, setFormIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Lojas ativas ordenadas por cluster e nome
@@ -220,6 +225,23 @@ export const SeparationPresetsModal: React.FC<SeparationPresetsModalProps> = ({
     }
   };
 
+  // Definir modelo como padrão do sistema
+  const handleSetAsDefault = async (preset: SeparationPreset) => {
+    if (preset.isDefault) return;
+    try {
+      setSettingDefaultId(preset.id);
+      if (onSetDefaultPreset) {
+        await onSetDefaultPreset(preset.id);
+      } else if (onSavePreset) {
+        await onSavePreset({ ...preset, isDefault: true });
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao definir modelo como padrão.');
+    } finally {
+      setSettingDefaultId(null);
+    }
+  };
+
   // Filtragem de padrões por busca
   const filteredPresets = useMemo(() => {
     if (!searchTerm.trim()) return presets;
@@ -337,25 +359,45 @@ export const SeparationPresetsModal: React.FC<SeparationPresetsModalProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filteredPresets.map(preset => {
                     const activeCount = Object.values(preset.storeWeights || {}).filter(w => Number(w) > 0).length;
+                    const isDefault = Boolean(preset.isDefault);
+                    const isSettingThis = settingDefaultId === preset.id;
+
                     return (
                       <div
                         key={preset.id}
                         className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
-                          preset.isDefault
-                            ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800/60 shadow-xs'
+                          isDefault
+                            ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-300/80 dark:border-amber-800/80 shadow-xs ring-1 ring-amber-400/40'
                             : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/80 hover:border-slate-300 shadow-xs'
                         }`}
                       >
                         <div>
                           <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                               <span>{preset.name}</span>
-                              {preset.isDefault && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                                  ⭐ Padrão Rede
+                              {isDefault && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1">
+                                  ⭐ Padrão do Sistema
                                 </span>
                               )}
                             </h4>
+
+                            {!isDefault && (
+                              <button
+                                type="button"
+                                disabled={isSettingThis}
+                                onClick={() => handleSetAsDefault(preset)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-amber-700 dark:hover:text-amber-300 bg-slate-100 hover:bg-amber-100/70 dark:bg-slate-700/60 dark:hover:bg-amber-950/60 border border-slate-200 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 transition cursor-pointer shrink-0 disabled:opacity-50"
+                                title="Definir este modelo como o padrão inicial para distribuição"
+                              >
+                                {isSettingThis ? (
+                                  <Loader2 className="w-3 h-3 animate-spin text-amber-500" />
+                                ) : (
+                                  <Star className="w-3 h-3 text-amber-500" />
+                                )}
+                                <span>Tornar Padrão</span>
+                              </button>
+                            )}
                           </div>
 
                           {preset.description && (
@@ -388,7 +430,7 @@ export const SeparationPresetsModal: React.FC<SeparationPresetsModalProps> = ({
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
-                            {!preset.isDefault && (
+                            {!isDefault && (
                               <button
                                 type="button"
                                 onClick={() => handleDelete(preset)}
@@ -460,6 +502,27 @@ export const SeparationPresetsModal: React.FC<SeparationPresetsModalProps> = ({
                     className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
+              </div>
+
+              {/* Checkbox / Toggle para Definir como Padrão do Sistema */}
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={formIsDefault}
+                    onChange={(e) => setFormIsDefault(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      Definir como Padrão do Sistema
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                      Este modelo será selecionado automaticamente ao carregar novos pedidos e separações.
+                    </span>
+                  </div>
+                </label>
               </div>
 
               {/* Retenção no Centro de Distribuição / CD */}

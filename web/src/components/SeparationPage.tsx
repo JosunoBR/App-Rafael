@@ -72,6 +72,7 @@ interface SeparationPageProps {
   onViewAuditLogs?: (order: PurchaseOrder) => void;
   onSavePreset?: (preset: SeparationPreset) => Promise<any> | void;
   onDeletePreset?: (id: string) => Promise<any> | void;
+  onSetDefaultPreset?: (id: string) => Promise<any> | void;
 }
 
 // Função para converter qualquer unidade de medida em unidades reais de peças
@@ -148,7 +149,8 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   onViewAuditLogs,
   presets = [],
   onSavePreset,
-  onDeletePreset
+  onDeletePreset,
+  onSetDefaultPreset
 }) => {
   const activeStores = stores.filter(s => s.active);
 
@@ -252,8 +254,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   };
 
   // Estados de Modelos / Presets de Separação (Saves)
-  const [selectedPresetId, setSelectedPresetId] = useState<string>(() => presets[0]?.id || 'preset_default_clusters');
-  const [presetInputValue, setPresetInputValue] = useState<string>(() => presets[0]?.name || 'Padrão Rede (Clusters A, B e C)');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(() => {
+    const defaultP = presets.find(p => p.isDefault) || presets[0];
+    return defaultP?.id || 'preset_default_clusters';
+  });
+  const [presetInputValue, setPresetInputValue] = useState<string>(() => {
+    const defaultP = presets.find(p => p.isDefault) || presets[0];
+    return defaultP?.name || 'Padrão Rede (Clusters A, B e C)';
+  });
   const [isPresetsModalOpen, setIsPresetsModalOpen] = useState<boolean>(false);
   const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState<boolean>(false);
   const [isSavingPreset, setIsSavingPreset] = useState<boolean>(false);
@@ -272,8 +280,9 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
       if (current) {
         setPresetInputValue(current.name);
       } else {
-        setSelectedPresetId(presets[0].id);
-        setPresetInputValue(presets[0].name);
+        const defaultP = presets.find(p => p.isDefault) || presets[0];
+        setSelectedPresetId(defaultP.id);
+        setPresetInputValue(defaultP.name);
       }
     }
   }, [presets]);
@@ -2417,6 +2426,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         })()}
         onSavePreset={onSavePreset}
         onDeletePreset={onDeletePreset}
+        onSetDefaultPreset={onSetDefaultPreset}
         onSelectPreset={(p: SeparationPreset) => {
           handleApplyPresetToAll(p);
           setIsPresetsModalOpen(false);

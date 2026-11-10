@@ -315,6 +315,45 @@ class OrderService {
     return warnings;
   }
 
+  _isProductInfoOnlyChange(existing, incoming) {
+    if (!existing || !incoming) return false;
+    const exH = existing.header || {};
+    const inH = incoming.header || {};
+
+    // 1. Status do pedido não pode mudar
+    if (exH.status && inH.status && exH.status !== inH.status) return false;
+    // 2. Fornecedor não pode mudar
+    if (exH.fornecedor && inH.fornecedor && exH.fornecedor !== inH.fornecedor) return false;
+    // 3. Condição de pagamento e forma de pagamento não podem mudar
+    if (exH.condicaoPagamento && inH.condicaoPagamento && exH.condicaoPagamento !== inH.condicaoPagamento) return false;
+    if (exH.formaPagamento && inH.formaPagamento && exH.formaPagamento !== inH.formaPagamento) return false;
+    // 4. Flags de esteira e marcos operacionais não podem sofrer alteração
+    if (Boolean(exH.boletosLiberados) !== Boolean(inH.boletosLiberados)) return false;
+    if (Boolean(exH.recebidoMatriz) !== Boolean(inH.recebidoMatriz)) return false;
+    if (Boolean(exH.distribuicaoConcluida) !== Boolean(inH.distribuicaoConcluida)) return false;
+    if (Boolean(exH.separacaoConcluida) !== Boolean(inH.separacaoConcluida)) return false;
+
+    const exItems = existing.items || [];
+    const inItems = incoming.items || [];
+    // Não pode adicionar nem remover produtos do pedido
+    if (exItems.length !== inItems.length) return false;
+
+    for (const exIt of exItems) {
+      const inIt = inItems.find(it => it.id === exIt.id);
+      if (!inIt) return false;
+
+      // Quantidades negociadas não podem sofrer alteração
+      if (Number(exIt.qtdTotalUnidades || 0) !== Number(inIt.qtdTotalUnidades || 0)) return false;
+      if (Number(exIt.qtdPacotes || 0) !== Number(inIt.qtdPacotes || 0)) return false;
+
+      // Alocação da separação por filial não pode sofrer alteração
+      if (JSON.stringify(exIt.separacaoLojas || {}) !== JSON.stringify(inIt.separacaoLojas || {})) return false;
+      if (JSON.stringify(exIt.separationDistribution || {}) !== JSON.stringify(inIt.separationDistribution || {})) return false;
+    }
+
+    return true;
+  }
+
   async saveOrder(orderData, currentUser, options = {}) {
     if (!orderData || !orderData.header || !orderData.header.numeroPedido) {
       const err = new Error('Dados do pedido inválidos: número do pedido é obrigatório.');
@@ -425,7 +464,22 @@ class OrderService {
         : 'orders:create';
     const defaultRoles = isExistingClosed ? ['comprador', 'faturamento'] : ['comprador'];
 
-    if (!hasOperationPermission(permissionCode, defaultRoles)) {
+    // 🛡️ Regra de Negócio: Edição de dados cadastrais do produto (código interno, ref fabricante, código de barras, foto, descrição, NCM)
+    // não altera negociação comercial, quantidades ou etapas do pedido, logo é permitida a qualquer momento que o pedido esteja na esteira
+    const isProductInfoUpdate = Boolean(
+      existingForAuthorization && this._isProductInfoOnlyChange(existingForAuthorization, orderData)
+    );
+    const canManageProductInfo = isUnrestricted ||
+      role === 'deposito' ||
+      role === 'comprador' ||
+      role === 'faturamento' ||
+      currentUser?.permissions?.['nav:products'] === true ||
+      currentUser?.permissions?.['orders:edit_closed'] === true ||
+      currentUser?.permissions?.['orders:edit_draft'] === true;
+
+    if (isProductInfoUpdate && canManageProductInfo) {
+      // ✅ Edição de informações do produto liberada na esteira para perfis de catálogo/depósito/compras
+    } else if (!hasOperationPermission(permissionCode, defaultRoles)) {
       const err = new Error(`Seu perfil (${role || 'não identificado'}) não possui a permissão "${permissionCode}" para salvar este pedido.`);
       err.statusCode = 403;
       err.code = 'ORDER_SAVE_FORBIDDEN';
@@ -456,15 +510,15 @@ class OrderService {
                                isCompradorAllowed ||
                                (hasEditClosedPermission && !isDeniedEditClosed);
 
-          if (!isAuthorized) {
+          if (!isAuthorized && !isProductInfoUpdate) {
             const err = new Error(`Seu perfil (${currentUser.role}) não possui autorização para alterar pedidos já fechados/aprovados na esteira.`);
             err.statusCode = 403;
             err.code = 'ORDER_CLOSED_FORBIDDEN';
             throw err;
           }
 
-          // Boletos já liberados no Financeiro: Apenas Diretoria e Faturamento podem alterar
-          if (existing.header.boletosLiberados && !isDiretoriaOrRoot && currentUser.role !== 'faturamento') {
+          // Boletos já liberados no Financeiro: Apenas Diretoria e Faturamento podem alterar dados comerciais
+          if (existing.header.boletosLiberados && !isDiretoriaOrRoot && currentUser.role !== 'faturamento' && !isProductInfoUpdate) {
             const err = new Error('Os boletos deste pedido já foram liberados para o Financeiro. Alterações são restritas à Diretoria e Faturamento.');
             err.statusCode = 403;
             err.code = 'ORDER_LOCKED';
@@ -556,8 +610,10 @@ class OrderService {
         usuarioId: currentUser.id || null,
         usuarioNome: currentUser.nome || currentUser.email || 'Usuário',
         usuarioRole: currentUser.role,
-        acao: isEditingClosed ? 'EDICAO_PEDIDO_FECHADO' : 'SALVAMENTO_PEDIDO',
-        observacoes: `Alteração salva no pedido (${saved.header.status}) por ${currentUser.nome || currentUser.email || 'Usuário'} (${currentUser.role}).`
+        acao: isProductInfoUpdate ? 'EDICAO_INFO_PRODUTO' : (isEditingClosed ? 'EDICAO_PEDIDO_FECHADO' : 'SALVAMENTO_PEDIDO'),
+        observacoes: isProductInfoUpdate
+          ? `Atualização de dados cadastrais de produto no pedido (${saved.header.status}) por ${currentUser.nome || currentUser.email || 'Usuário'} (${currentUser.role}).`
+          : `Alteração salva no pedido (${saved.header.status}) por ${currentUser.nome || currentUser.email || 'Usuário'} (${currentUser.role}).`
       }).catch(e => console.error('Erro ao registrar log de auditoria de alteração:', e));
     }
 

@@ -51,7 +51,8 @@ class OrderController {
     try {
       const options = {
         forceOverwrite: req.body?.forceOverwrite === true || req.query?.forceOverwrite === 'true',
-        autoAssignNextOnConflict: req.body?.autoAssignNextOnConflict !== false
+        autoAssignNextOnConflict: req.body?.autoAssignNextOnConflict !== false,
+        isProductInfoUpdate: req.body?.isProductInfoUpdate === true
       };
       const result = await orderService.saveOrder(req.body, req.user, options);
       return res.json(result);

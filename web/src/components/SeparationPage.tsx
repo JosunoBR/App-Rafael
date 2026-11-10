@@ -53,7 +53,7 @@ interface SeparationPageProps {
   products?: Product[];
   suppliers?: Supplier[];
   onSaveProduct?: (product: Product) => void | Promise<void>;
-  onUpdateOrder?: (updatedOrder: PurchaseOrder) => void | Promise<void>;
+  onUpdateOrder?: (updatedOrder: PurchaseOrder, options?: { isProductInfoUpdate?: boolean }) => void | Promise<void>;
   onConcludeSeparation?: (order: PurchaseOrder) => void | Promise<void>;
   onExportPDF: (visibleColumns?: Record<string, boolean>) => void | Promise<void>;
   onExportExcel?: (visibleColumns: Record<string, boolean>) => void | Promise<void>;
@@ -185,7 +185,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
       };
 
       if (onUpdateOrder) {
-        await onUpdateOrder(updatedOrder);
+        await onUpdateOrder(updatedOrder, { isProductInfoUpdate: true });
       } else if (onChangeOrder) {
         onChangeOrder(updatedOrder);
       }

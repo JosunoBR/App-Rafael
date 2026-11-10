@@ -2695,7 +2695,10 @@ export function App() {
   };
 
   // Salvar pedido atualizado diretamente (ex: pelo módulo financeiro ou romaneio)
-  const handleSaveOrderDirect = async (updatedOrder: PurchaseOrder) => {
+  const handleSaveOrderDirect = async (
+    updatedOrder: PurchaseOrder,
+    options?: { isProductInfoUpdate?: boolean }
+  ) => {
     const cleanNum = (updatedOrder.header.numeroPedido || '').trim().toUpperCase();
     if (cleanNum) {
       const conflict = savedOrders.find(o => 
@@ -2777,7 +2780,10 @@ export function App() {
     }
 
     try {
-      const result = await saveOrderToDb(updatedOrder);
+      const result = await saveOrderToDb(updatedOrder, {
+        autoAssignNextOnConflict: false,
+        isProductInfoUpdate: options?.isProductInfoUpdate === true
+      });
       const confirmedOrder = result.order || updatedOrder;
       setSavedOrders(prev => {
         const idx = prev.findIndex(o => o.header.id === confirmedOrder.header.id);

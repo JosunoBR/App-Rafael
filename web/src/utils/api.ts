@@ -379,12 +379,13 @@ export async function importOrderPackageToDb(
 
 export async function saveOrderToDb(
   order: PurchaseOrder, 
-  options: { autoAssignNextOnConflict?: boolean; forceOverwrite?: boolean } = { autoAssignNextOnConflict: true }
+  options: { autoAssignNextOnConflict?: boolean; forceOverwrite?: boolean; isProductInfoUpdate?: boolean } = { autoAssignNextOnConflict: true }
 ): Promise<SaveOrderResult> {
   const payload = {
     ...order,
     autoAssignNextOnConflict: options.autoAssignNextOnConflict !== false,
-    forceOverwrite: Boolean(options.forceOverwrite)
+    forceOverwrite: Boolean(options.forceOverwrite),
+    isProductInfoUpdate: Boolean(options.isProductInfoUpdate)
   };
 
   try {

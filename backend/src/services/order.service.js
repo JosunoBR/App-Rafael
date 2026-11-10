@@ -75,7 +75,13 @@ class OrderService {
     const orders = await orderRepository.findAll();
     const role = String(currentUser?.role || '').toLowerCase();
     if (role === 'separacao' || role === 'conferente') {
-      return orders.filter(order => order.header?.status === 'Em Separação');
+      return orders.filter(order => {
+        const isTransfer = order.header?.supplierId === 'cd_matriz' || 
+                           String(order.header?.numeroPedido || '').startsWith('CD-') || 
+                           Boolean(order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+        // Doca só recebe pedidos para separação manual quando o recebimento físico na Matriz estiver confirmado
+        return order.header?.status === 'Em Separação' && (isTransfer || Boolean(order.header?.recebidoMatriz));
+      });
     }
     return orders;
   }
@@ -88,10 +94,15 @@ class OrderService {
       throw err;
     }
     const role = String(currentUser?.role || '').toLowerCase();
-    if ((role === 'separacao' || role === 'conferente') && order.header?.status !== 'Em Separação') {
-      const err = new Error('Pedido não disponível para separação.');
-      err.statusCode = 403;
-      throw err;
+    if (role === 'separacao' || role === 'conferente') {
+      const isTransfer = order.header?.supplierId === 'cd_matriz' || 
+                         String(order.header?.numeroPedido || '').startsWith('CD-') || 
+                         Boolean(order.header?.fornecedor && order.header.fornecedor.toLowerCase().includes('transferência'));
+      if (order.header?.status !== 'Em Separação' || (!isTransfer && !order.header?.recebidoMatriz)) {
+        const err = new Error('Pedido ainda não disponível para separação na doca (aguardando confirmação do recebimento físico na Matriz).');
+        err.statusCode = 403;
+        throw err;
+      }
     }
     return order;
   }
@@ -521,7 +532,7 @@ class OrderService {
     const persistedHeader = existingForAuthorization?.header;
     if (!isStockTransfer(persistedHeader || orderData.header)) {
       if (orderData.header.status === 'Em Separação' && persistedHeader?.status !== 'Em Separação') {
-        const error = new Error('Use a opção Liberar para Separação após confirmar o recebimento na Distribuição.');
+        const error = new Error('Use a opção Liberar para Separação na tela de Distribuição.');
         error.statusCode = 409;
         error.code = 'USE_SEPARATION_RELEASE';
         throw error;
@@ -1244,7 +1255,6 @@ class OrderService {
         err.code = 'INVALID_PIPELINE_STATE';
         throw err;
       }
-      requireConfirmedReceipt(order);
       checkPipelineVersion(order, payload.expectedVersion);
       await applyDistributionItems(order, payload.items);
 
@@ -2032,7 +2042,6 @@ class OrderService {
       err.statusCode = 400;
       throw err;
     }
-    if (targetStatus === 'Em Separação') requireConfirmedReceipt(order);
 
     // Trava de Segurança Financeira: impedir se houver qualquer parcela paga
     const financialRepo = require('../repositories/financialRepository');

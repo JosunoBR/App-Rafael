@@ -48,13 +48,16 @@ export const MobileSeparationView: React.FC<MobileSeparationViewProps> = ({
   onUpdateOrder,
   onFinalizeOrder
 }) => {
-  // Lista de pedidos aguardando separação física (status 'Em Separação' ou 'Em Distribuição')
-  // Conforme regra de negócio: ao concluir a separação, o pedido não é mais exibido no app e segue o fluxo na web
+  // Lista de pedidos aguardando separação física na doca (status 'Em Separação' e com recebimento confirmado na Matriz)
   const pendingSeparationOrders = useMemo(() => {
     return orders.filter(o => {
-      const isInPipeline = o.header.status === 'Em Separação' || o.header.status === 'Em Distribuição';
+      const isInPipeline = o.header.status === 'Em Separação';
       const isNotConcluded = !o.header.separacaoConcluida;
-      return isInPipeline && isNotConcluded;
+      const isTransferOrder = o.header?.supplierId === 'cd_matriz' || 
+                              String(o.header?.numeroPedido || '').startsWith('CD-') || 
+                              Boolean(o.header?.fornecedor && o.header.fornecedor.toLowerCase().includes('transferência'));
+      const isReceived = isTransferOrder || Boolean(o.header.recebidoMatriz);
+      return isInPipeline && isNotConcluded && isReceived;
     });
   }, [orders]);
 

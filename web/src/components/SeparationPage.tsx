@@ -416,9 +416,17 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
   const isInDistribution = (order.header.status === 'Aprovado' || order.header.status === 'Em Distribuição') && !order.header.distribuicaoConcluida;
   const isInSeparation = order.header.status === 'Em Separação' || (Boolean(order.header.distribuicaoConcluida) && order.header.status !== 'Finalizado' && order.header.status !== 'Faturamento');
 
-  // Inclui pedidos em andamento na esteira
+  const isDockTeam = currentUser?.role === 'separacao';
+
+  // Inclui pedidos em andamento na esteira (para a doca/separação manual, apenas pedidos recebidos na Matriz ou transferências)
   const availableDepositOrders = useMemo(() => {
     return orders.filter(o => {
+      if (isDockTeam) {
+        const isTransferOrder = o.header?.supplierId === 'cd_matriz' || 
+                                String(o.header?.numeroPedido || '').startsWith('CD-') || 
+                                Boolean(o.header?.fornecedor && o.header.fornecedor.toLowerCase().includes('transferência'));
+        return o.header?.status === 'Em Separação' && (isTransferOrder || Boolean(o.header?.recebidoMatriz));
+      }
       return (
         !o.header.status ||
         o.header.status === 'Aprovado' || 
@@ -430,7 +438,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
         o.header.status === 'Finalizado'
       );
     });
-  }, [orders]);
+  }, [orders, isDockTeam]);
   const pendingSeparationOrders = availableDepositOrders;
 
   const isCurrentFinalized = order.header.status === 'Finalizado';
@@ -1105,7 +1113,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">STATUS</span>
                 <span className={`text-xs font-extrabold ${isReceiptPending ? 'text-amber-700 dark:text-amber-400' : hasAnyOverAllocation ? 'text-rose-600' : 'text-emerald-700 dark:text-emerald-400'}`}>
-                  {isReceiptPending ? 'Aguardando recebimento' : hasAnyOverAllocation ? 'Excedente Detectado' : '100% Válido'}
+                  {isReceiptPending ? (isInSeparation ? 'Aguardando Recebimento na Matriz' : 'Aguardando recebimento') : hasAnyOverAllocation ? 'Excedente Detectado' : '100% Válido'}
                 </span>
               </div>
             </div>
@@ -2223,13 +2231,14 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
               <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5">
                 <PackageCheck className="w-4 h-4" /> Conferência física e separação concluídas. Aguardando liberação de boletos no Faturamento.
               </span>
-            ) : (isInDistribution || isInSeparation) && isReceiptPending ? (
-              <span className="text-amber-600 dark:text-amber-400 font-medium">
-                Confirme o recebimento físico na Matriz para avançar com o pedido.
-              </span>
             ) : isInDistribution ? (
               <span>
-                <b>Distribuição CD:</b> Confira as quantidades de cada filial e libere o pedido para Separação na Doca.
+                <b>Distribuição CD:</b> Confira as quantidades de cada filial e libere o pedido para Separação.
+              </span>
+            ) : isInSeparation && isReceiptPending ? (
+              <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5">
+                <Truck className="w-4 h-4 shrink-0 text-amber-500" />
+                <span><b>Em Separação:</b> Aguardando confirmação do recebimento físico na Matriz para envio ao time da doca.</span>
               </span>
             ) : isInSeparation ? (
               <span>
@@ -2254,7 +2263,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
             {isInDistribution && onReleaseToSeparation && hasPermission(currentUser, 'pipeline:release_separation') && (
               <button
                 type="button"
-                disabled={isReceiptPending || hasAnyOverAllocation || isReleasing}
+                disabled={hasAnyOverAllocation || isReleasing}
                 onClick={async () => {
                   setIsReleasing(true);
                   try {
@@ -2264,7 +2273,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                   }
                 }}
                 className="w-full sm:w-auto px-6 py-3 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-indigo-600/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                title={isReceiptPending ? 'Confirme o recebimento físico primeiro' : hasAnyOverAllocation ? 'Corrija o excedente da grade antes de liberar' : 'Concluir o rateio e liberar para Separação'}
+                title={hasAnyOverAllocation ? 'Corrija o excedente da grade antes de liberar' : 'Concluir o rateio e liberar para Separação'}
               >
                 <Boxes className="w-4 h-4" />
                 <span>{isReleasing ? 'Liberando…' : 'Salvar Distribuição e Liberar para Separação'}</span>

@@ -2256,7 +2256,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 title="Confirmar o recebimento físico da mercadoria na Matriz"
               >
                 <Truck className="w-4 h-4" />
-                <span>Confirmar Recebimento Físico</span>
+                <span>Confirmar Recebimento</span>
               </button>
             )}
 
@@ -2276,7 +2276,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                 title={hasAnyOverAllocation ? 'Corrija o excedente da grade antes de liberar' : 'Concluir o rateio e liberar para Separação'}
               >
                 <Boxes className="w-4 h-4" />
-                <span>{isReleasing ? 'Liberando…' : 'Salvar Distribuição e Liberar para Separação'}</span>
+                <span>{isReleasing ? 'Liberando…' : 'Liberar Separação'}</span>
               </button>
             )}
 
@@ -2317,7 +2317,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                   title="Concluir conferência física e finalizar expedição da transferência"
                 >
                   <PackageCheck className="w-4 h-4" />
-                  <span>Concluir Separação & Finalizar Expedição</span>
+                  <span>Finalizar Expedição</span>
                 </button>
               ) : order.header.separacaoConcluida ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -2333,7 +2333,7 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                       title="Liberar formalmente este pedido para o Faturamento"
                     >
                       <Receipt className="w-4 h-4" />
-                      <span>Liberar para Faturamento</span>
+                      <span>Liberar Faturamento</span>
                     </button>
                   )}
                 </div>

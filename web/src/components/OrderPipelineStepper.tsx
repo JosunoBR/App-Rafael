@@ -262,7 +262,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
               className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Truck className="w-3.5 h-3.5" />
-              <span>Confirmar Recebimento Físico</span>
+              <span>Confirmar Recebimento</span>
             </button>
           )}
 
@@ -289,7 +289,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
                       title="Separação física concluída na doca. Clique para liberar este pedido para o Faturamento."
                     >
                       <Receipt className="w-3.5 h-3.5" />
-                      <span>Liberar p/ Faturamento</span>
+                      <span>Liberar Faturamento</span>
                     </button>
                   )}
                   {onOpenSeparation && (
@@ -314,7 +314,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
                     title={isTransfer ? "Acessar conferência de doca e concluir expedição para as lojas" : "Acessar conferência de doca / apontamento de avarias"}
                   >
                     <PackageCheck className="w-3.5 h-3.5" />
-                    <span>{isTransfer ? "Conferir Doca & Finalizar Expedição" : "Acessar Separação / Doca"}</span>
+                    <span>{isTransfer ? "Finalizar Expedição" : "Abrir Separação"}</span>
                   </button>
                 )
               )}
@@ -340,7 +340,7 @@ export const OrderPipelineStepper: React.FC<OrderPipelineStepperProps> = ({
                     title={order.header.boletosLiberados ? "Finalizar o pedido na esteira" : "Liberar os boletos no Contas a Pagar e finalizar o pedido"}
                   >
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>{order.header.boletosLiberados ? "Finalizar Pedido" : "Liberar Boletos & Finalizar"}</span>
+                    <span>{order.header.boletosLiberados ? "Finalizar Pedido" : "Liberar Boletos"}</span>
                   </button>
                 )
               )}

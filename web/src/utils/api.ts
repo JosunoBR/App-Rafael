@@ -1014,7 +1014,7 @@ export async function finalizeOrderPipelineApi(orderId: string): Promise<{ succe
 
 export async function rollbackOrderStatusApi(
   orderId: string, 
-  payload: { targetStatus: OrderStatus; reason: string; password?: string }
+  payload: { targetStatus: OrderStatus; password?: string; reason?: string }
 ): Promise<{ success: boolean; message: string; order: PurchaseOrder }> {
   const res = await apiFetch(`/orders/${orderId}/rollback`, {
     method: 'POST',

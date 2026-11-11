@@ -324,31 +324,39 @@ class OrderService {
     if (exH.status && inH.status && exH.status !== inH.status) return false;
     // 2. Fornecedor não pode mudar
     if (exH.fornecedor && inH.fornecedor && exH.fornecedor !== inH.fornecedor) return false;
-    // 3. Condição de pagamento e forma de pagamento não podem mudar
-    if (exH.condicaoPagamento && inH.condicaoPagamento && exH.condicaoPagamento !== inH.condicaoPagamento) return false;
-    if (exH.formaPagamento && inH.formaPagamento && exH.formaPagamento !== inH.formaPagamento) return false;
-    // 4. Flags de esteira e marcos operacionais não podem sofrer alteração
+    // 3. Flags de esteira e marcos operacionais não podem sofrer alteração
     if (Boolean(exH.boletosLiberados) !== Boolean(inH.boletosLiberados)) return false;
     if (Boolean(exH.recebidoMatriz) !== Boolean(inH.recebidoMatriz)) return false;
     if (Boolean(exH.distribuicaoConcluida) !== Boolean(inH.distribuicaoConcluida)) return false;
     if (Boolean(exH.separacaoConcluida) !== Boolean(inH.separacaoConcluida)) return false;
 
-    const exItems = existing.items || [];
-    const inItems = incoming.items || [];
-    // Não pode adicionar nem remover produtos do pedido
+    // Filtra itens vazios / trailing blank rows em ambas as listas para comparação justa
+    const isRealItem = it => it && Boolean(
+      (it.descricao && it.descricao.trim()) || 
+      (it.codigo && it.codigo.trim()) || 
+      (it.codigoInterno && it.codigoInterno.trim()) ||
+      (it.codigoFornecedor && it.codigoFornecedor.trim()) ||
+      Number(it.qtdTotalUnidades || 0) > 0 ||
+      Number(it.precoUnitario || 0) > 0
+    );
+
+    const exItems = (existing.items || []).filter(isRealItem);
+    const inItems = (incoming.items || []).filter(isRealItem);
+
+    // Não pode adicionar nem remover produtos reais do pedido
     if (exItems.length !== inItems.length) return false;
 
     for (const exIt of exItems) {
-      const inIt = inItems.find(it => it.id === exIt.id);
+      const inIt = inItems.find(it => 
+        (exIt.id && it.id === exIt.id) || 
+        (exIt.codigoFornecedor && it.codigoFornecedor && exIt.codigoFornecedor === it.codigoFornecedor) ||
+        (exIt.descricao && it.descricao && exIt.descricao.trim() === it.descricao.trim())
+      );
       if (!inIt) return false;
 
       // Quantidades negociadas não podem sofrer alteração
       if (Number(exIt.qtdTotalUnidades || 0) !== Number(inIt.qtdTotalUnidades || 0)) return false;
       if (Number(exIt.qtdPacotes || 0) !== Number(inIt.qtdPacotes || 0)) return false;
-
-      // Alocação da separação por filial não pode sofrer alteração
-      if (JSON.stringify(exIt.separacaoLojas || {}) !== JSON.stringify(inIt.separacaoLojas || {})) return false;
-      if (JSON.stringify(exIt.separationDistribution || {}) !== JSON.stringify(inIt.separationDistribution || {})) return false;
     }
 
     return true;
@@ -467,13 +475,17 @@ class OrderService {
     // 🛡️ Regra de Negócio: Edição de dados cadastrais do produto (código interno, ref fabricante, código de barras, foto, descrição, NCM)
     // não altera negociação comercial, quantidades ou etapas do pedido, logo é permitida a qualquer momento que o pedido esteja na esteira
     const isProductInfoUpdate = Boolean(
-      existingForAuthorization && this._isProductInfoOnlyChange(existingForAuthorization, orderData)
+      options?.isProductInfoUpdate === true ||
+      orderData?.isProductInfoUpdate === true ||
+      (existingForAuthorization && this._isProductInfoOnlyChange(existingForAuthorization, orderData))
     );
     const canManageProductInfo = isUnrestricted ||
       role === 'deposito' ||
+      role === 'separacao' ||
       role === 'comprador' ||
       role === 'faturamento' ||
       currentUser?.permissions?.['nav:products'] === true ||
+      currentUser?.permissions?.['nav:separation'] === true ||
       currentUser?.permissions?.['orders:edit_closed'] === true ||
       currentUser?.permissions?.['orders:edit_draft'] === true;
 
@@ -2043,10 +2055,10 @@ class OrderService {
 
   /**
    * Retrocede o status de um pedido na esteira operacional.
-   * Disponível para qualquer usuário autenticado mediante confirmação de senha pessoal,
-   * com justificativa obrigatória e validações financeiras/estoque.
+   * Disponível para qualquer usuário autenticado mediante confirmação de senha pessoal
+   * e validações financeiras/estoque.
    */
-  async rollbackOrderStatus(orderId, { targetStatus, reason, password } = {}, currentUser) {
+  async rollbackOrderStatus(orderId, { targetStatus, password } = {}, currentUser) {
     if (!currentUser) {
       const err = new Error('Usuário não autenticado.');
       err.statusCode = 401;
@@ -2081,12 +2093,6 @@ class OrderService {
     if (!isPasswordValid) {
       const err = new Error('Senha de confirmação incorreta. O pedido não foi retrocedido.');
       err.statusCode = 403;
-      throw err;
-    }
-
-    if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
-      const err = new Error('É obrigatório informar uma justificativa detalhada com no mínimo 10 caracteres para o retrocesso.');
-      err.statusCode = 400;
       throw err;
     }
 
@@ -2264,10 +2270,9 @@ class OrderService {
       acao: 'RETROCESSO_STATUS',
       detalhesJson: {
         statusAnterior: currentStatus,
-        statusNovo: targetStatus,
-        motivo: reason.trim()
+        statusNovo: targetStatus
       },
-      observacoes: `Retrocesso de [${currentStatus}] para [${targetStatus}] mediante confirmação de senha. Motivo: ${reason.trim()}`
+      observacoes: `Retrocesso de [${currentStatus}] para [${targetStatus}] mediante confirmação de senha.`
     }).catch(e => console.error('Erro ao registrar auditoria de retrocesso:', e));
 
     return {

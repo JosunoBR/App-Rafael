@@ -2043,20 +2043,43 @@ class OrderService {
 
   /**
    * Retrocede o status de um pedido na esteira operacional.
-   * Permitido para Diretoria e Compras (RBAC), com justificativa obrigatória e validações financeiras/estoque.
+   * Disponível para qualquer usuário autenticado mediante confirmação de senha pessoal,
+   * com justificativa obrigatória e validações financeiras/estoque.
    */
-  async rollbackOrderStatus(orderId, { targetStatus, reason } = {}, currentUser) {
-    const isAuthorized = currentUser && (
-      currentUser.role === 'diretoria' || 
-      currentUser.role === 'comprador' || 
-      currentUser.role === 'faturamento' || 
-      currentUser.role === 'root' || 
-      currentUser.id === 'usr_root' || 
-      currentUser.email?.toLowerCase() === 'root' ||
-      currentUser.nome?.toLowerCase() === 'root'
-    );
-    if (!isAuthorized) {
-      const err = new Error('Apenas a Diretoria, Compras e Faturamento possuem autorização para retroceder o status de um pedido na esteira.');
+  async rollbackOrderStatus(orderId, { targetStatus, reason, password } = {}, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Usuário não autenticado.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    // 🔒 Confirmação obrigatória da senha do usuário logado
+    if (!password || typeof password !== 'string' || !password.trim()) {
+      const err = new Error('A confirmação da sua senha de acesso é obrigatória para retroceder o status do pedido.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const userRepository = require('../repositories/userRepository');
+    const bcrypt = require('bcryptjs');
+    const dbUser = (currentUser.id ? await userRepository.findById(currentUser.id) : null) || 
+                   (currentUser.email ? await userRepository.findByEmailOrAlias(currentUser.email) : null);
+    if (!dbUser) {
+      const err = new Error('Usuário autenticado não encontrado no sistema.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    let isPasswordValid = false;
+    const isBcrypt = dbUser.senha && dbUser.senha.startsWith('$2');
+    if (isBcrypt) {
+      isPasswordValid = await bcrypt.compare(password.trim(), dbUser.senha);
+    } else {
+      isPasswordValid = (dbUser.senha === password.trim());
+    }
+
+    if (!isPasswordValid) {
+      const err = new Error('Senha de confirmação incorreta. O pedido não foi retrocedido.');
       err.statusCode = 403;
       throw err;
     }
@@ -2236,7 +2259,7 @@ class OrderService {
       numeroPedido: saved.header.numeroPedido,
       fornecedor: saved.header.fornecedor,
       usuarioId: currentUser.id || null,
-      usuarioNome: currentUser.nome || 'Diretoria',
+      usuarioNome: currentUser.nome || currentUser.email || 'Usuário',
       usuarioRole: currentUser.role,
       acao: 'RETROCESSO_STATUS',
       detalhesJson: {
@@ -2244,7 +2267,7 @@ class OrderService {
         statusNovo: targetStatus,
         motivo: reason.trim()
       },
-      observacoes: `Retrocesso de [${currentStatus}] para [${targetStatus}]. Motivo: ${reason.trim()}`
+      observacoes: `Retrocesso de [${currentStatus}] para [${targetStatus}] mediante confirmação de senha. Motivo: ${reason.trim()}`
     }).catch(e => console.error('Erro ao registrar auditoria de retrocesso:', e));
 
     return {

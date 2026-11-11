@@ -241,15 +241,8 @@ export function canAuthorizeFinancialRelease(userOrRole?: UserLike, orderStatus?
 
 /**
  * Permite retroceder o status de um pedido na esteira operacional.
- * Permitido para Diretoria Executiva, Compras ou usuário Root/Superadmin.
+ * Disponível para qualquer usuário autenticado mediante confirmação de senha pessoal.
  */
 export function canRollbackOrderStatus(user?: { role?: UserRole; id?: string; email?: string; nome?: string } | null): boolean {
-  if (!user) return false;
-  return user.role === 'diretoria' || 
-         user.role === 'comprador' || 
-         user.role === 'faturamento' || 
-         user.role === ('root' as any) || 
-         user.id === 'usr_root' || 
-         user.email?.toLowerCase() === 'root' || 
-         user.nome?.toLowerCase() === 'root';
+  return Boolean(user);
 }

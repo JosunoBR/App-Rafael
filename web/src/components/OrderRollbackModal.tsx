@@ -9,7 +9,10 @@ import {
   Building2, 
   Boxes, 
   PackageCheck, 
-  Receipt 
+  Receipt,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { PurchaseOrder, OrderStatus } from '../shared/types';
 import { rollbackOrderStatusApi } from '../utils/api';
@@ -78,6 +81,8 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
 }) => {
   const [selectedTarget, setSelectedTarget] = useState<OrderStatus>('Em Cotação');
   const [reason, setReason] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -122,6 +127,8 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setReason('');
+      setPassword('');
+      setShowPassword(false);
       setErrorMessage(null);
       if (availableOptions.length > 0) {
         setSelectedTarget(availableOptions[0].status);
@@ -133,10 +140,16 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
 
   const selectedOption = availableOptions.find(o => o.status === selectedTarget) || availableOptions[0];
   const isReasonValid = reason.trim().length >= 10;
+  const isPasswordProvided = password.trim().length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isReasonValid || !selectedOption) return;
+
+    if (!isPasswordProvided) {
+      setErrorMessage('Por favor, informe sua senha de acesso para confirmar o retrocesso.');
+      return;
+    }
 
     setLoading(true);
     setErrorMessage(null);
@@ -145,7 +158,8 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
       const orderId = order.header.id || order.id || '';
       const res = await rollbackOrderStatusApi(orderId, {
         targetStatus: selectedOption.status,
-        reason: reason.trim()
+        reason: reason.trim(),
+        password: password.trim()
       });
 
       if (res.success && res.order) {
@@ -184,7 +198,7 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Ação permitida à <strong className="text-rose-600 dark:text-rose-400">Diretoria e Compras</strong> com registro de auditoria imutável
+                Ação disponível mediante <strong className="text-rose-600 dark:text-rose-400">confirmação da sua senha</strong> e registro de auditoria imutável
               </p>
             </div>
           </div>
@@ -301,6 +315,41 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
             />
           </div>
 
+          {/* Confirmação de Senha Pessoal do Usuário */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-slate-500" />
+                <span>Sua Senha de Confirmação</span>
+                <span className="text-rose-500">*</span>
+              </label>
+              <span className="text-[10px] text-slate-400">
+                Necessária para autorizar o retrocesso
+              </span>
+            </div>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Digite sua senha de acesso..."
+                className="w-full text-xs p-3 pr-10 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition"
+                disabled={loading}
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                title={showPassword ? 'Ocultar senha' : 'Ver senha'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
           {/* Rodapé / Ações */}
           <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
             <button
@@ -313,7 +362,7 @@ export const OrderRollbackModal: React.FC<OrderRollbackModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={loading || !isReasonValid || availableOptions.length === 0}
+              disabled={loading || !isReasonValid || !password.trim() || availableOptions.length === 0}
               className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-98"
             >
               {loading ? (

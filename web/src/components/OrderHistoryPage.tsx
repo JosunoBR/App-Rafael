@@ -1528,12 +1528,12 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             <FileSpreadsheet className="w-4 h-4" />
                           </button>
 
-                          {/* Botão de Retrocesso (Diretoria) para pedidos além de Cotação */}
+                          {/* Botão de Retrocesso para pedidos além de Cotação */}
                           {canRollbackOrderStatus(currentUser) && statusAtual !== 'Em Cotação' && statusAtual !== 'Rascunho' && (
                             <button
                               onClick={() => setOrderToRollback(ord)}
                               className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
-                              title="Retroceder etapa deste pedido (Diretoria)"
+                              title="Retroceder etapa deste pedido (mediante confirmação de senha)"
                             >
                               <RotateCcw className="w-4 h-4" />
                             </button>

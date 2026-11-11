@@ -258,8 +258,8 @@ class OrderController {
 
   async rollbackOrderStatus(req, res, next) {
     try {
-      const { targetStatus, reason } = req.body || {};
-      const result = await orderService.rollbackOrderStatus(req.params.id, { targetStatus, reason }, req.user);
+      const { targetStatus, reason, password } = req.body || {};
+      const result = await orderService.rollbackOrderStatus(req.params.id, { targetStatus, reason, password }, req.user);
       return res.json(result);
     } catch (err) {
       next(err);

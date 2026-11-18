@@ -1475,29 +1475,41 @@ export const SeparationPage: React.FC<SeparationPageProps> = ({
                         className="py-2 px-1.5 text-center border-r border-slate-200 dark:border-slate-700 sticky bg-white dark:bg-slate-800 group-hover:bg-slate-50/90 dark:group-hover:bg-slate-800/90 z-20 w-[50px] min-w-[50px] max-w-[50px] shadow-xs"
                       >
                         <div className="flex items-center justify-center">
-                          <div 
-                            className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center cursor-pointer shadow-2xs hover:ring-2 hover:ring-indigo-500/40 transition"
-                            onClick={() => {
-                              if (item.fotoUrl) {
-                                setZoomedImage({ url: item.fotoUrl, title: item.descricao });
-                              } else {
-                                setEditingItemForModal(item);
-                              }
-                            }}
-                            title={item.fotoUrl ? "Clique para ver a foto ampliada" : "Sem foto - Clique para editar e adicionar"}
-                          >
-                            {item.fotoUrl ? (
-                              <img 
-                                src={item.fotoUrl} 
-                                alt="" 
-                                loading="lazy" 
-                                decoding="async" 
-                                className="w-full h-full object-cover hover:scale-110 transition" 
-                              />
-                            ) : (
-                              <ImageIcon className="w-4 h-4 text-slate-300 dark:text-slate-600 hover:text-indigo-500 transition" />
-                            )}
-                          </div>
+                          {(() => {
+                            const effectivePhoto = item.fotoUrl || products.find(p => {
+                              const itCod = (item.codigoInterno || item.codigo || '').trim().toUpperCase();
+                              const itDesc = (item.descricao || '').trim().toLowerCase();
+                              const pCod = (p.codigoInterno || p.codigo || '').trim().toUpperCase();
+                              const pDesc = (p.descricao || '').trim().toLowerCase();
+                              return (itCod && pCod && itCod === pCod) || (itDesc && pDesc && itDesc === pDesc);
+                            })?.fotoUrl;
+
+                            return (
+                              <div 
+                                className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center cursor-pointer shadow-2xs hover:ring-2 hover:ring-indigo-500/40 transition"
+                                onClick={() => {
+                                  if (effectivePhoto) {
+                                    setZoomedImage({ url: effectivePhoto, title: item.descricao });
+                                  } else {
+                                    setEditingItemForModal(item);
+                                  }
+                                }}
+                                title={effectivePhoto ? "Clique para ver a foto ampliada" : "Sem foto - Clique para editar e adicionar"}
+                              >
+                                {effectivePhoto ? (
+                                  <img 
+                                    src={effectivePhoto} 
+                                    alt="" 
+                                    loading="lazy" 
+                                    decoding="async" 
+                                    className="w-full h-full object-cover hover:scale-110 transition" 
+                                  />
+                                ) : (
+                                  <ImageIcon className="w-4 h-4 text-slate-300 dark:text-slate-600 hover:text-indigo-500 transition" />
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </td>
                     )}

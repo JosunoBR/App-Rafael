@@ -1331,18 +1331,19 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
           </td>
         );
 
-      case 'foto':
+      case 'foto': {
+        const effectivePhoto = item.fotoUrl || findCatalogProduct(item)?.fotoUrl;
         return (
           <td key="foto" style={cellStyle} className="py-1 px-2 text-center border-r border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/20 whitespace-nowrap">
             <div className="flex items-center justify-center">
-              {item.fotoUrl ? (
+              {effectivePhoto ? (
                 <div 
                   className="w-8 h-8 rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 cursor-pointer relative group/photo shadow-2xs"
                   onClick={() => handleOpenPhotoModal(item)}
                   title="Clique para trocar, ver ampliado ou remover foto"
                 >
                   <img 
-                    src={item.fotoUrl} 
+                    src={effectivePhoto} 
                     alt="" 
                     loading="lazy" 
                     decoding="async" 
@@ -1365,6 +1366,7 @@ export const OrderItemsTable: React.FC<OrderItemsTableProps> = ({
             </div>
           </td>
         );
+      }
 
       case 'codigoInterno': {
         const codeVal = (item.codigoInterno || item.codigo || '').trim().toUpperCase();

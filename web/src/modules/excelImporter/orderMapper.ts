@@ -192,6 +192,7 @@ export function mapParsedExcelToOrder(
       codigoFornecedor: rawItem.codigoFornecedor || rawItem.codigo,
       codigoBarras: rawItem.eanBarcode || undefined,
       descricao: rawItem.descricao,
+      fotoUrl: matchedCatalogProd?.fotoUrl || '',
       qtdNoPacote: rawItem.qtdNoPacote,
       qtdPorPacote: rawItem.qtdNoPacote || 1,
       qtdPacotes: rawItem.qtdPacotes,

@@ -77,6 +77,7 @@ export function analyzeCatalogProducts(
     // 1. Tentar encontrar produto correspondente no catálogo
     let matchedProduct: Product | undefined;
     let matchedByGlobalInternalCode = false;
+    let matchedByGlobalDesc = false;
 
     // Código interno é o único identificador permitido para associação global.
     // Código do fornecedor, EAN e descrição só podem associar produtos do mesmo fornecedor.
@@ -107,6 +108,10 @@ export function analyzeCatalogProducts(
 
     if (!matchedProduct && normDesc) {
       matchedProduct = existingCatalog.find(p => belongsToSupplier(p) && normalizeText(p.descricao || '') === normDesc);
+      if (!matchedProduct) {
+        matchedProduct = existingCatalog.find(p => normalizeText(p.descricao || '') === normDesc);
+        if (matchedProduct) matchedByGlobalDesc = true;
+      }
     }
 
     if (!matchedProduct) {
@@ -114,9 +119,9 @@ export function analyzeCatalogProducts(
     }
 
     if (matchedProduct) {
-      if (matchedByGlobalInternalCode && !belongsToSupplier(matchedProduct)) {
-        // O código interno é global e identifica o produto, mas não autoriza
-        // transferir seu cadastro para outro fornecedor nem sobrescrever a referência dele.
+      if ((matchedByGlobalInternalCode || matchedByGlobalDesc) && !belongsToSupplier(matchedProduct)) {
+        // O código interno ou descrição idêntica identifica o produto globalmente (ex: Trident, Halls),
+        // preservando seu código e foto sem descaracterizar o cadastro original.
         statusList.push({
           rawItem,
           status: 'existing',

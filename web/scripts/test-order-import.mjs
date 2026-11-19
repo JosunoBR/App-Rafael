@@ -183,4 +183,5 @@ try {
   console.log('✓ Importação Excel: verificações de regressão aprovadas.');
 } finally {
   await server.close();
+  process.exit(0);
 }

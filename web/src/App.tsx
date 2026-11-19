@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, startTransition } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
+import { ROUTE_PATHS, NAV_TAB_TO_PATH, PATH_TO_NAV_TAB } from './routes/routePaths';
 import { 
   Sidebar,
   ActiveNavTab
@@ -211,6 +213,9 @@ import { OrderConflictResolutionModal } from './components/OrderConflictResoluti
 import { OrderRollbackModal } from './components/OrderRollbackModal';
 
 export function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // 1. Estado de Autenticação (RBAC) - Validação prévia de expiração local
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('mega12_user');
@@ -231,8 +236,14 @@ export function App() {
     return null;
   });
 
-  // Navigation State: Agora inicia por padrão no Hub / Home ou rota autorizada para o perfil
+  // Navigation State: Sincronizado com a URL (BrowserRouter) ou rota autorizada para o perfil
   const [activeNav, setActiveNav] = useState<ActiveNavTab>(() => {
+    try {
+      const initialPath = window.location.pathname;
+      const initialTab = PATH_TO_NAV_TAB[initialPath] as ActiveNavTab | undefined;
+      if (initialTab) return initialTab;
+    } catch {}
+
     const saved = localStorage.getItem('mega12_user');
     if (saved) {
       try { 
@@ -251,6 +262,43 @@ export function App() {
       setActiveNav(getDefaultNavForRole(currentUser.role));
     }
   }, [currentUser, activeNav]);
+
+  // Sincronização bidirecional: quando a URL do navegador muda (Back/Forward, digitação direta, bookmarks)
+  useEffect(() => {
+    const currentPath = location.pathname;
+    const mappedTab = PATH_TO_NAV_TAB[currentPath] as ActiveNavTab | undefined;
+    if (mappedTab && canAccessTab(currentUser, mappedTab)) {
+      if (activeNav !== mappedTab) {
+        setActiveNav(mappedTab);
+        setViewMode('desktop');
+      }
+    } else if (currentPath === ROUTE_PATHS.HOME) {
+      const targetPath = NAV_TAB_TO_PATH[activeNav] || ROUTE_PATHS.HOME;
+      if (targetPath !== ROUTE_PATHS.HOME && location.pathname !== targetPath) {
+        navigate(targetPath, { replace: true });
+      }
+    }
+  }, [location.pathname, currentUser]);
+
+  // Sincronização bidirecional: quando activeNav muda programaticamente na aplicação
+  useEffect(() => {
+    const expectedPath = NAV_TAB_TO_PATH[activeNav];
+    if (expectedPath && location.pathname !== expectedPath) {
+      navigate(expectedPath);
+    }
+  }, [activeNav]);
+
+  // Handler de navegação unificado e sincronizado com URLs reais
+  const handleSelectNav = (tab: ActiveNavTab) => {
+    if (canAccessTab(currentUser, tab)) {
+      setActiveNav(tab);
+      setViewMode('desktop');
+      const targetPath = NAV_TAB_TO_PATH[tab] || ROUTE_PATHS.HOME;
+      if (location.pathname !== targetPath) {
+        navigate(targetPath);
+      }
+    }
+  };
 
   // Modo de visualização: 'desktop' | 'mobile_purchases' | 'mobile_separation'
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile_purchases' | 'mobile_separation'>('desktop');
@@ -844,6 +892,7 @@ export function App() {
     localStorage.removeItem('mega12_user');
     setCurrentUser(null);
     setActiveNav('home');
+    navigate(ROUTE_PATHS.HOME);
   };
 
   const handleLoginSuccess = async (user: User) => {
@@ -855,7 +904,10 @@ export function App() {
     localStorage.setItem('mega12_user', JSON.stringify(cleanUser));
     // Carrega na hora os dados do banco usando o token do usuário logado
     await loadFromSqlite();
-    setActiveNav(getDefaultNavForRole(cleanUser.role));
+    const defaultTab = getDefaultNavForRole(cleanUser.role);
+    setActiveNav(defaultTab);
+    const targetPath = NAV_TAB_TO_PATH[defaultTab] || ROUTE_PATHS.HOME;
+    navigate(targetPath);
   };
 
   // Sincroniza o frete proporcional ao total de produtos quando a alíquota percentual estiver definida
@@ -3678,12 +3730,7 @@ export function App() {
       <Sidebar
         order={order}
         activeNav={activeNav}
-        onSelectNav={(tab) => {
-          if (canAccessTab(currentUser, tab)) {
-            setActiveNav(tab);
-            setViewMode('desktop');
-          }
-        }}
+        onSelectNav={handleSelectNav}
         isDark={isDark}
         onToggleTheme={toggleTheme}
         currentUser={currentUser}
@@ -3720,11 +3767,7 @@ export function App() {
           isExportingRomaneioExcel={isExportingRomaneioExcel}
           onExportPDF={activeNav === 'separation' ? handleExportSeparationPDF : handleExportCommercialPDF}
           onImportExcel={() => setIsImportModalOpen(true)}
-          onSelectNav={(tab) => {
-            if (canAccessTab(currentUser, tab)) {
-              setActiveNav(tab);
-            }
-          }}
+          onSelectNav={handleSelectNav}
         />
 
         <main className="flex-1 w-full max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-all duration-300">
@@ -3770,12 +3813,7 @@ export function App() {
                   isLoading={isInitialLoading}
                   localSaveNotice={localSaveNotice}
                   onRetryLocalSave={() => { void handleSaveDraftOrder(); }}
-                  onNavigate={(tab) => {
-                    if (canAccessTab(currentUser, tab)) {
-                      setActiveNav(tab);
-                      setViewMode('desktop');
-                    }
-                  }}
+                  onNavigate={handleSelectNav}
                   onNewOrder={handleNewOrder}
                   onContinueDraft={handleContinueDraft}
                   onDiscardDraft={handleDiscardDraft}
@@ -4053,7 +4091,7 @@ export function App() {
                   onUpdateStockBalance={handleUpdateStockBalance}
                   onSaveNewStockItem={handleSaveNewStockItem}
                   onGenerateStockSeparation={handleGenerateStockSeparation}
-                  onNavigateToSeparation={() => setActiveNav('separation')}
+                  onNavigateToSeparation={() => handleSelectNav('separation')}
                 />
               )}
 
@@ -4175,7 +4213,7 @@ export function App() {
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
                   stores={storeConfigs}
                   onSelectOrderForSeparation={(selected) => handleOpenSelectedOrder(selected, 'separation')}
-                  onNavigateToSeparation={() => setActiveNav('separation')}
+                  onNavigateToSeparation={() => handleSelectNav('separation')}
                 />
               )}
 
@@ -4202,8 +4240,8 @@ export function App() {
                       : (canAccessTab(currentUser, 'orders') ? 'orders' : 'separation');
                     handleOpenSelectedOrder(selected, target);
                   }}
-                  onNavigateToOrders={() => setActiveNav('orders')}
-                  onNavigateToProductsBI={() => setActiveNav('bi_products')}
+                  onNavigateToOrders={() => handleSelectNav('orders')}
+                  onNavigateToProductsBI={() => handleSelectNav('bi_products')}
                 />
               )}
 
@@ -4213,7 +4251,7 @@ export function App() {
                   orders={savedOrders.length > 0 ? savedOrders : (order ? [order] : [])}
                   stores={storeConfigs}
                   canAccessFinancialBI={canAccessTab(currentUser, 'dashboard')}
-                  onNavigateToFinancialBI={() => setActiveNav('dashboard')}
+                  onNavigateToFinancialBI={() => handleSelectNav('dashboard')}
                   onSelectOrder={(selected) => {
                     const st = selected.header.status;
                     const target = (st === 'Em Separação' || st === 'Em Distribuição' || st === 'Finalizado' || st === 'Aprovado')
@@ -4256,7 +4294,7 @@ export function App() {
                   onSaveProduct={handleSaveProduct}
                   onNavigateToProducts={(supId) => {
                     setSelectedCatalogSupplier(supId || 'all');
-                    setActiveNav('products');
+                    handleSelectNav('products');
                   }}
                 />
               )}

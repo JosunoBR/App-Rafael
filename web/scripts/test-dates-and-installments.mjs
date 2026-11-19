@@ -287,4 +287,5 @@ try {
   process.exit(1);
 } finally {
   await server.close();
+  process.exit(0);
 }

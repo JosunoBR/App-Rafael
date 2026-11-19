@@ -1,0 +1,81 @@
+/**
+ * DESIGN SYSTEM - TEMA E VARIÁVEIS DE CORES
+ * Rede Mega 12 • Sistema Integrado
+ * PRESERVAÇÃO RIGOROSA DE 100% DAS CORES E IDENTIDADE VISUAL
+ */
+
+:root {
+  /* Marca e Destaque Principal (Verde Esmeralda Mega 12) */
+  --color-primary: #10B981;
+  --color-primary-hover: #059669;
+  --color-primary-light: #ECFDF5;
+  --color-primary-dark: #047857;
+
+  /* Superfícies & Fundos (Modo Claro) */
+  --bg-app: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F1F5F9;
+  --border-card: #E2E8F0;
+  --border-card-subtle: #F1F5F9;
+
+  /* Tipografia (Modo Claro) */
+  --text-main: #0F172A;
+  --text-muted: #64748B;
+  --text-subtle: #94A3B8;
+
+  /* Status e Esteira */
+  --status-draft-bg: #F1F5F9;
+  --status-draft-text: #475569;
+  --status-quotation-bg: #FEF3C7;
+  --status-quotation-text: #D97706;
+  --status-approved-bg: #D1FAE5;
+  --status-approved-text: #059669;
+  --status-distribution-bg: #E0E7FF;
+  --status-distribution-text: #4F46E5;
+  --status-separation-bg: #EDE9FE;
+  --status-separation-text: #7C3AED;
+  --status-billing-bg: #DBEAFE;
+  --status-billing-text: #2563EB;
+  --status-completed-bg: #F1F5F9;
+  --status-completed-text: #334155;
+  --status-error-bg: #FFE4E6;
+  --status-error-text: #E11D48;
+}
+
+.dark {
+  /* Marca e Destaque Principal (Modo Escuro) */
+  --color-primary: #10B981;
+  --color-primary-hover: #34D399;
+  --color-primary-light: #064E3B;
+  --color-primary-dark: #059669;
+
+  /* Superfícies & Fundos (Modo Escuro) */
+  --bg-app: #0B0F17;
+  --bg-card: #131B2A;
+  --bg-card-hover: #1E293B;
+  --border-card: #1E293B;
+  --border-card-subtle: #0F172A;
+
+  /* Tipografia (Modo Escuro) */
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --text-subtle: #64748B;
+
+  /* Status e Esteira (Modo Escuro) */
+  --status-draft-bg: #1E293B;
+  --status-draft-text: #94A3B8;
+  --status-quotation-bg: #78350F;
+  --status-quotation-text: #FDE68A;
+  --status-approved-bg: #064E3B;
+  --status-approved-text: #A7F3D0;
+  --status-distribution-bg: #312E81;
+  --status-distribution-text: #C7D2FE;
+  --status-separation-bg: #4C1D95;
+  --status-separation-text: #DDD6FE;
+  --status-billing-bg: #1E3A8A;
+  --status-billing-text: #BFDBFE;
+  --status-completed-bg: #1E293B;
+  --status-completed-text: #CBD5E1;
+  --status-error-bg: #881337;
+  --status-error-text: #FECDD3;
+}

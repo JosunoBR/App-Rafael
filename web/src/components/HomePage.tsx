@@ -274,14 +274,14 @@ export const HomePage: React.FC<HomePageProps> = ({
   };
 
   const getActionButtonLabel = (status: string) => {
-    if (status === 'Em Separação' || status === 'Aprovado') return 'Conferir Doca';
-    if (status === 'Em Distribuição') return 'Distribuir CD';
-    if (status === 'Finalizado') return 'Ver Romaneio';
+    if (status === 'Em Separação' || status === 'Aprovado' || status === 'Em Distribuição' || status === 'Finalizado') {
+      return 'Distribuição';
+    }
     return canAccessOrders ? 'Abrir Cotação' : 'Visualizar';
   };
 
   // Determina a aba de destino do pedido respeitando estritamente a segurança e o estágio operacional:
-  // "Conferir Doca", "Ver Romaneio" e "Distribuir CD" abrem obrigatoriamente na página Distribuição ('separation')
+  // "Distribuição" abre obrigatoriamente na página Distribuição ('separation')
   const getDestinationTabForOrder = (status: string): ActiveNavTab => {
     if (status === 'Em Separação' || status === 'Em Distribuição' || status === 'Finalizado' || status === 'Aprovado') {
       return 'separation';
@@ -788,13 +788,32 @@ export const HomePage: React.FC<HomePageProps> = ({
                                 <span>{ord.header.boletosLiberados ? "Finalizar Pedido" : "Liberar Boletos"}</span>
                               </button>
                             )}
-                            <button
-                              onClick={() => handleSelectOrder(ord)}
-                              className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition cursor-pointer inline-flex items-center gap-1 shadow-2xs"
-                            >
-                              <span>{isTransfer && ord.header.status === 'Em Separação' ? 'Conferir Doca' : getActionButtonLabel(ord.header.status)}</span>
-                              <ArrowRight className="w-3 h-3" />
-                            </button>
+                            {(() => {
+                              const isDistribuicao = (isTransfer && ord.header.status === 'Em Separação') || getDestinationTabForOrder(ord.header.status) === 'separation';
+                              if (isDistribuicao) {
+                                return (
+                                  <button
+                                    onClick={() => handleSelectOrder(ord)}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200/80 dark:border-blue-800/60 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs active:scale-95"
+                                    title="Abrir diretamente a Distribuição por Lojas deste pedido"
+                                  >
+                                    <Boxes className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                    <span>Distribuição</span>
+                                    <ArrowRight className="w-3 h-3 text-blue-500 dark:text-blue-400" />
+                                  </button>
+                                );
+                              }
+                              return (
+                                <button
+                                  onClick={() => handleSelectOrder(ord)}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-95"
+                                  title={canAccessOrders ? "Abrir Cotação deste pedido" : "Visualizar detalhes do pedido"}
+                                >
+                                  <span>{canAccessOrders ? 'Abrir Cotação' : 'Visualizar'}</span>
+                                  <ArrowRight className="w-3 h-3" />
+                                </button>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>

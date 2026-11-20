@@ -156,7 +156,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'separation':
         return { title: 'Separação & Distribuição de Lojas', group: 'Operação', icon: userRole === 'separacao' ? PackageCheck : Boxes, color: 'text-blue-500' };
       case 'financial':
-        return { title: 'Gestão Financeira & Boletos', group: 'Gestão', icon: CreditCard, color: 'text-amber-500' };
+        return { title: 'Financeiro', group: 'Gestão', icon: CreditCard, color: 'text-amber-500' };
       case 'dashboard':
         return { title: 'Dashboard Executivo & Barganha BI', group: 'Gestão', icon: BarChart3, color: 'text-teal-500' };
       case 'history':

@@ -290,10 +290,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 activeNav === 'history'
               )}
 
-              {/* Financeiro / Boletos */}
+              {/* Financeiro */}
               {canAccessFinancial && renderItem(
                 'financial',
-                'Financeiro / Boletos',
+                'Financeiro',
                 <CreditCard className={`w-4 h-4 ${activeNav === 'financial' ? 'text-white' : 'text-amber-500'}`} />,
                 activeNav === 'financial'
               )}

@@ -1067,23 +1067,94 @@ class OrderRepository {
     const now = new Date().toISOString();
     const today = now.split('T')[0];
 
-    // Preserva produtos revertendo qualquer alteração de preço decorrente de ajuste fiscal
+    let activeStoresRows = [];
+    try {
+      activeStoresRows = await queryAll("SELECT id FROM stores WHERE active = 1 ORDER BY name ASC");
+    } catch {}
+    const activeStoreIds = activeStoresRows.map(s => s.id);
+
+    // Preserva produtos revertendo qualquer alteração de preço, quantidade ou rateio decorrente de ajuste fiscal, ruptura ou divergência física
     const duplicatedItems = (original.items || []).map(item => {
-      const grade = item.grade || item.separacaoLojas || {};
       const origPrice = item.precoUnitarioOriginal !== undefined && Number(item.precoUnitarioOriginal) > 0
         ? Number(item.precoUnitarioOriginal)
         : Number(item.precoUnitario || 0);
-      const pecas = Number(item.qtdTotalUnidades || 0);
-      const bruto = Number(item.valorTotalBrutoOriginal !== undefined ? item.valorTotalBrutoOriginal : (pecas * origPrice));
+
+      const pack = Number(item.packOriginal || item.qtdNoPacote || item.qtdPorPacote || 1) || 1;
+
+      // 🛡️ Restauração inteligente de quantidades pré-ruptura / pré-divergência
+      let pecas = 0;
+      if (item.qtdTotalUnidadesOriginal !== undefined && Number(item.qtdTotalUnidadesOriginal) > 0) {
+        pecas = Number(item.qtdTotalUnidadesOriginal);
+      } else if (item.qtdTotalUnidades !== undefined && Number(item.qtdTotalUnidades) > 0) {
+        pecas = Number(item.qtdTotalUnidades);
+      } else if (item.qtdPacotesOriginal !== undefined && Number(item.qtdPacotesOriginal) > 0) {
+        pecas = Number(item.qtdPacotesOriginal) * pack;
+      } else if (item.qtdPacotes !== undefined && Number(item.qtdPacotes) > 0) {
+        pecas = Number(item.qtdPacotes) * pack;
+      }
+
+      let pacotes = 0;
+      if (item.qtdPacotesOriginal !== undefined && Number(item.qtdPacotesOriginal) > 0) {
+        pacotes = Number(item.qtdPacotesOriginal);
+      } else if (item.qtdPacotes !== undefined && Number(item.qtdPacotes) > 0) {
+        pacotes = Number(item.qtdPacotes);
+      } else if (pecas > 0) {
+        pacotes = pack > 1 ? Math.floor(pecas / pack) : pecas;
+      }
+
+      const bruto = Number(item.valorTotalBrutoOriginal !== undefined && Number(item.valorTotalBrutoOriginal) > 0
+        ? item.valorTotalBrutoOriginal
+        : (pecas * origPrice));
       const hasItemDesc = item.percentualDesconto !== undefined && item.percentualDesconto !== null && item.percentualDesconto > 0;
       const descPct = hasItemDesc ? Number(item.percentualDesconto) : 0;
       const descVal = descPct > 0 ? Number((bruto * (descPct / 100)).toFixed(2)) : 0;
       const liqVal = Math.max(0, Number((bruto - descVal).toFixed(2)));
 
+      // 🛡️ Restauração da grade / distribuição pré-ruptura
+      const rawOrigGrade = item.separacaoLojasOriginal || item.gradeOriginal || null;
+      let effectiveGrade = {};
+      let hasValidAllocations = false;
+
+      if (rawOrigGrade && typeof rawOrigGrade === 'object') {
+        const sumOrig = Object.values(rawOrigGrade).reduce((s, v) => s + (Number(v) || 0), 0);
+        if (sumOrig > 0) {
+          effectiveGrade = { ...rawOrigGrade };
+          hasValidAllocations = true;
+        }
+      }
+
+      if (!hasValidAllocations) {
+        const currentGrade = item.grade || item.separacaoLojas || {};
+        if (typeof currentGrade === 'object') {
+          const sumCurr = Object.values(currentGrade).reduce((s, v) => s + (Number(v) || 0), 0);
+          if (sumCurr > 0) {
+            effectiveGrade = { ...currentGrade };
+            hasValidAllocations = true;
+          }
+        }
+      }
+
+      // Se a grade estava totalmente zerada por causa de ruptura mas temos peças restauradas, distribui entre as lojas
+      if (!hasValidAllocations && pecas > 0) {
+        const storeKeys = activeStoreIds.length > 0 ? activeStoreIds : Object.keys(item.grade || item.separacaoLojas || {});
+        if (storeKeys.length > 0) {
+          const basePerStore = Math.floor(pecas / storeKeys.length);
+          let remainder = pecas % storeKeys.length;
+          storeKeys.forEach(sId => {
+            effectiveGrade[sId] = basePerStore + (remainder > 0 ? 1 : 0);
+            if (remainder > 0) remainder--;
+          });
+        }
+      }
+
       const cleanItem = {
         ...item,
         id: `it_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         orderId: newId,
+        qtdNoPacote: pack,
+        qtdPorPacote: pack,
+        qtdPacotes: pacotes,
+        qtdTotalUnidades: pecas,
         precoUnitario: origPrice,
         valorTotalBruto: bruto,
         valorDescontoItem: descVal,
@@ -1094,11 +1165,22 @@ class OrderRepository {
         ruptura: false,
         separacaoManual: false,
         checks: {},
-        separacaoLojas: typeof grade === 'object' ? { ...grade } : {},
-        grade: typeof grade === 'object' ? { ...grade } : {}
+        separacaoLojas: effectiveGrade,
+        grade: effectiveGrade
       };
+
+      // Limpeza estrita de marcadores de divergência e ajuste fiscal antigos
       delete cleanItem.precoUnitarioOriginal;
       delete cleanItem.valorTotalBrutoOriginal;
+      delete cleanItem.qtdTotalUnidadesOriginal;
+      delete cleanItem.qtdPacotesOriginal;
+      delete cleanItem.packOriginal;
+      delete cleanItem.separacaoLojasOriginal;
+      delete cleanItem.gradeOriginal;
+      delete cleanItem.divergenciaFisicaAtiva;
+      delete cleanItem.divergenciaFisicaId;
+      delete cleanItem.motivoDivergencia;
+
       return cleanItem;
     });
 

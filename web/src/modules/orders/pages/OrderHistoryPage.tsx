@@ -1226,7 +1226,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                 <th className="py-3 px-3 text-center whitespace-nowrap min-w-[280px]">Avançar Esteira</th>
 
                 {/* 10. AÇÕES */}
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[120px]">Ações</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[190px]">Ações</th>
               </tr>
             </thead>
 
@@ -1501,6 +1501,16 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToSeparation ? onNavigateToSeparation(ord) : onSelectOrder(ord)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200/80 dark:border-blue-800/60 active:scale-95 transition cursor-pointer shadow-2xs"
+                            title="Abrir diretamente a Distribuição por Lojas deste pedido"
+                          >
+                            <Boxes className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                            <span>Distribuição</span>
+                          </button>
+
                           <button
                             onClick={() => handleOpenOrder(ord)}
                             disabled={openingOrderId === ord.header.id}

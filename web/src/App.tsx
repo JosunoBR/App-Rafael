@@ -2419,31 +2419,104 @@ export function App() {
         };
       }
 
-      // 1. Reverter preços originais dos produtos caso o pedido de origem tenha sofrido ajuste fiscal
+      // 1. Reverter preços, quantidades e rateios originais dos produtos caso o pedido de origem tenha sofrido ajuste fiscal, ruptura ou divergência
       const cleanedItems = (duplicated.items || order.items || []).map(it => {
         const origPrice = it.precoUnitarioOriginal !== undefined && Number(it.precoUnitarioOriginal) > 0
           ? Number(it.precoUnitarioOriginal)
           : Number(it.precoUnitario || 0);
-        const pecas = Number(it.qtdTotalUnidades || 0);
-        const bruto = Number(it.valorTotalBrutoOriginal !== undefined ? it.valorTotalBrutoOriginal : (pecas * origPrice));
+
+        const pack = Number(it.packOriginal || it.qtdNoPacote || it.qtdPorPacote || 1) || 1;
+
+        // 🛡️ Restauração inteligente de quantidades pré-ruptura / pré-divergência
+        let pecas = 0;
+        if (it.qtdTotalUnidadesOriginal !== undefined && Number(it.qtdTotalUnidadesOriginal) > 0) {
+          pecas = Number(it.qtdTotalUnidadesOriginal);
+        } else if (it.qtdTotalUnidades !== undefined && Number(it.qtdTotalUnidades) > 0) {
+          pecas = Number(it.qtdTotalUnidades);
+        } else if (it.qtdPacotesOriginal !== undefined && Number(it.qtdPacotesOriginal) > 0) {
+          pecas = Number(it.qtdPacotesOriginal) * pack;
+        } else if (it.qtdPacotes !== undefined && Number(it.qtdPacotes) > 0) {
+          pecas = Number(it.qtdPacotes) * pack;
+        }
+
+        let pacotes = 0;
+        if (it.qtdPacotesOriginal !== undefined && Number(it.qtdPacotesOriginal) > 0) {
+          pacotes = Number(it.qtdPacotesOriginal);
+        } else if (it.qtdPacotes !== undefined && Number(it.qtdPacotes) > 0) {
+          pacotes = Number(it.qtdPacotes);
+        } else if (pecas > 0) {
+          pacotes = pack > 1 ? Math.floor(pecas / pack) : pecas;
+        }
+
+        const bruto = Number(it.valorTotalBrutoOriginal !== undefined && Number(it.valorTotalBrutoOriginal) > 0
+          ? it.valorTotalBrutoOriginal
+          : (pecas * origPrice));
         const hasItemDesc = it.percentualDesconto !== undefined && it.percentualDesconto !== null && it.percentualDesconto > 0;
         const descPct = hasItemDesc ? Number(it.percentualDesconto) : 0;
         const descVal = descPct > 0 ? Number((bruto * (descPct / 100)).toFixed(2)) : 0;
         const liqVal = Math.max(0, Number((bruto - descVal).toFixed(2)));
 
+        // 🛡️ Restauração da grade / distribuição pré-ruptura
+        const rawOrigGrade = it.separacaoLojasOriginal || (it as any).gradeOriginal || null;
+        let effectiveGrade: Record<string, number> = {};
+        let hasValidAllocations = false;
+
+        if (rawOrigGrade && typeof rawOrigGrade === 'object') {
+          const sumOrig = Object.values(rawOrigGrade).reduce((s: number, v: any) => s + (Number(v) || 0), 0);
+          if (sumOrig > 0) {
+            effectiveGrade = { ...(rawOrigGrade as Record<string, number>) };
+            hasValidAllocations = true;
+          }
+        }
+
+        if (!hasValidAllocations) {
+          const currentGrade = it.grade || it.separacaoLojas || {};
+          if (typeof currentGrade === 'object') {
+            const sumCurr = Object.values(currentGrade).reduce((s: number, v: any) => s + (Number(v) || 0), 0);
+            if (sumCurr > 0) {
+              effectiveGrade = { ...(currentGrade as Record<string, number>) };
+              hasValidAllocations = true;
+            }
+          }
+        }
+
+        let finalReserve = Number(it.qtdReservaEstoque) || 0;
+        if (!hasValidAllocations && pecas > 0) {
+          const autoSep = calculateAutomaticSeparation(pecas, storeConfigs);
+          effectiveGrade = autoSep.allocations;
+          finalReserve = autoSep.reserveStock;
+        }
+
         const itemCopy = {
           ...it,
           id: it.id && it.id.startsWith('it_') ? it.id : ('it_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
+          qtdNoPacote: pack,
+          qtdPorPacote: pack,
+          qtdPacotes: pacotes,
+          qtdTotalUnidades: pecas,
           qtdRecebida: null,
           ruptura: false,
           motivoRuptura: undefined,
           precoUnitario: origPrice,
           valorTotalBruto: bruto,
           valorDescontoItem: descVal,
-          valorTotalLiquido: liqVal
+          valorTotalLiquido: liqVal,
+          qtdReservaEstoque: finalReserve,
+          separacaoManual: false,
+          checks: {},
+          separacaoLojas: effectiveGrade,
+          grade: effectiveGrade
         };
         delete itemCopy.precoUnitarioOriginal;
         delete itemCopy.valorTotalBrutoOriginal;
+        delete itemCopy.qtdTotalUnidadesOriginal;
+        delete itemCopy.qtdPacotesOriginal;
+        delete itemCopy.packOriginal;
+        delete itemCopy.separacaoLojasOriginal;
+        delete (itemCopy as any).gradeOriginal;
+        delete (itemCopy as any).divergenciaFisicaAtiva;
+        delete (itemCopy as any).divergenciaFisicaId;
+        delete (itemCopy as any).motivoDivergencia;
         return itemCopy;
       });
       duplicated.items = cleanedItems;

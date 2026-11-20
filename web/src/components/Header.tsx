@@ -150,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'home':
         return { title: 'Visão Geral & Hub', group: 'Operação', icon: Home, color: 'text-emerald-500' };
       case 'orders':
-        return { title: 'Cotação & Pedidos de Compras', group: 'Operação', icon: ShoppingCart, color: 'text-emerald-500' };
+        return { title: 'Pedido', group: 'Operação', icon: ShoppingCart, color: 'text-emerald-500' };
       case 'stock':
         return { title: 'Estoque Central CD & Almoxarifado', group: 'Operação', icon: Warehouse, color: 'text-emerald-500' };
       case 'separation':
@@ -204,7 +204,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-tight whitespace-nowrap">
-                {activeNav === 'orders' ? 'Cotação & Pedidos' : navMeta.title}
+                {activeNav === 'orders' ? 'Pedido' : navMeta.title}
               </h1>
               {activeNav === 'orders' && canAccessOrders && order?.header?.numeroPedido && (
                 <div className="relative" ref={ordersDropdownRef}>

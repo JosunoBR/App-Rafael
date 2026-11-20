@@ -234,10 +234,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               activeNav === 'home'
             )}
 
-            {/* Cotação & Pedidos */}
+            {/* Pedido */}
             {canAccessOrders && renderItem(
               'orders',
-              'Cotação & Pedidos',
+              'Pedido',
               <ShoppingCart className={`w-4 h-4 ${activeNav === 'orders' ? 'text-white' : 'text-emerald-500'}`} />,
               activeNav === 'orders',
               hasActiveDraft && activeNav !== 'orders' ? (

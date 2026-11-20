@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  ShoppingCart, 
-  PackageCheck, 
-  Warehouse, 
-  Boxes, 
-  ArrowRight, 
-  Clock, 
-  CheckCircle2, 
+import {
+  ShoppingCart,
+  PackageCheck,
+  Warehouse,
+  Boxes,
+  ArrowRight,
+  Clock,
+  CheckCircle2,
   Search,
   ShieldAlert,
   Calendar,
@@ -94,7 +94,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   // Verifica se há rascunho em aberto
   const hasValidDraft = Boolean(
     draftOrder && (
-      (draftOrder.items && draftOrder.items.length > 0) || 
+      (draftOrder.items && draftOrder.items.length > 0) ||
       (draftOrder.header.fornecedor && draftOrder.header.fornecedor.trim() !== '')
     )
   );
@@ -188,10 +188,10 @@ export const HomePage: React.FC<HomePageProps> = ({
     if (currentUser?.role === 'faturamento') {
       list = list.filter(o => o.header.status !== 'Em Cotação' && o.header.status !== 'Rascunho');
     } else if (!canAccessOrders) {
-      list = list.filter(o => 
-        o.header.status === 'Aprovado' || 
-        o.header.status === 'Em Distribuição' || 
-        o.header.status === 'Em Separação' || 
+      list = list.filter(o =>
+        o.header.status === 'Aprovado' ||
+        o.header.status === 'Em Distribuição' ||
+        o.header.status === 'Em Separação' ||
         o.header.status === 'Faturamento' ||
         o.header.status === 'Finalizado'
       );
@@ -231,8 +231,8 @@ export const HomePage: React.FC<HomePageProps> = ({
 
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      list = list.filter(o => 
-        o.header.numeroPedido.toLowerCase().includes(q) || 
+      list = list.filter(o =>
+        o.header.numeroPedido.toLowerCase().includes(q) ||
         (o.header.fornecedor && o.header.fornecedor.toLowerCase().includes(q))
       );
     }
@@ -277,7 +277,7 @@ export const HomePage: React.FC<HomePageProps> = ({
     if (status === 'Em Separação' || status === 'Aprovado' || status === 'Em Distribuição' || status === 'Finalizado') {
       return 'Distribuição';
     }
-    return canAccessOrders ? 'Abrir Cotação' : 'Visualizar';
+    return canAccessOrders ? 'Pedido' : 'Visualizar';
   };
 
   // Determina a aba de destino do pedido respeitando estritamente a segurança e o estágio operacional:
@@ -296,7 +296,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      
+
       {/* 1. Header do Cockpit Executivo */}
       <div className="relative overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 text-white p-6 sm:p-7 shadow-xl">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -321,7 +321,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
                 </span>
               </div>
-              
+
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
                 {getGreeting()}, <span className="text-emerald-400">{(currentUser.nome || 'Usuário').replace(/\s*\([^)]*\)/g, '').trim()}</span>
               </h1>
@@ -430,7 +430,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
       {/* 2. Barra Executiva de KPIs (Pulse Indicators) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
+
         {/* KPI 1: Pedidos em Fluxo */}
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition">
           <div className="flex items-center justify-between">
@@ -464,8 +464,8 @@ export const HomePage: React.FC<HomePageProps> = ({
               {pedidosNaDoca.length} <span className="text-xs font-normal text-slate-400">cargas</span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-              {totalPecasNaDoca > 0 
-                ? `${totalPecasNaDoca.toLocaleString('pt-BR')} peças em conferência` 
+              {totalPecasNaDoca > 0
+                ? `${totalPecasNaDoca.toLocaleString('pt-BR')} peças em conferência`
                 : 'Aguardando liberação de compras'}
             </p>
           </div>
@@ -484,8 +484,8 @@ export const HomePage: React.FC<HomePageProps> = ({
               {pedidosComAvarias.length > 0 ? `${totalPecasAvariadas} un` : '100%'}
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-              {pedidosComAvarias.length > 0 
-                ? `${pedidosComAvarias.length} pedido(s) com apontamento` 
+              {pedidosComAvarias.length > 0
+                ? `${pedidosComAvarias.length} pedido(s) com apontamento`
                 : 'Zero divergências críticas registradas'}
             </p>
           </div>
@@ -561,282 +561,277 @@ export const HomePage: React.FC<HomePageProps> = ({
 
       {/* 4. Fila Operacional de Pedidos (Largura Total) */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xs overflow-hidden">
-          
-          {/* Cabeçalho da Fila de Trabalho com Abas */}
-          <div className="p-5 border-b border-slate-200/90 dark:border-slate-800 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-emerald-500" />
-                  Fila Operacional de Pedidos
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Acompanhe e despache pedidos conforme cada estágio do fluxo.
-                </p>
-              </div>
 
-              {/* Busca Rápida */}
-              <div className="relative w-full sm:w-56">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Filtrar por nº ou fornecedor..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-8.5 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
+        {/* Cabeçalho da Fila de Trabalho com Abas */}
+        <div className="p-5 border-b border-slate-200/90 dark:border-slate-800 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-500" />
+                Fila Operacional de Pedidos
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Acompanhe e despache pedidos conforme cada estágio do fluxo.
+              </p>
             </div>
 
-            {/* Esteira Operacional de Pedidos (Padrão Oficial Mega 12) */}
-            <div className="flex flex-wrap items-center gap-2 pt-1 overflow-x-auto pb-1">
-              <button
-                type="button"
-                onClick={() => { setActiveTab('todos'); setOperationalFilter('all'); }}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  activeTab === 'todos'
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/50'
-                }`}
-              >
-                <span>Todos os Pedidos</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20 dark:bg-white/20">
-                  {countByStatus.todos}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setActiveTab('Em Cotação'); setOperationalFilter('all'); }}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  activeTab === 'Em Cotação'
-                    ? 'bg-amber-500 text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-                }`}
-              >
-                <span>🟡 1. Em Cotação</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
-                  {countByStatus['Em Cotação']}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setActiveTab('Aprovado'); setOperationalFilter('all'); }}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  activeTab === 'Aprovado'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-50 dark:hover:bg-blue-950/30'
-                }`}
-              >
-                <span>🔵 2. Aprovados</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
-                  {countByStatus['Aprovado']}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setActiveTab('Em Separação'); setOperationalFilter('all'); }}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  activeTab === 'Em Separação'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50 dark:hover:bg-purple-950/30'
-                }`}
-              >
-                <span>🟣 3. Separação</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
-                  {countByStatus['Em Separação'] || 0}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setActiveTab('Faturamento'); setOperationalFilter('all'); }}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  activeTab === 'Faturamento'
-                    ? 'bg-amber-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-                }`}
-              >
-                <span>🟠 4. Faturamento</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
-                  {countByStatus['Faturamento'] || 0}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setActiveTab('Finalizado'); setOperationalFilter('all'); }}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  activeTab === 'Finalizado'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
-                }`}
-              >
-                <span>🟢 5. Finalizados</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
-                  {countByStatus['Finalizado'] || 0}
-                </span>
-              </button>
+            {/* Busca Rápida */}
+            <div className="relative w-full sm:w-56">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Filtrar por nº ou fornecedor..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8.5 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+              />
             </div>
           </div>
 
-          {/* Conteúdo da Tabela */}
-          {filteredOrders.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
-                <Boxes className="w-6 h-6" />
-              </div>
-              <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                Nenhum pedido encontrado nesta visualização
-              </h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-                {searchTerm ? 'Tente ajustar os termos da pesquisa.' : 'Alterne as abas acima para conferir os outros estágios.'}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[620px]">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                    <th className="py-3 px-4">Nº Pedido</th>
-                    <th className="py-3 px-4">Fornecedor</th>
-                    <th className="py-3 px-4">Data</th>
-                    <th className="py-3 px-4 text-center">Peças</th>
-                    {canAccessOrders && <th className="py-3 px-4 text-right">Valor Total</th>}
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-right">Ação</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                  {filteredOrders.slice(0, 6).map((ord) => {
-                    const isTransfer = ord.header.supplierId === 'cd_matriz' ||
-                      String(ord.header.numeroPedido || '').startsWith('CD-') ||
-                      String(ord.header.id || '').startsWith('order_transf_cd_') ||
-                      Boolean(ord.header.fornecedor && ord.header.fornecedor.toLowerCase().includes('transferência'));
-                    const totalVal = ord.items?.reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0) || 0;
-                    const totalPecas = ord.items?.reduce((sum, it) => sum + (it.qtdTotalUnidades || 0), 0) || 0;
+          {/* Esteira Operacional de Pedidos (Padrão Oficial Mega 12) */}
+          <div className="flex flex-wrap items-center gap-2 pt-1 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => { setActiveTab('todos'); setOperationalFilter('all'); }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${activeTab === 'todos'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                }`}
+            >
+              <span>Todos os Pedidos</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20 dark:bg-white/20">
+                {countByStatus.todos}
+              </span>
+            </button>
 
-                    return (
-                      <tr 
-                        key={ord.header.id}
-                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer group"
-                        onClick={() => handleSelectOrder(ord)}
-                      >
-                        <td className="py-3.5 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">
-                          {ord.header.numeroPedido}
+            <button
+              type="button"
+              onClick={() => { setActiveTab('Em Cotação'); setOperationalFilter('all'); }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${activeTab === 'Em Cotação'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                }`}
+            >
+              <span>🟡 1. Em Cotação</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                {countByStatus['Em Cotação']}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setActiveTab('Aprovado'); setOperationalFilter('all'); }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${activeTab === 'Aprovado'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-50 dark:hover:bg-blue-950/30'
+                }`}
+            >
+              <span>🔵 2. Aprovados</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                {countByStatus['Aprovado']}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setActiveTab('Em Separação'); setOperationalFilter('all'); }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${activeTab === 'Em Separação'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50 dark:hover:bg-purple-950/30'
+                }`}
+            >
+              <span>🟣 3. Separação</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                {countByStatus['Em Separação'] || 0}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setActiveTab('Faturamento'); setOperationalFilter('all'); }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${activeTab === 'Faturamento'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                }`}
+            >
+              <span>🟠 4. Faturamento</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                {countByStatus['Faturamento'] || 0}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setActiveTab('Finalizado'); setOperationalFilter('all'); }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${activeTab === 'Finalizado'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                }`}
+            >
+              <span>🟢 5. Finalizados</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/20">
+                {countByStatus['Finalizado'] || 0}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Conteúdo da Tabela */}
+        {filteredOrders.length === 0 ? (
+          <div className="p-8 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
+              <Boxes className="w-6 h-6" />
+            </div>
+            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              Nenhum pedido encontrado nesta visualização
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+              {searchTerm ? 'Tente ajustar os termos da pesquisa.' : 'Alterne as abas acima para conferir os outros estágios.'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[620px]">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                  <th className="py-3 px-4">Nº Pedido</th>
+                  <th className="py-3 px-4">Fornecedor</th>
+                  <th className="py-3 px-4">Data</th>
+                  <th className="py-3 px-4 text-center">Peças</th>
+                  {canAccessOrders && <th className="py-3 px-4 text-right">Valor Total</th>}
+                  <th className="py-3 px-4 text-center">Status</th>
+                  <th className="py-3 px-4 text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {filteredOrders.slice(0, 6).map((ord) => {
+                  const isTransfer = ord.header.supplierId === 'cd_matriz' ||
+                    String(ord.header.numeroPedido || '').startsWith('CD-') ||
+                    String(ord.header.id || '').startsWith('order_transf_cd_') ||
+                    Boolean(ord.header.fornecedor && ord.header.fornecedor.toLowerCase().includes('transferência'));
+                  const totalVal = ord.items?.reduce((sum, it) => sum + (it.valorTotalBruto || 0), 0) || 0;
+                  const totalPecas = ord.items?.reduce((sum, it) => sum + (it.qtdTotalUnidades || 0), 0) || 0;
+
+                  return (
+                    <tr
+                      key={ord.header.id}
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer group"
+                      onClick={() => handleSelectOrder(ord)}
+                    >
+                      <td className="py-3.5 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">
+                        {ord.header.numeroPedido}
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-100 max-w-[180px] truncate">
+                        {ord.header.fornecedor || 'Fornecedor não informado'}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
+                        {toBrDate(ord.header.dataPedido) || '-'}
+                      </td>
+                      <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
+                        {totalPecas.toLocaleString('pt-BR')}
+                      </td>
+                      {canAccessOrders && (
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
+                          R$ {totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-100 max-w-[180px] truncate">
-                          {ord.header.fornecedor || 'Fornecedor não informado'}
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
-                          {toBrDate(ord.header.dataPedido) || '-'}
-                        </td>
-                        <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
-                          {totalPecas.toLocaleString('pt-BR')}
-                        </td>
-                        {canAccessOrders && (
-                          <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
-                            R$ {totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                        )}
-                        <td className="py-3.5 px-4 text-center">
-                          <span className={`px-2.5 py-0.8 rounded-full text-[10px] font-extrabold border ${getStatusBadge(ord.header.status)}`}>
-                            {isTransfer && ord.header.status === 'Finalizado' ? 'Expedido' : ord.header.status}
-                          </span>
-                          <div className="mt-1 flex flex-col items-center gap-0.5">
-                            {isTransfer ? (
-                              <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400">
-                                📦 Transferência CD
-                              </span>
-                            ) : ord.header.recebidoMatriz ? (
-                              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
-                                ✓ Recebido Matriz
-                              </span>
-                            ) : (ord.header.status === 'Aprovado' || ord.header.status === 'Em Distribuição') && ord.header.supplierId !== 'cd_matriz' ? (
-                              <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
-                                Aguardando entrega
-                              </span>
-                            ) : null}
-                            {!isTransfer && ord.header.recebidoMatriz && !ord.header.boletosLiberados && (
-                              <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
-                                🔒 Boletos retidos
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            {!isTransfer && !ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser, ord.header.status) && (
-                              <button
-                                onClick={() => onConfirmReceipt(ord)}
-                                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
-                                title="Confirmar o recebimento físico da mercadoria na Matriz"
-                              >
-                                <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                                <span>Receber</span>
-                              </button>
-                            )}
-                            {!isTransfer && (!ord.header.boletosLiberados || ord.header.status === 'Faturamento') && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser, ord.header.status) && (
-                              <button
-                                onClick={() => onAuthorizeFinancial(ord)}
-                                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50/90 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
-                                title={ord.header.boletosLiberados ? "Finalizar o pedido na esteira" : "Liberar os boletos no Contas a Pagar e finalizar o pedido"}
-                              >
-                                <CreditCard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                                <span>{ord.header.boletosLiberados ? "Finalizar Pedido" : "Liberar Boletos"}</span>
-                              </button>
-                            )}
-                            {(() => {
-                              const isDistribuicao = (isTransfer && ord.header.status === 'Em Separação') || getDestinationTabForOrder(ord.header.status) === 'separation';
-                              if (isDistribuicao) {
-                                return (
-                                  <button
-                                    onClick={() => handleSelectOrder(ord)}
-                                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200/80 dark:border-blue-800/60 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs active:scale-95"
-                                    title="Abrir diretamente a Distribuição por Lojas deste pedido"
-                                  >
-                                    <Boxes className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                                    <span>Distribuição</span>
-                                    <ArrowRight className="w-3 h-3 text-blue-500 dark:text-blue-400" />
-                                  </button>
-                                );
-                              }
+                      )}
+                      <td className="py-3.5 px-4 text-center">
+                        <span className={`px-2.5 py-0.8 rounded-full text-[10px] font-extrabold border ${getStatusBadge(ord.header.status)}`}>
+                          {isTransfer && ord.header.status === 'Finalizado' ? 'Expedido' : ord.header.status}
+                        </span>
+                        <div className="mt-1 flex flex-col items-center gap-0.5">
+                          {isTransfer ? (
+                            <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400">
+                              📦 Transferência CD
+                            </span>
+                          ) : ord.header.recebidoMatriz ? (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                              ✓ Recebido Matriz
+                            </span>
+                          ) : (ord.header.status === 'Aprovado' || ord.header.status === 'Em Distribuição') && ord.header.supplierId !== 'cd_matriz' ? (
+                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                              Aguardando entrega
+                            </span>
+                          ) : null}
+                          {!isTransfer && ord.header.recebidoMatriz && !ord.header.boletosLiberados && (
+                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                              🔒 Boletos retidos
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {!isTransfer && !ord.header.recebidoMatriz && ord.header.status !== 'Finalizado' && onConfirmReceipt && canConfirmReceipt(currentUser, ord.header.status) && (
+                            <button
+                              onClick={() => onConfirmReceipt(ord)}
+                              className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
+                              title="Confirmar o recebimento físico da mercadoria na Matriz"
+                            >
+                              <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              <span>Receber</span>
+                            </button>
+                          )}
+                          {!isTransfer && (!ord.header.boletosLiberados || ord.header.status === 'Faturamento') && onAuthorizeFinancial && canAuthorizeFinancialRelease(currentUser, ord.header.status) && (
+                            <button
+                              onClick={() => onAuthorizeFinancial(ord)}
+                              className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50/90 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs transition cursor-pointer inline-flex items-center gap-1 active:scale-98"
+                              title={ord.header.boletosLiberados ? "Finalizar o pedido na esteira" : "Liberar os boletos no Contas a Pagar e finalizar o pedido"}
+                            >
+                              <CreditCard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                              <span>{ord.header.boletosLiberados ? "Finalizar Pedido" : "Liberar Boletos"}</span>
+                            </button>
+                          )}
+                          {(() => {
+                            const isDistribuicao = (isTransfer && ord.header.status === 'Em Separação') || getDestinationTabForOrder(ord.header.status) === 'separation';
+                            if (isDistribuicao) {
                               return (
                                 <button
                                   onClick={() => handleSelectOrder(ord)}
-                                  className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-95"
-                                  title={canAccessOrders ? "Abrir Cotação deste pedido" : "Visualizar detalhes do pedido"}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200/80 dark:border-blue-800/60 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs active:scale-95"
+                                  title="Abrir diretamente a Distribuição por Lojas deste pedido"
                                 >
-                                  <span>{canAccessOrders ? 'Abrir Cotação' : 'Visualizar'}</span>
-                                  <ArrowRight className="w-3 h-3" />
+                                  <Boxes className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                  <span>Distribuição</span>
+                                  <ArrowRight className="w-3 h-3 text-blue-500 dark:text-blue-400" />
                                 </button>
                               );
-                            })()}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Rodapé da Tabela */}
-          <div className="p-3.5 bg-slate-50/80 dark:bg-slate-800/40 border-t border-slate-200/90 dark:border-slate-800 flex items-center justify-between text-xs">
-            <span className="text-slate-500 dark:text-slate-400 text-[11px]">
-              Exibindo até 6 pedidos mais recentes • Total de {filteredOrders.length} pedido(s)
-            </span>
-            <button
-              onClick={() => onNavigate(canAccessTab(currentUser, 'history') ? 'history' : 'separationHistory')}
-              className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span>Acessar Arquivo & Histórico Completo</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+                            }
+                            return (
+                              <button
+                                onClick={() => handleSelectOrder(ord)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 dark:hover:text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs active:scale-95 group"
+                                title={canAccessOrders ? "Abrir detalhes e itens do pedido" : "Visualizar detalhes do pedido"}
+                              >
+                                <ShoppingCart className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 group-hover:text-white transition" />
+                                <span>{canAccessOrders ? 'Pedido' : 'Visualizar'}</span>
+                                <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
+        )}
+
+        {/* Rodapé da Tabela */}
+        <div className="p-3.5 bg-slate-50/80 dark:bg-slate-800/40 border-t border-slate-200/90 dark:border-slate-800 flex items-center justify-between text-xs">
+          <span className="text-slate-500 dark:text-slate-400 text-[11px]">
+            Exibindo até 6 pedidos mais recentes • Total de {filteredOrders.length} pedido(s)
+          </span>
+          <button
+            onClick={() => onNavigate(canAccessTab(currentUser, 'history') ? 'history' : 'separationHistory')}
+            className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <span>Acessar Arquivo & Histórico Completo</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
       </div>
 

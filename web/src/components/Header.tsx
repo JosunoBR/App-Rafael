@@ -152,7 +152,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'orders':
         return { title: 'Pedido', group: 'Operação', icon: ShoppingCart, color: 'text-emerald-500' };
       case 'stock':
-        return { title: 'Estoque Central CD & Almoxarifado', group: 'Operação', icon: Warehouse, color: 'text-emerald-500' };
+        return { title: 'Depósito', group: 'Operação', icon: Warehouse, color: 'text-emerald-500' };
       case 'separation':
         return { title: 'Separação & Distribuição de Lojas', group: 'Operação', icon: userRole === 'separacao' ? PackageCheck : Boxes, color: 'text-blue-500' };
       case 'financial':

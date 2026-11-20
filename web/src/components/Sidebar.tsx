@@ -262,10 +262,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               activeNav === 'separation'
             )}
 
-            {/* Depósito / Estoque Central */}
+            {/* Depósito */}
             {canAccessStock && renderItem(
               'stock',
-              'Depósito / Estoque CD',
+              'Depósito',
               <Warehouse className={`w-4 h-4 ${activeNav === 'stock' ? 'text-white' : 'text-emerald-500'}`} />,
               activeNav === 'stock'
             )}

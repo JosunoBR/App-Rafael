@@ -13,8 +13,6 @@ export interface AppLayoutProps {
   currentUser: User;
   onLogout?: () => void;
   hasActiveDraft: boolean;
-  viewMode: 'desktop' | 'mobile_purchases' | 'mobile_separation';
-  onChangeViewMode: (mode: 'desktop' | 'mobile_purchases' | 'mobile_separation') => void;
   isSavedOrder: boolean;
   savedOrders: PurchaseOrder[];
   onSelectOrder: (selected: PurchaseOrder) => void;
@@ -39,8 +37,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   currentUser,
   onLogout,
   hasActiveDraft,
-  viewMode,
-  onChangeViewMode,
   isSavedOrder,
   savedOrders,
   onSelectOrder,
@@ -72,8 +68,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           activeNav={activeNav}
           order={order}
           currentUser={currentUser}
-          viewMode={viewMode}
-          onChangeViewMode={onChangeViewMode}
           hasActiveDraft={hasActiveDraft}
           isSavedOrder={isSavedOrder}
           savedOrders={savedOrders}

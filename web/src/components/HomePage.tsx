@@ -31,7 +31,6 @@ interface HomePageProps {
   onContinueDraft: () => void;
   onDiscardDraft: () => void;
   onSelectOrder: (order: PurchaseOrder, destinationTab?: ActiveNavTab) => void;
-  onSwitchViewMode: (mode: 'desktop' | 'mobile_purchases' | 'mobile_separation') => void;
   onConfirmReceipt?: (order: PurchaseOrder) => void;
   onAuthorizeFinancial?: (order: PurchaseOrder) => void;
   onRescheduleOrder?: (order: PurchaseOrder) => void;
@@ -52,7 +51,6 @@ export const HomePage: React.FC<HomePageProps> = ({
   onContinueDraft,
   onDiscardDraft,
   onSelectOrder,
-  onSwitchViewMode: _onSwitchViewMode,
   onConfirmReceipt,
   onAuthorizeFinancial,
   onRescheduleOrder,

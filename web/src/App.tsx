@@ -76,12 +76,6 @@ import {
   LoginPage 
 } from './components/LoginPage';
 import { 
-  MobilePurchasesView 
-} from './components/MobilePurchasesView';
-import { 
-  MobileSeparationView 
-} from './components/MobileSeparationView';
-import { 
   FinancialBoletosPage 
 } from './components/FinancialBoletosPage';
 import { 
@@ -270,7 +264,6 @@ export function App() {
     if (mappedTab && canAccessTab(currentUser, mappedTab)) {
       if (activeNav !== mappedTab) {
         setActiveNav(mappedTab);
-        setViewMode('desktop');
       }
     } else if (currentPath === ROUTE_PATHS.HOME) {
       const targetPath = NAV_TAB_TO_PATH[activeNav] || ROUTE_PATHS.HOME;
@@ -292,16 +285,12 @@ export function App() {
   const handleSelectNav = (tab: ActiveNavTab) => {
     if (canAccessTab(currentUser, tab)) {
       setActiveNav(tab);
-      setViewMode('desktop');
       const targetPath = NAV_TAB_TO_PATH[tab] || ROUTE_PATHS.HOME;
       if (location.pathname !== targetPath) {
         navigate(targetPath);
       }
     }
   };
-
-  // Modo de visualização: 'desktop' | 'mobile_purchases' | 'mobile_separation'
-  const [viewMode, setViewMode] = useState<'desktop' | 'mobile_purchases' | 'mobile_separation'>('desktop');
 
   // Theme state (Dark/Light)
   const [isDark, setIsDark] = useState<boolean>(() => {
@@ -1324,7 +1313,6 @@ export function App() {
         items: ensureTrailingBlankItem(newOrd.items || [], fiscalConfig, storeConfigs)
       });
       setActiveNav('orders');
-      setViewMode('desktop');
       showToast(`Novo pedido ${nextNum} em branco iniciado!`);
     } catch (err) {
       const localNum = getNextOrderNumber();
@@ -1334,7 +1322,6 @@ export function App() {
         items: ensureTrailingBlankItem(newOrd.items || [], fiscalConfig, storeConfigs)
       });
       setActiveNav('orders');
-      setViewMode('desktop');
       showToast(`Novo pedido ${localNum} em branco iniciado!`);
     }
   };
@@ -1342,7 +1329,6 @@ export function App() {
   // Continuar rascunho existente
   const handleContinueDraft = () => {
     setActiveNav('orders');
-    setViewMode('desktop');
     showToast(`Continuando edição do pedido ${order.header.numeroPedido}.`);
   };
 
@@ -1755,7 +1741,6 @@ export function App() {
     startTransition(() => {
       baseOrderRef.current = JSON.parse(JSON.stringify(updatedOrder));
       setOrder(updatedOrder);
-      setViewMode('desktop');
       if (activeNav !== targetTab) {
         setActiveNav(targetTab);
       }
@@ -3222,7 +3207,6 @@ export function App() {
       setSavedOrders(updatedOrders);
 
       setActiveNav('orders');
-      setViewMode('desktop');
       confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
 
       if (saveRes?.numberReassigned) {
@@ -3819,8 +3803,6 @@ export function App() {
           activeNav={activeNav}
           order={order}
           currentUser={currentUser}
-          viewMode={viewMode}
-          onChangeViewMode={setViewMode}
           hasActiveDraft={hasActiveDraft}
           isSavedOrder={isCurrentOrderSaved}
           savedOrders={savedOrders}
@@ -3844,38 +3826,7 @@ export function App() {
         />
 
         <main className="flex-1 w-full max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-all duration-300">
-          
-          {/* MODO MOBILE 1: COMPRAS EM VIAGENS / FEIRAS (Apenas Compradores) */}
-          {viewMode === 'mobile_purchases' && canCreateOrEditOrders(currentUser) && (
-            <MobilePurchasesView
-              order={order}
-              suppliers={suppliers}
-              products={products}
-              stores={storeConfigs}
-              fiscalConfig={fiscalConfig}
-              onUpdateOrder={setOrder}
-              onExportPDF={handleExportCommercialPDF}
-              onSaveOrder={handleSaveDraftOrder}
-              onNewOrder={handleNewOrder}
-              onOpenSeparationModal={(item) => setSelectedSeparationItem(item)}
-            />
-          )}
-
-          {/* MODO MOBILE 2: ROMANEIO DE BOLSO / GALPÃO */}
-          {viewMode === 'mobile_separation' && (
-            <MobileSeparationView
-              order={order}
-              orders={savedOrders.length > 0 ? savedOrders : [order]}
-              currentUser={currentUser}
-              onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
-              onUpdateOrder={handleSaveOrderDirect}
-              onFinalizeOrder={handleConcludeSeparation}
-            />
-          )}
-
-          {/* MODO DESKTOP TRADICIONAL COM AS PÁGINAS DO MENU */}
-          {viewMode === 'desktop' && (
-            <>
+          <>
               {/* PÁGINA 0: HOME / HUB PRINCIPAL */}
               {activeNav === 'home' && canAccessTab(currentUser, 'home') && (
                 <HomePage
@@ -3900,7 +3851,6 @@ export function App() {
                     }
                     handleOpenSelectedOrder(selected, target);
                   }}
-                  onSwitchViewMode={(mode) => setViewMode(mode)}
                   onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
                   onAuthorizeFinancial={handleAuthorizeFinancial}
                   onRescheduleOrder={(selected) => setRescheduleModalOrder(selected)}
@@ -4236,47 +4186,36 @@ export function App() {
                     </div>
                   )}
 
-                  {currentUser?.role === 'separacao' ? (
-                    <MobileSeparationView
-                      order={order}
-                      orders={savedOrders.length > 0 ? savedOrders : [order]}
-                      currentUser={currentUser}
-                      onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
-                      onUpdateOrder={handleSaveOrderDirect}
-                      onFinalizeOrder={handleConcludeSeparation}
-                    />
-                  ) : (
-                    <SeparationPage
-                      order={order}
-                      orders={savedOrders.length > 0 ? savedOrders : [order]}
-                      stores={storeConfigs}
-                      presets={separationPresets}
-                      currentUser={currentUser}
-                      products={products}
-                      suppliers={suppliers}
-                      onSaveProduct={handleSaveProduct}
-                      onUpdateOrder={handleSaveOrderDirect}
-                      onConcludeSeparation={handleConcludeSeparation}
-                      onExportPDF={handleExportSeparationPDF}
-                      onExportExcel={handleExportSeparationExcel}
-                      isExportingExcel={isExportingRomaneioExcel}
-                      onNavigateToOrders={() => setActiveNav('orders')}
-                      onNavigateToHistory={() => setActiveNav('separationHistory')}
-                      onChangeOrder={setOrder}
-                      onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
-                      onFinalizeOrder={handleFinalizeSeparation}
-                      onReleaseToSeparation={handleReleaseToSeparation}
-                      onApproveOrder={handleApproveOrder}
-                      onSendToDistribution={handleSendToDistribution}
-                      onSendToFaturamento={handleSendToFaturamento}
-                      onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
-                      onAuthorizeFinancial={handleAuthorizeFinancial}
-                      onViewAuditLogs={(ord) => setPipelineAuditOrder(ord)}
-                      onSavePreset={handleSaveSeparationPreset}
-                      onDeletePreset={handleDeleteSeparationPreset}
-                      onSetDefaultPreset={handleSetDefaultSeparationPreset}
-                    />
-                  )}
+                  <SeparationPage
+                    order={order}
+                    orders={savedOrders.length > 0 ? savedOrders : [order]}
+                    stores={storeConfigs}
+                    presets={separationPresets}
+                    currentUser={currentUser}
+                    products={products}
+                    suppliers={suppliers}
+                    onSaveProduct={handleSaveProduct}
+                    onUpdateOrder={handleSaveOrderDirect}
+                    onConcludeSeparation={handleConcludeSeparation}
+                    onExportPDF={handleExportSeparationPDF}
+                    onExportExcel={handleExportSeparationExcel}
+                    isExportingExcel={isExportingRomaneioExcel}
+                    onNavigateToOrders={() => setActiveNav('orders')}
+                    onNavigateToHistory={() => setActiveNav('separationHistory')}
+                    onChangeOrder={setOrder}
+                    onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'separation')}
+                    onFinalizeOrder={handleFinalizeSeparation}
+                    onReleaseToSeparation={handleReleaseToSeparation}
+                    onApproveOrder={handleApproveOrder}
+                    onSendToDistribution={handleSendToDistribution}
+                    onSendToFaturamento={handleSendToFaturamento}
+                    onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
+                    onAuthorizeFinancial={handleAuthorizeFinancial}
+                    onViewAuditLogs={(ord) => setPipelineAuditOrder(ord)}
+                    onSavePreset={handleSaveSeparationPreset}
+                    onDeletePreset={handleDeleteSeparationPreset}
+                    onSetDefaultPreset={handleSetDefaultSeparationPreset}
+                  />
                 </div>
               )}
 
@@ -4413,7 +4352,6 @@ export function App() {
                 <UsersPage currentUser={currentUser} />
               )}
             </>
-          )}
 
         </main>
 

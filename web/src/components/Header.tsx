@@ -16,8 +16,6 @@ import {
   Boxes, 
   CreditCard,
   Users as UsersIcon,
-  Monitor,
-  Smartphone,
   Sparkles,
   Clock,
   Trash2,
@@ -39,8 +37,6 @@ interface HeaderProps {
   activeNav: ActiveNavTab;
   order: PurchaseOrder;
   currentUser: User;
-  viewMode: 'desktop' | 'mobile_purchases' | 'mobile_separation';
-  onChangeViewMode: (mode: 'desktop' | 'mobile_purchases' | 'mobile_separation') => void;
   hasActiveDraft: boolean;
   isSavedOrder: boolean;
   savedOrders?: PurchaseOrder[];
@@ -61,8 +57,6 @@ export const Header: React.FC<HeaderProps> = ({
   activeNav,
   order,
   currentUser,
-  viewMode,
-  onChangeViewMode,
   hasActiveDraft,
   isSavedOrder,
   savedOrders = [],
@@ -354,57 +348,8 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Lado Direito: Modos de Dispositivo & Ações Contextuais Agrupadas */}
         <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
           
-          {/* Grupo 1: Seletor de Modo de Visualização & Sincronizar BD */}
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center bg-slate-100/90 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80 text-xs font-bold shadow-2xs">
-              <button
-                onClick={() => onChangeViewMode('desktop')}
-                className={`px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'desktop'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-                title="Visualização Completa para Computadores"
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Desktop</span>
-              </button>
-
-              {canAccessOrders && (
-                <button
-                  onClick={() => onChangeViewMode('mobile_purchases')}
-                  className={`px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                    viewMode === 'mobile_purchases'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                  title="Modo Mobile: Digitação Rápida para Feiras e Viagens"
-                >
-                  <Smartphone className="w-3.5 h-3.5 text-emerald-300" />
-                  <span className="hidden sm:inline">Viagens</span>
-                </button>
-              )}
-
-              <button
-                onClick={() => onChangeViewMode('mobile_separation')}
-                className={`px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'mobile_separation'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                }`}
-                title="Modo Mobile: Romaneio de Bolso para Doca e Galpão"
-              >
-                <PackageCheck className="w-3.5 h-3.5 text-teal-300" />
-                <span className="hidden sm:inline">Doca</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Divisor vertical sutil */}
-          <div className="hidden xl:block h-6 w-px bg-slate-200 dark:bg-slate-700 mx-0.5" />
-
-          {/* Grupo 2: Ações Específicas da Tela de Cotação & Pedidos */}
-          {activeNav === 'orders' && viewMode === 'desktop' && canAccessOrders && (
+          {/* Grupo 1: Ações Específicas da Tela de Pedido */}
+          {activeNav === 'orders' && canAccessOrders && (
             <div className="flex items-center gap-2 flex-wrap">
               
               {/* Subgrupo: Gestão do Pedido (Novo, Duplicar, Descartar) */}
@@ -523,8 +468,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* Grupo 3: Ações Específicas da Tela de Separação */}
-          {activeNav === 'separation' && viewMode === 'desktop' && (
+          {/* Grupo 2: Ações Específicas da Tela de Separação */}
+          {activeNav === 'separation' && (
             <div className="flex items-center gap-1 bg-slate-100/90 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
               {onExportExcel && (
                 <button

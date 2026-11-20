@@ -142,7 +142,7 @@ export const Header: React.FC<HeaderProps> = ({
   const getNavMeta = (tab: ActiveNavTab) => {
     switch (tab) {
       case 'home':
-        return { title: 'Visão Geral & Hub', group: 'Operação', icon: Home, color: 'text-emerald-500' };
+        return { title: 'Início', group: 'Operação', icon: Home, color: 'text-emerald-500' };
       case 'orders':
         return { title: 'Pedido', group: 'Operação', icon: ShoppingCart, color: 'text-emerald-500' };
       case 'stock':

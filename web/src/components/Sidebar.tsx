@@ -226,10 +226,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="h-px bg-slate-200/80 dark:bg-slate-800 my-1 mx-2" />
             )}
 
-            {/* Início / Home Hub */}
+            {/* Início */}
             {canAccessHome && renderItem(
               'home',
-              'Início (Visão Geral)',
+              'Início',
               <Home className={`w-4 h-4 ${activeNav === 'home' ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />,
               activeNav === 'home'
             )}

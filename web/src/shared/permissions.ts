@@ -100,9 +100,9 @@ export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): 
     return tab === 'store_portal' || tab === 'near_expiry';
   }
 
-  // Validade Próxima: liberado para Unidades, Compradores (Bryan), Diretoria, Root e Operação
+  // Validade Próxima: exclusivo para o terminal das Unidades (Lojas)
   if (tab === 'near_expiry') {
-    return true;
+    return false;
   }
 
   // Inicialmente, apenas o perfil 'unidade' acessa a tela da loja

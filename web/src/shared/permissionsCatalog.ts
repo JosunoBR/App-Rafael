@@ -5,7 +5,7 @@ export interface PermissionDefinition {
   categoria: string;
   nome: string;
   obs: string;
-  roleDefaults: Record<UserRole, boolean>;
+  roleDefaults: Partial<Record<UserRole, boolean>> | Record<string, boolean>;
 }
 
 export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
@@ -281,6 +281,27 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     nome: 'Consultar Trilhas de Auditoria (Logs de Operações)',
     obs: 'Histórico de quem alterou pedidos, boletos e esteira',
     roleDefaults: { diretoria: true, comprador: false, deposito: false, separacao: false, faturamento: false }
+  },
+  {
+    codigo: 'nav:store_portal',
+    categoria: '5. Unidades de Loja',
+    nome: 'Acessar Painel da Unidade (Portal da Loja)',
+    obs: 'Acesso exclusivo para a equipe da loja física registrar caixas e ver metas',
+    roleDefaults: { unidade: true }
+  },
+  {
+    codigo: 'nav:units',
+    categoria: '5. Unidades de Loja e Metas',
+    nome: 'Gerenciar Unidades (Conferência Financeira e BI de Vendas)',
+    obs: 'Acesso para Financeiro, Diretoria e Root conferirem caixas, aprovarem feriados e visualizarem o BI',
+    roleDefaults: { diretoria: true, faturamento: true, comprador: false, deposito: false, separacao: false }
+  },
+  {
+    codigo: 'nav:goals',
+    categoria: '5. Unidades de Loja e Metas',
+    nome: 'Painel Executivo de Metas (Calculadora, PE e Comissões)',
+    obs: 'Acesso exclusivo para Diretoria e Root definirem, calcularem e publicarem metas de vendas para as 20 lojas',
+    roleDefaults: { diretoria: true, faturamento: false, comprador: false, deposito: false, separacao: false }
   }
 ];
 

@@ -25,6 +25,19 @@ npm-debug.log*
 yarn-debug.log*
 *.ogg
 *.mp3
+*.mp4
+*.pptx
+*.pptx.*
+__pycache__/
+tmp/
+output/
+Audio/
+App Erica/
+ERP Joia 2/
+Portal ERP Joia/
+Portal ERP Jóia/
+*.xlsx
+gerar_proposta_2.py
 
 # Android & Gradle
 .gradle/

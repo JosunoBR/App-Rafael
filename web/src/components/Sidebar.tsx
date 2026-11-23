@@ -1,26 +1,30 @@
 import React, { useState } from 'react';
-import { 
+import {
   Home,
-  ShoppingCart, 
-  PackageCheck, 
-  BarChart3, 
-  Building2, 
-  FolderOpen, 
-  Settings, 
-  Sun, 
-  Moon, 
-  ShoppingBag, 
+  ShoppingCart,
+  PackageCheck,
+  BarChart3,
+  Building2,
+  FolderOpen,
+  Settings,
+  Sun,
+  Moon,
+  ShoppingBag,
   ChevronRight,
-  ChevronLeft,
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
   LogOut,
   Users as UsersIcon,
-  Boxes, 
+  Boxes,
   CreditCard,
   Warehouse,
-  TrendingUp
+  TrendingUp,
+  Store,
+  Target,
+  FileSpreadsheet,
+  Banknote,
+  CalendarClock
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { canAccessTab, ActiveNavTab } from '../shared/permissions';
@@ -60,6 +64,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isBiMenuOpen, setIsBiMenuOpen] = useState<boolean>(true);
   const isBiActive = activeNav === 'dashboard' || activeNav === 'bi_products';
 
+  const [isUnitsMenuOpen, setIsUnitsMenuOpen] = useState<boolean>(true);
+  const isUnitsActive = activeNav === 'units' || activeNav === 'units_cash' || activeNav === 'goals' || activeNav === 'units_bi' || activeNav === 'units_history';
+
   const toggleCollapsed = () => {
     setIsCollapsed(prev => {
       const next = !prev;
@@ -88,6 +95,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canAccessSuppliers = canAccessTab(currentUser, 'suppliers');
   const canAccessFiscal = canAccessTab(currentUser, 'fiscal');
   const canAccessUsers = canAccessTab(currentUser, 'users');
+  const canAccessStorePortal = canAccessTab(currentUser, 'store_portal');
+  const canAccessUnits = canAccessTab(currentUser, 'units');
+  const canAccessUnitsCash = canAccessTab(currentUser, 'units_cash');
+  const canAccessUnitsBi = canAccessTab(currentUser, 'units_bi');
+  const canAccessUnitsHistory = canAccessTab(currentUser, 'units_history');
+  const canAccessGoals = canAccessTab(currentUser, 'goals');
+  const canAccessVersionTwoPreview = canAccessTab(currentUser, 'version_two_preview');
+  const canAccessNearExpiry = canAccessTab(currentUser, 'near_expiry');
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
@@ -95,6 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case 'comprador': return 'Comprador';
       case 'deposito': return 'Depósito & CD';
       case 'separacao': return 'Separação & Doca';
+      case 'unidade': return 'Unidade (Loja)';
       default: return 'Usuário';
     }
   };
@@ -105,6 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case 'comprador': return 'bg-purple-500/15 text-purple-500 border-purple-500/30';
       case 'deposito': return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
       case 'separacao': return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30';
+      case 'unidade': return 'bg-teal-500/15 text-teal-500 border-teal-500/30';
       default: return 'bg-slate-500/15 text-slate-500 border-slate-500/30';
     }
   };
@@ -122,17 +139,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           key={id}
           onClick={() => onSelectNav(id)}
-          className={`w-11 h-11 mx-auto rounded-xl flex items-center justify-center transition-all relative cursor-pointer group ${
-            isActive
-              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
+          className={`w-11 h-11 mx-auto rounded-xl flex items-center justify-center transition-all relative cursor-pointer group ${isActive
+            ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
           title={label}
         >
           {icon}
           {showDraftDot && !isActive && (
-            <span 
-              className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900 animate-pulse" 
+            <span
+              className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900 animate-pulse"
               title="Rascunho em andamento"
             />
           )}
@@ -144,11 +160,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <button
         key={id}
         onClick={() => onSelectNav(id)}
-        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-          isActive
-            ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25'
-            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
-        }`}
+        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${isActive
+          ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25'
+          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+          }`}
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="shrink-0">{icon}</span>
@@ -163,24 +178,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <aside 
-      className={`${
-        isCollapsed ? 'w-[72px]' : 'w-64'
-      } bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 flex flex-col justify-between shrink-0 h-screen sticky top-0 transition-all duration-300 ease-in-out z-30 select-none overflow-x-hidden overflow-y-auto`}
+    <aside
+      className={`${isCollapsed ? 'w-[72px]' : 'w-64'
+        } bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 flex flex-col justify-between shrink-0 h-screen sticky top-0 transition-all duration-300 ease-in-out z-30 select-none overflow-x-hidden overflow-y-auto`}
     >
-      
+
       {/* 1. Topo: Brand & Botão de Recolher/Expandir */}
       <div>
         <div className={`p-3.5 border-b border-slate-200/80 dark:border-slate-800 ${isCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center justify-between'}`}>
-          <div 
+          <div
             onClick={isCollapsed ? toggleCollapsed : undefined}
             className={`flex items-center gap-3 min-w-0 ${isCollapsed ? 'cursor-pointer' : ''}`}
             title={isCollapsed ? 'Expandir menu lateral' : undefined}
           >
             <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-emerald-950/20 shrink-0 transition-transform hover:scale-105 flex items-center justify-center bg-slate-950/80 p-0.5 border border-emerald-500/30">
-              <img 
-                src={LOGO_MEGA12_BASE64} 
-                alt="Logo Rede Mega 12" 
+              <img
+                src={LOGO_MEGA12_BASE64}
+                alt="Logo Rede Mega 12"
                 className="w-full h-full object-contain rounded-lg"
               />
             </div>
@@ -215,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 2. Menu de Navegação Estruturado em 3 Pilares Lógicos */}
         <div className={`space-y-3 ${isCollapsed ? 'p-2' : 'p-3'}`}>
-          
+
           {/* GRUPO 1: OPERAÇÃO CENTRAL */}
           <div className="space-y-1">
             {!isCollapsed ? (
@@ -224,6 +238,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ) : (
               <div className="h-px bg-slate-200/80 dark:bg-slate-800 my-1 mx-2" />
+            )}
+
+            {/* Painel da Loja (Unidade) */}
+            {canAccessStorePortal && renderItem(
+              'store_portal',
+              'Painel da Loja',
+              <Store className={`w-4 h-4 ${activeNav === 'store_portal' ? 'text-white' : 'text-teal-500'}`} />,
+              activeNav === 'store_portal'
+            )}
+
+            {/* Validade Próxima (Controle de Validades das Lojas) */}
+            {canAccessNearExpiry && renderItem(
+              'near_expiry',
+              'Validade próxima',
+              <CalendarClock className={`w-4 h-4 ${activeNav === 'near_expiry' ? 'text-white' : 'text-amber-500'}`} />,
+              activeNav === 'near_expiry',
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                3
+              </span>
             )}
 
             {/* Início */}
@@ -251,8 +284,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Separação e Distribuição por Lojas */}
             {canAccessSeparation && renderItem(
               'separation',
-              userRole === 'separacao' 
-                ? 'Conferência & Doca' 
+              userRole === 'separacao'
+                ? 'Conferência & Doca'
                 : 'Distribuição',
               userRole === 'separacao' ? (
                 <PackageCheck className={`w-4 h-4 ${activeNav === 'separation' ? 'text-white' : 'text-purple-500'}`} />
@@ -298,6 +331,181 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 activeNav === 'financial'
               )}
 
+              {/* Unidades & Submenus (Conferência, Caixa, Metas, BI, Histórico) */}
+              {(canAccessUnits || canAccessGoals || canAccessUnitsBi || canAccessUnitsHistory || canAccessUnitsCash) && (
+                isCollapsed ? (
+                  <button
+                    key="units_collapsed"
+                    onClick={() => {
+                      const availableTabs: ActiveNavTab[] = [];
+                      if (canAccessUnits) availableTabs.push('units');
+                      if (canAccessUnitsCash) availableTabs.push('units_cash');
+                      if (canAccessGoals) availableTabs.push('goals');
+                      if (canAccessUnitsBi) availableTabs.push('units_bi');
+                      if (canAccessUnitsHistory) availableTabs.push('units_history');
+
+                      if (availableTabs.length === 0) return;
+                      const currentIndex = availableTabs.indexOf(activeNav);
+                      const nextIndex = (currentIndex + 1) % availableTabs.length;
+                      onSelectNav(availableTabs[nextIndex] || 'units');
+                    }}
+                    className={`w-11 h-11 mx-auto rounded-xl flex items-center justify-center transition-all relative cursor-pointer group ${isUnitsActive
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    title="Unidades (Conferência, Caixa, Metas, Bi & Histórico)"
+                  >
+                    {activeNav === 'units_cash' ? (
+                      <Banknote className="w-4 h-4" />
+                    ) : activeNav === 'goals' ? (
+                      <Target className="w-4 h-4" />
+                    ) : activeNav === 'units_bi' ? (
+                      <TrendingUp className="w-4 h-4" />
+                    ) : activeNav === 'units_history' ? (
+                      <FileSpreadsheet className="w-4 h-4" />
+                    ) : (
+                      <Building2 className="w-4 h-4" />
+                    )}
+                  </button>
+                ) : (
+                  (canAccessGoals || canAccessUnitsBi || canAccessUnitsHistory || canAccessUnitsCash) ? (
+                    // Menu com Submenu para Perfis com múltiplos módulos de Unidades (Diretoria, Root e Financeiro)
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isUnitsMenuOpen) {
+                            setIsUnitsMenuOpen(true);
+                            if (!isUnitsActive) onSelectNav('units');
+                          } else {
+                            setIsUnitsMenuOpen(prev => !prev);
+                          }
+                        }}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${isUnitsActive
+                          ? 'bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/60'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                          }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Building2 className={`w-4 h-4 shrink-0 ${isUnitsActive ? 'text-amber-500' : 'text-slate-500 dark:text-slate-400'}`} />
+                          <span className="truncate">Unidades</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0 text-slate-400">
+                          {isUnitsMenuOpen ? (
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          ) : (
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                      </button>
+
+                      {/* Submenu Expandido */}
+                      {isUnitsMenuOpen && (
+                        <div className="pl-3 pr-1 py-1 space-y-1 border-l-2 border-amber-500/30 dark:border-amber-500/20 ml-4 animate-in fade-in duration-150">
+                          {/* 1. Conferência */}
+                          {canAccessUnits && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectNav('units')}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${activeNav === 'units'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Building2 className={`w-3.5 h-3.5 shrink-0 ${activeNav === 'units' ? 'text-white' : 'text-amber-500'}`} />
+                                <span className="truncate">Conferência</span>
+                              </div>
+                              {activeNav === 'units' && <ChevronRight className="w-3 h-3 opacity-80" />}
+                            </button>
+                          )}
+
+                          {/* 2. Caixa */}
+                          {canAccessUnitsCash && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectNav('units_cash')}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${activeNav === 'units_cash'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Banknote className={`w-3.5 h-3.5 shrink-0 ${activeNav === 'units_cash' ? 'text-white' : 'text-emerald-500'}`} />
+                                <span className="truncate">Caixa</span>
+                              </div>
+                              {activeNav === 'units_cash' && <ChevronRight className="w-3 h-3 opacity-80" />}
+                            </button>
+                          )}
+
+                          {/* 3. Metas */}
+                          {canAccessGoals && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectNav('goals')}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${activeNav === 'goals'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Target className={`w-3.5 h-3.5 shrink-0 ${activeNav === 'goals' ? 'text-white' : 'text-amber-500'}`} />
+                                <span className="truncate">Metas</span>
+                              </div>
+                              {activeNav === 'goals' && <ChevronRight className="w-3 h-3 opacity-80" />}
+                            </button>
+                          )}
+
+                          {/* 4. Bi */}
+                          {canAccessUnitsBi && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectNav('units_bi')}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${activeNav === 'units_bi'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <TrendingUp className={`w-3.5 h-3.5 shrink-0 ${activeNav === 'units_bi' ? 'text-white' : 'text-emerald-500'}`} />
+                                <span className="truncate">Bi</span>
+                              </div>
+                              {activeNav === 'units_bi' && <ChevronRight className="w-3 h-3 opacity-80" />}
+                            </button>
+                          )}
+
+                          {/* 5. Histórico */}
+                          {canAccessUnitsHistory && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectNav('units_history')}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${activeNav === 'units_history'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <FileSpreadsheet className={`w-3.5 h-3.5 shrink-0 ${activeNav === 'units_history' ? 'text-white' : 'text-indigo-400'}`} />
+                                <span className="truncate">Histórico</span>
+                              </div>
+                              {activeNav === 'units_history' && <ChevronRight className="w-3 h-3 opacity-80" />}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // Item individual direto para outros perfis
+                    renderItem(
+                      'units',
+                      'Unidades',
+                      <Building2 className={`w-4 h-4 ${activeNav === 'units' ? 'text-white' : 'text-amber-500'}`} />,
+                      activeNav === 'units'
+                    )
+                  )
+                )
+              )}
+
               {/* Dashboard & BI com Submenu ou Item Direto */}
               {(canAccessDashboard || canAccessBiProducts) && (
                 isCollapsed ? (
@@ -318,16 +526,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onSelectNav('dashboard');
                       }
                     }}
-                    className={`w-11 h-11 mx-auto rounded-xl flex items-center justify-center transition-all relative cursor-pointer group ${
-                      isBiActive
-                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
+                    className={`w-11 h-11 mx-auto rounded-xl flex items-center justify-center transition-all relative cursor-pointer group ${isBiActive
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
                     title={
                       canAccessDashboard && canAccessBiProducts
                         ? (activeNav === 'bi_products'
-                            ? 'BI Produtos & Lojas (Clique para alternar para Financeiro)'
-                            : 'BI Financeiro (Clique para alternar para Produtos)')
+                          ? 'BI Produtos & Lojas (Clique para alternar para Financeiro)'
+                          : 'BI Financeiro (Clique para alternar para Produtos)')
                         : (canAccessBiProducts ? 'BI Produtos & Lojas' : 'BI Financeiro')
                     }
                   >
@@ -347,11 +554,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             setIsBiMenuOpen(prev => !prev);
                           }
                         }}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          isBiActive
-                            ? 'bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/60'
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
-                        }`}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${isBiActive
+                          ? 'bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/60'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                          }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <BarChart3 className={`w-4 h-4 shrink-0 ${isBiActive ? 'text-emerald-500' : 'text-slate-500 dark:text-slate-400'}`} />
@@ -373,11 +579,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <button
                               type="button"
                               onClick={() => onSelectNav('dashboard')}
-                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                                activeNav === 'dashboard'
-                                  ? 'bg-emerald-600 text-white shadow-xs font-bold'
-                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                              }`}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${activeNav === 'dashboard'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                }`}
                             >
                               <div className="flex items-center gap-2 min-w-0">
                                 <TrendingUp className={`w-3.5 h-3.5 shrink-0 ${activeNav === 'dashboard' ? 'text-white' : 'text-emerald-500'}`} />
@@ -391,11 +596,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <button
                               type="button"
                               onClick={() => onSelectNav('bi_products')}
-                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                                activeNav === 'bi_products'
-                                  ? 'bg-emerald-600 text-white shadow-xs font-bold'
-                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                              }`}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${activeNav === 'bi_products'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                }`}
                             >
                               <div className="flex items-center gap-2 min-w-0">
                                 <Boxes className={`w-3.5 h-3.5 shrink-0 ${activeNav === 'bi_products' ? 'text-white' : 'text-teal-400'}`} />
@@ -464,6 +668,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 activeNav === 'users'
               )}
 
+              {canAccessVersionTwoPreview && renderItem(
+                'version_two_preview',
+                'Prévia da versão 2.0',
+                <Target className={`w-4 h-4 ${activeNav === 'version_two_preview' ? 'text-white' : 'text-emerald-500'}`} />,
+                activeNav === 'version_two_preview'
+              )}
+
               {/* Configurações */}
               {canAccessFiscal && renderItem(
                 'fiscal',
@@ -479,12 +690,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* 3. Rodapé da Barra Lateral: Usuário & Tema */}
       <div className={`border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 ${isCollapsed ? 'p-2 space-y-2' : 'p-3 space-y-2'}`}>
-        
+
         {/* Widget do Usuário Logado */}
         {currentUser && (
           isCollapsed ? (
             <div className="flex flex-col items-center gap-1.5">
-              <div 
+              <div
                 className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-extrabold text-xs shadow-xs cursor-default"
                 title={`${currentUser.nome} (${getRoleLabel(currentUser.role)})`}
               >

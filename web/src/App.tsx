@@ -57,6 +57,20 @@ import {
 import {
   OrderImportModal
 } from './modules/excelImporter';
+import {
+  StorePortalPage,
+  StoreNearExpiryPage
+} from './modules/storePortal';
+import {
+  UnitsManagementPage,
+  StoresCashPage,
+  StoresBiPage,
+  StoresHistoryPage
+} from './modules/unitsManagement';
+import {
+  GoalsExecutivePage
+} from './modules/goalsExecutive';
+import { VersionTwoPreviewPage } from './modules/versionTwoPreview/VersionTwoPreviewPage';
 import { 
   OrderHistoryPage 
 } from './components/OrderHistoryPage';
@@ -4350,6 +4364,45 @@ export function App() {
               {/* PÁGINA 7: GESTÃO DE USUÁRIOS & PERMISSÕES (Diretoria) */}
               {activeNav === 'users' && canAccessTab(currentUser, 'users') && (
                 <UsersPage currentUser={currentUser} />
+              )}
+
+              {/* PÁGINA 8: PAINEL DA LOJA / UNIDADE (Módulo Sistema 2.0) */}
+              {activeNav === 'store_portal' && canAccessTab(currentUser, 'store_portal') && (
+                <StorePortalPage showToast={showToast} />
+              )}
+
+              {/* PÁGINA 8.1: VALIDADE PRÓXIMA DAS UNIDADES (Controle de Validades & Lotes 2.0) */}
+              {activeNav === 'near_expiry' && canAccessTab(currentUser, 'near_expiry') && (
+                <StoreNearExpiryPage currentUser={currentUser} showToast={showToast} />
+              )}
+
+              {/* PÁGINA 9: CONFERÊNCIA DE UNIDADES (Conferência Financeira + Feriados) */}
+              {activeNav === 'units' && canAccessTab(currentUser, 'units') && (
+                <UnitsManagementPage currentUser={currentUser} showToast={showToast} />
+              )}
+
+              {/* PÁGINA 9.1: CAIXA DAS UNIDADES (Montante Acumulado, Entradas vs Despesas e Gastos Diários) */}
+              {activeNav === 'units_cash' && canAccessTab(currentUser, 'units_cash') && (
+                <StoresCashPage currentUser={currentUser} showToast={showToast} />
+              )}
+
+              {/* PÁGINA 10: METAS EXECUTIVAS (Calculadora de Metas & P.E. de 20 Lojas) */}
+              {activeNav === 'goals' && canAccessTab(currentUser, 'goals') && (
+                <GoalsExecutivePage currentUser={currentUser} showToast={showToast} />
+              )}
+
+              {/* PÁGINA 11: BI DAS LOJAS (Gráficos, Curva de Evolução, Ranking & Mix de Pagamentos) */}
+              {activeNav === 'units_bi' && canAccessTab(currentUser, 'units_bi') && (
+                <StoresBiPage currentUser={currentUser} showToast={showToast} />
+              )}
+
+              {/* PÁGINA 12: HISTÓRICO DE VENDAS (Matriz Multianual 2021-2026 Planilha ALS) */}
+              {activeNav === 'units_history' && canAccessTab(currentUser, 'units_history') && (
+                <StoresHistoryPage currentUser={currentUser} showToast={showToast} />
+              )}
+
+              {activeNav === 'version_two_preview' && canAccessTab(currentUser, 'version_two_preview') && (
+                <VersionTwoPreviewPage />
               )}
             </>
 

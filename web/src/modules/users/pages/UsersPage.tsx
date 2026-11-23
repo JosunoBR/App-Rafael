@@ -15,7 +15,8 @@ import {
   Save, 
   X,
   Receipt,
-  Sliders
+  Sliders,
+  Store
 } from 'lucide-react';
 import { User, UserRole } from '../../../shared/types';
 import { maskPhone } from '../../../utils/masks';
@@ -178,6 +179,13 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
             💳 Faturamento & Boletos
           </span>
         );
+      case 'unidade':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-300 dark:border-teal-800">
+            <Store className="w-3 h-3 text-teal-600" />
+            🏬 Unidade (Loja)
+          </span>
+        );
       default:
         return null;
     }
@@ -255,6 +263,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
             <option value="deposito">🏢 Depósito & CD</option>
             <option value="separacao">📦 Separação & Doca</option>
             <option value="faturamento">💳 Faturamento & Boletos</option>
+            <option value="unidade">🏬 Unidades (Lojas)</option>
           </select>
         </div>
 
@@ -439,6 +448,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                     <option value="deposito">🏢 Depósito (CD / Estoque)</option>
                     <option value="separacao">📦 Separação (Doca / Conferente)</option>
                     <option value="faturamento">💳 Faturamento (Boletos / Caixa)</option>
+                    <option value="unidade">🏬 Unidade (Loja Física)</option>
                   </select>
                 </div>
 

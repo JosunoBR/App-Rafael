@@ -26,7 +26,12 @@ import {
   Warehouse,
   Copy,
   Lock,
-  ShieldCheck
+  ShieldCheck,
+  Store,
+  Target,
+  Banknote,
+  TrendingUp,
+  CalendarClock
 } from 'lucide-react';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { ActiveNavTab, canAccessTab, canCreateOrEditOrders, canEditSpecificOrder, canEditClosedOrders } from '../shared/permissions';
@@ -165,6 +170,20 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Configurações Gerais & Parâmetros', group: 'Cadastros', icon: Settings, color: 'text-indigo-500' };
       case 'users':
         return { title: 'Gestão de Usuários & Acessos (RBAC)', group: 'Sistema', icon: UsersIcon, color: 'text-pink-500' };
+      case 'store_portal':
+        return { title: 'Painel da Loja (Unidade)', group: 'Frente de Loja', icon: Store, color: 'text-teal-500' };
+      case 'units':
+        return { title: 'Conferência de Unidades', group: 'Unidades', icon: Building2, color: 'text-amber-500' };
+      case 'units_cash':
+        return { title: 'Caixa das Unidades', group: 'Unidades', icon: Banknote, color: 'text-emerald-500' };
+      case 'goals':
+        return { title: 'Metas Executivas', group: 'Unidades', icon: Target, color: 'text-emerald-500' };
+      case 'units_bi':
+        return { title: 'Bi das Lojas', group: 'Unidades', icon: TrendingUp, color: 'text-emerald-500' };
+      case 'units_history':
+        return { title: 'Histórico de Vendas', group: 'Unidades', icon: FileSpreadsheet, color: 'text-indigo-500' };
+      case 'near_expiry':
+        return { title: 'Validade Próxima das Unidades', group: 'Controle de Lojas', icon: CalendarClock, color: 'text-amber-500' };
       default:
         return { title: 'Sistema Mega 12', group: 'Matriz', icon: ShoppingBag, color: 'text-emerald-500' };
     }

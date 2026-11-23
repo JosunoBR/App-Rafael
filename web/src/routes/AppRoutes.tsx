@@ -24,5 +24,13 @@ export const APP_ROUTES: RouteConfig[] = [
   { path: ROUTE_PATHS.BI_PRODUCTS, name: 'bi_products', title: 'Curva ABC & Produtos', requiresAuth: true },
   { path: ROUTE_PATHS.FISCAL, name: 'fiscal', title: 'Configurações Fiscais', requiresAuth: true },
   { path: ROUTE_PATHS.USERS, name: 'users', title: 'Gestão de Usuários', requiresAuth: true },
+  { path: ROUTE_PATHS.STORE_PORTAL, name: 'store_portal', title: 'Portal da Loja', requiresAuth: true },
+  { path: ROUTE_PATHS.NEAR_EXPIRY, name: 'near_expiry', title: 'Validade Próxima', requiresAuth: true },
+  { path: ROUTE_PATHS.UNITS, name: 'units', title: 'Unidades', requiresAuth: true },
+  { path: ROUTE_PATHS.UNITS_CASH, name: 'units_cash', title: 'Caixa das Unidades', requiresAuth: true },
+  { path: ROUTE_PATHS.GOALS, name: 'goals', title: 'Metas Executivas', requiresAuth: true },
+  { path: ROUTE_PATHS.UNITS_BI, name: 'units_bi', title: 'BI das Lojas', requiresAuth: true },
+  { path: ROUTE_PATHS.UNITS_HISTORY, name: 'units_history', title: 'Histórico de Vendas', requiresAuth: true },
+  { path: ROUTE_PATHS.VERSION_TWO_PREVIEW, name: 'version_two_preview', title: 'Prévia da Versão 2.0', requiresAuth: true },
   { path: ROUTE_PATHS.LOGIN, name: 'login', title: 'Autenticação', requiresAuth: false }
 ];

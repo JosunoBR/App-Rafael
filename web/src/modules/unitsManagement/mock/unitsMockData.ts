@@ -1,0 +1,708 @@
+import {
+  StoreDailyClosingSummary,
+  StoreHolidayRequest,
+  StorePerformanceMetric,
+  BiDailyProgression,
+  PaymentMixItem,
+  AnnualStoreMatrixRow
+} from '../types/unitsManagement.types';
+
+export const MOCK_STORES_LIST = [
+  { id: 'itapevi', codigo: '04', nome: 'Loja Itapevi', cluster: 'A' as const },
+  { id: 'pg_centro', codigo: '01', nome: 'Ponta Grossa Centro', cluster: 'A' as const },
+  { id: 'reserva', codigo: '02', nome: 'Reserva', cluster: 'A' as const },
+  { id: 'tibagi', codigo: '03', nome: 'Tibagi', cluster: 'A' as const },
+  { id: 'nova_russia', codigo: '05', nome: 'Nova Rússia', cluster: 'A' as const },
+  { id: 'javert', codigo: '06', nome: 'Javert', cluster: 'A' as const },
+  { id: 'ivai', codigo: '07', nome: 'Ivaí', cluster: 'A' as const },
+  { id: 'irati_centro', codigo: '08', nome: 'Irati Centro', cluster: 'A' as const },
+  { id: 'campo_largo', codigo: '09', nome: 'Campo Largo', cluster: 'A' as const },
+  { id: 'castro', codigo: '10', nome: 'Castro', cluster: 'B' as const },
+  { id: 'imbituva', codigo: '11', nome: 'Imbituva', cluster: 'B' as const },
+  { id: 'santa_paula', codigo: '12', nome: 'Santa Paula', cluster: 'B' as const },
+  { id: 'prudentopolis', codigo: '13', nome: 'Prudentópolis', cluster: 'B' as const },
+  { id: 'guarapuava', codigo: '14', nome: 'Guarapuava', cluster: 'B' as const },
+  { id: 'imbau', codigo: '15', nome: 'Imbaú', cluster: 'B' as const },
+  { id: 'rio_azul', codigo: '16', nome: 'Rio Azul', cluster: 'B' as const },
+  { id: 'reboucas', codigo: '17', nome: 'Rebouças', cluster: 'B' as const },
+  { id: 'teixeira_soares', codigo: '18', nome: 'Teixeira Soares', cluster: 'C' as const },
+  { id: 'mallet', codigo: '19', nome: 'Mallet', cluster: 'C' as const },
+  { id: 'ipiranga', codigo: '20', nome: 'Ipiranga', cluster: 'C' as const }
+];
+
+export const INITIAL_DAILY_CLOSINGS: StoreDailyClosingSummary[] = [
+  {
+    lojaId: 'itapevi',
+    lojaNome: 'Loja Itapevi',
+    lojaCodigo: '04',
+    data: '2026-11-23',
+    status: 'aguardando',
+    vendaTotal: 3580,
+    quantidadeVendas: 48,
+    ticketMedio: 74.58,
+    meiosPagamento: {
+      dinheiro: 700,
+      pixKais: 950,
+      pixStone: 730,
+      pixCnpj: 350,
+      cartaoDebito: 425,
+      cartaoCredito: 425
+    },
+    despesas: [],
+    memorando: 'Movimento moderado na parte da tarde. Clima ensolarado.',
+    responsavelFechamento: 'Amanda (Gerente)',
+    dataHoraEnvio: '23/11/2026 às 18:42'
+  },
+  {
+    lojaId: 'pg_centro',
+    lojaNome: 'Ponta Grossa Centro',
+    lojaCodigo: '01',
+    data: '2026-11-23',
+    status: 'aguardando',
+    vendaTotal: 4820,
+    quantidadeVendas: 62,
+    ticketMedio: 77.74,
+    meiosPagamento: {
+      dinheiro: 1100,
+      pixKais: 1400,
+      pixStone: 920,
+      pixCnpj: 500,
+      cartaoDebito: 450,
+      cartaoCredito: 450
+    },
+    despesas: [
+      { id: 'exp_pg_1', descricao: 'Material de Limpeza e Sacolas', valor: 85 }
+    ],
+    memorando: 'Promoção de calçados atraiu bom fluxo de clientes.',
+    responsavelFechamento: 'Camila Santos',
+    dataHoraEnvio: '23/11/2026 às 19:05'
+  },
+  {
+    lojaId: 'castro',
+    lojaNome: 'Castro',
+    lojaCodigo: '10',
+    data: '2026-11-23',
+    status: 'aguardando',
+    vendaTotal: 3120,
+    quantidadeVendas: 39,
+    ticketMedio: 80.00,
+    meiosPagamento: {
+      dinheiro: 620,
+      pixKais: 800,
+      pixStone: 700,
+      pixCnpj: 400,
+      cartaoDebito: 300,
+      cartaoCredito: 300
+    },
+    despesas: [],
+    memorando: 'Dia tranquilo, vendas regulares.',
+    responsavelFechamento: 'Larissa Ferreira',
+    dataHoraEnvio: '23/11/2026 às 18:50'
+  },
+  {
+    lojaId: 'guarapuava',
+    lojaNome: 'Guarapuava',
+    lojaCodigo: '14',
+    data: '2026-11-23',
+    status: 'aguardando',
+    vendaTotal: 4400,
+    quantidadeVendas: 55,
+    ticketMedio: 80.00,
+    meiosPagamento: {
+      dinheiro: 900,
+      pixKais: 1200,
+      pixStone: 1000,
+      pixCnpj: 400,
+      cartaoDebito: 450,
+      cartaoCredito: 450
+    },
+    despesas: [
+      { id: 'exp_gp_1', descricao: 'Água mineral galão', valor: 25 }
+    ],
+    memorando: 'Sem ocorrências. Todos os terminais operando 100%.',
+    responsavelFechamento: 'Juliana Mendes',
+    dataHoraEnvio: '23/11/2026 às 19:12'
+  },
+  // Devolvidos
+  {
+    lojaId: 'imbau',
+    lojaNome: 'Imbaú',
+    lojaCodigo: '15',
+    data: '2026-11-23',
+    status: 'devolvido',
+    vendaTotal: 2890,
+    quantidadeVendas: 34,
+    ticketMedio: 85.00,
+    meiosPagamento: {
+      dinheiro: 500,
+      pixKais: 600,
+      pixStone: 890,
+      pixCnpj: 300,
+      cartaoDebito: 300,
+      cartaoCredito: 300
+    },
+    despesas: [
+      { id: 'exp_ib_1', descricao: 'Lanche equipe hora extra', valor: 65 }
+    ],
+    memorando: 'Houve queda de energia rápida às 16h.',
+    responsavelFechamento: 'Luciana Rocha',
+    dataHoraEnvio: '23/11/2026 às 18:15',
+    motivoDevolucao: 'Comprovante Pix Stone não confere com o valor declarado (R$ 890 informado vs R$ 790 no extrato). Favor verificar e reenviar.',
+    conferidoPor: 'Bruna (Financeiro)',
+    conferidoEm: '23/11/2026 às 18:35'
+  },
+  {
+    lojaId: 'reboucas',
+    lojaNome: 'Rebouças',
+    lojaCodigo: '17',
+    data: '2026-11-23',
+    status: 'devolvido',
+    vendaTotal: 2450,
+    quantidadeVendas: 31,
+    ticketMedio: 79.03,
+    meiosPagamento: {
+      dinheiro: 450,
+      pixKais: 700,
+      pixStone: 500,
+      pixCnpj: 300,
+      cartaoDebito: 250,
+      cartaoCredito: 250
+    },
+    despesas: [
+      { id: 'exp_rb_1', descricao: 'Envio malote via Correios', valor: 42 }
+    ],
+    memorando: 'Aguardando comprovante fiscal do correio.',
+    responsavelFechamento: 'Tatiane Dias',
+    dataHoraEnvio: '23/11/2026 às 17:55',
+    motivoDevolucao: 'Despesa de R$ 42,00 lançada sem o comprovante do Correio anexado. Favor confirmar ou retificar.',
+    conferidoPor: 'Bruna (Financeiro)',
+    conferidoEm: '23/11/2026 às 18:20'
+  },
+  // Aprovados
+  {
+    lojaId: 'reserva',
+    lojaNome: 'Reserva',
+    lojaCodigo: '02',
+    data: '2026-11-23',
+    status: 'aprovado',
+    vendaTotal: 3950,
+    quantidadeVendas: 51,
+    ticketMedio: 77.45,
+    meiosPagamento: {
+      dinheiro: 850,
+      pixKais: 1100,
+      pixStone: 800,
+      pixCnpj: 400,
+      cartaoDebito: 400,
+      cartaoCredito: 400
+    },
+    despesas: [],
+    memorando: 'Tudo conferido 100%.',
+    responsavelFechamento: 'Fernanda Lima',
+    dataHoraEnvio: '23/11/2026 às 18:10',
+    conferidoPor: 'Bruna (Financeiro)',
+    conferidoEm: '23/11/2026 às 18:40'
+  },
+  {
+    lojaId: 'tibagi',
+    lojaNome: 'Tibagi',
+    lojaCodigo: '03',
+    data: '2026-11-23',
+    status: 'aprovado',
+    vendaTotal: 3420,
+    quantidadeVendas: 44,
+    ticketMedio: 77.72,
+    meiosPagamento: {
+      dinheiro: 720,
+      pixKais: 900,
+      pixStone: 800,
+      pixCnpj: 400,
+      cartaoDebito: 300,
+      cartaoCredito: 300
+    },
+    despesas: [],
+    responsavelFechamento: 'Beatriz Costa',
+    dataHoraEnvio: '23/11/2026 às 18:25',
+    conferidoPor: 'Bruna (Financeiro)',
+    conferidoEm: '23/11/2026 às 18:45'
+  },
+  {
+    lojaId: 'nova_russia',
+    lojaNome: 'Nova Rússia',
+    lojaCodigo: '05',
+    data: '2026-11-23',
+    status: 'aprovado',
+    vendaTotal: 4610,
+    quantidadeVendas: 59,
+    ticketMedio: 78.13,
+    meiosPagamento: {
+      dinheiro: 1000,
+      pixKais: 1310,
+      pixStone: 900,
+      pixCnpj: 500,
+      cartaoDebito: 450,
+      cartaoCredito: 450
+    },
+    despesas: [],
+    responsavelFechamento: 'Vanessa Ribeiro',
+    dataHoraEnvio: '23/11/2026 às 18:30',
+    conferidoPor: 'Bruna (Financeiro)',
+    conferidoEm: '23/11/2026 às 18:55'
+  },
+  {
+    lojaId: 'campo_largo',
+    lojaNome: 'Campo Largo',
+    lojaCodigo: '09',
+    data: '2026-11-23',
+    status: 'aprovado',
+    vendaTotal: 4950,
+    quantidadeVendas: 65,
+    ticketMedio: 76.15,
+    meiosPagamento: {
+      dinheiro: 1200,
+      pixKais: 1450,
+      pixStone: 900,
+      pixCnpj: 500,
+      cartaoDebito: 450,
+      cartaoCredito: 450
+    },
+    despesas: [],
+    responsavelFechamento: 'Patrícia Souza',
+    dataHoraEnvio: '23/11/2026 às 18:32',
+    conferidoPor: 'Bruna (Financeiro)',
+    conferidoEm: '23/11/2026 às 19:00'
+  },
+  // Pendentes de envio
+  {
+    lojaId: 'rio_azul',
+    lojaNome: 'Rio Azul',
+    lojaCodigo: '16',
+    data: '2026-11-23',
+    status: 'pendente',
+    vendaTotal: 0,
+    meiosPagamento: { dinheiro: 0, pixKais: 0, pixStone: 0, pixCnpj: 0, cartaoDebito: 0, cartaoCredito: 0 },
+    despesas: []
+  },
+  {
+    lojaId: 'teixeira_soares',
+    lojaNome: 'Teixeira Soares',
+    lojaCodigo: '18',
+    data: '2026-11-23',
+    status: 'pendente',
+    vendaTotal: 0,
+    meiosPagamento: { dinheiro: 0, pixKais: 0, pixStone: 0, pixCnpj: 0, cartaoDebito: 0, cartaoCredito: 0 },
+    despesas: []
+  },
+  {
+    lojaId: 'mallet',
+    lojaNome: 'Mallet',
+    lojaCodigo: '19',
+    data: '2026-11-23',
+    status: 'pendente',
+    vendaTotal: 0,
+    meiosPagamento: { dinheiro: 0, pixKais: 0, pixStone: 0, pixCnpj: 0, cartaoDebito: 0, cartaoCredito: 0 },
+    despesas: []
+  },
+  {
+    lojaId: 'ipiranga',
+    lojaNome: 'Ipiranga',
+    lojaCodigo: '20',
+    data: '2026-11-23',
+    status: 'pendente',
+    vendaTotal: 0,
+    meiosPagamento: { dinheiro: 0, pixKais: 0, pixStone: 0, pixCnpj: 0, cartaoDebito: 0, cartaoCredito: 0 },
+    despesas: []
+  }
+];
+
+export const INITIAL_HOLIDAY_REQUESTS: StoreHolidayRequest[] = [
+  {
+    id: 'req_hol_01',
+    lojaId: 'itapevi',
+    lojaNome: 'Loja Itapevi',
+    data: '2026-11-20',
+    holidayName: 'Consciência Negra',
+    solicitadoPor: 'Amanda (Gerente)',
+    solicitadoEm: '18/11/2026 às 14:15',
+    status: 'pendente',
+    motivoLoja: 'Feriado estadual/municipal em SP. Comércio de rua da cidade fecha integralmente.'
+  },
+  {
+    id: 'req_hol_02',
+    lojaId: 'campo_largo',
+    lojaNome: 'Campo Largo',
+    data: '2026-12-08',
+    holidayName: 'Padroeira da Cidade (N. Sra. da Conceição)',
+    solicitadoPor: 'Patrícia Souza (Gerente)',
+    solicitadoEm: '22/11/2026 às 11:30',
+    status: 'pendente',
+    motivoLoja: 'Decreto municipal com fechamento obrigatório do comércio de rua.'
+  },
+  {
+    id: 'req_hol_03',
+    lojaId: 'pg_centro',
+    lojaNome: 'Ponta Grossa Centro',
+    data: '2026-11-15',
+    holidayName: 'Proclamação da República',
+    solicitadoPor: 'Camila Santos',
+    solicitadoEm: '10/11/2026 às 09:20',
+    status: 'aprovado',
+    motivoLoja: 'Feriado Nacional - Loja Fechada.',
+    respondidoPor: 'Bruna (Financeiro)',
+    respondidoEm: '11/11/2026 às 10:00',
+    respostaFinanceiro: 'Aprovado. Dia descontado da meta útil da unidade.'
+  },
+  {
+    id: 'req_hol_04',
+    lojaId: 'guarapuava',
+    lojaNome: 'Guarapuava',
+    data: '2026-11-10',
+    holidayName: 'Aniversário Facultativo',
+    solicitadoPor: 'Juliana Mendes',
+    solicitadoEm: '05/11/2026 às 16:00',
+    status: 'recusado',
+    motivoLoja: 'Feriado comemorativo da cidade.',
+    respondidoPor: 'Bruna (Financeiro)',
+    respondidoEm: '06/11/2026 às 09:15',
+    respostaFinanceiro: 'Recusado. Loja em polo comercial ativo, expediente regular mantido (10h às 19h).'
+  }
+];
+
+export const MOCK_STORE_METRICS: StorePerformanceMetric[] = [
+  {
+    lojaId: 'itapevi',
+    lojaNome: 'Itapevi',
+    lojaCodigo: '04',
+    cluster: 'A',
+    metaNormal: 90000,
+    superMeta: 99000,
+    acumuladoVendido: 63580,
+    percentualMeta: 70.6,
+    percentualSuperMeta: 64.2,
+    ritmoDiario: 3973,
+    mediaDiariaNecessaria: 3302,
+    projecaoFechamento: 95352,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'meta',
+    ticketMedio: 74.58,
+    totalAtendimentos: 852
+  },
+  {
+    lojaId: 'pg_centro',
+    lojaNome: 'PG Centro',
+    lojaCodigo: '01',
+    cluster: 'A',
+    metaNormal: 110000,
+    superMeta: 121000,
+    acumuladoVendido: 88400,
+    percentualMeta: 80.4,
+    percentualSuperMeta: 73.1,
+    ritmoDiario: 5525,
+    mediaDiariaNecessaria: 2700,
+    projecaoFechamento: 132600,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'supermeta',
+    ticketMedio: 77.74,
+    totalAtendimentos: 1137
+  },
+  {
+    lojaId: 'campo_largo',
+    lojaNome: 'Campo Largo',
+    lojaCodigo: '09',
+    cluster: 'A',
+    metaNormal: 105000,
+    superMeta: 115500,
+    acumuladoVendido: 82100,
+    percentualMeta: 78.2,
+    percentualSuperMeta: 71.1,
+    ritmoDiario: 5131,
+    mediaDiariaNecessaria: 2862,
+    projecaoFechamento: 123144,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'supermeta',
+    ticketMedio: 76.15,
+    totalAtendimentos: 1078
+  },
+  {
+    lojaId: 'nova_russia',
+    lojaNome: 'Nova Rússia',
+    lojaCodigo: '05',
+    cluster: 'A',
+    metaNormal: 95000,
+    superMeta: 104500,
+    acumuladoVendido: 71200,
+    percentualMeta: 74.9,
+    percentualSuperMeta: 68.1,
+    ritmoDiario: 4450,
+    mediaDiariaNecessaria: 2975,
+    projecaoFechamento: 106800,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'supermeta',
+    ticketMedio: 78.13,
+    totalAtendimentos: 911
+  },
+  {
+    lojaId: 'reserva',
+    lojaNome: 'Reserva',
+    lojaCodigo: '02',
+    cluster: 'A',
+    metaNormal: 85000,
+    superMeta: 93500,
+    acumuladoVendido: 61800,
+    percentualMeta: 72.7,
+    percentualSuperMeta: 66.1,
+    ritmoDiario: 3862,
+    mediaDiariaNecessaria: 2900,
+    projecaoFechamento: 92688,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'meta',
+    ticketMedio: 77.45,
+    totalAtendimentos: 798
+  },
+  {
+    lojaId: 'tibagi',
+    lojaNome: 'Tibagi',
+    lojaCodigo: '03',
+    cluster: 'A',
+    metaNormal: 80000,
+    superMeta: 88000,
+    acumuladoVendido: 57400,
+    percentualMeta: 71.8,
+    percentualSuperMeta: 65.2,
+    ritmoDiario: 3587,
+    mediaDiariaNecessaria: 2825,
+    projecaoFechamento: 86088,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'meta',
+    ticketMedio: 77.72,
+    totalAtendimentos: 738
+  },
+  {
+    lojaId: 'guarapuava',
+    lojaNome: 'Guarapuava',
+    lojaCodigo: '14',
+    cluster: 'B',
+    metaNormal: 92000,
+    superMeta: 101200,
+    acumuladoVendido: 65400,
+    percentualMeta: 71.1,
+    percentualSuperMeta: 64.6,
+    ritmoDiario: 4087,
+    mediaDiariaNecessaria: 3325,
+    projecaoFechamento: 98088,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'meta',
+    ticketMedio: 80.00,
+    totalAtendimentos: 817
+  },
+  {
+    lojaId: 'castro',
+    lojaNome: 'Castro',
+    lojaCodigo: '10',
+    cluster: 'B',
+    metaNormal: 78000,
+    superMeta: 85800,
+    acumuladoVendido: 53900,
+    percentualMeta: 69.1,
+    percentualSuperMeta: 62.8,
+    ritmoDiario: 3368,
+    mediaDiariaNecessaria: 3012,
+    projecaoFechamento: 80832,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'no_ritmo',
+    ticketMedio: 80.00,
+    totalAtendimentos: 673
+  },
+  {
+    lojaId: 'imbau',
+    lojaNome: 'Imbaú',
+    lojaCodigo: '15',
+    cluster: 'B',
+    metaNormal: 65000,
+    superMeta: 71500,
+    acumuladoVendido: 41200,
+    percentualMeta: 63.4,
+    percentualSuperMeta: 57.6,
+    ritmoDiario: 2575,
+    mediaDiariaNecessaria: 2975,
+    projecaoFechamento: 61800,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'abaixo',
+    ticketMedio: 85.00,
+    totalAtendimentos: 485
+  },
+  {
+    lojaId: 'reboucas',
+    lojaNome: 'Rebouças',
+    lojaCodigo: '17',
+    cluster: 'B',
+    metaNormal: 60000,
+    superMeta: 66000,
+    acumuladoVendido: 38900,
+    percentualMeta: 64.8,
+    percentualSuperMeta: 58.9,
+    ritmoDiario: 2431,
+    mediaDiariaNecessaria: 2637,
+    projecaoFechamento: 58344,
+    diasUteisOperacionais: 24,
+    diasUteisRestantes: 8,
+    statusRitmo: 'abaixo',
+    ticketMedio: 79.03,
+    totalAtendimentos: 492
+  }
+];
+
+export const MOCK_PAYMENT_MIX: PaymentMixItem[] = [
+  { id: 'pix_kais', label: 'Pix Kais', valor: 284500, percentual: 31.2, color: 'bg-emerald-500', iconName: 'Zap' },
+  { id: 'pix_stone', label: 'Pix Stone', valor: 212300, percentual: 23.3, color: 'bg-teal-500', iconName: 'Zap' },
+  { id: 'dinheiro', label: 'Dinheiro em Espécie', valor: 178900, percentual: 19.6, color: 'bg-amber-500', iconName: 'Banknote' },
+  { id: 'cartao_debito', label: 'Cartão Débito', valor: 104500, percentual: 11.5, color: 'bg-sky-500', iconName: 'CreditCard' },
+  { id: 'cartao_credito', label: 'Cartão Crédito', valor: 88200, percentual: 9.7, color: 'bg-purple-500', iconName: 'CreditCard' },
+  { id: 'pix_cnpj', label: 'Pix Direto CNPJ', valor: 43600, percentual: 4.7, color: 'bg-indigo-500', iconName: 'QrCode' }
+];
+
+export const MOCK_ANNUAL_MATRIX: AnnualStoreMatrixRow[] = [
+  {
+    lojaId: 'itapevi',
+    lojaNome: 'Itapevi',
+    cluster: 'A',
+    vendas2021: 720000,
+    vendas2022: 840000,
+    vendas2023: 930000,
+    vendas2024: 1020000,
+    vendas2025: 1110000,
+    vendas2026: 1220000,
+    meta2026: 1080000,
+    superMeta2026: 1188000,
+    pontoEquilibrio: 68500,
+    crescimentoAnualPct: 9.9,
+    comissaoMetaEstimada: 3240,
+    comissaoSuperMetaEstimada: 10692
+  },
+  {
+    lojaId: 'pg_centro',
+    lojaNome: 'Ponta Grossa Centro',
+    cluster: 'A',
+    vendas2021: 890000,
+    vendas2022: 980000,
+    vendas2023: 1120000,
+    vendas2024: 1250000,
+    vendas2025: 1390000,
+    vendas2026: 1540000,
+    meta2026: 1320000,
+    superMeta2026: 1452000,
+    pontoEquilibrio: 82000,
+    crescimentoAnualPct: 10.8,
+    comissaoMetaEstimada: 3960,
+    comissaoSuperMetaEstimada: 13068
+  },
+  {
+    lojaId: 'campo_largo',
+    lojaNome: 'Campo Largo',
+    cluster: 'A',
+    vendas2021: 810000,
+    vendas2022: 920000,
+    vendas2023: 1040000,
+    vendas2024: 1160000,
+    vendas2025: 1280000,
+    vendas2026: 1410000,
+    meta2026: 1260000,
+    superMeta2026: 1386000,
+    pontoEquilibrio: 78000,
+    crescimentoAnualPct: 10.1,
+    comissaoMetaEstimada: 3780,
+    comissaoSuperMetaEstimada: 12474
+  },
+  {
+    lojaId: 'nova_russia',
+    lojaNome: 'Nova Rússia',
+    cluster: 'A',
+    vendas2021: 750000,
+    vendas2022: 830000,
+    vendas2023: 940000,
+    vendas2024: 1050000,
+    vendas2025: 1160000,
+    vendas2026: 1280000,
+    meta2026: 1140000,
+    superMeta2026: 1254000,
+    pontoEquilibrio: 71000,
+    crescimentoAnualPct: 10.3,
+    comissaoMetaEstimada: 3420,
+    comissaoSuperMetaEstimada: 11286
+  },
+  {
+    lojaId: 'reserva',
+    lojaNome: 'Reserva',
+    cluster: 'A',
+    vendas2021: 670000,
+    vendas2022: 740000,
+    vendas2023: 820000,
+    vendas2024: 910000,
+    vendas2025: 1010000,
+    vendas2026: 1100000,
+    meta2026: 1020000,
+    superMeta2026: 1122000,
+    pontoEquilibrio: 63000,
+    crescimentoAnualPct: 8.9,
+    comissaoMetaEstimada: 3060,
+    comissaoSuperMetaEstimada: 10098
+  },
+  {
+    lojaId: 'guarapuava',
+    lojaNome: 'Guarapuava',
+    cluster: 'B',
+    vendas2021: 710000,
+    vendas2022: 790000,
+    vendas2023: 880000,
+    vendas2024: 970000,
+    vendas2025: 1070000,
+    vendas2026: 1180000,
+    meta2026: 1104000,
+    superMeta2026: 1214400,
+    pontoEquilibrio: 69000,
+    crescimentoAnualPct: 10.2,
+    comissaoMetaEstimada: 3312,
+    comissaoSuperMetaEstimada: 10929
+  }
+];
+
+export const MOCK_DAILY_PROGRESSION: BiDailyProgression[] = Array.from({ length: 30 }, (_, i) => {
+  const day = i + 1;
+  const dayStr = `2026-11-${String(day).padStart(2, '0')}`;
+  const metaDiariaRateio = 60000;
+  const superMetaDiariaRateio = 66000;
+  const isPastOrToday = day <= 23;
+
+  // Curva de vendas com flutuações realistas (sábados maiores, domingos zerados)
+  const isSunday = day === 1 || day === 8 || day === 15 || day === 22 || day === 29;
+  const isSaturday = day === 7 || day === 14 || day === 21 || day === 28;
+
+  let vendaDia = null;
+  if (isPastOrToday) {
+    if (isSunday) {
+      vendaDia = 0;
+    } else if (isSaturday) {
+      vendaDia = 74000 + (day * 300);
+    } else {
+      vendaDia = 52000 + (day * 250);
+    }
+  }
+
+  return {
+    dia: day,
+    dataStr: dayStr,
+    vendaDia,
+    vendaRealAcumulada: isPastOrToday ? Math.round(day * 53200) : null,
+    linhaMeta: day * metaDiariaRateio,
+    linhaSuperMeta: day * superMetaDiariaRateio
+  };
+});

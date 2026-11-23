@@ -425,7 +425,7 @@ export interface PurchaseOrder {
 }
 
 // 7. Tipos de Usuários & Níveis de Acesso (RBAC: Diretoria, Comprador, Depósito, Separação, Faturamento)
-export type UserRole = 'diretoria' | 'comprador' | 'deposito' | 'separacao' | 'faturamento';
+export type UserRole = 'diretoria' | 'comprador' | 'deposito' | 'separacao' | 'faturamento' | 'unidade';
 
 export interface User {
   id: string;

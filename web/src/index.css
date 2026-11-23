@@ -95,3 +95,23 @@ input[type="number"] {
   animation: ios-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
+/* Shimmer Beam Animation para Barra de Metas (Fiel ao App Erica) */
+@keyframes shimmer-beam {
+  0% { transform: translateX(-150%); }
+  100% { transform: translateX(300%); }
+}
+
+.animate-shimmer-beam {
+  animation: shimmer-beam 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Gold Pulse Glow para Supermeta Atingida */
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 12px rgba(245, 158, 11, 0.35); }
+  50% { box-shadow: 0 0 25px rgba(245, 158, 11, 0.65); }
+}
+
+.animate-pulse-gold {
+  animation: pulse-gold 2s ease-in-out infinite;
+}
+

@@ -14,7 +14,15 @@ export type ActiveNavTab =
   | 'suppliers' 
   | 'history' 
   | 'fiscal' 
-  | 'users';
+  | 'users'
+  | 'store_portal'
+  | 'units'
+  | 'units_cash'
+  | 'goals'
+  | 'units_bi'
+  | 'units_history'
+  | 'near_expiry'
+  | 'version_two_preview';
 
 export type UserLike = 
   | User 
@@ -78,6 +86,30 @@ export function hasPermission(userOrRole: UserLike, code: string): boolean {
 export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): boolean {
   if (!userOrRole || !tab) return false;
 
+  const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+
+  // A prévia da versão 2.0 é exclusiva do usuário root nesta etapa visual.
+  if (tab === 'version_two_preview') {
+    return typeof userOrRole === 'string'
+      ? userOrRole === 'root'
+      : userOrRole.role === 'root' || userOrRole.id === 'usr_root' || userOrRole.email?.toLowerCase() === 'root' || userOrRole.nome?.toLowerCase() === 'root';
+  }
+
+  // Se o usuário possui o perfil 'unidade', possui acesso ao portal da loja e ao controle de validades
+  if (role === 'unidade') {
+    return tab === 'store_portal' || tab === 'near_expiry';
+  }
+
+  // Validade Próxima: liberado para Unidades, Compradores (Bryan), Diretoria, Root e Operação
+  if (tab === 'near_expiry') {
+    return true;
+  }
+
+  // Inicialmente, apenas o perfil 'unidade' acessa a tela da loja
+  if (tab === 'store_portal') {
+    return false;
+  }
+
   if (tab === 'home') {
     return hasPermission(userOrRole, 'nav:orders') || 
            hasPermission(userOrRole, 'nav:separation') || 
@@ -90,6 +122,76 @@ export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): 
 
   if (tab === 'bi_products') {
     return hasPermission(userOrRole, 'nav:bi_products') || hasPermission(userOrRole, 'nav:dashboard');
+  }
+
+  if (tab === 'units') {
+    const isRoot = role === 'root' || 
+                   role === 'diretoria' || 
+                   (typeof userOrRole === 'object' && userOrRole !== null && (
+                     userOrRole.id === 'usr_root' || 
+                     userOrRole.email?.toLowerCase() === 'root' || 
+                     userOrRole.nome?.toLowerCase() === 'root'
+                   ));
+    if (isRoot || role === 'diretoria' || role === 'faturamento' || role === 'financeiro') {
+      return true;
+    }
+    return hasPermission(userOrRole, 'nav:units');
+  }
+
+  if (tab === 'units_cash') {
+    const isRoot = role === 'root' || 
+                   role === 'diretoria' || 
+                   (typeof userOrRole === 'object' && userOrRole !== null && (
+                     userOrRole.id === 'usr_root' || 
+                     userOrRole.email?.toLowerCase() === 'root' || 
+                     userOrRole.nome?.toLowerCase() === 'root'
+                   ));
+    if (isRoot || role === 'diretoria' || role === 'faturamento' || role === 'financeiro') {
+      return true;
+    }
+    return hasPermission(userOrRole, 'nav:units_cash');
+  }
+
+  if (tab === 'goals') {
+    const isRoot = role === 'root' || 
+                   role === 'diretoria' || 
+                   (typeof userOrRole === 'object' && userOrRole !== null && (
+                     userOrRole.id === 'usr_root' || 
+                     userOrRole.email?.toLowerCase() === 'root' || 
+                     userOrRole.nome?.toLowerCase() === 'root'
+                   ));
+    if (isRoot || role === 'diretoria') {
+      return true;
+    }
+    return hasPermission(userOrRole, 'nav:goals');
+  }
+
+  if (tab === 'units_bi') {
+    const isRoot = role === 'root' || 
+                   role === 'diretoria' || 
+                   (typeof userOrRole === 'object' && userOrRole !== null && (
+                     userOrRole.id === 'usr_root' || 
+                     userOrRole.email?.toLowerCase() === 'root' || 
+                     userOrRole.nome?.toLowerCase() === 'root'
+                   ));
+    if (isRoot || role === 'diretoria') {
+      return true;
+    }
+    return hasPermission(userOrRole, 'nav:units_bi');
+  }
+
+  if (tab === 'units_history') {
+    const isRoot = role === 'root' || 
+                   role === 'diretoria' || 
+                   (typeof userOrRole === 'object' && userOrRole !== null && (
+                     userOrRole.id === 'usr_root' || 
+                     userOrRole.email?.toLowerCase() === 'root' || 
+                     userOrRole.nome?.toLowerCase() === 'root'
+                   ));
+    if (isRoot || role === 'diretoria') {
+      return true;
+    }
+    return hasPermission(userOrRole, 'nav:units_history');
   }
 
   return hasPermission(userOrRole, `nav:${tab}`);
@@ -195,6 +297,7 @@ export function canDeleteOrder(userOrRole?: UserLike): boolean {
  * Retorna a rota padrão inicial ao fazer login ou ao tentar acessar rota não permitida
  */
 export function getDefaultNavForRole(role?: UserRole | null): ActiveNavTab {
+  if (role === 'unidade') return 'store_portal';
   if (role === 'separacao') return 'separation';
   if (role === 'faturamento') return 'financial';
   if (role === 'deposito') return 'home';

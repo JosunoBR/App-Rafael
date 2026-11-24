@@ -207,7 +207,7 @@ import { calculateItemFiscal, normalizeRateToDecimal } from './shared/fiscalEngi
 import { DEFAULT_FISCAL_CONFIG } from './shared/constants';
 import { calculateAutomaticSeparation } from './shared/separationEngine';
 import { ensureTrailingBlankItem, isOrderItemBlank, createBlankOrderItem, generateNextProductCode } from './utils/orderItemUtils';
-import { CheckCircle2, AlertCircle, Plus, Lock, ShieldCheck, RefreshCw, X, RotateCcw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Plus, Lock, ShieldCheck, RefreshCw, X, RotateCcw, ArrowLeft } from 'lucide-react';
 import { canAccessTab, canAuthorizeFinancialRelease, canCreateOrEditOrders, getDefaultNavForRole, canEditSpecificOrder, canRollbackOrderStatus } from './shared/permissions';
 import { 
   calculateOrderTotals, 
@@ -296,7 +296,11 @@ export function App() {
   }, [activeNav]);
 
   // Handler de navegação unificado e sincronizado com URLs reais
+  const [returnToTab, setReturnToTab] = useState<ActiveNavTab | null>(null);
   const handleSelectNav = (tab: ActiveNavTab) => {
+    if (tab !== 'orders') {
+      setReturnToTab(null);
+    }
     if (canAccessTab(currentUser, tab)) {
       setActiveNav(tab);
       const targetPath = NAV_TAB_TO_PATH[tab] || ROUTE_PATHS.HOME;
@@ -1668,6 +1672,10 @@ export function App() {
 
   // Carrega com segurança e resposta instantânea (0ms) o pedido selecionado
   const handleOpenSelectedOrder = (selected: PurchaseOrder, destinationTab: ActiveNavTab = 'orders') => {
+    if (activeNav === 'history' || activeNav === 'financial') {
+      setReturnToTab(activeNav);
+    }
+
     // 1. Ao trocar de pedido, se havia trabalho no pedido atual, preserva silenciosamente no banco SQLite
     if (order && order.header.id !== selected.header.id) {
       const validItems = (order.items || []).filter(it => !isOrderItemBlank(it));
@@ -3874,6 +3882,27 @@ export function App() {
               {/* PÁGINA 1: COTAÇÃO E PEDIDOS (Diretoria & Compradores) */}
               {activeNav === 'orders' && canAccessTab(currentUser, 'orders') && (
                 <div className="space-y-6 animate-in fade-in duration-200 w-full max-w-full min-w-0">
+                  {/* Botão de Retorno Rápido ao Histórico ou Financeiro mantendo os filtros originais */}
+                  {returnToTab && (
+                    <div className="flex items-center justify-between pb-1 -mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const dest = returnToTab;
+                          setReturnToTab(null);
+                          handleSelectNav(dest);
+                        }}
+                        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/80 shadow-2xs transition cursor-pointer group"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5 text-slate-500 group-hover:-translate-x-0.5 transition-transform" />
+                        <span>{returnToTab === 'financial' ? 'Voltar ao Financeiro' : 'Voltar ao Histórico'}</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-bold border border-amber-300 dark:border-amber-700">
+                          Filtros mantidos
+                        </span>
+                      </button>
+                    </div>
+                  )}
+
                   {/* Esteira Operacional Visual do Pedido (Compras ➔ Depósito ➔ Separação ➔ Finalizado) */}
                   <OrderPipelineStepper
                     order={order}
@@ -4329,6 +4358,7 @@ export function App() {
               {activeNav === 'history' && canAccessTab(currentUser, 'history') && (
                 <OrderHistoryPage
                   orders={savedOrders.length > 0 ? savedOrders : [order]}
+                  suppliers={suppliers}
                   currentUser={currentUser}
                   onSelectOrder={(selected) => handleOpenSelectedOrder(selected, 'orders')}
                   onDeleteOrder={handleDeleteOrder}

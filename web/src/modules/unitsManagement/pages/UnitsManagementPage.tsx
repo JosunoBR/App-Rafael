@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Building2,
   Calendar,
@@ -8,14 +8,17 @@ import {
 import { User } from '../../../shared/types';
 import { FinancialDailyClosingQueue } from '../components/FinancialDailyClosingQueue';
 import { FinancialHolidayApprovalPanel } from '../components/FinancialHolidayApprovalPanel';
+import { FinancialCalendarNavigator } from '../components/FinancialCalendarNavigator';
 import {
   INITIAL_DAILY_CLOSINGS,
   INITIAL_HOLIDAY_REQUESTS
 } from '../mock/unitsMockData';
 import {
   StoreDailyClosingSummary,
-  StoreHolidayRequest
+  StoreHolidayRequest,
+  StorePaymentMethods
 } from '../types/unitsManagement.types';
+import { ExpenseItem } from '../../storePortal/types/storePortal.types';
 
 interface UnitsManagementPageProps {
   currentUser?: User;
@@ -26,23 +29,53 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
   currentUser,
   showToast
 }) => {
+  // Carregamento resiliente dos filtros da conferência na sessão
+  const savedUnitsFilters = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem('mega12_units_management_filters_v1') || localStorage.getItem('mega12_units_management_filters_v1');
+      if (raw) return JSON.parse(raw);
+    } catch { }
+    return null;
+  }, []);
+
   // Sub-abas exclusivas da Conferência Financeira:
   // 'closings' (Fechamentos Diários) vs 'holidays' (Aprovação de Feriados)
-  const [financialSubTab, setFinancialSubTab] = useState<'closings' | 'holidays'>('closings');
-  const [selectedDate] = useState('2026-11-23');
+  const [financialSubTab, setFinancialSubTab] = useState<'closings' | 'holidays'>(() => savedUnitsFilters?.financialSubTab ?? 'closings');
+
+  // Navegação de Data e Mês da Conferência
+  const [selectedDate, setSelectedDate] = useState<string>(() => savedUnitsFilters?.selectedDate ?? '2026-11-23');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => savedUnitsFilters?.selectedMonth ?? '2026-11');
+  const [viewMode, setViewMode] = useState<'day' | 'month'>(() => savedUnitsFilters?.viewMode ?? 'day');
+
+  useEffect(() => {
+    try {
+      const payload = { financialSubTab, selectedDate, selectedMonth, viewMode };
+      sessionStorage.setItem('mega12_units_management_filters_v1', JSON.stringify(payload));
+      localStorage.setItem('mega12_units_management_filters_v1', JSON.stringify(payload));
+    } catch { }
+  }, [financialSubTab, selectedDate, selectedMonth, viewMode]);
 
   // Estados locais interativos (Mock com atualização otimista)
   const [closings, setClosings] = useState<StoreDailyClosingSummary[]>(INITIAL_DAILY_CLOSINGS);
   const [holidayRequests, setHolidayRequests] = useState<StoreHolidayRequest[]>(INITIAL_HOLIDAY_REQUESTS);
 
+  // Fechamentos filtrados por data ou mês consolidado
+  const displayedClosings = useMemo(() => {
+    if (viewMode === 'day') {
+      return closings.filter(c => c.data === selectedDate);
+    }
+    return closings.filter(c => c.data.startsWith(selectedMonth));
+  }, [closings, viewMode, selectedDate, selectedMonth]);
+
   // Contadores dinâmicos para os badges das abas
-  const pendingClosingsCount = closings.filter(c => c.status === 'aguardando').length;
+  const pendingClosingsCount = displayedClosings.filter(c => c.status === 'aguardando').length;
   const pendingHolidaysCount = holidayRequests.filter(r => r.status === 'pendente').length;
 
   // Handlers para Ações da Conferência (Fechamento)
   const handleApproveClosing = (lojaId: string) => {
     setClosings(prev => prev.map(c => {
-      if (c.lojaId === lojaId) {
+      const matchDate = viewMode === 'day' ? c.data === selectedDate : true;
+      if (c.lojaId === lojaId && matchDate) {
         return {
           ...c,
           status: 'aprovado',
@@ -60,7 +93,8 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
 
   const handleReturnClosing = (lojaId: string, motivo: string) => {
     setClosings(prev => prev.map(c => {
-      if (c.lojaId === lojaId) {
+      const matchDate = viewMode === 'day' ? c.data === selectedDate : true;
+      if (c.lojaId === lojaId && matchDate) {
         return {
           ...c,
           status: 'devolvido',
@@ -74,6 +108,38 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
 
     if (showToast) {
       showToast(`Fechamento devolvido para a loja com o apontamento registrado!`, 'info');
+    }
+  };
+
+  const handleAdjustClosing = (
+    lojaId: string,
+    dataStr: string,
+    updatedClosing: {
+      vendaTotal: number;
+      meiosPagamento: StorePaymentMethods;
+      despesas: ExpenseItem[];
+      motivoAjuste: string;
+    }
+  ) => {
+    setClosings(prev => prev.map(c => {
+      if (c.lojaId === lojaId && c.data === dataStr) {
+        return {
+          ...c,
+          vendaTotal: updatedClosing.vendaTotal,
+          meiosPagamento: updatedClosing.meiosPagamento,
+          despesas: updatedClosing.despesas,
+          status: 'aprovado',
+          ajustadoPorFinanceiro: true,
+          motivoAjusteFinanceiro: updatedClosing.motivoAjuste,
+          conferidoPor: currentUser?.nome ? `${currentUser.nome} (Ajustado pelo Financeiro)` : 'Bruna (Ajustado pelo Financeiro)',
+          conferidoEm: new Date().toLocaleString('pt-BR')
+        };
+      }
+      return c;
+    }));
+
+    if (showToast) {
+      showToast(`Fechamento da unidade retificado e homologado pelo Financeiro com sucesso!`, 'success');
     }
   };
 
@@ -162,11 +228,14 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
             </div>
           </div>
 
-          {/* Navegador de Data */}
+          {/* Indicador de Data Ativa */}
           <div className="flex items-center gap-2 self-start md:self-auto">
-            <div className="px-3 py-1.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
-              <Calendar className="w-3.5 h-3.5 text-amber-500" />
-              <span>Novembro / 2026</span>
+            <div className="px-3.5 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+              <Calendar className="w-4 h-4 text-amber-500" />
+              <span>{viewMode === 'day' ? selectedDate.split('-').reverse().join('/') : selectedMonth}</span>
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                {viewMode === 'day' ? 'Visão Diária' : 'Visão Mensal'}
+              </span>
             </div>
           </div>
         </div>
@@ -176,11 +245,10 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
           <button
             type="button"
             onClick={() => setFinancialSubTab('closings')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${
-              financialSubTab === 'closings'
-                ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-md shadow-slate-950/5'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${financialSubTab === 'closings'
+              ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-md shadow-slate-950/5'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
           >
             <CheckCircle2 className="w-4 h-4" />
             <span>Fila Diária de Fechamentos</span>
@@ -194,11 +262,10 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
           <button
             type="button"
             onClick={() => setFinancialSubTab('holidays')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${
-              financialSubTab === 'holidays'
-                ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-md shadow-slate-950/5'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${financialSubTab === 'holidays'
+              ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-md shadow-slate-950/5'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
           >
             <Palmtree className="w-4 h-4" />
             <span>Aprovação de Feriados</span>
@@ -211,13 +278,41 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
         </div>
       </div>
 
-      {/* 3. CONTEÚDO DA ABA ATIVA */}
+      {/* 3. NAVEGADOR DE CALENDÁRIO COMERCIAL (DIAS E MESES) */}
+      {financialSubTab === 'closings' && (
+        <FinancialCalendarNavigator
+          selectedDate={selectedDate}
+          selectedMonth={selectedMonth}
+          onSelectDate={(date) => {
+            setSelectedDate(date);
+            const m = date.substring(0, 7);
+            if (m !== selectedMonth) {
+              setSelectedMonth(m);
+            }
+          }}
+          onSelectMonth={(month) => setSelectedMonth(month)}
+          viewMode={viewMode}
+          onChangeViewMode={(mode) => setViewMode(mode)}
+          closings={closings}
+          holidayRequests={holidayRequests}
+        />
+      )}
+
+      {/* 4. CONTEÚDO DA ABA ATIVA */}
       {financialSubTab === 'closings' ? (
         <FinancialDailyClosingQueue
-          closings={closings}
+          closings={displayedClosings}
           onApprove={handleApproveClosing}
           onReturn={handleReturnClosing}
+          onAdjust={handleAdjustClosing}
           selectedDate={selectedDate}
+          viewMode={viewMode}
+          onGoToday={() => {
+            setSelectedDate('2026-11-23');
+            setSelectedMonth('2026-11');
+            setViewMode('day');
+          }}
+          onViewMonth={() => setViewMode('month')}
         />
       ) : (
         <FinancialHolidayApprovalPanel

@@ -53,7 +53,10 @@ export const StoreNearExpiryPage: React.FC<StoreNearExpiryPageProps> = ({
       const savedVer = localStorage.getItem('mega12_store_validities_ver');
       if (savedVer === VALIDITY_STORAGE_VERSION) {
         const saved = localStorage.getItem('mega12_store_validities');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
       }
     } catch {
       // fallback
@@ -69,8 +72,8 @@ export const StoreNearExpiryPage: React.FC<StoreNearExpiryPageProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [checkingItem, setCheckingItem] = useState<StoreProductValidity | null>(null);
 
-  // Data de referência do sistema (23/11/2026)
-  const today = new Date('2026-11-23');
+  // Data de referência do sistema (23/11/2026) em horário local para precisão de dias
+  const today = new Date('2026-11-23T00:00:00');
 
   // Cálculo de dias restantes para o vencimento
   const calculateDaysLeft = (expDateStr: string): number => {
@@ -162,8 +165,15 @@ export const StoreNearExpiryPage: React.FC<StoreNearExpiryPageProps> = ({
       );
     });
 
-    // Se por qualquer razão na fase de protótipo não encontrar (ex: filial recém-criada), exibe a lista mockada para teste
-    return matched.length > 0 ? matched : validities;
+    // Se por qualquer razão na fase de protótipo não encontrar (ex: filial recém-criada como P6), exibe a lista adaptada para a filial logada
+    if (matched.length > 0) return matched;
+
+    return validities.map(v => ({
+      ...v,
+      storeId: currentStore.id,
+      storeName: currentStore.name,
+      cidade: currentStore.cidade
+    }));
   }, [validities, currentStore]);
 
   // Filtragem por busca e por abas

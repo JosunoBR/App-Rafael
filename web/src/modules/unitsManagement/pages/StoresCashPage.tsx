@@ -12,7 +12,9 @@ import {
   DollarSign,
   Download,
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { User } from '../../../shared/types';
 import { StoreCashBalance } from '../types/unitsCash.types';
@@ -29,9 +31,33 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
   currentUser: _currentUser,
   showToast
 }) => {
-  const [selectedMonth, setSelectedMonth] = useState('2026-11');
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    try {
+      return sessionStorage.getItem('mega12_stores_cash_month') || '2026-11';
+    } catch {
+      return '2026-11';
+    }
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [inspectingStore, setInspectingStore] = useState<StoreCashBalance | null>(null);
+
+  React.useEffect(() => {
+    try {
+      sessionStorage.setItem('mega12_stores_cash_month', selectedMonth);
+    } catch {}
+  }, [selectedMonth]);
+
+  const handlePrevMonth = () => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const d = new Date(y, m - 2, 1);
+    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  };
+
+  const handleNextMonth = () => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const d = new Date(y, m, 1);
+    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  };
 
   /**
    * NOTA DE ARQUITETURA PARA O BACKEND:
@@ -101,18 +127,32 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
           </div>
 
           {/* Seletor de Período e Exportação */}
-          <div className="flex items-center gap-3 self-start md:self-auto">
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 shadow-2xs">
-              <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
-              <select
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(e.target.value)}
-                className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+          <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 shadow-2xs">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                className="p-1.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                title="Mês anterior"
               >
-                <option value="2026-11">Novembro / 2026 (Atual)</option>
-                <option value="2026-12">Dezembro / 2026 (Natal)</option>
-                <option value="2027-01">Janeiro / 2027</option>
-              </select>
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              
+              <div className="flex items-center gap-2 px-2">
+                <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {selectedMonth === '2026-11' ? 'Novembro / 2026' : selectedMonth === '2026-12' ? 'Dezembro / 2026' : selectedMonth}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="p-1.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                title="Próximo mês"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             <button

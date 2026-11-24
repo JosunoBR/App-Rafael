@@ -1041,7 +1041,7 @@ class FinancialService {
       const valorPago = isPaid ? (existing?.valorPago || inst.valorPago || inst.valor) : 0;
 
       // Limpar tags antigas de previsão/confirmação para evitar duplicação
-      const isAutoOldObs = existing?.observacao && /(dep[oó]sito|boleto)\s+\d+\/\d+/i.test(existing.observacao);
+      const isAutoOldObs = existing?.observacao && /(dep[oó]sito|boleto|parcela)\s+\d+\/\d+/i.test(existing.observacao);
       const chosenObs = (inst.observacao && (isAutoOldObs || !existing?.observacao))
         ? inst.observacao
         : (existing?.observacao || inst.observacao || (condicao ? `Condição: ${condicao}` : ''));

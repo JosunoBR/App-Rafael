@@ -33,7 +33,8 @@ import {
   UploadCloud,
   FileCheck,
   Loader2,
-  Scale
+  Scale,
+  Globe
 } from 'lucide-react';
 import { 
   PurchaseOrder, 
@@ -84,6 +85,9 @@ const MONTHS_NAMES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
+const FINANCIAL_FILTERS_STORAGE_KEY = 'mega12_financial_filters_v1';
+const LAST_VIEWED_FINANCIAL_ENTRY_KEY = 'mega12_last_viewed_financial_entry';
+
 export const FORMAS_OPCOES = [
   { id: 'BOLETO', label: '📄 Boletos' },
   { id: 'DEPOSITO', label: '🏦 Depósitos' },
@@ -101,8 +105,19 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
   onSaveOrder: _onSaveOrder,
   showToast
 }) => {
+  // 1. Carregamento inicial resiliente dos filtros salvos na sessão (SessionStorage / LocalStorage)
+  const savedFinancialFilters = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem(FINANCIAL_FILTERS_STORAGE_KEY) || localStorage.getItem(FINANCIAL_FILTERS_STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Erro ao restaurar filtros salvos do financeiro:', e);
+    }
+    return null;
+  }, []);
+
   // Aba ativa: 'daily' (Visão Diária da Planilha) ou 'list' (Contas a Pagar Analítico)
-  const [activeTab, setActiveTab] = useState<'daily' | 'list'>('daily');
+  const [activeTab, setActiveTab] = useState<'daily' | 'list'>(() => savedFinancialFilters?.activeTab ?? 'daily');
 
   // Mapeamento otimizado de pedidos para lookup instantâneo e detecção de ajuste fiscal
   const ordersMap = useMemo(() => {
@@ -135,26 +150,96 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
     return undefined;
   }, [ordersMap]);
 
-  // Filtros de Período (inicializados dinamicamente no mês/ano atual)
-  const [selectedYear, setSelectedYear] = useState<string>(() => String(new Date().getFullYear()));
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => String(new Date().getMonth() + 1).padStart(2, '0'));
-  const [selectedStore, setSelectedStore] = useState<string>('all');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  // Filtros de Período (restaura da sessão ou inicializa no mês/ano atual)
+  const [selectedYear, setSelectedYear] = useState<string>(() => savedFinancialFilters?.selectedYear ?? String(new Date().getFullYear()));
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => savedFinancialFilters?.selectedMonth ?? String(new Date().getMonth() + 1).padStart(2, '0'));
+  const [selectedStore, setSelectedStore] = useState<string>(() => savedFinancialFilters?.selectedStore ?? 'all');
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => savedFinancialFilters?.selectedCategory ?? 'all');
+  const [selectedStatus, setSelectedStatus] = useState<string>(() => savedFinancialFilters?.selectedStatus ?? 'all');
   
   // Formas de Pagamento selecionadas (vazio ou todas = Todas as Formas)
-  const [selectedFormas, setSelectedFormas] = useState<string[]>([]);
+  const [selectedFormas, setSelectedFormas] = useState<string[]>(() => savedFinancialFilters?.selectedFormas ?? []);
 
   // Período e Atalhos Rápidos (D = Dia, S = Semana, M = Mês, custom = Período Livre)
-  const [periodMode, setPeriodMode] = useState<'D' | 'S' | 'M' | 'custom'>('M');
-  const [referenceDate, setReferenceDate] = useState<Date>(() => new Date());
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [periodMode, setPeriodMode] = useState<'D' | 'S' | 'M' | 'custom'>(() => savedFinancialFilters?.periodMode ?? 'M');
+  const [referenceDate, setReferenceDate] = useState<Date>(() => savedFinancialFilters?.referenceDate ? new Date(savedFinancialFilters.referenceDate) : new Date());
+  const [startDate, setStartDate] = useState<string>(() => savedFinancialFilters?.startDate ?? '');
+  const [endDate, setEndDate] = useState<string>(() => savedFinancialFilters?.endDate ?? '');
 
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>(() => savedFinancialFilters?.searchQuery ?? '');
   
   // Visão da Diretoria: 'all' (Geral), 'confirmados' (Confirmados/Lançados), 'previstos' (Apenas Previsão)
-  const [viewMode, setViewMode] = useState<'all' | 'confirmados' | 'previstos'>('all');
+  const [viewMode, setViewMode] = useState<'all' | 'confirmados' | 'previstos'>(() => savedFinancialFilters?.viewMode ?? 'all');
+
+  // ID do último lançamento financeiro/pedido visualizado para destaque visual na lista
+  const [lastViewedEntryId, setLastViewedEntryId] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(LAST_VIEWED_FINANCIAL_ENTRY_KEY);
+    } catch {
+      return null;
+    }
+  });
+
+  // Sincronização automática contínua para manter os filtros preservados ao navegar
+  useEffect(() => {
+    try {
+      const payload = {
+        activeTab,
+        selectedYear,
+        selectedMonth,
+        selectedStore,
+        selectedCategory,
+        selectedStatus,
+        selectedFormas,
+        periodMode,
+        referenceDate: referenceDate ? referenceDate.toISOString() : null,
+        startDate,
+        endDate,
+        searchQuery,
+        viewMode,
+        savedAt: Date.now()
+      };
+      const json = JSON.stringify(payload);
+      sessionStorage.setItem(FINANCIAL_FILTERS_STORAGE_KEY, json);
+      localStorage.setItem(FINANCIAL_FILTERS_STORAGE_KEY, json);
+    } catch {}
+  }, [
+    activeTab, selectedYear, selectedMonth, selectedStore, selectedCategory,
+    selectedStatus, selectedFormas, periodMode, referenceDate, startDate,
+    endDate, searchQuery, viewMode
+  ]);
+
+  const handleResetAllFinancialFilters = () => {
+    const now = new Date();
+    setSelectedYear(String(now.getFullYear()));
+    setSelectedMonth(String(now.getMonth() + 1).padStart(2, '0'));
+    setSelectedStore('all');
+    setSelectedCategory('all');
+    setSelectedStatus('all');
+    setSelectedFormas([]);
+    setPeriodMode('M');
+    setReferenceDate(now);
+    setStartDate('');
+    setEndDate('');
+    setSearchQuery('');
+    setViewMode('all');
+    try {
+      sessionStorage.removeItem(FINANCIAL_FILTERS_STORAGE_KEY);
+      localStorage.removeItem(FINANCIAL_FILTERS_STORAGE_KEY);
+    } catch {}
+  };
+
+  const hasActiveFinancialFilters = Boolean(
+    selectedStore !== 'all' ||
+    selectedCategory !== 'all' ||
+    selectedStatus !== 'all' ||
+    (selectedFormas && selectedFormas.length > 0) ||
+    searchQuery.trim() !== '' ||
+    viewMode !== 'all' ||
+    periodMode !== 'M' ||
+    startDate !== '' ||
+    endDate !== ''
+  );
 
   // Meta Diária de Pagamentos (persiste no navegador)
   const [metaDiaria, setMetaDiaria] = useState<number>(() => {
@@ -328,32 +413,42 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
         ? selectedFormas.join(',')
         : undefined;
 
+      const cleanSearch = searchQuery.trim();
+      const isSpecificPoOrDocSearch = cleanSearch.length >= 3 && (
+        /^\d+$/.test(cleanSearch) || 
+        /^ped-?\d+/i.test(cleanSearch) || 
+        /^nf-?\d+/i.test(cleanSearch)
+      );
+      // Se for busca específica por número de pedido ou nota fiscal com "Todos os Meses",
+      // expande a busca para não truncar parcelas que cruzam a virada de ano (ex: Dez/2026 -> Jan/2027)
+      const shouldBypassYearForSearch = isSpecificPoOrDocSearch && selectedMonth === 'all';
+
       // Filtros da listagem de lançamentos
       const listFilters: FinancialFilters = {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        year: (!isCustomDate && selectedYear !== 'all') ? selectedYear : undefined,
+        year: (!isCustomDate && selectedYear !== 'all' && !shouldBypassYearForSearch) ? selectedYear : undefined,
         month: (!isCustomDate && selectedMonth !== 'all') ? selectedMonth : undefined,
         lojaNome: selectedStore !== 'all' ? selectedStore : undefined,
         categoria: selectedCategory !== 'all' ? selectedCategory : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
         formaPagamento: formaParam,
         statusPrevisao: viewMode === 'all' ? undefined : (viewMode === 'confirmados' ? 'CONFIRMADO' : 'PREVISTO'),
-        search: searchQuery.trim() || undefined
+        search: cleanSearch || undefined
       };
 
       // Filtros do resumo
       const summaryFilters: FinancialFilters = {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        year: (!isCustomDate && selectedYear !== 'all') ? selectedYear : undefined,
+        year: (!isCustomDate && selectedYear !== 'all' && !shouldBypassYearForSearch) ? selectedYear : undefined,
         month: (!isCustomDate && selectedMonth !== 'all') ? selectedMonth : undefined,
         lojaNome: selectedStore !== 'all' ? selectedStore : undefined,
         categoria: selectedCategory !== 'all' ? selectedCategory : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
         formaPagamento: formaParam,
         statusPrevisao: viewMode === 'all' ? undefined : (viewMode === 'confirmados' ? 'CONFIRMADO' : 'PREVISTO'),
-        search: searchQuery.trim() || undefined
+        search: cleanSearch || undefined
       };
 
       const [entriesData, summaryData] = await Promise.all([
@@ -798,7 +893,13 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
       const mIdx = parseInt(selectedMonth, 10) - 1;
       parts.push(`Mês: ${MONTHS_NAMES[mIdx] || selectedMonth}/${selectedYear}`);
     } else {
-      parts.push(`Ano: ${selectedYear}`);
+      const cleanSearch = searchQuery.trim();
+      const isSpecificPoOrDocSearch = cleanSearch.length >= 3 && (/^\d+$/.test(cleanSearch) || /^ped-?\d+/i.test(cleanSearch) || /^nf-?\d+/i.test(cleanSearch));
+      if (isSpecificPoOrDocSearch && selectedMonth === 'all' && selectedYear !== 'all') {
+        parts.push(`Ano: Todos os Anos (busca expandida)`);
+      } else {
+        parts.push(`Ano: ${selectedYear}`);
+      }
     }
 
     if (selectedFormas.length > 0 && selectedFormas.length < FORMAS_OPCOES.length) {
@@ -1504,6 +1605,40 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
 
         </div>
 
+        {/* Linha de Status de Filtros Ativos e Limpar Filtros */}
+        {hasActiveFinancialFilters && (
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-100 dark:border-slate-700/60 text-xs">
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                <Filter className="w-3.5 h-3.5 text-amber-500" />
+                <span>Filtros preservados na sessão</span>
+              </span>
+              <span className="text-[11px] text-slate-400">({filtersDescription})</span>
+              {selectedYear !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedYear('all')}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900/40 border border-sky-300 dark:border-sky-800 transition cursor-pointer"
+                  title="Expandir visualização para todos os anos"
+                >
+                  <Globe className="w-3 h-3 text-sky-500" />
+                  <span>Ver Todos os Anos</span>
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleResetAllFinancialFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/40 active:scale-95 transition cursor-pointer border border-rose-200 dark:border-rose-900/40"
+              title="Restaurar todos os filtros para o padrão do mês atual"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Limpar Filtros</span>
+            </button>
+          </div>
+        )}
+
       </div>
 
       {/* 4. Conteúdo Dinâmico das Abas */}
@@ -1595,6 +1730,8 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                     const adjNf = linkedOrder?.header.valorNotaFiscalEntregue || 0;
                     const { orderNumber, nfNumber } = getEntryOrderAndNf(item, linkedOrder);
 
+                    const isLastViewed = lastViewedEntryId === item.id;
+
                     return (
                       <tr
                         key={item.id}
@@ -1602,7 +1739,9 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                           isPrevisto
                             ? 'border-l-blue-500 bg-blue-50/20 dark:bg-blue-950/20 hover:bg-blue-50/35 dark:hover:bg-blue-950/35'
                             : 'border-l-emerald-500 hover:bg-slate-50/80 dark:hover:bg-slate-700/30'
-                        } ${isPaid ? 'opacity-65 bg-slate-50/30 dark:bg-slate-800/30' : ''}`}
+                        } ${isPaid ? 'opacity-65 bg-slate-50/30 dark:bg-slate-800/30' : ''} ${
+                          isLastViewed ? 'ring-2 ring-inset ring-amber-400/80 bg-amber-50/40 dark:bg-amber-950/25' : ''
+                        }`}
                       >
                         <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
                           <input
@@ -1645,10 +1784,19 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                             <span className={`${isPaid ? 'line-through text-slate-400' : ''} ${item.observacao ? 'cursor-help' : ''}`}>
                               {item.descricao}
                             </span>
+                            {isLastViewed && (
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80">
+                                Último visto
+                              </span>
+                            )}
                             {hasFiscalAdjustment && (
                               <button
                                 type="button"
-                                onClick={() => linkedOrder && onSelectOrder(linkedOrder)}
+                                onClick={() => {
+                                  setLastViewedEntryId(item.id);
+                                  try { sessionStorage.setItem(LAST_VIEWED_FINANCIAL_ENTRY_KEY, item.id); } catch {}
+                                  linkedOrder && onSelectOrder(linkedOrder);
+                                }}
                                 className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 border border-indigo-400/40 inline-flex items-center gap-1 shadow-xs transition active:scale-95 cursor-pointer"
                                 title={`Pedido ${linkedOrder?.header.numeroPedido} com Ajuste Fiscal da NF aplicado: ${adjDiff >= 0 ? '+' : '-'}R$ ${Math.abs(adjDiff).toFixed(2).replace('.', ',')} no total final (NF: R$ ${adjNf.toFixed(2).replace('.', ',')}). Clique para abrir o pedido.`}
                               >
@@ -1705,7 +1853,11 @@ export const FinancialBoletosPage: React.FC<FinancialBoletosPageProps> = ({
                             linkedOrder && onSelectOrder ? (
                               <button
                                 type="button"
-                                onClick={() => onSelectOrder(linkedOrder)}
+                                onClick={() => {
+                                  setLastViewedEntryId(item.id);
+                                  try { sessionStorage.setItem(LAST_VIEWED_FINANCIAL_ENTRY_KEY, item.id); } catch {}
+                                  onSelectOrder(linkedOrder);
+                                }}
                                 className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer transition text-left"
                                 title={`Clique para visualizar o Pedido ${orderNumber}`}
                               >

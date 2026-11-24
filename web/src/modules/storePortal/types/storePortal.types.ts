@@ -34,6 +34,8 @@ export interface DailyCashClosing {
   motivoDevolucao?: string;
   dataHoraEnvio?: string;
   dataHoraConferencia?: string;
+  ajustadoPorFinanceiro?: boolean;
+  motivoAjusteFinanceiro?: string;
 }
 
 export interface StoreGoalData {

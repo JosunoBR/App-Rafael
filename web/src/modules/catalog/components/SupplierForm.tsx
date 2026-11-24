@@ -152,7 +152,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
         {/* Razão Social */}
         <div className="sm:col-span-2">
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            Razão Social / Nome da Empresa *
+            Razão Social *
           </label>
           <input
             type="text"

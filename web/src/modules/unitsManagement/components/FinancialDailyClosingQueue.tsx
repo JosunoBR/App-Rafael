@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2,
   AlertCircle,
@@ -10,27 +10,140 @@ import {
   FileText,
   AlertTriangle,
   Send,
-  Building2
+  Building2,
+  Edit3,
+  Plus,
+  Trash2,
+  Save,
+  RotateCcw
 } from 'lucide-react';
-import { StoreDailyClosingSummary, ClosingStatus } from '../types/unitsManagement.types';
-import { formatCurrency } from '../../../utils/masks';
+import { StoreDailyClosingSummary, ClosingStatus, StorePaymentMethods } from '../types/unitsManagement.types';
+import { ExpenseItem } from '../../storePortal/types/storePortal.types';
+import { formatCurrency, handleCurrencyInput } from '../../../utils/masks';
+
+interface BrlCurrencyInputProps {
+  value: number;
+  onChange: (val: number) => void;
+  placeholder?: string;
+  className?: string;
+  required?: boolean;
+  autoFocus?: boolean;
+}
+
+const BrlCurrencyInput: React.FC<BrlCurrencyInputProps> = ({
+  value,
+  onChange,
+  placeholder = '0,00',
+  className,
+  required,
+  autoFocus
+}) => {
+  const [displayVal, setDisplayVal] = useState<string>(() => (value > 0 ? formatCurrency(value, false) : ''));
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDisplayVal(value > 0 ? formatCurrency(value, false) : '');
+    }
+  }, [value, isFocused]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const { formatted, value: num } = handleCurrencyInput(raw, true);
+    setDisplayVal(formatted);
+    onChange(num);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    if (value > 0) {
+      setDisplayVal(formatCurrency(value, false));
+    } else {
+      setDisplayVal('');
+    }
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    setIsFocused(true);
+    e.target.select();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === '.' && !displayVal.includes(',')) {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const start = target.selectionStart ?? displayVal.length;
+      const end = target.selectionEnd ?? displayVal.length;
+      const newVal = displayVal.slice(0, start) + ',' + displayVal.slice(end);
+      const { formatted, value: num } = handleCurrencyInput(newVal, true);
+      setDisplayVal(formatted);
+      onChange(num);
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={displayVal}
+      onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      required={required}
+      autoFocus={autoFocus}
+      className={className}
+    />
+  );
+};
 
 interface FinancialDailyClosingQueueProps {
   closings: StoreDailyClosingSummary[];
   onApprove: (lojaId: string) => void;
   onReturn: (lojaId: string, motivo: string) => void;
+  onAdjust?: (
+    lojaId: string,
+    dataStr: string,
+    updatedClosing: {
+      vendaTotal: number;
+      meiosPagamento: StorePaymentMethods;
+      despesas: ExpenseItem[];
+      motivoAjuste: string;
+    }
+  ) => void;
   selectedDate?: string;
+  viewMode?: 'day' | 'month';
+  onGoToday?: () => void;
+  onViewMonth?: () => void;
 }
 
 export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProps> = ({
   closings,
   onApprove,
   onReturn,
-  selectedDate: _selectedDate
+  onAdjust,
+  selectedDate,
+  viewMode = 'day',
+  onGoToday,
+  onViewMonth
 }) => {
   const [activeFilter, setActiveFilter] = useState<'all' | ClosingStatus>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [inspectingClosing, setInspectingClosing] = useState<StoreDailyClosingSummary | null>(null);
+
+  // Estados do Modo de Ajuste pelo Financeiro
+  const [isAdjusting, setIsAdjusting] = useState(false);
+  const [editMeios, setEditMeios] = useState<StorePaymentMethods>({
+    dinheiro: 0,
+    pixKais: 0,
+    pixStone: 0,
+    pixCnpj: 0,
+    cartaoDebito: 0,
+    cartaoCredito: 0
+  });
+  const [editDespesas, setEditDespesas] = useState<ExpenseItem[]>([]);
+  const [editMotivoAjuste, setEditMotivoAjuste] = useState('');
 
   // Helper para exibir estritamente apenas o nome da unidade (removendo Mega 12 e Filial XX)
   const cleanStoreName = (name: string) => {
@@ -85,7 +198,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-700 whitespace-nowrap">
             <AlertCircle className="w-2.5 h-2.5 text-rose-600 dark:text-rose-400 shrink-0" />
-            <span>Ajuste</span>
+            <span>Devolvido (Ajuste)</span>
           </span>
         );
       case 'pendente':
@@ -112,6 +225,65 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
     onReturn(returnModalData.lojaId, returnModalData.motivo.trim());
     setReturnModalData(null);
     setInspectingClosing(null);
+    setIsAdjusting(false);
+  };
+
+  // Inicia o modo de retificação pelo financeiro
+  const handleStartAdjustment = (c: StoreDailyClosingSummary) => {
+    setInspectingClosing(c);
+    setIsAdjusting(true);
+    setEditMeios({ ...c.meiosPagamento });
+    setEditDespesas(c.despesas ? c.despesas.map(d => ({ ...d })) : []);
+    setEditMotivoAjuste(c.motivoAjusteFinanceiro || '');
+  };
+
+  // Funções de manipulação de despesas no modo de ajuste
+  const handleAddExpense = () => {
+    const newItem: ExpenseItem = {
+      id: `exp_fin_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      descricao: '',
+      valor: 0
+    };
+    setEditDespesas(prev => [...prev, newItem]);
+  };
+
+  const handleUpdateExpense = (id: string, field: 'descricao' | 'valor', value: any) => {
+    setEditDespesas(prev => prev.map(item => {
+      if (item.id === id) {
+        return { ...item, [field]: value };
+      }
+      return item;
+    }));
+  };
+
+  const handleRemoveExpense = (id: string) => {
+    setEditDespesas(prev => prev.filter(item => item.id !== id));
+  };
+
+  // Salva o ajuste feito pelo financeiro
+  const handleSaveAdjustment = () => {
+    if (!inspectingClosing || !onAdjust) return;
+    if (!editMotivoAjuste.trim()) return;
+
+    const totalCalculado =
+      (Number(editMeios.dinheiro) || 0) +
+      (Number(editMeios.pixKais) || 0) +
+      (Number(editMeios.pixStone) || 0) +
+      (Number(editMeios.pixCnpj) || 0) +
+      (Number(editMeios.cartaoDebito) || 0) +
+      (Number(editMeios.cartaoCredito) || 0);
+
+    const validDespesas = editDespesas.filter(d => d.descricao.trim() !== '' || d.valor > 0);
+
+    onAdjust(inspectingClosing.lojaId, inspectingClosing.data, {
+      vendaTotal: totalCalculado,
+      meiosPagamento: { ...editMeios },
+      despesas: validDespesas,
+      motivoAjuste: editMotivoAjuste.trim()
+    });
+
+    setIsAdjusting(false);
+    setInspectingClosing(null);
   };
 
   const QUICK_TEMPLATES = [
@@ -120,6 +292,24 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
     'Despesa lançada sem o comprovante fiscal ou recibo anexado.',
     'Favor conferir o valor em dinheiro vivo físico antes de reenviar.'
   ];
+
+  const QUICK_ADJUST_REASONS = [
+    'Ajuste no valor de Pix Stone conforme conciliação do extrato bancário oficial.',
+    'Retificação de valor em dinheiro vivo físico após contagem do malote/depósito.',
+    'Reclassificação de comprovante entre Cartão de Débito e Crédito.',
+    'Ajuste/lançamento de despesa operacional autorizada pelo Financeiro.'
+  ];
+
+  // Cálculo da soma dos meios em edição
+  const sumEditMeios =
+    (Number(editMeios.dinheiro) || 0) +
+    (Number(editMeios.pixKais) || 0) +
+    (Number(editMeios.pixStone) || 0) +
+    (Number(editMeios.pixCnpj) || 0) +
+    (Number(editMeios.cartaoDebito) || 0) +
+    (Number(editMeios.cartaoCredito) || 0);
+
+  const diffAjuste = inspectingClosing ? sumEditMeios - inspectingClosing.vendaTotal : 0;
 
   return (
     <div className="space-y-4">
@@ -239,7 +429,12 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
           return (
             <div
               key={c.lojaId}
-              onClick={() => c.status !== 'pendente' && setInspectingClosing(c)}
+              onClick={() => {
+                if (c.status !== 'pendente') {
+                  setInspectingClosing(c);
+                  setIsAdjusting(false);
+                }
+              }}
               className={`p-4 rounded-3xl border transition-all flex flex-col justify-between overflow-hidden relative ${borderClass} ${
                 c.status !== 'pendente' ? 'cursor-pointer hover:scale-[1.01] hover:shadow-lg' : 'opacity-65'
               }`}
@@ -260,7 +455,16 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                       </p>
                     </div>
                   </div>
-                  <div className="shrink-0">
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {c.ajustadoPorFinanceiro && (
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-700 shrink-0"
+                        title={c.motivoAjusteFinanceiro || 'Ajustado pelo Financeiro'}
+                      >
+                        <Edit3 className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400" />
+                        <span>Ajustado</span>
+                      </span>
+                    )}
                     {getStatusBadge(c.status)}
                   </div>
                 </div>
@@ -302,8 +506,19 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                 {/* Motivo de devolução exibido se houver */}
                 {isDevolvido && c.motivoDevolucao && (
                   <div className="mt-2.5 p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60 text-[11px] text-rose-800 dark:text-rose-300 font-medium">
-                    <span className="font-bold block">Ajuste Solicitado:</span>
+                    <span className="font-bold block">Ajuste Solicitado à Loja:</span>
                     <span className="line-clamp-2">"{c.motivoDevolucao}"</span>
+                  </div>
+                )}
+
+                {/* Motivo de ajuste pelo financeiro se houver */}
+                {c.ajustadoPorFinanceiro && c.motivoAjusteFinanceiro && (
+                  <div className="mt-2.5 p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-900/60 text-[11px] text-purple-900 dark:text-purple-300 font-medium">
+                    <span className="font-bold block flex items-center gap-1">
+                      <Edit3 className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                      Retificado pelo Financeiro:
+                    </span>
+                    <span className="line-clamp-2">"{c.motivoAjusteFinanceiro}"</span>
                   </div>
                 )}
               </div>
@@ -314,39 +529,91 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                   {c.dataHoraEnvio || 'Aguardando fechamento'}
                 </span>
 
-                {isAguardando ? (
-                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  {c.status !== 'pendente' && onAdjust && (
                     <button
                       type="button"
-                      onClick={() => handleOpenReturnModal(c)}
-                      className="px-2.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-[10px] font-black transition cursor-pointer"
+                      onClick={() => handleStartAdjustment(c)}
+                      className="px-2 py-1 rounded-lg text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-950/60 text-[10px] font-black transition cursor-pointer flex items-center gap-1"
+                      title="Retificar valores diretamente pelo Financeiro"
                     >
-                      Devolver
+                      <Edit3 className="w-3 h-3" />
+                      <span>Ajustar</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => onApprove(c.lojaId)}
-                      className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black transition cursor-pointer shadow-xs active:scale-95"
-                    >
-                      Aprovar
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-0.5">
-                    Detalhes <ChevronRight className="w-3 h-3" />
-                  </span>
-                )}
+                  )}
+
+                  {isAguardando ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenReturnModal(c)}
+                        className="px-2.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-[10px] font-black transition cursor-pointer"
+                      >
+                        Devolver
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onApprove(c.lojaId)}
+                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black transition cursor-pointer shadow-xs active:scale-95"
+                      >
+                        Aprovar
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400 flex items-center gap-0.5">
+                      Detalhes <ChevronRight className="w-3 h-3" />
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* 3. MODAL / GAVETA DE CONFRONTO DETALHADO (BRUNA) */}
+      {/* Estado Vazio Quando Não Há Fechamentos */}
+      {filteredClosings.length === 0 && (
+        <div className="py-14 text-center space-y-3 bg-white dark:bg-[#0B132B] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 animate-in fade-in duration-200">
+          <Building2 className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto" />
+          <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            {viewMode === 'day' && selectedDate
+              ? `Nenhum fechamento registrado para o dia ${selectedDate.split('-').reverse().join('/')}`
+              : 'Nenhum fechamento encontrado com os filtros atuais'}
+          </h4>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            Utilize o navegador e calendário acima para alternar entre os dias e meses da conferência.
+          </p>
+          <div className="flex items-center justify-center gap-2 pt-2">
+            {onGoToday && (
+              <button
+                type="button"
+                onClick={onGoToday}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 transition cursor-pointer shadow-xs"
+              >
+                Ir para Hoje (23/11/2026)
+              </button>
+            )}
+            {onViewMonth && viewMode === 'day' && (
+              <button
+                type="button"
+                onClick={onViewMonth}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer"
+              >
+                Ver Mês Inteiro
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3. MODAL DE CONFRONTO DETALHADO / AJUSTE PELO FINANCEIRO */}
       {inspectingClosing && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto animate-fade-in"
-          onClick={() => setInspectingClosing(null)}
+          onClick={() => {
+            setInspectingClosing(null);
+            setIsAdjusting(false);
+          }}
         >
           <div
             className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-6 flex flex-col max-h-[90vh]"
@@ -355,15 +622,21 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
             {/* Header da Gaveta */}
             <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                  <Building2 className="w-5 h-5" />
+                <div className={`p-2.5 rounded-2xl ${isAdjusting ? 'bg-amber-500 text-slate-950' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
+                  {isAdjusting ? <Edit3 className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-black text-slate-900 dark:text-white">
                       {cleanStoreName(inspectingClosing.lojaNome)}
                     </h3>
-                    {getStatusBadge(inspectingClosing.status)}
+                    {isAdjusting ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                        ✏️ Modo Retificação do Financeiro
+                      </span>
+                    ) : (
+                      getStatusBadge(inspectingClosing.status)
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                     Data: {inspectingClosing.data.split('-').reverse().join('/')} • Responsável: {inspectingClosing.responsavelFechamento}
@@ -372,7 +645,10 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
               </div>
               <button
                 type="button"
-                onClick={() => setInspectingClosing(null)}
+                onClick={() => {
+                  setInspectingClosing(null);
+                  setIsAdjusting(false);
+                }}
                 className="p-1.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -382,162 +658,437 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
             {/* Conteúdo com scroll */}
             <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
               
-              {/* Total Geral Declarado */}
-              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">
-                    Faturamento Total Declarado
-                  </span>
-                  <span className="text-xl sm:text-2xl font-black text-emerald-950 dark:text-emerald-100">
-                    {formatCurrency(inspectingClosing.vendaTotal, true)}
-                  </span>
-                </div>
-                {inspectingClosing.quantidadeVendas && (
-                  <div className="text-right">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
-                      {inspectingClosing.quantidadeVendas} Vendas
-                    </span>
-                    <span className="text-xs font-black text-slate-700 dark:text-slate-300">
-                      Ticket Médio: {formatCurrency(inspectingClosing.ticketMedio || 0, true)}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Confronto dos Meios de Pagamento */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <DollarSign className="w-4 h-4 text-amber-500" />
-                  <span>Discriminação por Meios de Pagamento</span>
-                </h4>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                    <span className="text-[11px] font-medium text-slate-500 block">💵 Dinheiro</span>
-                    <span className="text-sm font-black text-slate-900 dark:text-white">
-                      {formatCurrency(inspectingClosing.meiosPagamento.dinheiro, true)}
-                    </span>
+              {/* === MODO DE RETIFICAÇÃO PELO FINANCEIRO === */}
+              {isAdjusting ? (
+                <div className="space-y-4">
+                  {/* Banner de Instrução do Ajuste */}
+                  <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs">
+                    <div className="flex items-center gap-2 font-black text-amber-900 dark:text-amber-200 mb-1">
+                      <Edit3 className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>Retificação Direta pelo Financeiro (Matriz)</span>
+                    </div>
+                    <p className="text-amber-800/90 dark:text-amber-300/90 font-medium">
+                      O financeiro pode corrigir os valores divergentes diretamente aqui. Ao salvar, o caixa é homologado com registro de auditoria, sem necessidade de aguardar a unidade física.
+                    </p>
                   </div>
 
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                    <span className="text-[11px] font-medium text-slate-500 block">⚡ Pix Kais</span>
-                    <span className="text-sm font-black text-slate-900 dark:text-white">
-                      {formatCurrency(inspectingClosing.meiosPagamento.pixKais, true)}
-                    </span>
-                  </div>
+                  {/* Comparativo de Totais */}
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
+                        Valor Declarado Original:
+                      </span>
+                      <span className="text-lg font-black text-slate-700 dark:text-slate-300">
+                        {formatCurrency(inspectingClosing.vendaTotal, true)}
+                      </span>
+                    </div>
 
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                    <span className="text-[11px] font-medium text-slate-500 block">⚡ Pix Stone</span>
-                    <span className="text-sm font-black text-slate-900 dark:text-white">
-                      {formatCurrency(inspectingClosing.meiosPagamento.pixStone, true)}
-                    </span>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                    <span className="text-[11px] font-medium text-slate-500 block">⚡ Pix CNPJ</span>
-                    <span className="text-sm font-black text-slate-900 dark:text-white">
-                      {formatCurrency(inspectingClosing.meiosPagamento.pixCnpj, true)}
-                    </span>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                    <span className="text-[11px] font-medium text-slate-500 block">💳 Cartão Débito</span>
-                    <span className="text-sm font-black text-slate-900 dark:text-white">
-                      {formatCurrency(inspectingClosing.meiosPagamento.cartaoDebito, true)}
-                    </span>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                    <span className="text-[11px] font-medium text-slate-500 block">💳 Cartão Crédito</span>
-                    <span className="text-sm font-black text-slate-900 dark:text-white">
-                      {formatCurrency(inspectingClosing.meiosPagamento.cartaoCredito, true)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Despesas do Caixa */}
-              <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Despesas e Sangrias Pagas pelo Caixa
-                  </h4>
-                  <span className="text-xs font-bold text-slate-500">
-                    {inspectingClosing.despesas.length} itens
-                  </span>
-                </div>
-                {inspectingClosing.despesas.length === 0 ? (
-                  <p className="text-slate-400 italic">Nenhuma despesa lançada nesta data.</p>
-                ) : (
-                  <div className="space-y-1">
-                    {inspectingClosing.despesas.map((d, i) => (
-                      <div key={d.id} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
-                        <span>{i + 1}. {d.descricao}</span>
-                        <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(d.valor, true)}</span>
+                    <div className="text-left sm:text-right">
+                      <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 block">
+                        Novo Total Retificado:
+                      </span>
+                      <div className="flex items-center sm:justify-end gap-2">
+                        <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                          {formatCurrency(sumEditMeios, true)}
+                        </span>
+                        {diffAjuste !== 0 && (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            diffAjuste > 0
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
+                              : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'
+                          }`}>
+                            {diffAjuste > 0 ? `+${formatCurrency(diffAjuste, true)}` : formatCurrency(diffAjuste, true)}
+                          </span>
+                        )}
                       </div>
-                    ))}
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Memorando */}
-              {inspectingClosing.memorando && (
-                <div className="space-y-1 pt-2 border-t border-slate-200 dark:border-slate-800">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Memorando da Loja</span>
-                  </h4>
-                  <p className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
-                    "{inspectingClosing.memorando}"
-                  </p>
-                </div>
-              )}
+                  {/* Formulário de Meios de Pagamento */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <DollarSign className="w-4 h-4 text-amber-500" />
+                        <span>Meios de Pagamento (Editar Valores)</span>
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-500">
+                        Soma: {formatCurrency(sumEditMeios, true)}
+                      </span>
+                    </h4>
 
-              {/* Auditoria / Histórico */}
-              {inspectingClosing.conferidoPor && (
-                <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/80 text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
-                  <div className="font-bold">Trilha de Auditoria:</div>
-                  <div>Conferido por: {inspectingClosing.conferidoPor} em {inspectingClosing.conferidoEm}</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {/* Dinheiro */}
+                      <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                          💵 Dinheiro
+                        </label>
+                        <BrlCurrencyInput
+                          value={editMeios.dinheiro}
+                          onChange={(val) => setEditMeios(prev => ({ ...prev, dinheiro: val }))}
+                          className="w-full px-2.5 py-1.5 text-xs font-black rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Pix Kais */}
+                      <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                          ⚡ Pix Kais
+                        </label>
+                        <BrlCurrencyInput
+                          value={editMeios.pixKais}
+                          onChange={(val) => setEditMeios(prev => ({ ...prev, pixKais: val }))}
+                          className="w-full px-2.5 py-1.5 text-xs font-black rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Pix Stone */}
+                      <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                          ⚡ Pix Stone
+                        </label>
+                        <BrlCurrencyInput
+                          value={editMeios.pixStone}
+                          onChange={(val) => setEditMeios(prev => ({ ...prev, pixStone: val }))}
+                          className="w-full px-2.5 py-1.5 text-xs font-black rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Pix CNPJ */}
+                      <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                          ⚡ Pix CNPJ
+                        </label>
+                        <BrlCurrencyInput
+                          value={editMeios.pixCnpj}
+                          onChange={(val) => setEditMeios(prev => ({ ...prev, pixCnpj: val }))}
+                          className="w-full px-2.5 py-1.5 text-xs font-black rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Cartão Débito */}
+                      <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                          💳 Cartão Débito
+                        </label>
+                        <BrlCurrencyInput
+                          value={editMeios.cartaoDebito}
+                          onChange={(val) => setEditMeios(prev => ({ ...prev, cartaoDebito: val }))}
+                          className="w-full px-2.5 py-1.5 text-xs font-black rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Cartão Crédito */}
+                      <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                          💳 Cartão Crédito
+                        </label>
+                        <BrlCurrencyInput
+                          value={editMeios.cartaoCredito}
+                          onChange={(val) => setEditMeios(prev => ({ ...prev, cartaoCredito: val }))}
+                          className="w-full px-2.5 py-1.5 text-xs font-black rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Edição de Despesas */}
+                  <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                        Despesas do Caixa ({editDespesas.length})
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={handleAddExpense}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Adicionar Despesa</span>
+                      </button>
+                    </div>
+
+                    {editDespesas.length === 0 ? (
+                      <p className="text-slate-400 italic text-[11px]">Nenhuma despesa lançada.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {editDespesas.map((item, idx) => (
+                          <div key={item.id} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                            <span className="text-[10px] font-bold text-slate-400 shrink-0">{idx + 1}.</span>
+                            <input
+                              type="text"
+                              placeholder="Descrição da despesa"
+                              value={item.descricao}
+                              onChange={(e) => handleUpdateExpense(item.id, 'descricao', e.target.value)}
+                              className="flex-1 px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-1 focus:ring-amber-500"
+                            />
+                            <div className="w-28 relative shrink-0">
+                              <BrlCurrencyInput
+                                value={Number(item.valor) || 0}
+                                onChange={(val) => handleUpdateExpense(item.id, 'valor', val)}
+                                placeholder="0,00"
+                                className="w-full px-2 py-1 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-1 focus:ring-amber-500 text-right"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveExpense(item.id)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                              title="Remover despesa"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Justificativa / Motivo do Ajuste pelo Financeiro (Obrigatório) */}
+                  <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <label className="block text-xs font-extrabold text-slate-700 dark:text-slate-300">
+                      Justificativa da Retificação pelo Financeiro: <span className="text-amber-500">*</span>
+                    </label>
+
+                    <div className="flex flex-wrap gap-1">
+                      {QUICK_ADJUST_REASONS.map((r, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setEditMotivoAjuste(r)}
+                          className="text-[10px] px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition cursor-pointer text-left"
+                        >
+                          "{r}"
+                        </button>
+                      ))}
+                    </div>
+
+                    <textarea
+                      rows={2}
+                      value={editMotivoAjuste}
+                      onChange={(e) => setEditMotivoAjuste(e.target.value)}
+                      placeholder="Descreva o motivo da retificação (ex: Valor do Pix Stone ajustado conforme extrato Stone conferido)..."
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-amber-500 resize-y"
+                    />
+                  </div>
                 </div>
+              ) : (
+                /* === MODO DE VISUALIZAÇÃO / CONFRONTO NORMAL === */
+                <>
+                  {/* Total Geral Declarado */}
+                  <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">
+                        Faturamento Total Declarado
+                      </span>
+                      <span className="text-xl sm:text-2xl font-black text-emerald-950 dark:text-emerald-100">
+                        {formatCurrency(inspectingClosing.vendaTotal, true)}
+                      </span>
+                    </div>
+                    {inspectingClosing.quantidadeVendas && (
+                      <div className="text-right">
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
+                          {inspectingClosing.quantidadeVendas} Vendas
+                        </span>
+                        <span className="text-xs font-black text-slate-700 dark:text-slate-300">
+                          Ticket Médio: {formatCurrency(inspectingClosing.ticketMedio || 0, true)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Informação de Ajuste se já tiver sido retificado */}
+                  {inspectingClosing.ajustadoPorFinanceiro && (
+                    <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-xs">
+                      <div className="flex items-center gap-2 font-black text-purple-900 dark:text-purple-200 mb-1">
+                        <Edit3 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                        <span>Fechamento Retificado Diretamente pelo Financeiro</span>
+                      </div>
+                      <p className="text-purple-900/90 dark:text-purple-300/90 font-medium pl-6">
+                        "{inspectingClosing.motivoAjusteFinanceiro || 'Ajustes homologados pelo setor financeiro.'}"
+                      </p>
+                      {inspectingClosing.conferidoPor && (
+                        <p className="text-[10px] text-purple-700 dark:text-purple-400 font-bold pl-6 mt-1">
+                          Homologado por: {inspectingClosing.conferidoPor} em {inspectingClosing.conferidoEm}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Confronto dos Meios de Pagamento */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-amber-500" />
+                      <span>Discriminação por Meios de Pagamento</span>
+                    </h4>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                        <span className="text-[11px] font-medium text-slate-500 block">💵 Dinheiro</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">
+                          {formatCurrency(inspectingClosing.meiosPagamento.dinheiro, true)}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                        <span className="text-[11px] font-medium text-slate-500 block">⚡ Pix Kais</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">
+                          {formatCurrency(inspectingClosing.meiosPagamento.pixKais, true)}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                        <span className="text-[11px] font-medium text-slate-500 block">⚡ Pix Stone</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">
+                          {formatCurrency(inspectingClosing.meiosPagamento.pixStone, true)}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                        <span className="text-[11px] font-medium text-slate-500 block">⚡ Pix CNPJ</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">
+                          {formatCurrency(inspectingClosing.meiosPagamento.pixCnpj, true)}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                        <span className="text-[11px] font-medium text-slate-500 block">💳 Cartão Débito</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">
+                          {formatCurrency(inspectingClosing.meiosPagamento.cartaoDebito, true)}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                        <span className="text-[11px] font-medium text-slate-500 block">💳 Cartão Crédito</span>
+                        <span className="text-sm font-black text-slate-900 dark:text-white">
+                          {formatCurrency(inspectingClosing.meiosPagamento.cartaoCredito, true)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Despesas do Caixa */}
+                  <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                        Despesas e Sangrias Pagas pelo Caixa
+                      </h4>
+                      <span className="text-xs font-bold text-slate-500">
+                        {inspectingClosing.despesas.length} itens
+                      </span>
+                    </div>
+                    {inspectingClosing.despesas.length === 0 ? (
+                      <p className="text-slate-400 italic">Nenhuma despesa lançada nesta data.</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {inspectingClosing.despesas.map((d, i) => (
+                          <div key={d.id} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
+                            <span>{i + 1}. {d.descricao}</span>
+                            <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(d.valor, true)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Memorando */}
+                  {inspectingClosing.memorando && (
+                    <div className="space-y-1 pt-2 border-t border-slate-200 dark:border-slate-800">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Memorando da Loja</span>
+                      </h4>
+                      <p className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                        "{inspectingClosing.memorando}"
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Auditoria / Histórico */}
+                  {inspectingClosing.conferidoPor && (
+                    <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/80 text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
+                      <div className="font-bold">Trilha de Auditoria:</div>
+                      <div>Conferido por: {inspectingClosing.conferidoPor} em {inspectingClosing.conferidoEm}</div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
             {/* Rodapé com Ações da Bruna */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5 bg-slate-50 dark:bg-slate-800/50 shrink-0">
-              <button
-                type="button"
-                onClick={() => setInspectingClosing(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
-              >
-                Fechar
-              </button>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2.5 bg-slate-50 dark:bg-slate-800/50 shrink-0">
+              {isAdjusting ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsAdjusting(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                  >
+                    Cancelar Edição
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => handleOpenReturnModal(inspectingClosing)}
-                className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 active:scale-95 text-white transition cursor-pointer flex items-center gap-1.5 shadow-sm shadow-rose-600/30"
-              >
-                <AlertCircle className="w-4 h-4" />
-                <span>Solicitar Ajuste / Devolver</span>
-              </button>
+                  <button
+                    type="button"
+                    disabled={!editMotivoAjuste.trim()}
+                    onClick={handleSaveAdjustment}
+                    className="px-5 py-2 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-500 active:scale-95 text-white transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-amber-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Retificação e Aprovar Caixa</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setInspectingClosing(null)}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                  >
+                    Fechar
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  onApprove(inspectingClosing.lojaId);
-                  setInspectingClosing(null);
-                }}
-                className="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-600/30"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Aprovar e Travar Caixa</span>
-              </button>
+                  <div className="flex items-center gap-2">
+                    {onAdjust && (
+                      <button
+                        type="button"
+                        onClick={() => handleStartAdjustment(inspectingClosing)}
+                        className="px-4 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 transition cursor-pointer flex items-center gap-1.5 shadow-sm shadow-amber-500/20"
+                        title="Editar e retificar os valores deste fechamento diretamente"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        <span>Ajustar pelo Financeiro</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenReturnModal(inspectingClosing)}
+                      className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 active:scale-95 text-white transition cursor-pointer flex items-center gap-1.5 shadow-sm shadow-rose-600/30"
+                      title="Devolver para a gerente da filial corrigir na loja"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      <span>Devolver para a Loja</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onApprove(inspectingClosing.lojaId);
+                        setInspectingClosing(null);
+                      }}
+                      className="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-600/30"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Aprovar e Travar</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* 4. MODAL DE DEVOLUTIVA COM MOTIVO DA BRUNA */}
+      {/* 4. MODAL DE DEVOLUTIVA COM MOTIVO DA BRUNA (DEVOLVER PARA A LOJA) */}
       {returnModalData && (
         <div
           className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-fade-in"
@@ -621,7 +1172,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                 className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 active:scale-95 text-white transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-md shadow-rose-600/30"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>Confirmar e Devolver</span>
+                <span>Confirmar e Devolver à Loja</span>
               </button>
             </div>
           </div>

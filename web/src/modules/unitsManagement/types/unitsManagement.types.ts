@@ -28,6 +28,8 @@ export interface StoreDailyClosingSummary {
   motivoDevolucao?: string;
   conferidoPor?: string;
   conferidoEm?: string;
+  ajustadoPorFinanceiro?: boolean;
+  motivoAjusteFinanceiro?: string;
 }
 
 export type HolidayRequestStatus = 'pendente' | 'aprovado' | 'recusado';

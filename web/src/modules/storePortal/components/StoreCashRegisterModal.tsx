@@ -9,7 +9,10 @@ import {
   FileText,
   Receipt,
   User,
-  Calculator
+  Calculator,
+  CheckCircle2,
+  Lock,
+  Edit3
 } from 'lucide-react';
 import { DailyCashClosing, ExpenseItem } from '../types/storePortal.types';
 import { getStoreDayStatus } from '../utils/storeCalendarUtils';
@@ -250,6 +253,17 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
                 <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                   Fechamento de Caixa Diário
                 </h2>
+                {initialData?.status === 'devolvido' && (
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-700 animate-pulse">
+                    ⚠️ Ajuste Solicitado
+                  </span>
+                )}
+                {initialData?.status === 'aprovado' && (
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>Aprovado</span>
+                  </span>
+                )}
                 {dateStatus.isHoliday && (
                   <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                     🏖️ Feriado
@@ -289,10 +303,39 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
             <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-xs">
               <div className="flex items-center gap-2 font-black text-rose-800 dark:text-rose-300 mb-1">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>Motivo da Devolução pelo Financeiro:</span>
+                <span>Ajuste Solicitado pelo Financeiro:</span>
               </div>
               <p className="text-rose-900 dark:text-rose-200 font-medium pl-6">
                 "{initialData.motivoDevolucao}"
+              </p>
+              <p className="text-rose-700 dark:text-rose-400 text-[11px] font-bold pl-6 mt-1">
+                Realize a correção dos valores nos campos abaixo e reenvie para nova homologação.
+              </p>
+            </div>
+          )}
+
+          {/* AVISO DE RETIFICAÇÃO PELO FINANCEIRO */}
+          {initialData?.ajustadoPorFinanceiro && initialData.motivoAjusteFinanceiro && (
+            <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-800 text-xs">
+              <div className="flex items-center gap-2 font-black text-purple-800 dark:text-purple-300 mb-1">
+                <Edit3 className="w-4 h-4 text-purple-600 shrink-0" />
+                <span>Fechamento Retificado Diretamente pelo Financeiro:</span>
+              </div>
+              <p className="text-purple-900 dark:text-purple-200 font-medium pl-6">
+                "{initialData.motivoAjusteFinanceiro}"
+              </p>
+            </div>
+          )}
+
+          {/* AVISO DE FECHAMENTO APROVADO E TRAVADO */}
+          {initialData?.status === 'aprovado' && (
+            <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-xs">
+              <div className="flex items-center gap-2 font-black text-emerald-800 dark:text-emerald-300 mb-1">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Fechamento Homologado e Travado pelo Financeiro</span>
+              </div>
+              <p className="text-emerald-900 dark:text-emerald-200 font-medium pl-6">
+                Este dia foi auditado e aprovado. Qualquer alteração necessária deve ser solicitada à Matriz / Financeiro.
               </p>
             </div>
           )}
@@ -558,13 +601,33 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
             >
               Cancelar
             </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-md shadow-emerald-500/20 transition cursor-pointer flex items-center gap-2"
-            >
-              <Send className="w-4 h-4" />
-              <span>Enviar</span>
-            </button>
+            {initialData?.status === 'aprovado' ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2.5 rounded-xl text-xs font-black bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer flex items-center gap-2"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Fechamento Aprovado (Travado)</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-md shadow-emerald-500/20 transition cursor-pointer flex items-center gap-2"
+              >
+                {initialData?.status === 'devolvido' ? (
+                  <>
+                    <Edit3 className="w-4 h-4" />
+                    <span>Salvar Ajuste e Reenviar ao Financeiro</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>Enviar Fechamento</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </form>
       </div>

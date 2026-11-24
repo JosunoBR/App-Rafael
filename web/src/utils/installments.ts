@@ -725,7 +725,31 @@ export function generateOrderInstallments(
     }
   } else {
     // CENÁRIO B: PARCELAMENTO PADRÃO (OU 100% À VISTA)
-    const totalParcelas = customParcelas ?? order.header.parcelasCount ?? parsed.parcelas ?? 3;
+    const condStr = (order.header.condicaoPagamento || '').trim();
+    const condLower = condStr.toLowerCase();
+    const hasExplicitFormat = condStr.includes('/') || 
+      /\b\d+\s*x\b/i.test(condStr) || 
+      condLower.includes('vista') ||
+      QUICK_PAYMENT_PRESETS.some(p => p.conditionString.toLowerCase() === condLower);
+
+    const customDatesCount = (customDates && typeof customDates === 'object')
+      ? Object.keys(customDates).filter(k => k !== 'frete' && !isNaN(Number(k)) && Number(k) > 0).length
+      : 0;
+
+    let detectedParcelas = 3;
+    if (customParcelas !== undefined && customParcelas > 0) {
+      detectedParcelas = customParcelas;
+    } else if (hasExplicitFormat && parsed.parcelas > 0) {
+      detectedParcelas = parsed.parcelas;
+    } else if (customDatesCount > 0 && (!order.header.parcelasCount || customDatesCount > order.header.parcelasCount)) {
+      detectedParcelas = customDatesCount;
+    } else if (order.header.parcelasCount !== undefined && order.header.parcelasCount > 0) {
+      detectedParcelas = order.header.parcelasCount;
+    } else if (parsed.parcelas > 0) {
+      detectedParcelas = parsed.parcelas;
+    }
+
+    const totalParcelas = detectedParcelas > 0 ? detectedParcelas : 3;
     const baseValue = totalParcelas > 0 ? Number((valorBaseMercadoria / totalParcelas).toFixed(2)) : valorBaseMercadoria;
     const remainder = totalParcelas > 0 ? Number((valorBaseMercadoria - baseValue * totalParcelas).toFixed(2)) : 0;
 

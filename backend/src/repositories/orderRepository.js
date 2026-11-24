@@ -855,6 +855,11 @@ class OrderRepository {
           if (!paymentConfig.saldoParcelasCount) paymentConfig.saldoParcelasCount = parseInt(xMatches[1][1], 10);
         }
       }
+    } else if (condStr && condStr.includes('/')) {
+      const parts = condStr.replace(/\s*dias$/i, '').split('/').filter(p => /\d+/.test(p));
+      if (parts.length > 1 && (!paymentConfig.parcelasCount || paymentConfig.parcelasCount !== parts.length)) {
+        paymentConfig.parcelasCount = parts.length;
+      }
     }
 
     // Fallback para pedidos antigos: se não houver datasVencimentoPersonalizadas salvas, reconstrói a partir de installments

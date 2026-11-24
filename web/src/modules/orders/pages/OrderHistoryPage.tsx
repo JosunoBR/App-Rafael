@@ -24,7 +24,7 @@ import {
   ChevronDown,
   Layers
 } from 'lucide-react';
-import { PurchaseOrder } from '../../../shared/types';
+import { PurchaseOrder, Supplier } from '../../../shared/types';
 import { calculateOrderTotals } from '../../../shared/orderCalculationEngine';
 import { exportOrderToExcel } from '../../../utils/excelExporter';
 import { toBrDate } from '../../../utils/masks';
@@ -38,6 +38,7 @@ import { canConfirmReceipt, canAuthorizeFinancialRelease, canEditSpecificOrder, 
 
 interface OrderHistoryPageProps {
   orders: PurchaseOrder[];
+  suppliers: Supplier[];
   currentUser?: User;
   onSelectOrder: (order: PurchaseOrder) => void;
   onDeleteOrder?: (orderId: string, authPayload?: { directorEmail?: string; directorPassword?: string; reason?: string }) => Promise<void> | void;
@@ -83,8 +84,12 @@ const getFreteBadgeClass = (frete: 'CIF' | 'FOB' | 'Retira') => {
   }
 };
 
+const HISTORY_FILTERS_STORAGE_KEY = 'mega12_order_history_filters_v1';
+const LAST_VIEWED_ORDER_KEY = 'mega12_last_viewed_order_id';
+
 export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   orders,
+  suppliers,
   currentUser,
   onSelectOrder,
   onDeleteOrder,
@@ -96,7 +101,20 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   onRollbackSuccess,
   onRescheduleOrder
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  // 1. Carregamento inicial resiliente dos filtros salvos na sessão (SessionStorage/LocalStorage)
+  const savedFilters = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem(HISTORY_FILTERS_STORAGE_KEY) || localStorage.getItem(HISTORY_FILTERS_STORAGE_KEY);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    } catch (e) {
+      console.warn('Aviso: falha ao restaurar filtros salvos do histórico:', e);
+    }
+    return null;
+  }, []);
+
+  const [searchTerm, setSearchTerm] = useState<string>(() => savedFilters?.searchTerm ?? '');
   
   // Status da esteira oficial suportados para o perfil atual
   const ALL_PIPELINE_STATUSES = useMemo(() => {
@@ -106,12 +124,22 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     return ['Em Cotação', 'Aprovado', 'Em Separação', 'Faturamento', 'Finalizado'];
   }, [currentUser?.role]);
 
-  // Conjunto de status ligados/ativos no filtro (por padrão todos ligados)
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => new Set(
-    currentUser?.role === 'faturamento'
-      ? ['Aprovado', 'Em Separação', 'Faturamento', 'Finalizado']
-      : ['Em Cotação', 'Aprovado', 'Em Separação', 'Faturamento', 'Finalizado']
-  ));
+  // Conjunto de status ligados/ativos no filtro (restaura filtros prévios se existirem)
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => {
+    if (savedFilters?.selectedStatuses && Array.isArray(savedFilters.selectedStatuses) && savedFilters.selectedStatuses.length > 0) {
+      const validForRole = savedFilters.selectedStatuses.filter((st: string) =>
+        currentUser?.role === 'faturamento' ? (st !== 'Em Cotação' && st !== 'Rascunho') : true
+      );
+      if (validForRole.length > 0) {
+        return new Set(validForRole);
+      }
+    }
+    return new Set(
+      currentUser?.role === 'faturamento'
+        ? ['Aprovado', 'Em Separação', 'Faturamento', 'Finalizado']
+        : ['Em Cotação', 'Aprovado', 'Em Separação', 'Faturamento', 'Finalizado']
+    );
+  });
 
   const isAllSelected = useMemo(() => {
     return ALL_PIPELINE_STATUSES.length > 0 && ALL_PIPELINE_STATUSES.every(st => selectedStatuses.has(st));
@@ -160,11 +188,11 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
   const [orderToRollback, setOrderToRollback] = useState<PurchaseOrder | null>(null);
 
-  // Ordenação e Filtros por Coluna
-  const [sortField, setSortField] = useState<SortField | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  // Ordenação e Filtros por Coluna (Preservados entre navegações)
+  const [sortField, setSortField] = useState<SortField | null>(() => savedFilters?.sortField ?? null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() => savedFilters?.sortDirection ?? null);
   const [activeFilterDropdown, setActiveFilterDropdown] = useState<SortField | null>(null);
-  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>(() => savedFilters?.columnFilters ?? {
     numero: '',
     fornecedor: '',
     data: '',
@@ -172,8 +200,58 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     status: ''
   });
 
+  // ID do último pedido visualizado para destaque visual na lista
+  const [lastViewedOrderId, setLastViewedOrderId] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(LAST_VIEWED_ORDER_KEY);
+    } catch {
+      return null;
+    }
+  });
+
+  // Sincronização automática contínua para manter os filtros preservados ao navegar
+  useEffect(() => {
+    try {
+      const payload = {
+        searchTerm,
+        selectedStatuses: Array.from(selectedStatuses),
+        sortField,
+        sortDirection,
+        columnFilters,
+        savedAt: Date.now()
+      };
+      const json = JSON.stringify(payload);
+      sessionStorage.setItem(HISTORY_FILTERS_STORAGE_KEY, json);
+      localStorage.setItem(HISTORY_FILTERS_STORAGE_KEY, json);
+    } catch {}
+  }, [searchTerm, selectedStatuses, sortField, sortDirection, columnFilters]);
+
+  // Limpa completamente todos os filtros salvos e volta ao padrão
+  const handleResetAllFilters = () => {
+    setSearchTerm('');
+    setSelectedStatuses(new Set(ALL_PIPELINE_STATUSES));
+    setSortField(null);
+    setSortDirection(null);
+    setColumnFilters({
+      numero: '',
+      fornecedor: '',
+      data: '',
+      frete: '',
+      status: ''
+    });
+    try {
+      sessionStorage.removeItem(HISTORY_FILTERS_STORAGE_KEY);
+      localStorage.removeItem(HISTORY_FILTERS_STORAGE_KEY);
+    } catch {}
+  };
+
   const handleOpenOrder = (ord: PurchaseOrder) => {
     setOpeningOrderId(ord.header.id);
+    setLastViewedOrderId(ord.header.id);
+    try {
+      sessionStorage.setItem(LAST_VIEWED_ORDER_KEY, ord.header.id);
+    } catch {}
+
     const isTransf = ord.header?.supplierId === 'cd_matriz' || 
       String(ord.header?.numeroPedido || '').startsWith('CD-') || 
       String(ord.header?.id || '').startsWith('order_transf_cd_') ||
@@ -199,19 +277,29 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     }
   };
 
+  const supplierById = useMemo(() => new Map(suppliers.map(supplier => [supplier.id, supplier])), [suppliers]);
+  const supplierByName = useMemo(() => new Map(suppliers.map(supplier => [supplier.razaoSocial.trim().toLowerCase(), supplier])), [suppliers]);
+  const getSupplierFantasyName = (order: PurchaseOrder) => {
+    const supplier = (order.header.supplierId && supplierById.get(order.header.supplierId))
+      || supplierByName.get((order.header.fornecedor || '').trim().toLowerCase());
+    const fantasyName = supplier?.nomeFantasia?.trim();
+    return fantasyName && fantasyName.toLowerCase() !== (order.header.fornecedor || '').trim().toLowerCase()
+      ? fantasyName : '';
+  };
+
   // Fornecedores únicos para o filtro de coluna
   const uniqueSuppliers = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { count: number; fantasyName: string }>();
     orders.forEach(o => {
       const fn = (o.header?.fornecedor || '').trim();
       if (fn) {
-        map.set(fn, (map.get(fn) || 0) + 1);
+        map.set(fn, { count: (map.get(fn)?.count || 0) + 1, fantasyName: getSupplierFantasyName(o) });
       }
     });
     return Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
+      .map(([name, { count, fantasyName }]) => ({ name, count, fantasyName }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [orders]);
+  }, [orders, supplierById, supplierByName]);
 
   // Contagem por modalidade de frete
   const freteCounts = useMemo(() => {
@@ -240,6 +328,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         const matchesSearch = 
           o.header.numeroPedido.toLowerCase().includes(q) ||
           o.header.fornecedor.toLowerCase().includes(q) ||
+          getSupplierFantasyName(o).toLowerCase().includes(q) ||
           (o.header.vendedor && o.header.vendedor.toLowerCase().includes(q));
         if (!matchesSearch) return false;
       }
@@ -258,12 +347,12 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         }
       }
 
-      // 5. Filtro da Coluna: Fornecedor / Representante
+      // 5. Filtro da Coluna: Razão social / Nome fantasia
       if (columnFilters.fornecedor.trim()) {
         const qFornec = columnFilters.fornecedor.toLowerCase();
         const matchesFornec = 
           o.header.fornecedor.toLowerCase().includes(qFornec) ||
-          (o.header.vendedor && o.header.vendedor.toLowerCase().includes(qFornec));
+          getSupplierFantasyName(o).toLowerCase().includes(qFornec);
         if (!matchesFornec) return false;
       }
 
@@ -348,7 +437,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
     }
 
     return result;
-  }, [orders, searchTerm, selectedStatuses, columnFilters, sortField, sortDirection]);
+  }, [orders, searchTerm, selectedStatuses, columnFilters, sortField, sortDirection, supplierById, supplierByName]);
 
   // Pedidos filtrados dinamicamente pelos botões multi-status da esteira (para sincronização com o Card de Controle de Compras / Financeiro)
   const statusFilteredOrders = useMemo(() => {
@@ -729,19 +818,14 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
             <span>
               Exibindo <strong className="text-slate-900 dark:text-white font-mono">{processedOrders.length}</strong> de <strong className="font-mono">{orders.length}</strong> pedidos
             </span>
-            {(sortField || hasActiveColumnFilters || !isAllSelected) && (
+            {(sortField || hasActiveColumnFilters || searchTerm || !isAllSelected) && (
               <button
-                onClick={() => {
-                  setSortField(null);
-                  setSortDirection(null);
-                  handleClearAllColumnFilters();
-                  handleSelectAllStatuses();
-                }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 transition cursor-pointer"
-                title="Limpar todas as ordenações e filtros"
+                onClick={handleResetAllFilters}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 active:scale-95 transition cursor-pointer border border-rose-200 dark:border-rose-900/40"
+                title="Limpar todos os filtros e voltar à listagem completa"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Resetar Filtros
+                <span>Limpar Filtros</span>
               </button>
             )}
           </div>
@@ -929,12 +1013,14 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         autoFocus
                         value={columnFilters.fornecedor}
                         onChange={(e) => setColumnFilters(p => ({ ...p, fornecedor: e.target.value }))}
-                        placeholder="Digitar nome ou rep..."
+                          placeholder="Razão social ou nome fantasia..."
                         className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-hidden"
                       />
                       <div className="max-h-40 overflow-y-auto space-y-1 divide-y divide-slate-100 dark:divide-slate-700/40 text-xs">
                         {uniqueSuppliers
-                          .filter(s => !columnFilters.fornecedor || s.name.toLowerCase().includes(columnFilters.fornecedor.toLowerCase()))
+                           .filter(s => !columnFilters.fornecedor ||
+                             s.name.toLowerCase().includes(columnFilters.fornecedor.toLowerCase()) ||
+                             s.fantasyName.toLowerCase().includes(columnFilters.fornecedor.toLowerCase()))
                           .map(s => (
                             <button
                               key={s.name}
@@ -1283,8 +1369,17 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                   const ajusteDiff = ord.header.ajusteFiscalDiferenca || 0;
                   const deliveryAlert = getOrderDeliveryAlert(ord);
 
+                  const isLastViewed = lastViewedOrderId === ord.header.id;
+
                   return (
-                    <tr key={ord.header.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition group">
+                    <tr
+                      key={ord.header.id}
+                      className={`transition group ${
+                        isLastViewed
+                          ? 'bg-amber-50/60 dark:bg-amber-950/25 ring-1 ring-inset ring-amber-400/50 dark:ring-amber-500/40'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                      }`}
+                    >
                       
                       {/* Pedido / Número */}
                       <td 
@@ -1292,7 +1387,14 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         onClick={() => handleOpenOrder(ord)}
                         title={canEditSpecificOrder(currentUser, ord.header.status, ord.header.boletosLiberados) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
                       >
-                        <span className="underline decoration-dotted underline-offset-4">{ord.header.numeroPedido}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="underline decoration-dotted underline-offset-4">{ord.header.numeroPedido}</span>
+                          {isLastViewed && (
+                            <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80">
+                              Último visto
+                            </span>
+                          )}
+                        </div>
                         {temAjusteFiscal && (
                           <div className="mt-1">
                             <span 
@@ -1315,9 +1417,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                         <div className="font-bold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition">
                           {ord.header.fornecedor}
                         </div>
-                        {ord.header.vendedor && (
+                        {getSupplierFantasyName(ord) && (
                           <div className="text-[11px] text-slate-400">
-                            Rep: {ord.header.vendedor}
+                            Fantasia: {getSupplierFantasyName(ord)}
                           </div>
                         )}
                       </td>

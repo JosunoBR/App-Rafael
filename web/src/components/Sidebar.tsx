@@ -61,10 +61,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   });
 
-  const [isBiMenuOpen, setIsBiMenuOpen] = useState<boolean>(true);
+  const [isBiMenuOpen, setIsBiMenuOpen] = useState<boolean>(false);
   const isBiActive = activeNav === 'dashboard' || activeNav === 'bi_products';
 
-  const [isUnitsMenuOpen, setIsUnitsMenuOpen] = useState<boolean>(true);
+  const [isUnitsMenuOpen, setIsUnitsMenuOpen] = useState<boolean>(false);
   const isUnitsActive = activeNav === 'units' || activeNav === 'units_cash' || activeNav === 'goals' || activeNav === 'units_bi' || activeNav === 'units_history';
 
   const toggleCollapsed = () => {
@@ -201,12 +201,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {!isCollapsed && (
               <div className="min-w-0">
                 <h1 className="text-base font-black text-slate-900 dark:text-white tracking-tight leading-none truncate">
-                  Mega 12 <span className="text-emerald-600 dark:text-emerald-400 font-medium">Matriz</span>
+                  Mega 12 <span className="text-emerald-600 dark:text-emerald-400 font-medium">{userRole === 'unidade' ? (currentUser?.nome || 'Loja') : 'Matriz'}</span>
                 </h1>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                    SQLite Ativo
+                    {userRole === 'unidade' ? 'Terminal Unidade' : 'SQLite Ativo'}
                   </span>
                 </div>
               </div>
@@ -234,7 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="space-y-1">
             {!isCollapsed ? (
               <div className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Operação Central
+                {userRole === 'unidade' ? 'Terminal da Loja' : 'Operação Central'}
               </div>
             ) : (
               <div className="h-px bg-slate-200/80 dark:bg-slate-800 my-1 mx-2" />
@@ -253,10 +253,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               'near_expiry',
               'Validade próxima',
               <CalendarClock className={`w-4 h-4 ${activeNav === 'near_expiry' ? 'text-white' : 'text-amber-500'}`} />,
-              activeNav === 'near_expiry',
-              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
-                3
-              </span>
+              activeNav === 'near_expiry'
             )}
 
             {/* Início */}
@@ -373,14 +370,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <div className="space-y-1">
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!isUnitsMenuOpen) {
-                            setIsUnitsMenuOpen(true);
-                            if (!isUnitsActive) onSelectNav('units');
-                          } else {
-                            setIsUnitsMenuOpen(prev => !prev);
-                          }
-                        }}
+                        onClick={() => setIsUnitsMenuOpen(prev => !prev)}
                         className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${isUnitsActive
                           ? 'bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/60'
                           : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
@@ -546,14 +536,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <div className="space-y-1">
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!isBiMenuOpen) {
-                            setIsBiMenuOpen(true);
-                            if (!isBiActive) onSelectNav('dashboard');
-                          } else {
-                            setIsBiMenuOpen(prev => !prev);
-                          }
-                        }}
+                        onClick={() => setIsBiMenuOpen(prev => !prev)}
                         className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${isBiActive
                           ? 'bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/60'
                           : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'

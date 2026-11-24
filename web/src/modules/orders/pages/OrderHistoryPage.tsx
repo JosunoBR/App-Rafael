@@ -674,7 +674,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         
         {/* Barra Superior: Busca Global, Dropdown Pill de Status da Esteira e Métricas */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1 max-w-2xl">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1 max-w-3xl">
             
             {/* Campo de Busca Global */}
             <div className="relative flex-1">
@@ -697,6 +697,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
             </div>
 
             {/* Conceito 1: Command Pill Dropdown de Status da Esteira */}
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <div ref={statusDropdownRef} className="relative shrink-0">
               <button
                 type="button"
@@ -812,14 +813,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               )}
             </div>
 
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 shrink-0">
-            <span>
-              Exibindo <strong className="text-slate-900 dark:text-white font-mono">{processedOrders.length}</strong> de <strong className="font-mono">{orders.length}</strong> pedidos
-            </span>
             {(sortField || hasActiveColumnFilters || searchTerm || !isAllSelected) && (
               <button
+                type="button"
                 onClick={handleResetAllFilters}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 active:scale-95 transition cursor-pointer border border-rose-200 dark:border-rose-900/40"
                 title="Limpar todos os filtros e voltar à listagem completa"
@@ -828,6 +824,13 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                 <span>Limpar Filtros</span>
               </button>
             )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 shrink-0">
+            <span>
+              Exibindo <strong className="text-slate-900 dark:text-white font-mono">{processedOrders.length}</strong> de <strong className="font-mono">{orders.length}</strong> pedidos
+            </span>
           </div>
         </div>
 

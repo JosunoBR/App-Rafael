@@ -26,7 +26,6 @@ export const ROUTE_PATHS = {
   UNITS_HISTORY: '/unidades/historico',
   GOALS: '/metas',
   NEAR_EXPIRY: '/validade-proxima',
-  VERSION_TWO_PREVIEW: '/versao-2/previa',
   LOGIN: '/login'
 } as const;
 
@@ -55,8 +54,7 @@ export const NAV_TAB_TO_PATH: Record<string, string> = {
   units_bi: ROUTE_PATHS.UNITS_BI,
   units_history: ROUTE_PATHS.UNITS_HISTORY,
   goals: ROUTE_PATHS.GOALS,
-  near_expiry: ROUTE_PATHS.NEAR_EXPIRY,
-  version_two_preview: ROUTE_PATHS.VERSION_TWO_PREVIEW
+  near_expiry: ROUTE_PATHS.NEAR_EXPIRY
 };
 
 export const PATH_TO_NAV_TAB: Record<string, string> = Object.entries(NAV_TAB_TO_PATH).reduce(

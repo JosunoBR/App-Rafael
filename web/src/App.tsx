@@ -70,7 +70,6 @@ import {
 import {
   GoalsExecutivePage
 } from './modules/goalsExecutive';
-import { VersionTwoPreviewPage } from './modules/versionTwoPreview/VersionTwoPreviewPage';
 import { 
   OrderHistoryPage 
 } from './components/OrderHistoryPage';
@@ -4429,10 +4428,6 @@ export function App() {
               {/* PÁGINA 12: HISTÓRICO DE VENDAS (Matriz Multianual 2021-2026 Planilha ALS) */}
               {activeNav === 'units_history' && canAccessTab(currentUser, 'units_history') && (
                 <StoresHistoryPage currentUser={currentUser} showToast={showToast} />
-              )}
-
-              {activeNav === 'version_two_preview' && canAccessTab(currentUser, 'version_two_preview') && (
-                <VersionTwoPreviewPage />
               )}
             </>
 

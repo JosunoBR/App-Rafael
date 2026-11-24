@@ -101,7 +101,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canAccessUnitsBi = canAccessTab(currentUser, 'units_bi');
   const canAccessUnitsHistory = canAccessTab(currentUser, 'units_history');
   const canAccessGoals = canAccessTab(currentUser, 'goals');
-  const canAccessVersionTwoPreview = canAccessTab(currentUser, 'version_two_preview');
   const canAccessNearExpiry = canAccessTab(currentUser, 'near_expiry');
 
   const getRoleLabel = (role: UserRole) => {
@@ -650,14 +649,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <UsersIcon className={`w-4 h-4 ${activeNav === 'users' ? 'text-white' : 'text-pink-400'}`} />,
                 activeNav === 'users'
               )}
-
-              {canAccessVersionTwoPreview && renderItem(
-                'version_two_preview',
-                'Prévia da versão 2.0',
-                <Target className={`w-4 h-4 ${activeNav === 'version_two_preview' ? 'text-white' : 'text-emerald-500'}`} />,
-                activeNav === 'version_two_preview'
-              )}
-
               {/* Configurações */}
               {canAccessFiscal && renderItem(
                 'fiscal',

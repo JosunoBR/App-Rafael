@@ -21,8 +21,7 @@ export type ActiveNavTab =
   | 'goals'
   | 'units_bi'
   | 'units_history'
-  | 'near_expiry'
-  | 'version_two_preview';
+  | 'near_expiry';
 
 export type UserLike = 
   | User 
@@ -87,13 +86,6 @@ export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): 
   if (!userOrRole || !tab) return false;
 
   const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
-
-  // A prévia da versão 2.0 é exclusiva do usuário root nesta etapa visual.
-  if (tab === 'version_two_preview') {
-    return typeof userOrRole === 'string'
-      ? userOrRole === 'root'
-      : userOrRole.role === 'root' || userOrRole.id === 'usr_root' || userOrRole.email?.toLowerCase() === 'root' || userOrRole.nome?.toLowerCase() === 'root';
-  }
 
   // Se o usuário possui o perfil 'unidade', possui acesso ao portal da loja e ao controle de validades
   if (role === 'unidade') {

@@ -31,6 +31,5 @@ export const APP_ROUTES: RouteConfig[] = [
   { path: ROUTE_PATHS.GOALS, name: 'goals', title: 'Metas Executivas', requiresAuth: true },
   { path: ROUTE_PATHS.UNITS_BI, name: 'units_bi', title: 'BI das Lojas', requiresAuth: true },
   { path: ROUTE_PATHS.UNITS_HISTORY, name: 'units_history', title: 'Histórico de Vendas', requiresAuth: true },
-  { path: ROUTE_PATHS.VERSION_TWO_PREVIEW, name: 'version_two_preview', title: 'Prévia da Versão 2.0', requiresAuth: true },
   { path: ROUTE_PATHS.LOGIN, name: 'login', title: 'Autenticação', requiresAuth: false }
 ];

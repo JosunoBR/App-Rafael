@@ -5,7 +5,7 @@ import { SortHeader } from '../../../shared/components/SortHeader';
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { GoalAnalysisRow } from '../utils/goalsCalculations';
-import { operatingProfitForYear, superGoal, valueForYear } from '../utils/goalsCalculations';
+import { goalShortfall, operatingProfitForYear, superGoal, valueForYear } from '../utils/goalsCalculations';
 
 import { money } from '../utils/goalsFormat';
 const cell = 'px-4 py-3 text-right whitespace-nowrap tabular-nums';
@@ -24,24 +24,31 @@ export function GoalsComparisonTable({ rows, previousRows, previousPeriod, targe
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [metric, setMetric] = useState<'sales' | 'profit'>('sales');
-  const columns = useColumnOrder(['name', 'previousMonth', 'previousYear', 'suggestion', 'workingDays', 'daily', 'plan', 'superGoal'], storageKey);
+  const columns = useColumnOrder(['name', 'previousMonth', 'previousYear', 'suggestion', 'workingDays', 'daily', 'plan', 'superGoal', 'shortfall'], storageKey);
   const previousById = new Map(previousRows.map(row => [row.id, row]));
   const metricLabel = metric === 'sales' ? 'faturamento' : 'lucro';
-  const comparisonRows = rows.map(row => ({ ...row,
-    comparisonHistory: metric === 'sales' ? row.sales : row.evolution.history,
-    previousMonthValue: metric === 'sales' ? previousById.get(row.id)?.currentSales ?? null : operatingProfitForYear(previousById.get(row.id)?.profit, previousPeriod.year),
-    previousMonthGoal: valueForYear(previousById.get(row.id)?.goals ?? [], previousPeriod.year),
-    previousYearGoal: valueForYear(row.goals, targetYear - 1),
-  }));
+  const comparisonRows = rows.map(row => {
+    const previous = previousById.get(row.id);
+    const previousMonthGoal = valueForYear(previous?.goals ?? [], previousPeriod.year);
+    return { ...row,
+      shortfall: goalShortfall(previousMonthGoal, previous?.currentSales ?? null, previous?.workingDays ?? 0),
+      previousMonthWorkingDays: previous?.workingDays ?? null,
+      comparisonHistory: metric === 'sales' ? row.sales : row.evolution.history,
+      previousMonthValue: metric === 'sales' ? previous?.currentSales ?? null : operatingProfitForYear(previous?.profit, previousPeriod.year),
+      previousMonthGoal,
+      previousYearGoal: valueForYear(row.goals, targetYear - 1),
+    };
+  });
   const sorting = useTableSort(comparisonRows, (row, key) => {
     if (key === 'previousYear') return valueForYear(row.comparisonHistory, targetYear - 1);
     if (key === 'previousMonth') return row.previousMonthValue;
     if (key === 'superGoal') return superGoal(plans[row.id] ?? null);
     if (key === 'plan') return plans[row.id] ?? null;
+    if (key === 'shortfall') return row.shortfall.amount;
     return ({ name: row.name, suggestion: row.suggestion, workingDays: row.workingDays, daily: row.dailySuggestion })[key];
   });
   return <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0B132B]">
-    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-3 text-xs"><label className="font-semibold">Comparar <select aria-label="Visão do comparativo de metas" value={metric} onChange={event => setMetric(event.target.value as 'sales' | 'profit')} className="ml-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-2"><option value="sales">Faturamento</option><option value="profit">Lucro líquido</option></select></label><span className="text-slate-500 dark:text-slate-400">A sugestão de meta e as metas diárias usam sempre o faturamento.</span></div>
+    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-3 text-xs"><label className="font-semibold">Comparar <select aria-label="Visão do comparativo de metas" value={metric} onChange={event => setMetric(event.target.value as 'sales' | 'profit')} className="ml-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-2"><option value="sales">Faturamento</option><option value="profit">Lucro líquido</option></select></label><span className="text-slate-500 dark:text-slate-400">A sugestão, as metas diárias e a diferença para a meta usam sempre o faturamento.</span></div>
     <ResizableTable resizeId="modules/goalsExecutive/components/GoalsComparisonTable:1" className="w-full text-xs text-slate-700 dark:text-slate-200">
       <caption className="sr-only">Comparativo com o mês anterior e o mesmo mês do ano anterior, {metricLabel} e sugestão de meta para {targetYear}</caption>
       <thead className="bg-slate-50 dark:bg-slate-900 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -55,6 +62,7 @@ export function GoalsComparisonTable({ rows, previousRows, previousPeriod, targe
             daily: `Meta diária ${targetYear}`,
             plan: 'Meta planejada',
             superGoal: 'Supermeta +10%',
+            shortfall: <>Faltou para a meta<br /><span className="normal-case">Mês anterior</span></>,
           };
           const dragProps = columns.headerProps(column);
           const color = column === 'suggestion' ? 'text-emerald-700 dark:text-emerald-400' : column === 'superGoal' ? 'text-amber-700 dark:text-amber-400' : '';
@@ -72,7 +80,7 @@ export function GoalsComparisonTable({ rows, previousRows, previousPeriod, targe
             </th>,
                 previousMonth: <td className={cell}><span data-comparison-value>{money(row.previousMonthValue)}</span>{metric === 'sales' && <HistoricalGoal sales={row.previousMonthValue} goal={row.previousMonthGoal} periodLabel={previousPeriod.label} />}</td>,
                 previousYear: <td className={`${cell} font-bold`}><span data-comparison-value>{money(valueForYear(row.comparisonHistory, targetYear - 1))}</span>{metric === 'sales' && <HistoricalGoal sales={valueForYear(row.comparisonHistory, targetYear - 1)} goal={row.previousYearGoal} periodLabel={`mesmo mês de ${targetYear - 1}`} />}</td>,
-                suggestion: <td className={`${cell} font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/5`}>{row.suggestion === null ? <span className="font-normal text-slate-500 dark:text-slate-400">Sem histórico</span> : money(row.suggestion)}</td>,
+                suggestion: <td className="p-0 text-right whitespace-nowrap tabular-nums font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/5">{row.suggestion === null ? <span className="block px-4 py-3 font-normal text-slate-500 dark:text-slate-400">Sem histórico</span> : <button type="button" disabled={readOnly} aria-label={`Aplicar sugestão de meta para ${row.name}`} aria-pressed={plans[row.id] === row.suggestion} title={plans[row.id] === row.suggestion ? 'Limpar a meta planejada da unidade' : 'Aplicar este valor na meta planejada da unidade'} onClick={() => onPlanChange(row.id, plans[row.id] === row.suggestion ? null : row.suggestion)} className="block w-full px-4 py-3 text-right font-bold cursor-pointer hover:bg-emerald-500/15 focus-visible:outline-2 focus-visible:outline-emerald-500 focus-visible:outline-offset-[-2px] disabled:cursor-default disabled:opacity-60 transition-colors">{money(row.suggestion)}</button>}</td>,
                 workingDays: <td data-column="workingDays" className={cell} title="Dias úteis da unidade no mês selecionado, descontando domingos, feriados nacionais e fechamentos aprovados.">{row.workingDays}</td>,
                 daily: <td className={cell} title={`${row.workingDays} dias úteis para esta unidade, descontando domingos, feriados nacionais e fechamentos aprovados.`}>{money(row.dailySuggestion)}</td>,
                 plan: <td className={cell}><input disabled={readOnly} type="text" inputMode="numeric" aria-label={`Meta planejada ${row.name}`} value={plans[row.id] === undefined ? '' : money(plans[row.id])} placeholder="" onChange={event => {
@@ -81,6 +89,10 @@ export function GoalsComparisonTable({ rows, previousRows, previousPeriod, targe
               if (value === null || (Number.isFinite(value) && value >= 0 && value <= 1e12)) onPlanChange(row.id, value);
             }} className="w-44 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent p-2 text-right focus:outline-2 focus:outline-emerald-500" /></td>,
                 superGoal: <td className={`${cell} font-bold text-amber-700 dark:text-amber-400`}>{money(superGoal(plans[row.id] ?? null))}</td>,
+                shortfall: <td data-column="shortfall" className={cell} title={`Meta menos vendas de ${previousPeriod.label}. Diferença dividida pelos ${row.previousMonthWorkingDays ?? 0} dias úteis daquele mês.`}>
+                  <span className={row.shortfall.amount === 0 ? 'font-bold text-emerald-700 dark:text-emerald-400' : 'font-semibold'}>{money(row.shortfall.amount)}</span>
+                  <span className="block mt-1 text-[10px] font-normal text-slate-500 dark:text-slate-400">{row.previousMonthGoal === null ? 'Meta não informada' : row.shortfall.amount === null ? 'Sem faturamento informado' : row.shortfall.dailyAmount === null ? 'Sem dias úteis no mês' : `${money(row.shortfall.dailyAmount)}/dia`}</span>
+                </td>,
               };
           return <React.Fragment key={row.id}>
           <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
@@ -105,6 +117,12 @@ export function GoalsComparisonTable({ rows, previousRows, previousPeriod, targe
       {!!rows.length && <tfoot className="bg-slate-50 dark:bg-slate-900 font-bold"><tr>{columns.order.map(column => {
         if (column === 'name') return <th key={column} scope="row" className="px-4 py-4 text-left">Total das lojas exibidas</th>;
         if (column === 'workingDays') return <td key={column} className={cell}>—</td>;
+        if (column === 'shortfall') {
+          const shortfalls = comparisonRows.map(row => row.shortfall).filter(item => item.amount !== null);
+          const totalRemaining = shortfalls.length ? shortfalls.reduce((sum, item) => sum + (item.amount ?? 0), 0) : null;
+          const totalDaily = shortfalls.length && shortfalls.every(item => item.dailyAmount !== null) ? shortfalls.reduce((sum, item) => sum + (item.dailyAmount ?? 0), 0) : null;
+          return <td key={column} className={cell} title="Total que faltou no mês anterior e soma das diferenças diárias das unidades com meta informada.">{money(totalRemaining)}<span className="block mt-1 text-[10px] font-normal text-slate-500 dark:text-slate-400">{totalDaily === null ? '—' : `${money(totalDaily)}/dia`}</span></td>;
+        }
         if (column === 'previousMonth' || column === 'previousYear') {
           const values = comparisonRows.map(row => column === 'previousMonth' ? row.previousMonthValue : valueForYear(row.comparisonHistory, targetYear - 1)).filter(value => value !== null);
           return <td key={column} className={cell}>{money(values.length ? values.reduce((sum, value) => sum + value, 0) : null)}<span className="block text-[10px] font-normal text-slate-500">{values.length}/{rows.length} com dados</span></td>;

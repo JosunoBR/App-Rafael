@@ -25,6 +25,12 @@ export function workingDays(year: number, month: number, closures: NonNullable<G
   return { count, holidays: excludedHolidays };
 }
 
+export function goalShortfall(goal: number | null, sales: number | null, workingDays: number) {
+  if (goal === null || sales === null) return { amount: null, dailyAmount: null };
+  const amount = roundMoney(Math.max(0, goal - sales));
+  return { amount, dailyAmount: amount === 0 ? 0 : workingDays > 0 ? roundMoney(amount / workingDays) : null };
+}
+
 export function operatingProfitForYear(profit: ProfitMonth | undefined, year: number): number | null {
   const sales = valueForYear(profit?.sales ?? [], year);
   return sales === null || sales <= 0 ? null : valueForYear(profit?.profits ?? [], year);

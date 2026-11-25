@@ -174,6 +174,12 @@ async function checkBrowser(apiBase, token) {
     const februaryRow = input.locator('xpath=ancestor::tr');
     assert.equal((await februaryRow.locator('td').nth(0).locator('span').nth(1).innerText()).replace(/\s/g, ' '), 'Meta: R$ 140.000,00', 'Mês anterior deve usar a coluna 10 da planilha de janeiro/2026.');
     assert.equal((await februaryRow.locator('td').nth(1).locator('span').nth(1).innerText()).replace(/\s/g, ' '), 'Meta: —', 'Ano anterior sem meta não deve herdar a meta de 2026.');
+    const castroShortfall = page.getByLabel('Meta planejada Castro', { exact: true }).locator('xpath=ancestor::tr').locator('td[data-column="shortfall"]');
+    assert.equal((await castroShortfall.locator('span').nth(0).innerText()).replace(/\s/g, ' '), 'R$ 27.933,00', 'Usar meta de janeiro/2026 (120.000) menos vendas de janeiro/2026 (92.067).');
+    assert.equal((await castroShortfall.locator('span').nth(1).innerText()).replace(/\s/g, ' '), 'R$ 1.074,35/dia', 'Dividir a diferença pelos 26 dias úteis do mês anterior.');
+    const iratiShortfall = februaryRow.locator('td[data-column="shortfall"]');
+    assert.equal((await iratiShortfall.locator('span').nth(0).innerText()).replace(/\s/g, ' '), 'R$ 0,00', 'Meta atingida não deve produzir falta negativa.');
+
     await page.getByLabel('Ano da meta').selectOption('2027');
     await page.getByLabel('Mês da meta').selectOption('01');
     const nextJanuaryRow = input.locator('xpath=ancestor::tr');
@@ -186,7 +192,7 @@ async function checkBrowser(apiBase, token) {
     assert.equal(await metricSelect.inputValue(), 'sales');
     assert.equal(await page.getByRole('columnheader', { name: /Média de evolução/ }).count(), 0, 'A evolução deve ficar somente no histórico.');
     const headers = page.locator('thead th');
-    assert.equal(await headers.count(), 8, 'A tabela deve mostrar apenas mês anterior e ano anterior entre as referências.');
+    assert.equal(await headers.count(), 9, 'A tabela deve mostrar apenas mês anterior e ano anterior entre as referências.');
     await page.getByRole('columnheader', { name: 'Dias úteis do mês', exact: true }).waitFor();
     assert.equal(await input.locator('xpath=ancestor::tr').locator('td[data-column="workingDays"]').innerText(), '26');
     const resizeHeader = headers.nth(1);
@@ -211,7 +217,7 @@ async function checkBrowser(apiBase, token) {
     const cellsBefore = await januaryRow.locator(':scope > td, :scope > th').allTextContents();
     const totalsBefore = await page.locator('tfoot tr > *').allTextContents();
     await headers.nth(1).dragTo(headers.nth(0));
-    assert.deepEqual(await headers.evaluateAll(elements => elements.map(element => element.dataset.column)), ['previousMonth', 'name', 'previousYear', 'suggestion', 'workingDays', 'daily', 'plan', 'superGoal']);
+    assert.deepEqual(await headers.evaluateAll(elements => elements.map(element => element.dataset.column)), ['previousMonth', 'name', 'previousYear', 'suggestion', 'workingDays', 'daily', 'plan', 'superGoal', 'shortfall']);
     assert.deepEqual(await januaryRow.locator(':scope > td, :scope > th').allTextContents(), [cellsBefore[1], cellsBefore[0], ...cellsBefore.slice(2)], 'Arrastar deve mover também os valores.');
     assert.deepEqual(await page.locator('tfoot tr > *').allTextContents(), [totalsBefore[1], totalsBefore[0], ...totalsBefore.slice(2)], 'Os totais devem acompanhar as colunas.');
     assert.equal(await headers.locator('[aria-sort="ascending"]').count(), 0);
@@ -236,6 +242,20 @@ async function checkBrowser(apiBase, token) {
     await metricSelect.selectOption('sales');
 
     assert.ok((await input.locator('xpath=ancestor::tr').textContent()).includes('111.778,92'));
+    await input.fill('R$ 1,00');
+    await page.getByRole('button', { name: 'Aplicar sugestão de meta para Irati Centro Atualizada', exact: true }).click();
+    assert.equal((await input.inputValue()).replace(/\s/g, ' '), 'R$ 111.778,92', 'Clicar na sugestão deve preencher a meta planejada daquela unidade.');
+    assert.ok((await input.locator('xpath=ancestor::tr').textContent()).includes('122.956,81'), 'A supermeta deve acompanhar a sugestão aplicada.');
+    assert.equal((await repository.getPlans(2026, 1)).find(plan => plan.storeId === 'fixture_0').amount, 111778.92, 'Aplicar sugestão não pode gravar automaticamente.');
+    const suggestionToggle = page.getByRole('button', { name: 'Aplicar sugestão de meta para Irati Centro Atualizada', exact: true });
+    assert.equal(await suggestionToggle.getAttribute('aria-pressed'), 'true');
+    await suggestionToggle.click();
+    assert.equal(await input.inputValue(), '', 'Segundo clique deve limpar a meta planejada.');
+    assert.equal(await suggestionToggle.getAttribute('aria-pressed'), 'false');
+    assert.equal(await input.locator('xpath=ancestor::tr').locator('td').nth(-2).innerText(), '—', 'Limpar a meta também deve limpar a supermeta.');
+    await suggestionToggle.click();
+    assert.equal((await input.inputValue()).replace(/\s/g, ' '), 'R$ 111.778,92', 'Novo clique deve reaplicar a sugestão.');
+
     await input.fill('R$ 120.000,55');
     await page.getByRole('button', { name: 'Salvar metas no sistema', exact: true }).click();
     await page.getByText('Metas de 2026-01 salvas no banco de dados do sistema.', { exact: true }).waitFor();

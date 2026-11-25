@@ -17,7 +17,7 @@ const server = await createServer({ root: webDir, server: { middlewareMode: true
 try {
   const calculations = await server.ssrLoadModule('/src/modules/goalsExecutive/utils/goalsCalculations.ts');
   const generated = prepared;
-  const { valueForYear, superGoal, salesEvolution, suggestGoal, workingDays, nationalHolidays, profitEvolution, operatingProfitForYear, buildGoalRows } = calculations;
+  const { goalShortfall, valueForYear, superGoal, salesEvolution, suggestGoal, workingDays, nationalHolidays, profitEvolution, operatingProfitForYear, buildGoalRows } = calculations;
   assert.deepEqual(JSON.parse(JSON.stringify(generated)), parsed, 'Dados gerados devem corresponder ao arquivo atual; execute a importação novamente se a planilha mudou.');
   assert.equal(Object.keys(parsed.months).length, 12);
   assert.equal(Object.values(parsed.months).reduce((sum, month) => sum + month.stores.length, 0), 235);
@@ -33,6 +33,12 @@ try {
       }
     }
   }
+  assert.deepEqual(goalShortfall(100000, 40000, 5), { amount: 60000, dailyAmount: 12000 });
+  assert.deepEqual(goalShortfall(100000, 110000, 5), { amount: 0, dailyAmount: 0 });
+  assert.deepEqual(goalShortfall(100000, 100000, 0), { amount: 0, dailyAmount: 0 });
+  assert.deepEqual(goalShortfall(100000, 40000, 0), { amount: 60000, dailyAmount: null });
+  assert.deepEqual(goalShortfall(null, 40000, 5), { amount: null, dailyAmount: null });
+  assert.deepEqual(goalShortfall(100000, null, 5), { amount: null, dailyAmount: null });
   assert.equal(superGoal(100000), 110000);
   assert.equal(superGoal(120000.55), 132000.61);
   assert.equal(superGoal(0), 0);

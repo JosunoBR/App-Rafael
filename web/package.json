@@ -12,7 +12,8 @@
     "test:goals": "node scripts/test-goals.mjs",
     "test:units-bi": "node scripts/test-units-bi.mjs",
     "import:goals": "node ../scripts/generateGoalsData.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:holidays": "node scripts/test-holidays.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

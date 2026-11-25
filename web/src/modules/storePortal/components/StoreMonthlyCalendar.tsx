@@ -21,7 +21,7 @@ interface StoreMonthlyCalendarProps {
   closings: Record<string, DailyCashClosing>;
   markedHolidays?: Record<string, MarkedHoliday>;
   onSelectDay: (dateStr: string) => void;
-  onToggleHoliday?: (dateStr: string, holidayName: string, isClosing: boolean) => void;
+  onToggleHoliday?: (dateStr: string, holidayName: string, isClosing: boolean) => Promise<void>;
   activeStyle?: StorePortalStyle;
 }
 
@@ -40,6 +40,8 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
     isCurrentlyMarked: boolean;
   } | null>(null);
 
+  const [holidayBusy, setHolidayBusy] = useState(false);
+  const [holidayError, setHolidayError] = useState('');
   const [customHolidayInput, setCustomHolidayInput] = useState<string>('');
 
   // Parsing do mês selecionado
@@ -97,6 +99,8 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
 
   // Abertura do box de confirmação do feriado
   const handleOpenHolidayConfirm = (dateStr: string, currentHolidayName: string, isCurrentlyMarked: boolean) => {
+    if (!onToggleHoliday) return;
+    setHolidayError('');
     setCustomHolidayInput(currentHolidayName || 'Feriado Municipal');
     setConfirmModalData({
       dateStr,
@@ -105,12 +109,14 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
     });
   };
 
-  const handleConfirmHolidayAction = () => {
-    if (!confirmModalData || !onToggleHoliday) return;
-    const finalName = customHolidayInput.trim() || confirmModalData.holidayName;
-    // se estava marcado, a ação é desmarcar (isClosing = false); se não estava marcado, a ação é marcar como fechado (isClosing = true)
-    onToggleHoliday(confirmModalData.dateStr, finalName, !confirmModalData.isCurrentlyMarked);
-    setConfirmModalData(null);
+  const handleConfirmHolidayAction = async () => {
+    if (!confirmModalData || !onToggleHoliday || holidayBusy) return;
+    setHolidayBusy(true); setHolidayError('');
+    try {
+      await onToggleHoliday(confirmModalData.dateStr, customHolidayInput.trim() || confirmModalData.holidayName, !confirmModalData.isCurrentlyMarked);
+      setConfirmModalData(null);
+    } catch (error) { setHolidayError(error instanceof Error ? error.message : 'Não foi possível enviar a solicitação.'); }
+    finally { setHolidayBusy(false); }
   };
 
   // Formatação de data amigável para o modal
@@ -238,7 +244,7 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
           if (isSunday) {
             return (
               <div
-                key={dateStr}
+                key={dateStr} data-date={dateStr}
                 className={`p-2 sm:p-2.5 min-h-[88px] sm:min-h-[102px] ${cellRadius} border border-slate-200 dark:border-slate-800/70 bg-slate-100/80 dark:bg-slate-900/50 text-slate-400 dark:text-slate-500 opacity-60 cursor-not-allowed select-none flex flex-col justify-between text-left shadow-none`}
                 title="Domingo - Loja Fechada (Lançamento desabilitado)"
               >
@@ -280,7 +286,7 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
           if (isHolidayMarked) {
             return (
               <div
-                key={dateStr}
+                key={dateStr} data-date={dateStr}
                 className={`p-2 sm:p-2.5 min-h-[88px] sm:min-h-[102px] ${cellRadius} border-2 border-amber-400/90 dark:border-amber-500/70 bg-amber-50/90 dark:bg-amber-950/30 text-amber-900 dark:text-amber-100 flex flex-col justify-between text-left shadow-xs relative overflow-hidden group select-none`}
                 title={`Feriado: ${holidayName} (Clique na palavra Feriado para reabrir o dia)`}
               >
@@ -345,7 +351,7 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
           if (isHolidayCandidate) {
             return (
               <div
-                key={dateStr}
+                key={dateStr} data-date={dateStr}
                 onClick={() => onSelectDay(dateStr)}
                 className={`p-2 sm:p-2.5 min-h-[88px] sm:min-h-[102px] ${cellRadius} border-2 border-dashed border-amber-300/90 dark:border-amber-700/80 bg-amber-50/20 dark:bg-amber-950/15 hover:border-amber-400 dark:hover:border-amber-500 active:scale-95 transition-all cursor-pointer flex flex-col justify-between text-left shadow-2xs group relative overflow-hidden`}
                 title={`Clique para lançar vendas do dia ${dayNum}. Ou clique em '🏖️ ${candidateHolidayName}' para marcar como feriado.`}
@@ -362,7 +368,7 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
                       handleOpenHolidayConfirm(dateStr, candidateHolidayName || 'Feriado', false);
                     }}
                     className="inline-flex items-center gap-0.5 text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/70 text-amber-800 dark:text-amber-300 border border-amber-300/80 cursor-pointer transition active:scale-95 shadow-2xs"
-                    title="Clique para informar feriado nesta data"
+                    title="Clique para informar feriado nesta data" aria-label={`Solicitar feriado em ${dateStr}`}
                   >
                     🏖️ {candidateHolidayName}
                   </button>
@@ -455,7 +461,7 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
 
           return (
             <div
-              key={dateStr}
+              key={dateStr} data-date={dateStr}
               onClick={() => onSelectDay(dateStr)}
               className={`p-2 sm:p-2.5 min-h-[88px] sm:min-h-[102px] ${cellRadius} border text-left transition-all cursor-pointer flex flex-col justify-between active:scale-95 shadow-2xs group relative overflow-hidden ${borderClass}`}
               title={`Clique para visualizar ou fechar o caixa do dia ${dateStr}`}
@@ -480,7 +486,7 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
                       handleOpenHolidayConfirm(dateStr, 'Feriado Municipal', false);
                     }}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-amber-600 transition"
-                    title="Clique para informar feriado nesta data"
+                    title="Clique para informar feriado nesta data" aria-label={`Solicitar feriado em ${dateStr}`}
                   >
                     <Palmtree className="w-3 h-3" />
                   </button>
@@ -561,15 +567,15 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
             {confirmModalData.isCurrentlyMarked ? (
               <div className="space-y-3">
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Este dia está marcado atualmente como <strong>Sem Expediente ({confirmModalData.holidayName})</strong>.
+                  Esta data está aprovada como <strong>Sem Expediente ({confirmModalData.holidayName})</strong>.
                 </p>
                 <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/80 text-xs text-slate-700 dark:text-slate-300 space-y-1">
                   <div className="font-bold flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Ao reabrir este dia:</span>
+                    <span>Após aprovação da reabertura:</span>
                   </div>
                   <ul className="list-disc list-inside text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
-                    <li>O dia voltará a ser computado como <strong>dia útil comercial (+1d)</strong>;</li>
+                    <li>Se não for domingo ou feriado nacional, o dia voltará a ser computado como <strong>dia útil comercial (+1d)</strong>;</li>
                     <li>O botão de lançamento de caixa será <strong>reabilitado</strong>;</li>
                     <li>A média diária necessária no topo será recalculada automaticamente.</li>
                   </ul>
@@ -587,9 +593,10 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
                   </label>
                   <input
                     type="text"
+                    aria-label="Nome do feriado da unidade" autoFocus maxLength={300}
                     value={customHolidayInput}
                     onChange={(e) => setCustomHolidayInput(e.target.value)}
-                    placeholder="Ex: Finados, Aniversário da Cidade, etc."
+                    placeholder="Ex: Aniversário da cidade"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
@@ -597,7 +604,7 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
                 <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 text-xs text-amber-900 dark:text-amber-200 space-y-1">
                   <div className="font-bold flex items-center gap-1.5">
                     <span>🏖️</span>
-                    <span>Comportamento após confirmação:</span>
+                    <span>Após aprovação do financeiro:</span>
                   </div>
                   <ul className="list-disc list-inside text-[11px] text-amber-800 dark:text-amber-300 space-y-0.5">
                     <li>O dia ficará em destaque alaranjado com o selo de <strong>Feriado Fechado</strong>;</li>
@@ -608,6 +615,7 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
               </div>
             )}
 
+            {holidayError && <p role="alert" className="text-xs text-rose-600">{holidayError}</p>}
             {/* Ações do Box */}
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
@@ -620,6 +628,7 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
 
               <button
                 type="button"
+                disabled={holidayBusy || !customHolidayInput.trim()}
                 onClick={handleConfirmHolidayAction}
                 className={`px-4 py-2 rounded-xl text-xs font-black text-white shadow-md active:scale-95 transition cursor-pointer flex items-center gap-1.5 ${
                   confirmModalData.isCurrentlyMarked
@@ -630,12 +639,12 @@ export const StoreMonthlyCalendar: React.FC<StoreMonthlyCalendarProps> = ({
                 {confirmModalData.isCurrentlyMarked ? (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Reabrir Dia Útil</span>
+                    <span>Solicitar reabertura</span>
                   </>
                 ) : (
                   <>
                     <CheckSquare className="w-4 h-4" />
-                    <span>Confirmar Feriado</span>
+                    <span>Solicitar feriado</span>
                   </>
                 )}
               </button>

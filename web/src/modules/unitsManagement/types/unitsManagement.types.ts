@@ -33,12 +33,15 @@ export interface StoreDailyClosingSummary {
   motivoAjusteFinanceiro?: string;
 }
 
-export type HolidayRequestStatus = 'pendente' | 'aprovado' | 'recusado';
+export type HolidayRequestStatus = 'pendente' | 'aprovado' | 'recusado' | 'cancelado';
 
 export interface StoreHolidayRequest {
   id: string;
-  lojaId: string;
+  lojaId: string | null;
   lojaNome: string;
+  action?: 'fechar' | 'reabrir';
+  scope?: 'rede' | 'unidade';
+  targetId?: string | null;
   data: string; // YYYY-MM-DD
   holidayName: string;
   solicitadoPor: string;

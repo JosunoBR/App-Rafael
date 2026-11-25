@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Palmtree,
   CheckCircle2,
@@ -12,17 +12,29 @@ import { StoreHolidayRequest, HolidayRequestStatus } from '../types/unitsManagem
 
 interface FinancialHolidayApprovalPanelProps {
   holidayRequests: StoreHolidayRequest[];
-  onApproveHoliday: (requestId: string) => void;
-  onRejectHoliday: (requestId: string, motivo: string) => void;
-  onDeclareGlobalHoliday: (data: string, holidayName: string) => void;
+  onApproveHoliday: (requestId: string) => Promise<void>;
+  onCancelHoliday: (requestId: string) => Promise<void>;
+  onRejectHoliday: (requestId: string, motivo: string) => Promise<void>;
+  onDeclareGlobalHoliday: (data: string, holidayName: string) => Promise<void>;
 }
 
 export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPanelProps> = ({
   holidayRequests,
   onApproveHoliday,
   onRejectHoliday,
+  onCancelHoliday,
   onDeclareGlobalHoliday
 }) => {
+  const mutationLock = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const run = async (work: () => Promise<void>) => {
+    if (mutationLock.current) return false;
+    mutationLock.current = true; setBusy(true); setError('');
+    try { await work(); return true; }
+    catch (failure) { setError(failure instanceof Error ? failure.message : 'Não foi possível atualizar o feriado.'); return false; }
+    finally { mutationLock.current = false; setBusy(false); }
+  };
   const [filter, setFilter] = useState<'all' | HolidayRequestStatus>('pendente');
   
   // Modal de Recusa de Feriado
@@ -34,10 +46,10 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
   } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  // Modal de Declaração de Feriado Global da Rede (todas as 20 lojas)
+  // Modal de Declaração de Feriado Global da Rede (todas as unidades)
   const [showGlobalModal, setShowGlobalModal] = useState(false);
-  const [globalDate, setGlobalDate] = useState('2026-12-25');
-  const [globalName, setGlobalName] = useState('Natal');
+  const [globalDate, setGlobalDate] = useState(() => new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(new Date()));
+  const [globalName, setGlobalName] = useState('');
 
   const countPendente = holidayRequests.filter(r => r.status === 'pendente').length;
   const countAprovado = holidayRequests.filter(r => r.status === 'aprovado').length;
@@ -48,21 +60,22 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
     return r.status === filter;
   });
 
-  const handleConfirmReject = () => {
+  const handleConfirmReject = async () => {
     if (!rejectModalData || !rejectReason.trim()) return;
-    onRejectHoliday(rejectModalData.id, rejectReason.trim());
+    if (!await run(() => onRejectHoliday(rejectModalData.id, rejectReason.trim()))) return;
     setRejectModalData(null);
     setRejectReason('');
   };
 
-  const handleConfirmGlobal = () => {
+  const handleConfirmGlobal = async () => {
     if (!globalDate || !globalName.trim()) return;
-    onDeclareGlobalHoliday(globalDate, globalName.trim());
+    if (!await run(() => onDeclareGlobalHoliday(globalDate, globalName.trim()))) return;
     setShowGlobalModal(false);
   };
 
   return (
     <div className="space-y-4">
+      {error && <p role="alert" className="p-3 rounded-xl bg-rose-500/10 text-rose-600">{error}</p>}
       {/* 1. TOPO: RESUMO E BOTÃO DE FERIADO GLOBAL */}
       <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#0B132B] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -120,7 +133,7 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
           }`}
         >
           <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>Aprovados (Loja Fechada -1d)</span>
+          <span>Aprovados</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 font-black">
             {countAprovado}
           </span>
@@ -185,7 +198,7 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                          {req.holidayName}
+                          {req.holidayName}{req.action === 'reabrir' ? ' · Solicitação de reabertura' : ''}
                         </h4>
                         <span className="text-[11px] font-black px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
                           Data: {req.data.split('-').reverse().join('/')}
@@ -197,7 +210,7 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
                             ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
                             : 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'
                         }`}>
-                          {isPendente ? 'Aguardando Aprovação' : isAprovado ? 'Feriado Aprovado' : 'Recusado'}
+                          {isPendente ? 'Aguardando aprovação' : isAprovado ? (req.action === 'reabrir' ? 'Reabertura aprovada' : 'Feriado aprovado') : req.status === 'cancelado' ? 'Cancelado' : 'Recusado'}
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
@@ -206,7 +219,8 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
                     </div>
                   </div>
 
-                  {/* Ações da Bruna */}
+                  {isAprovado && req.action !== 'reabrir' && <button type="button" disabled={busy} onClick={() => void run(() => onCancelHoliday(req.id))} className="px-3 py-2 rounded-xl border border-rose-300 text-xs text-rose-600">Cancelar feriado</button>}
+                  {/* Ações do financeiro */}
                   {isPendente && (
                     <div className="flex items-center gap-2 shrink-0">
                       <button
@@ -226,11 +240,12 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
                       </button>
                       <button
                         type="button"
-                        onClick={() => onApproveHoliday(req.id)}
+                        disabled={busy}
+                        onClick={() => void run(() => onApproveHoliday(req.id))}
                         className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-md shadow-emerald-600/25 transition cursor-pointer flex items-center gap-1.5"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        <span>Aprovar Fechamento (-1d)</span>
+                        <span>{req.action === 'reabrir' ? 'Aprovar reabertura' : 'Aprovar fechamento'}</span>
                       </button>
                     </div>
                   )}
@@ -330,7 +345,7 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
               </button>
               <button
                 type="button"
-                disabled={!rejectReason.trim()}
+                disabled={busy || !rejectReason.trim()}
                 onClick={handleConfirmReject}
                 className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 active:scale-95 text-white transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-md shadow-rose-600/25"
               >
@@ -362,7 +377,7 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
                     Feriado Geral da Rede
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Aplica fechamento para todas as 20 unidades
+                    Aplica fechamento para todas as unidades atuais e futuras
                   </p>
                 </div>
               </div>
@@ -375,6 +390,7 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
               </button>
             </div>
 
+            {error && <p role="alert" className="text-xs text-rose-600">{error}</p>}
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -382,6 +398,7 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
                 </label>
                 <input
                   type="date"
+                  aria-label="Data do feriado geral"
                   value={globalDate}
                   onChange={(e) => setGlobalDate(e.target.value)}
                   className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
@@ -390,10 +407,11 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Nome do Feriado Nacional / Geral:
+                  Nome do feriado / fechamento geral:
                 </label>
                 <input
                   type="text"
+                  aria-label="Nome do feriado geral" autoFocus maxLength={300}
                   value={globalName}
                   onChange={(e) => setGlobalName(e.target.value)}
                   placeholder="Ex: Natal, Ano Novo, Finados..."
@@ -404,8 +422,8 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
               <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 text-xs text-amber-900 dark:text-amber-200">
                 <span className="font-bold block mb-1">Impacto na Rede:</span>
                 <ul className="list-disc list-inside text-[11px] space-y-0.5">
-                  <li>Todas as 20 lojas físicas terão o dia marcado como Sem Expediente;</li>
-                  <li>O divisor de dias úteis da meta mensal será deduzido em 1 dia para todas as filiais.</li>
+                  <li>Todas as unidades atuais e futuras terão o dia marcado como Sem Expediente;</li>
+                  <li>O dia sai da contagem de dias úteis da rede, sem desconto duplicado se já for domingo ou feriado nacional.</li>
                 </ul>
               </div>
             </div>
@@ -420,6 +438,7 @@ export const FinancialHolidayApprovalPanel: React.FC<FinancialHolidayApprovalPan
               </button>
               <button
                 type="button"
+                disabled={busy || !globalDate || !globalName.trim()}
                 onClick={handleConfirmGlobal}
                 className="px-4 py-2 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-500 active:scale-95 text-white transition cursor-pointer shadow-md shadow-amber-600/25 flex items-center gap-1.5"
               >

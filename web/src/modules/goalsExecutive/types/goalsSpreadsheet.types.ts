@@ -27,6 +27,7 @@ export interface GoalsWorkbook {
   months: Record<string, { sourceRow: number; reportedTotals: AnnualValue[]; stores: SpreadsheetStore[] }>;
   profitSheets: Record<string, Record<string, ProfitMonth>>;
   costs: SpreadsheetCosts[];
+  calendarClosures?: { id: string; storeId: string | null; date: string; name: string }[];
   importedAt?: string;
   sourceSheetNames?: string[];
   registeredStores?: { id: string; name: string; shortName?: string; active: number | boolean }[];

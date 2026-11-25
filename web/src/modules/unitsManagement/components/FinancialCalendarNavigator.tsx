@@ -13,7 +13,7 @@ import {
   Filter
 } from 'lucide-react';
 import { StoreDailyClosingSummary, StoreHolidayRequest } from '../types/unitsManagement.types';
-import { BRAZILIAN_HOLIDAYS_MAP } from '../../storePortal/utils/storeCalendarUtils';
+import { nationalHolidays } from '../../../shared/nationalHolidays';
 
 interface FinancialCalendarNavigatorProps {
   selectedDate: string; // YYYY-MM-DD
@@ -159,11 +159,12 @@ export const FinancialCalendarNavigator: React.FC<FinancialCalendarNavigatorProp
 
     // Mapeia feriados
     holidayRequests.forEach(h => {
-      if (h.status === 'aprovado') {
+      if (h.status === 'aprovado' && h.action !== 'reabrir') {
         if (!map[h.data]) {
           map[h.data] = { total: 0, aguardando: 0, aprovado: 0, devolvido: 0, pendente: 0 };
         }
-        map[h.data].holidayName = h.holidayName;
+        const label = `${h.holidayName} · ${h.scope === 'rede' ? 'Toda a rede' : h.lojaNome}`;
+        map[h.data].holidayName = [map[h.data].holidayName, label].filter(Boolean).join(' / ');
       }
     });
 
@@ -390,7 +391,7 @@ export const FinancialCalendarNavigator: React.FC<FinancialCalendarNavigatorProp
               const hasAguardando = Boolean(metrics && metrics.aguardando > 0);
               const hasDevolvido = Boolean(metrics && metrics.devolvido > 0);
               const hasAprovado = Boolean(metrics && metrics.aprovado > 0);
-              const holidayName = metrics?.holidayName || BRAZILIAN_HOLIDAYS_MAP[dateStr] || BRAZILIAN_HOLIDAYS_MAP[`${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`];
+              const holidayName = [nationalHolidays(y)[`${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`], metrics?.holidayName].filter(Boolean).join(' / ');
 
               return (
                 <div

@@ -81,7 +81,7 @@ export function GoalsComparisonTable({ rows, previousRows, previousPeriod, targe
               <span className="block text-[10px] text-slate-500 dark:text-slate-400">{money(row.comparisonEvolution.averageChange)} / ano · {row.comparisonEvolution.comparisons} comparações</span>
             </td>,
                 suggestion: <td className={`${cell} font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/5`}>{row.suggestion === null ? <span className="font-normal text-slate-500 dark:text-slate-400">Sem histórico</span> : money(row.suggestion)}</td>,
-                daily: <td className={cell}>{money(row.dailySuggestion)}</td>,
+                daily: <td className={cell} title={`${row.workingDays} dias úteis para esta unidade, descontando domingos, feriados nacionais e fechamentos aprovados.`}>{money(row.dailySuggestion)}</td>,
                 plan: <td className={cell}><input disabled={readOnly} type="text" inputMode="numeric" aria-label={`Meta planejada ${row.name}`} value={plans[row.id] === undefined ? '' : money(plans[row.id])} placeholder="" onChange={event => {
               const digits = event.target.value.replace(/\D/g, '');
               const value = digits === '' ? null : Number(digits) / 100;

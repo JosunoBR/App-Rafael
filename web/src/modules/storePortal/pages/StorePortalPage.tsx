@@ -1,3 +1,5 @@
+import { businessDate } from '../../../shared/businessDate';
+import type { StoreHolidayRequest } from '../../unitsManagement/types/unitsManagement.types';
 import { hasPermission } from '../../../shared/permissions';
 import React, { useState, useMemo, useEffect } from 'react';
 import { apiFetch } from '../../../utils/api';
@@ -7,7 +9,7 @@ import { StoreMonthlyCalendar } from '../components/StoreMonthlyCalendar';
 import { StoreCashRegisterModal } from '../components/StoreCashRegisterModal';
 import { StoreConfetti } from '../components/StoreConfetti';
 import { StoreNotificationBox } from '../components/StoreNotificationBox';
-import { INITIAL_STORE_GOAL_DATA, INITIAL_CASH_CLOSINGS, INITIAL_MARKED_HOLIDAYS } from '../mock/storePortalMockData';
+import { INITIAL_STORE_GOAL_DATA, INITIAL_CASH_CLOSINGS } from '../mock/storePortalMockData';
 import { DailyCashClosing, StoreGoalData, MarkedHoliday } from '../types/storePortal.types';
 import { calculateMonthWorkingDays } from '../utils/storeCalendarUtils';
 
@@ -18,9 +20,11 @@ interface StorePortalPageProps {
 }
 
 export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, currentUser, unitName }) => {
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toLocaleDateString('en-CA').slice(0, 7));
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => businessDate().slice(0, 7));
   const [closings, setClosings] = useState<Record<string, DailyCashClosing>>(INITIAL_CASH_CLOSINGS);
-  const [markedHolidays, setMarkedHolidays] = useState<Record<string, MarkedHoliday>>(INITIAL_MARKED_HOLIDAYS);
+  const [holidayRequests, setHolidayRequests] = useState<StoreHolidayRequest[]>([]);
+  const [holidayError, setHolidayError] = useState('');
+  const markedHolidays = useMemo(() => Object.fromEntries(holidayRequests.filter(item => item.status === 'aprovado' && item.action !== 'reabrir').sort((a, b) => Number(a.scope === 'rede') - Number(b.scope === 'rede')).map(item => [item.data, { date: item.data, holidayName: item.holidayName, status: 'aprovado' } as MarkedHoliday])), [holidayRequests]);
   const [activeModalDate, setActiveModalDate] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [goalAmount, setGoalAmount] = useState(0);
@@ -50,9 +54,21 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
     return () => { active = false; };
   }, [storeId, selectedMonth, canViewGoals]);
 
-  // Data de hoje
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  useEffect(() => {
+    let active = true;
+    setHolidayRequests([]);
+    const refresh = () => {
+      if (!storeId) return;
+      void apiFetch(`/holidays?month=${selectedMonth}`).then(response => response.json()).then(rows => {
+        if (active) { setHolidayRequests(rows); setHolidayError(''); }
+      }).catch(error => { if (active) setHolidayError(error.message || 'Não foi possível carregar os feriados da unidade.'); });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [storeId, selectedMonth]);
+  const todayStr = businessDate();
 
   // Busca se há dia com devolução pelo financeiro
   const urgentReturned = useMemo(() => {
@@ -89,10 +105,15 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
   }, [closings, selectedMonth, todayStr, markedHolidays, goalAmount, storeId, unitName]);
 
   // Alternar marcação de feriado sem expediente
-  const handleToggleHoliday = (dateStr: string, holidayName: string, isClosing: boolean) => {
-    void dateStr; void holidayName; void isClosing;
-    showToast?.('O registro de feriados ainda não está disponível.', 'info');
-    return;
+  const handleToggleHoliday = async (dateStr: string, holidayName: string, isClosing: boolean) => {
+    if (!canSubmit) throw new Error('Seu acesso não permite solicitar feriados.');
+    await apiFetch('/holidays/requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: dateStr, name: holidayName, action: isClosing ? 'fechar' : 'reabrir' }) });
+    showToast?.('Solicitação enviada ao financeiro. O calendário só será alterado após aprovação.', 'success');
+    try {
+      const response = await apiFetch(`/holidays?month=${selectedMonth}`);
+      setHolidayRequests(await response.json());
+      setHolidayError('');
+    } catch { setHolidayError('Solicitação enviada, mas não foi possível atualizar o calendário. Aguarde a atualização ou recarregue a página.'); }
   };
 
   // Navegação de mês
@@ -159,13 +180,18 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
         onTriggerConfetti={() => setShowConfetti(true)}
       />}
 
+      {holidayError && <p role="alert" className="p-3 rounded-xl bg-amber-500/10 text-amber-600">{holidayError}</p>}
+      {holidayRequests.some(item => item.lojaId === storeId && (item.status === 'pendente' || item.status === 'recusado')) && <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs space-y-2">
+        <h3 className="font-bold">Solicitações de feriado da unidade</h3>
+        {holidayRequests.filter(item => item.lojaId === storeId && (item.status === 'pendente' || item.status === 'recusado')).map(item => <p key={item.id}>{item.data.split('-').reverse().join('/')} · {item.holidayName} · {item.action === 'reabrir' ? 'Reabertura' : 'Sem expediente'} · <strong>{item.status === 'pendente' ? 'Aguardando aprovação' : 'Recusado'}</strong>{item.respostaFinanceiro ? ` · ${item.respostaFinanceiro}` : ''}</p>)}
+      </div>}
       {/* 2. CALENDÁRIO INTERATIVO MENSAL DOS DIAS (TRILHA GAMIFICADA SPLIT 2) */}
       <StoreMonthlyCalendar
         selectedMonth={selectedMonth}
         closings={closings}
         markedHolidays={markedHolidays}
         onSelectDay={(d) => setActiveModalDate(d)}
-        onToggleHoliday={handleToggleHoliday}
+        onToggleHoliday={canSubmit && !holidayError ? handleToggleHoliday : undefined}
         activeStyle="split"
       />
 

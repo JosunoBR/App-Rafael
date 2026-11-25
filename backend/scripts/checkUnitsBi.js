@@ -46,6 +46,7 @@ let server;
     const token = jwt.sign({ id: 'usr_root' }, config.JWT_SECRET, { expiresIn: '5m' });
     const headers = { Authorization: `Bearer ${token}` };
     assert.equal((await fetch(`${apiBase}/units-bi`)).status, 401);
+    await execute('INSERT INTO users(id,nome,email,senha,role,ativo,createdAt,updatedAt) VALUES(?,?,?,?,?,1,?,?)', ['bi-no-access', 'Sem acesso BI', 'bi-denied@example.invalid', 'unused-test-password', 'deposito', now, now]);
     const denied = jwt.sign({ id: 'bi-no-access', role: 'deposito' }, config.JWT_SECRET, { expiresIn: '5m' });
     assert.equal((await fetch(`${apiBase}/units-bi`, { headers: { Authorization: `Bearer ${denied}` } })).status, 403);
     assert.equal((await fetch(`${apiBase}/units-bi?month=2026-13`, { headers })).status, 400);

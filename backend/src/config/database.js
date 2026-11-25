@@ -76,6 +76,32 @@ async function getDatabase() {
       active INTEGER NOT NULL DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS store_holidays (
+      id TEXT PRIMARY KEY,
+      storeId TEXT REFERENCES stores(id) ON DELETE RESTRICT,
+      holidayDate TEXT NOT NULL,
+      name TEXT NOT NULL,
+      action TEXT NOT NULL CHECK(action IN ('fechar','reabrir')),
+      targetId TEXT REFERENCES store_holidays(id),
+      status TEXT NOT NULL CHECK(status IN ('pendente','aprovado','recusado','cancelado')),
+      reason TEXT NOT NULL DEFAULT '',
+      requestedBy TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      reviewedBy TEXT,
+      reviewedAt TEXT,
+      reviewNote TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS holiday_pending_date ON store_holidays(COALESCE(storeId,''),holidayDate) WHERE status='pendente';
+    CREATE UNIQUE INDEX IF NOT EXISTS holiday_approved_date ON store_holidays(COALESCE(storeId,''),holidayDate) WHERE status='aprovado' AND action='fechar';
+    CREATE TABLE IF NOT EXISTS store_holiday_audit (
+      id TEXT PRIMARY KEY,
+      holidayId TEXT NOT NULL REFERENCES store_holidays(id),
+      action TEXT NOT NULL,
+      actorId TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      createdAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS store_daily_closings (
       id TEXT PRIMARY KEY,
       storeId TEXT NOT NULL REFERENCES stores(id),

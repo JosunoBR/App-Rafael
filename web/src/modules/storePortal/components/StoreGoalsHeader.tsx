@@ -104,7 +104,7 @@ export const StoreGoalsHeader: React.FC<StoreGoalsHeaderProps> = ({
               )}
             </div>
             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
-              Jornada de Metas do Mês • {goalData.diasOperacionaisMes || 23} dias úteis
+              Jornada de Metas do Mês • {goalData.diasOperacionaisMes ?? 0} dias úteis
             </div>
           </div>
         </div>

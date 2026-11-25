@@ -144,6 +144,7 @@ async function findWorkbook() {
       items: items.filter(item => item.costName === center.name).map(item => ({ name: item.itemName, value: item.amount })) }));
     const sourceSheetNames = (await queryAll('SELECT sheetName FROM goal_source_sheets WHERE importId = ? ORDER BY sheetName', params)).map(row => row.sheetName);
     return { filename: imported.filename, sha256: imported.id, importedAt: imported.importedAt, years: [...years].sort((a,b) => a-b), months, profitSheets, costs, registeredStores,
+      calendarClosures: await queryAll("SELECT id,storeId,holidayDate AS date,name FROM store_holidays WHERE status='aprovado' AND action='fechar' ORDER BY holidayDate"),
       sourceSheetNames, storeLinks: links.map(link => ({ sourceKey: link.sourceKey, sourceName: link.sourceName, storeId: link.storeId })) };
   });
 }

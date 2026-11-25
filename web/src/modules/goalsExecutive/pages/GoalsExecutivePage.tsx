@@ -63,12 +63,13 @@ function GoalsExecutiveContent({ currentUser, showToast, workbook: GOALS_WORKBOO
   }, [period, targetYear, month, versions]);
   const rows = useMemo(() => buildGoalRows(GOALS_WORKBOOK, month, targetYear), [GOALS_WORKBOOK, month, targetYear]);
   const filtered = rows.filter(row => row.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(search.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()));
-  const currentDays = workingDays(targetYear, Number(month));
-  const previousDays = workingDays(targetYear - 1, Number(month));
+  const currentDays = workingDays(targetYear, Number(month), GOALS_WORKBOOK.calendarClosures);
+  const previousDays = workingDays(targetYear - 1, Number(month), GOALS_WORKBOOK.calendarClosures);
   const comparable = rows.filter(row => row.suggestion !== null);
   const totalSuggestion = comparable.length ? comparable.reduce((sum, row) => sum + (row.suggestion ?? 0), 0) : null;
   const totalPrevious = comparable.length ? comparable.reduce((sum, row) => sum + (row.previousSales ?? 0), 0) : null;
-  const averageDailySuggestion = totalSuggestion === null || comparable.length === 0 ? null : totalSuggestion / currentDays.count / comparable.length;
+  const dailyComparable = comparable.filter(row => row.dailySuggestion !== null);
+  const averageDailySuggestion = dailyComparable.length ? dailyComparable.reduce((sum, row) => sum + (row.dailySuggestion ?? 0), 0) / dailyComparable.length : null;
   const previousMonth = Number(month) === 1 ? 12 : Number(month) - 1;
   const previousYear = Number(month) === 1 ? targetYear - 1 : targetYear;
   const previousRows = useMemo(() => buildGoalRows(GOALS_WORKBOOK, String(previousMonth).padStart(2, '0'), previousYear), [GOALS_WORKBOOK, previousMonth, previousYear]);
@@ -123,9 +124,9 @@ function GoalsExecutiveContent({ currentUser, showToast, workbook: GOALS_WORKBOO
       ].map(card => <div key={card.label} className={`${panel} p-5`}><p className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400">{card.label}</p><strong className="block text-2xl font-black mt-2 text-emerald-700 dark:text-emerald-400">{card.value}</strong><p className="text-xs text-slate-500 dark:text-slate-400 mt-2">{card.detail}</p></div>)}
     </div>
     <section className={`${panel} p-4 text-xs space-y-3`} aria-label="Regras e calendário da meta">
-      <p><strong>Sugestão de meta:</strong> faturamento do mesmo mês de {targetYear - 1} × 1,08. A quantidade de dias úteis não altera os 8%; a meta diária é a sugestão dividida pelos dias úteis de {targetYear}.</p>
-      <div><strong>Feriados nacionais fora dos dias úteis · {targetYear}</strong><p className="mt-1 text-slate-500 dark:text-slate-400">{currentDays.holidays.length ? currentDays.holidays.map(holiday => `${holiday.date.slice(8)}/${holiday.date.slice(5, 7)} ${holiday.name}${holiday.alreadySunday ? ' (domingo, já excluído)' : ''}`).join(' · ') : 'Nenhum feriado nacional neste mês.'}</p></div>
-      <p className="text-slate-500 dark:text-slate-400">Dias úteis: segunda a sábado, sem contar domingos e feriados nacionais. Carnaval e Corpus Christi permanecem na contagem. Consciência Negra entra como feriado nacional a partir de 2024. <a href="https://agenciagov.ebc.com.br/noticias/202512/confira-o-calendario-oficial-de-feriados-nacionais-e-pontos-facultativos-em-2026" target="_blank" rel="noreferrer" className="underline">Calendário oficial</a>.</p>
+      <p><strong>Sugestão de meta:</strong> faturamento do mesmo mês de {targetYear - 1} × 1,08. A quantidade de dias úteis não altera os 8%; a meta diária é a sugestão dividida pelos dias úteis da unidade em {targetYear}.</p>
+      <div><strong>Feriados e fechamentos da rede fora dos dias úteis · {targetYear}</strong><p className="mt-1 text-slate-500 dark:text-slate-400">{currentDays.holidays.length ? currentDays.holidays.map(holiday => `${holiday.date.slice(8)}/${holiday.date.slice(5, 7)} ${holiday.name}${holiday.alreadySunday ? ' (domingo, já excluído)' : ''}`).join(' · ') : 'Nenhum feriado ou fechamento da rede neste mês.'}</p></div>
+      <p className="text-slate-500 dark:text-slate-400">Dias úteis: segunda a sábado, sem domingos, feriados nacionais e fechamentos aprovados. O card compara o calendário da rede; cada unidade também desconta seus feriados locais aprovados. Carnaval e Corpus Christi só são descontados quando há fechamento aprovado. Consciência Negra entra como feriado nacional a partir de 2024. <a href="https://agenciagov.ebc.com.br/noticias/202512/confira-o-calendario-oficial-de-feriados-nacionais-e-pontos-facultativos-em-2026" target="_blank" rel="noreferrer" className="underline">Calendário oficial</a>.</p>
     </section>
     <section className="space-y-3" aria-label="Comparação e sugestões por loja">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-bold">{MONTH_NAMES[Number(month) - 1]} · comparativo por loja</h2><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Clique na loja para consultar lucros, metas e custos originais. Arraste a tabela para ver todas as colunas.</p></div>

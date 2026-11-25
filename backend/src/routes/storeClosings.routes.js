@@ -43,6 +43,7 @@ router.get('/monthly-sales', requirePermission('nav:units_history', 'financeiro'
 router.put('/:storeId/:date', requirePermission('units:submit', 'unidade'), action(async req => withTransaction(async () => {
   const { storeId, date } = req.params;
   if (!allowedStore(req, storeId)) throw fail('Acesso à unidade negado.', 403);
+  if ((await require('../services/holidays.service').activeClosures(storeId, date)).length) throw fail('Esta data está aprovada como sem expediente. Solicite a reabertura antes de enviar o fechamento.', 409);
   if (!validDate(date)) throw fail('Data inválida.');
   if (!await queryOne('SELECT id FROM stores WHERE id=? AND active=1', [storeId])) throw fail('Unidade não cadastrada ou inativa.', 404);
   const data = req.body || {};

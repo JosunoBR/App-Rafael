@@ -7,11 +7,7 @@ export const valueForYear = (history: AnnualValue[], year: number): number | nul
 export const superGoal = (goal: number | null): number | null => goal === null ? null : roundMoney(goal * 1.10);
 export const suggestGoal = (previousSales: number | null): number | null => previousSales === null ? null : roundMoney(previousSales * 1.08);
 
-// Calendar dedicated to executive planning. The store portal has a different rule
-// (operator-approved closures), so it must not be reused for this calculation.
-// Official calendar: https://agenciagov.ebc.com.br/noticias/202512/confira-o-calendario-oficial-de-feriados-nacionais-e-pontos-facultativos-em-2026
-
-export function workingDays(year: number, month: number) {
+export function workingDays(year: number, month: number, closures: NonNullable<GoalsWorkbook['calendarClosures']> = [], storeId?: string) {
   if (!Number.isInteger(year) || year < 1900 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12) throw new Error('Período inválido.');
   const holidays = nationalHolidays(year);
   const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -20,7 +16,8 @@ export function workingDays(year: number, month: number) {
   for (let day = 1; day <= days; day++) {
     const date = new Date(Date.UTC(year, month - 1, day));
     const isoDate = date.toISOString().slice(0, 10);
-    const holiday = holidays[isoDate.slice(5)];
+    const additional = closures.filter(item => item.date === isoDate && (item.storeId === null || item.storeId === storeId));
+    const holiday = holidays[isoDate.slice(5)] || additional.map(item => item.name).join(' / ');
     const sunday = date.getUTCDay() === 0;
     if (holiday) excludedHolidays.push({ date: isoDate, name: holiday, alreadySunday: sunday });
     if (!sunday && !holiday) count++;
@@ -61,8 +58,6 @@ function annualEvolution(values: AnnualValue[], targetYear: number) {
 }
 
 export function buildGoalRows(workbook: GoalsWorkbook, month: string, targetYear: number) {
-  const currentDays = workingDays(targetYear, Number(month));
-  const previousDays = workingDays(targetYear - 1, Number(month));
   // Use the union so a new store introduced in a later month remains visible,
   // while missing monthly records remain explicitly absent rather than zero.
   const allStores = new Map<string, SpreadsheetStore>();
@@ -73,6 +68,8 @@ export function buildGoalRows(workbook: GoalsWorkbook, month: string, targetYear
       id: registered.id, name: registered.name, sourceKey: original?.id ?? null, sourceName: original?.name ?? null, active: registered.active };
   }) : [...allStores.values()].map(store => ({ ...store, sourceKey: store.id, sourceName: store.name, active: true }));
   return identities.map(identity => {
+    const currentDays = workingDays(targetYear, Number(month), workbook.calendarClosures, identity.id);
+    const previousDays = workingDays(targetYear - 1, Number(month), workbook.calendarClosures, identity.id);
     const source = workbook.months[month]?.stores.find(store => store.id === identity.sourceKey);
     const sales = source?.sales ?? [];
     const previousSales = valueForYear(sales, targetYear - 1);
@@ -81,8 +78,9 @@ export function buildGoalRows(workbook: GoalsWorkbook, month: string, targetYear
     return {
       ...identity, source, sales, previousSales, suggestion,
       currentSales: valueForYear(sales, targetYear),
-      dailySuggestion: suggestion === null ? null : roundMoney(suggestion / currentDays.count),
-      previousDailySales: previousSales === null ? null : roundMoney(previousSales / previousDays.count),
+      workingDays: currentDays.count, previousWorkingDays: previousDays.count,
+      dailySuggestion: suggestion === null || currentDays.count === 0 ? null : roundMoney(suggestion / currentDays.count),
+      previousDailySales: previousSales === null || previousDays.count === 0 ? null : roundMoney(previousSales / previousDays.count),
       profit, evolution: profitEvolution(profit, targetYear),
     };
   });

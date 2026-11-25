@@ -10,7 +10,8 @@
     "test:goals": "node scripts/checkGoals.js",
     "test:units-bi": "node scripts/checkUnitsBi.js",
     "test:store-deposits": "node scripts/checkStoreDeposits.js",
-    "migrate-images": "node scripts/migrateProductImagesToDisk.js"
+    "migrate-images": "node scripts/migrateProductImagesToDisk.js",
+    "test:holidays": "node scripts/checkHolidays.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

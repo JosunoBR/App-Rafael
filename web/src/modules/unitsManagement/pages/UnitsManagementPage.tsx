@@ -11,8 +11,7 @@ import { FinancialDailyClosingQueue } from '../components/FinancialDailyClosingQ
 import { FinancialHolidayApprovalPanel } from '../components/FinancialHolidayApprovalPanel';
 import { FinancialCalendarNavigator } from '../components/FinancialCalendarNavigator';
 import {
-  INITIAL_DAILY_CLOSINGS,
-  INITIAL_HOLIDAY_REQUESTS
+  INITIAL_DAILY_CLOSINGS
 } from '../mock/unitsMockData';
 import {
   StoreDailyClosingSummary,
@@ -59,12 +58,15 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
 
   // Estados locais interativos (Mock com atualização otimista)
   const [closings, setClosings] = useState<StoreDailyClosingSummary[]>(INITIAL_DAILY_CLOSINGS);
-  const [holidayRequests] = useState<StoreHolidayRequest[]>(INITIAL_HOLIDAY_REQUESTS);
+  const [holidayRequests, setHolidayRequests] = useState<StoreHolidayRequest[]>([]);
 
+  const reloadHolidays = async () => {
+    const response = await apiFetch('/holidays');
+    setHolidayRequests(await response.json());
+  };
   const reloadClosings = async () => {
     const response = await apiFetch('/store-closings');
     const rows = await response.json();
-    setLoadError('');
     setClosings(rows.map((row: any) => ({
       id: row.id, lojaId: row.storeId, lojaNome: row.storeName, lojaCodigo: row.shortName || '',
       data: row.closingDate, status: row.status, vendaTotal: row.salesCents / 100,
@@ -79,7 +81,7 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
   };
   useEffect(() => {
     let active = true;
-    const refresh = () => { if (active) void reloadClosings().catch(() => { if (active) setLoadError('Não foi possível atualizar os fechamentos. Tente novamente.'); }); };
+    const refresh = () => { if (active) void Promise.all([reloadClosings(), reloadHolidays()]).then(() => { if (active) setLoadError(''); }).catch(() => { if (active) setLoadError('Não foi possível atualizar os fechamentos ou feriados. Tente novamente.'); }); };
     refresh();
     const timer = window.setInterval(refresh, 15000);
     window.addEventListener('focus', refresh);
@@ -115,10 +117,15 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
     return;
   };
 
-  // Feriados exigem persistência própria antes de serem liberados para operação.
-  const handleApproveHoliday = (_requestId: string) => showToast?.('O cadastro de feriados ainda não está disponível.', 'info');
-  const handleRejectHoliday = (_requestId: string, _motivo: string) => showToast?.('O cadastro de feriados ainda não está disponível.', 'info');
-  const handleDeclareGlobalHoliday = (_data: string, _name: string) => showToast?.('O cadastro de feriados ainda não está disponível.', 'info');
+  const holidayMutation = async (path: string, body: object) => {
+    await apiFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    showToast?.('Feriado atualizado. Os dias úteis serão recalculados automaticamente.', 'success');
+    try { await reloadHolidays(); } catch { setLoadError('Feriado salvo, mas não foi possível atualizar a lista. Aguarde a atualização.'); }
+  };
+  const handleApproveHoliday = (id: string) => holidayMutation(`/holidays/${encodeURIComponent(id)}/review`, { decision: 'aprovado', note: '' });
+  const handleRejectHoliday = (id: string, motivo: string) => holidayMutation(`/holidays/${encodeURIComponent(id)}/review`, { decision: 'recusado', note: motivo });
+  const handleCancelHoliday = (id: string) => holidayMutation(`/holidays/${encodeURIComponent(id)}/review`, { decision: 'cancelado', note: 'Cancelado pela central' });
+  const handleDeclareGlobalHoliday = (data: string, name: string) => holidayMutation('/holidays/global', { date: data, name });
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-14 animate-fade-in">
@@ -195,7 +202,7 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
       </div>
 
       {loadError && <p role="alert" className="p-3 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300">{loadError}</p>}
-      <button type="button" onClick={() => void reloadClosings().catch(() => setLoadError('Não foi possível atualizar os fechamentos.'))} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">Atualizar fechamentos</button>
+      <button type="button" onClick={() => void Promise.all([reloadClosings(), reloadHolidays()]).then(() => setLoadError('')).catch(() => setLoadError('Não foi possível atualizar os fechamentos ou feriados.'))} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">Atualizar dados</button>
       {/* 3. NAVEGADOR DE CALENDÁRIO COMERCIAL (DIAS E MESES) */}
       {financialSubTab === 'closings' && (
         <FinancialCalendarNavigator
@@ -235,6 +242,7 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
         <FinancialHolidayApprovalPanel
           holidayRequests={holidayRequests}
           onApproveHoliday={handleApproveHoliday}
+          onCancelHoliday={handleCancelHoliday}
           onRejectHoliday={handleRejectHoliday}
           onDeclareGlobalHoliday={handleDeclareGlobalHoliday}
         />

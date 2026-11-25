@@ -967,7 +967,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                   <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-800">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                        Despesas e Sangrias Pagas pelo Caixa
+                        Despesas e Depósitos do Caixa
                       </h4>
                       <span className="text-xs font-bold text-slate-500">
                         {inspectingClosing.despesas.length} itens
@@ -979,7 +979,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                       <div className="space-y-1">
                         {inspectingClosing.despesas.map((d, i) => (
                           <div key={d.id} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
-                            <span>{i + 1}. {d.descricao}</span>
+                            <span>{i + 1}. {d.tipo === 'deposito' ? 'Depósito' : 'Despesa'}: {d.descricao}</span>
                             <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(d.valor, true)}</span>
                           </div>
                         ))}

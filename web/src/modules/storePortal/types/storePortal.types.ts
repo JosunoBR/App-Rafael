@@ -4,6 +4,7 @@ export type StorePortalStyle = 'hero' | 'split' | 'erica' | 'classic';
 export interface ExpenseItem {
   id: string;
   descricao: string;
+  tipo?: 'despesa' | 'deposito';
   valor: number;
 }
 

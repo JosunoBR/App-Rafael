@@ -180,12 +180,13 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
     const newItem: ExpenseItem = {
       id: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       descricao: '',
+      tipo: 'despesa',
       valor: 0
     };
     setDespesas([...despesas, newItem]);
   };
 
-  const handleUpdateExpense = (id: string, field: 'descricao' | 'valor', value: any) => {
+  const handleUpdateExpense = (id: string, field: 'descricao' | 'valor' | 'tipo', value: any) => {
     setDespesas(prev => prev.map(item => {
       if (item.id === id) {
         return { ...item, [field]: value };
@@ -198,7 +199,8 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
     setDespesas(prev => prev.filter(item => item.id !== id));
   };
 
-  const totalDespesas = despesas.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+  const totalDespesas = despesas.filter(item => item.tipo !== 'deposito').reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+  const totalDepositos = despesas.filter(item => item.tipo === 'deposito').reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
 
   // Soma dos meios de pagamento
   const totalMeios =
@@ -515,7 +517,7 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Despesas / Sangrias do Dia
+                  Despesas / Depósitos do Dia
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   Gastos e saídas pagas diretamente pelo caixa da loja
@@ -527,13 +529,13 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
                 className="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition cursor-pointer flex items-center gap-1 shadow-2xs"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Adicionar Despesa</span>
+                <span>Adicionar saída</span>
               </button>
             </div>
 
             {despesas.length === 0 ? (
               <div className="p-3 text-center text-xs text-slate-400 italic rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                Nenhuma despesa ou sangria lançada neste dia.
+                Nenhuma despesa ou depósito lançado neste dia.
               </div>
             ) : (
               <div className="space-y-2">
@@ -542,12 +544,13 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
                     <span className="text-[11px] font-bold text-slate-400 w-4">
                       {idx + 1}.
                     </span>
+                    <select aria-label={`Tipo da saída ${idx + 1}`} value={item.tipo ?? 'despesa'} onChange={event => handleUpdateExpense(item.id, 'tipo', event.target.value)} className="w-28 px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"><option value="despesa">Despesa</option><option value="deposito">Depósito</option></select>
                     <input
                       type="text"
-                      placeholder="Descrição da despesa"
+                      placeholder={item.tipo === 'deposito' ? 'Descrição do depósito' : 'Descrição da despesa'}
                       value={item.descricao}
                       onChange={(e) => handleUpdateExpense(item.id, 'descricao', e.target.value)}
-                      className="flex-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-1 focus:ring-emerald-500"
+                      className="flex-1 min-w-0 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-1 focus:ring-emerald-500"
                     />
                     <div className="w-28 sm:w-32 relative">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400">R$</span>
@@ -570,7 +573,7 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
                 ))}
 
                 <div className="flex justify-end pt-1 text-xs font-extrabold text-slate-700 dark:text-slate-300">
-                  Total de Despesas: <span className="text-rose-600 dark:text-rose-400 ml-1.5">{formatCurrency(totalDespesas, true)}</span>
+                  Total de Despesas: <span className="text-rose-600 dark:text-rose-400 ml-1.5">{formatCurrency(totalDespesas, true)}</span><span className="ml-3">Depósitos: {formatCurrency(totalDepositos, true)}</span>
                 </div>
               </div>
             )}

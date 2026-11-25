@@ -90,17 +90,19 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
         const approved = closings.filter((row: any) => row.storeId === store.id && row.status === 'aprovado');
         const movements = approved.map((row: any) => {
           const expenses = row.expenses.map((expense: any) => ({ id: expense.id, descricao: expense.description,
-            valor: expense.amountCents / 100, categoria: 'outros' as const }));
-          const totalDespesas = expenses.reduce((sum: number, expense: { valor: number }) => sum + expense.valor, 0);
+            valor: expense.amountCents / 100, tipo: (expense.movementType ?? 'despesa') as 'despesa' | 'deposito', categoria: 'outros' as const }));
+          const totalDespesas = expenses.filter((expense: { tipo: string }) => expense.tipo !== 'deposito').reduce((sum: number, expense: { valor: number }) => sum + expense.valor, 0);
+          const sangriaDia = expenses.filter((expense: { tipo: string }) => expense.tipo === 'deposito').reduce((sum: number, expense: { valor: number }) => sum + expense.valor, 0);
           return { data: row.closingDate, dataFormatada: row.closingDate.split('-').reverse().join('/'),
-            diaSemana: '', entradaDinheiro: row.cashCents / 100, despesas: expenses, totalDespesas,
-            saldoLiquidoDia: row.cashCents / 100 - totalDespesas, responsavel: row.submittedByName || '', memorando: row.memo };
+            diaSemana: '', entradaDinheiro: row.cashCents / 100, despesas: expenses, totalDespesas, sangriaDia,
+            saldoLiquidoDia: row.cashCents / 100 - totalDespesas - sangriaDia, responsavel: row.submittedByName || '', memorando: row.memo };
         });
         const totalEntradasDinheiro = movements.reduce((sum: number, item: { entradaDinheiro: number }) => sum + item.entradaDinheiro, 0);
         const totalDespesas = movements.reduce((sum: number, item: { totalDespesas: number }) => sum + item.totalDespesas, 0);
+        const totalSangrias = movements.reduce((sum: number, item: { sangriaDia: number }) => sum + item.sangriaDia, 0);
         return { lojaId: store.id, lojaCodigo: store.shortName || '', lojaNome: store.name,
           cidade: '', responsavel: '', fundoDeCaixa: 0, totalEntradasDinheiro, totalDespesas,
-          totalSangrias: 0, saldoAtualEmCaixa: totalEntradasDinheiro - totalDespesas,
+          totalSangrias, saldoAtualEmCaixa: totalEntradasDinheiro - totalDespesas - totalSangrias,
           ultimaAtualizacao: approved[0]?.updatedAt || '', movimentacoes: movements };
       }));
     }).catch(() => { if (active) showToast?.('Não foi possível carregar o caixa das unidades.', 'error'); });
@@ -208,7 +210,7 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
               Lista Dinâmica Integrada ao Cadastro
             </span>
             <span>•</span>
-            <span>Valores de fechamentos aprovados; fundo de troco e sangrias ainda não estão cadastrados. O saldo físico depende desses valores.</span>
+            <span>Valores dos fechamentos aprovados: entradas em dinheiro menos despesas e depósitos. O fundo fixo de troco ainda não está cadastrado.</span>
           </div>
 
 

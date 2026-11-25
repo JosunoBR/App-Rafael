@@ -928,6 +928,9 @@ async function getDatabase() {
     console.warn('Aviso ao executar limpeza de idempotência:', cleanErr.message);
   }
 
+  if (!dbInstance.exec('PRAGMA table_info(store_daily_expenses)')[0].values.some(column => column[1] === 'movementType')) {
+    dbInstance.run("ALTER TABLE store_daily_expenses ADD COLUMN movementType TEXT NOT NULL DEFAULT 'despesa' CHECK(movementType IN ('despesa','deposito'))");
+  }
   if (!dbInstance.exec('PRAGMA table_info(store_daily_closings)')[0].values.some(column => column[1] === 'submittedByName')) {
     dbInstance.run('ALTER TABLE store_daily_closings ADD COLUMN submittedByName TEXT');
   }

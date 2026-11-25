@@ -42,7 +42,7 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
         dinheiro: row.cashCents / 100, pixKais: row.pixKaisCents / 100,
         pixStone: row.pixStoneCents / 100, pixCnpj: row.pixCnpjCents / 100,
         cartaoDebito: row.debitCents / 100, cartaoCredito: row.creditCents / 100,
-        despesas: row.expenses.map((expense: any) => ({ id: expense.id, descricao: expense.description, valor: expense.amountCents / 100 })),
+        despesas: row.expenses.map((expense: any) => ({ id: expense.id, descricao: expense.description, tipo: expense.movementType ?? 'despesa', valor: expense.amountCents / 100 })),
         memorando: row.memo, responsavelFechamento: row.submittedByName || '',
         motivoDevolucao: row.reviewNote, dataHoraEnvio: row.createdAt
       }])));

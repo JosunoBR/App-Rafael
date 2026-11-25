@@ -10,6 +10,7 @@ export type ExpenseCategory =
 export interface StoreExpenseRecord {
   id: string;
   descricao: string;
+  tipo?: 'despesa' | 'deposito';
   valor: number;
   hora?: string;
   categoria: ExpenseCategory;

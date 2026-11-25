@@ -9,6 +9,7 @@
     "test:transaction": "node scripts/testDatabaseTransaction.js",
     "test:goals": "node scripts/checkGoals.js",
     "test:units-bi": "node scripts/checkUnitsBi.js",
+    "test:store-deposits": "node scripts/checkStoreDeposits.js",
     "migrate-images": "node scripts/migrateProductImagesToDisk.js"
   },
   "dependencies": {

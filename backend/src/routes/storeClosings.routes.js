@@ -30,7 +30,7 @@ router.get('/', (req,res,next) => requirePermission(req.user.role === 'unidade' 
   if (storeId) { where += ' AND c.storeId = ?'; params.push(storeId); }
   if (req.user.role === 'unidade') { where += ' AND c.storeId = ?'; params.push(req.user.storeId); }
   const rows = await queryAll(`SELECT c.*,s.name AS storeName,s.shortName,c.submittedByName AS responsibleName FROM store_daily_closings c JOIN stores s ON s.id=c.storeId ${where} ORDER BY c.closingDate DESC,s.name`, params);
-  return Promise.all(rows.map(async row => ({ ...row, expenses: await queryAll('SELECT id,description,amountCents,financialEntryId FROM store_daily_expenses WHERE closingId = ?', [row.id]) })));
+  return Promise.all(rows.map(async row => ({ ...row, expenses: await queryAll('SELECT id,description,amountCents,financialEntryId,movementType FROM store_daily_expenses WHERE closingId = ?', [row.id]) })));
 }));
 
 router.get('/monthly-sales', requirePermission('nav:units_history', 'financeiro'), action(async () => {
@@ -53,9 +53,11 @@ router.put('/:storeId/:date', requirePermission('units:submit', 'unidade'), acti
   if (!Array.isArray(data.despesas) || data.despesas.length > 100) throw fail('Lista de gastos inválida.');
   const expenses = data.despesas.map(item => {
     if (!item || typeof item.descricao !== 'string' || !item.descricao.trim() || item.descricao.length > 500) throw fail('Descrição do gasto inválida.');
+    const movementType = item.tipo ?? 'despesa';
+    if (!['despesa','deposito'].includes(movementType)) throw fail('Tipo de saída inválido. Selecione Despesa ou Depósito.');
     const amount = cents(item.valor);
-    if (!amount) throw fail('Gasto deve ser maior que zero.');
-    return { id: randomUUID(), description: item.descricao.trim(), amount };
+    if (!amount) throw fail('O valor da saída deve ser maior que zero.');
+    return { id: randomUUID(), description: item.descricao.trim(), amount, movementType };
   });
   if (data.quantidadeVendas != null && (!Number.isInteger(data.quantidadeVendas) || data.quantidadeVendas < 0)) throw fail('Quantidade de vendas inválida.');
   if (typeof data.memorando !== 'string' || data.memorando.length > 5000) throw fail('Memorando inválido.');
@@ -68,7 +70,7 @@ router.put('/:storeId/:date', requirePermission('units:submit', 'unidade'), acti
     ON CONFLICT(storeId,closingDate) DO UPDATE SET status='aguardando',salesCents=excluded.salesCents,salesCount=excluded.salesCount,cashCents=excluded.cashCents,pixKaisCents=excluded.pixKaisCents,pixStoneCents=excluded.pixStoneCents,pixCnpjCents=excluded.pixCnpjCents,debitCents=excluded.debitCents,creditCents=excluded.creditCents,memo=excluded.memo,submittedBy=excluded.submittedBy,submittedByName=excluded.submittedByName,updatedAt=excluded.updatedAt,reviewNote=NULL`,
     [id,storeId,date,sales,data.quantidadeVendas ?? null,...amounts,data.memorando,req.user.id,responsibleName,now,now]);
   await execute('DELETE FROM store_daily_expenses WHERE closingId=?', [id]);
-  for (const expense of expenses) await execute('INSERT INTO store_daily_expenses(id,closingId,description,amountCents) VALUES(?,?,?,?)', [expense.id,id,expense.description,expense.amount]);
+  for (const expense of expenses) await execute('INSERT INTO store_daily_expenses(id,closingId,description,amountCents,movementType) VALUES(?,?,?,?,?)', [expense.id,id,expense.description,expense.amount,expense.movementType]);
   return { id, status: 'aguardando' };
 })));
 
@@ -83,6 +85,7 @@ router.post('/:id/review', requirePermission('nav:units_conference', 'faturament
   if (decision === 'aprovado') {
     const expenses = await queryAll('SELECT * FROM store_daily_expenses WHERE closingId=?', [closing.id]);
     for (const expense of expenses) {
+      if (expense.movementType === 'deposito') continue;
       const entryId = `store-expense:${expense.id}`;
       await execute(`INSERT INTO financial_entries(id,tipo,descricao,categoria,storeId,lojaNome,formaPagamento,documentoRef,dataVencimento,valor,status,dataPagamento,valorPago,observacao,createdAt,updatedAt)
         VALUES(?,'despesa',?,'OPERACIONAL',?,?,'DINHEIRO',?,?,?,'Pago',?,?,?, ?,?)`,

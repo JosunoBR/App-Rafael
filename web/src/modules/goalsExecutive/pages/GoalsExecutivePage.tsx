@@ -69,7 +69,10 @@ function GoalsExecutiveContent({ currentUser, showToast, workbook: GOALS_WORKBOO
   const totalSuggestion = comparable.length ? comparable.reduce((sum, row) => sum + (row.suggestion ?? 0), 0) : null;
   const totalPrevious = comparable.length ? comparable.reduce((sum, row) => sum + (row.previousSales ?? 0), 0) : null;
   const averageDailySuggestion = totalSuggestion === null || comparable.length === 0 ? null : totalSuggestion / currentDays.count / comparable.length;
-  const salesYears = [targetYear - 3, targetYear - 2, targetYear - 1];
+  const previousMonth = Number(month) === 1 ? 12 : Number(month) - 1;
+  const previousYear = Number(month) === 1 ? targetYear - 1 : targetYear;
+  const previousRows = useMemo(() => buildGoalRows(GOALS_WORKBOOK, String(previousMonth).padStart(2, '0'), previousYear), [GOALS_WORKBOOK, previousMonth, previousYear]);
+  const previousPeriod = { year: previousYear, label: `${MONTH_NAMES[previousMonth - 1]} ${previousYear}` };
   const report = GOALS_WORKBOOK.months[month];
   const announce = (message: string, error = false) => { setNotice({ message, error }); showToast?.(message, error ? 'error' : 'success'); };
   const updatePlan = (id: string, value: number | null) => setDrafts(previous => {
@@ -132,7 +135,7 @@ function GoalsExecutiveContent({ currentUser, showToast, workbook: GOALS_WORKBOO
           <button disabled={!canManage || saving || loadingPlans || plansError || !Object.keys(plans).length} onClick={() => setDrafts(previous => { const next = { ...previous }; delete next[period]; return next; })} className={`${button} bg-slate-100 dark:bg-slate-800`}><RotateCcw size={14} /> Restaurar sugestão do mês</button></div>
       </div>
       {!dirty && !Object.keys(plans).length && !loadingPlans && !plansError && <p className="text-xs text-slate-500 dark:text-slate-400">Nenhuma meta salva neste mês. Digite a meta planejada ou clique em “Preencher metas sem valor com +8%” para habilitar o salvamento. A supermeta é calculada automaticamente com mais 10%.</p>}
-      <GoalsComparisonTable key={period} rows={filtered} years={salesYears} targetYear={targetYear} plans={plans} onPlanChange={updatePlan} readOnly={!canManage || loadingPlans || plansError || saving} />
+      <GoalsComparisonTable key={period} rows={filtered} previousRows={previousRows} previousPeriod={previousPeriod} storageKey={`goals-columns:v1:${currentUser?.id ?? "default"}`} targetYear={targetYear} plans={plans} onPlanChange={updatePlan} readOnly={!canManage || loadingPlans || plansError || saving} />
       <p className="text-xs text-slate-500 dark:text-slate-400">{filtered.length}/{rows.length} lojas · {report.stores.length} registros originais neste mês. Metas planejadas são salvas no SQLite por loja, mês e ano; a sugestão de +8% permanece fixa.{dirty && <strong className="text-amber-700 dark:text-amber-400"> Há ajustes ainda não salvos.</strong>}</p>
     </section>
 

@@ -162,6 +162,26 @@ async function checkBrowser(apiBase, token) {
     const metricSelect = page.getByLabel('Visão do comparativo de metas', { exact: true });
     assert.equal(await metricSelect.inputValue(), 'sales');
     await page.getByRole('columnheader', { name: 'Média de evolução do faturamento', exact: true }).waitFor();
+    const headers = page.locator('thead th');
+    assert.equal(await headers.count(), 8, 'A tabela deve mostrar apenas mês anterior e ano anterior entre as referências.');
+    await page.getByRole('columnheader', { name: /Faturamento · mês anterior Dezembro 2025/ }).waitFor();
+    assert.equal(await page.getByRole('columnheader', { name: /Faturamento 202[34]/ }).count(), 0);
+    const moneyText = value => value === null ? '—' : value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\s/g, ' ');
+    const januaryRow = input.locator('xpath=ancestor::tr');
+    const previousMonthRevenue = seed.months['12'].stores.find(store => store.name === 'IRATI CENTRO').sales.find(item => item.year === 2025).value;
+    assert.equal((await januaryRow.locator(':scope > td, :scope > th').nth(1).innerText()).replace(/\s/g, ' '), moneyText(previousMonthRevenue));
+    const cellsBefore = await januaryRow.locator(':scope > td, :scope > th').allTextContents();
+    const totalsBefore = await page.locator('tfoot tr > *').allTextContents();
+    await headers.nth(1).dragTo(headers.nth(0));
+    assert.deepEqual(await headers.evaluateAll(elements => elements.map(element => element.dataset.column)), ['previousMonth', 'name', 'previousYear', 'profit', 'suggestion', 'daily', 'plan', 'superGoal']);
+    assert.deepEqual(await januaryRow.locator(':scope > td, :scope > th').allTextContents(), [cellsBefore[1], cellsBefore[0], ...cellsBefore.slice(2)], 'Arrastar deve mover também os valores.');
+    assert.deepEqual(await page.locator('tfoot tr > *').allTextContents(), [totalsBefore[1], totalsBefore[0], ...totalsBefore.slice(2)], 'Os totais devem acompanhar as colunas.');
+    assert.equal(await headers.locator('[aria-sort="ascending"]').count(), 0);
+    await headers.nth(0).getByRole('button').click();
+    assert.equal(await headers.nth(0).getAttribute('aria-sort'), 'ascending', 'Clique simples deve continuar ordenando.');
+    await headers.nth(0).getByRole('button').press('Alt+ArrowRight');
+    assert.equal(await headers.nth(0).getAttribute('data-column'), 'name', 'O teclado também deve permitir mover a coluna.');
+    await headers.nth(1).dragTo(headers.nth(0));
     const rowPercentage = input.locator('xpath=ancestor::tr').locator('span[tabindex="0"]');
     const meanPercentage = (a, b, c) => ((b - a) / Math.abs(a) * 100 + (c - b) / Math.abs(b) * 100) / 2;
     const formatPercentage = value => `${value > 0 ? '+' : ''}${value.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
@@ -170,8 +190,11 @@ async function checkBrowser(apiBase, token) {
     assert.ok((await rowPercentage.getAttribute('title')).includes('variações de faturamento'));
 
     await metricSelect.selectOption('profit');
-    await page.getByRole('columnheader', { name: 'Lucro líquido 2025', exact: true }).waitFor();
+    await page.getByRole('columnheader', { name: 'Lucro líquido 2025 Mesmo mês do ano anterior', exact: true }).waitFor();
     await page.getByRole('columnheader', { name: 'Média de evolução do lucro', exact: true }).waitFor();
+    const decemberProfit = seed.profitSheets['IRATI CENTRO']['12'];
+    const decemberProfitValue = decemberProfit.sales.find(item => item.year === 2025).value > 0 ? decemberProfit.profits.find(item => item.year === 2025).value : null;
+    assert.equal((await januaryRow.locator(':scope > td, :scope > th').nth(0).innerText()).replace(/\s/g, ' '), moneyText(decemberProfitValue), 'O mês anterior deve acompanhar a visão de lucro.');
     const profitPercentage = meanPercentage(8538.88, 16226.24, 4147.68);
     assert.equal(await rowPercentage.innerText(), formatPercentage(profitPercentage));
     assert.notEqual(formatPercentage(revenuePercentage), formatPercentage(profitPercentage));
@@ -188,6 +211,8 @@ async function checkBrowser(apiBase, token) {
     assert.ok((await input.locator('xpath=ancestor::tr').textContent()).includes('132.000,61'), 'Supermeta deve acompanhar a meta salva acrescida de 10%.');
 
     await page.reload();
+    await page.locator('thead th[data-column="previousMonth"]').waitFor();
+    assert.equal(await page.locator('thead th').first().getAttribute('data-column'), 'previousMonth', 'A posição deve ser mantida ao reabrir.');
     await page.getByLabel('Ano da meta').selectOption('2026');
     await page.getByLabel('Mês da meta').selectOption('01');
     await page.waitForFunction(() => document.querySelector('input[aria-label="Meta planejada Irati Centro Atualizada"]')?.value.replace(/\s/g, ' ') === 'R$ 120.000,55');

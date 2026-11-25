@@ -1336,26 +1336,58 @@ class FinancialService {
       const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
       for (const series of activeSeries) {
+        const existingEntries = await financialRepo.findByRecorrenciaId(series.recorrenciaId);
+        const existingYearMonths = new Set();
+        let maxActualYearMonth = 0;
         let baseDay = 1;
-        let lastYearMonth = 0;
-        if (series.maxVencimento.includes('/')) {
-          const [d, m, y] = series.maxVencimento.split('/');
-          baseDay = parseInt(d, 10) || 1;
-          const maxM = (parseInt(m, 10) || 1) - 1;
-          const maxY = parseInt(y, 10);
-          lastYearMonth = maxY * 12 + maxM;
-        } else if (series.maxVencimento.includes('-')) {
-          const [maxYStr, maxMStr, maxDStr] = series.maxVencimento.split('-');
-          baseDay = parseInt(maxDStr, 10) || 1;
-          const maxM = parseInt(maxMStr, 10) - 1;
-          const maxY = parseInt(maxYStr, 10);
-          lastYearMonth = maxY * 12 + maxM;
+
+        for (const entry of existingEntries) {
+          const dt = String(entry.dataVencimento || '').trim();
+          let y = 0;
+          let m = 0;
+          let d = 1;
+          if (dt.includes('/')) {
+            const [dStr, mStr, yStr] = dt.split('/');
+            d = parseInt(dStr, 10) || 1;
+            m = (parseInt(mStr, 10) || 1) - 1;
+            y = parseInt(yStr, 10) || 0;
+          } else if (dt.includes('-')) {
+            const [yStr, mStr, dStr] = dt.split('-');
+            d = parseInt(dStr, 10) || 1;
+            m = (parseInt(mStr, 10) || 1) - 1;
+            y = parseInt(yStr, 10) || 0;
+          }
+          if (y > 0) {
+            const ym = y * 12 + m;
+            existingYearMonths.add(ym);
+            if (ym >= maxActualYearMonth) {
+              maxActualYearMonth = ym;
+              baseDay = d;
+            }
+          }
+        }
+
+        let lastYearMonth = maxActualYearMonth;
+        if (lastYearMonth === 0 && series.maxVencimento) {
+          if (series.maxVencimento.includes('/')) {
+            const [d, m, y] = series.maxVencimento.split('/');
+            baseDay = parseInt(d, 10) || 1;
+            lastYearMonth = (parseInt(y, 10) || 0) * 12 + ((parseInt(m, 10) || 1) - 1);
+          } else if (series.maxVencimento.includes('-')) {
+            const [maxYStr, maxMStr, maxDStr] = series.maxVencimento.split('-');
+            baseDay = parseInt(maxDStr, 10) || 1;
+            lastYearMonth = (parseInt(maxYStr, 10) || 0) * 12 + (parseInt(maxMStr, 10) - 1);
+          }
         }
 
         let seriesAddedCount = 0;
         // Se o último vencimento cadastrado estiver antes do final da janela de 6 meses
         while (lastYearMonth < targetYearMonth) {
           lastYearMonth++;
+          if (existingYearMonths.has(lastYearMonth)) {
+            continue;
+          }
+          existingYearMonths.add(lastYearMonth);
           const nextYear = Math.floor(lastYearMonth / 12);
           const nextMonth = lastYearMonth % 12;
 

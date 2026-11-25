@@ -741,8 +741,8 @@ class FinancialRepository {
         tipo,
         statusPrevisao,
         observacao,
-        MAX(dataVencimento) as maxVencimento,
-        MIN(dataVencimento) as minVencimento,
+        MAX(CASE WHEN dataVencimento LIKE '__/__/____' THEN substr(dataVencimento, 7, 4) || '-' || substr(dataVencimento, 4, 2) || '-' || substr(dataVencimento, 1, 2) ELSE dataVencimento END) as maxVencimento,
+        MIN(CASE WHEN dataVencimento LIKE '__/__/____' THEN substr(dataVencimento, 7, 4) || '-' || substr(dataVencimento, 4, 2) || '-' || substr(dataVencimento, 1, 2) ELSE dataVencimento END) as minVencimento,
         COUNT(*) as totalParcelas
       FROM financial_entries
       WHERE recorrente = 1 AND recorrenciaId IS NOT NULL AND recorrenciaId != ''

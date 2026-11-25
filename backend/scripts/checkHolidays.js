@@ -67,6 +67,23 @@ async function main() {
     assert.equal((await repository.findWorkbook()).calendarClosures.length, 0);
     assert.ok((await db.queryOne('SELECT COUNT(*) AS n FROM store_holiday_audit')).n >= 8);
     assert.deepEqual(await db.queryAll('PRAGMA foreign_key_check'), []);
+    assert.equal((await call('holiday_a', '/holidays/central', 'POST', { date: '2026-11-10', name: 'Indevido', scope: 'rede' })).status, 403);
+    assert.equal((await call('holiday_a', '/holidays/stores')).status, 403);
+    assert.equal((await call('usr_root', '/holidays/central', 'POST', { date: '2026-11-10', name: 'Sem seleção', scope: 'unidades', storeIds: [] })).status, 400);
+    assert.equal((await call('usr_root', '/holidays/central', 'POST', { date: '2026-11-10', name: 'Inválida', scope: 'unidades', storeIds: ['holiday_a','missing'] })).status, 400);
+    const batch = await call('usr_root', '/holidays/central', 'POST', { date: '2026-11-10', name: 'Algumas unidades', scope: 'unidades', storeIds: ['holiday_a','holiday_b'] });
+    assert.equal(batch.status, 200, JSON.stringify(batch));
+    assert.equal(batch.data.ids.length, 2);
+    assert.equal((await repository.findWorkbook()).calendarClosures.filter(row => row.date === '2026-11-10').length, 2);
+    assert.equal((await require('../src/services/holidays.service').list({ storeId: 'holiday_new' })).some(row => batch.data.ids.includes(row.id)), false, 'Seleção parcial não inclui unidades não marcadas nem novas unidades.');
+    const conflict = await call('usr_root', '/holidays/central', 'POST', { date: '2026-11-10', name: 'Lote com conflito', scope: 'unidades', storeIds: ['holiday_new','holiday_b'] });
+    assert.equal(conflict.status, 409);
+    assert.equal((await db.queryOne("SELECT COUNT(*) AS n FROM store_holidays WHERE name='Lote com conflito'")).n, 0, 'Conflito deve reverter todo o lote, inclusive unidades processadas antes.');
+    for (const id of batch.data.ids) await review(id, 'cancelado');
+    const centralGlobal = await call('usr_root', '/holidays/central', 'POST', { date: '2026-11-12', name: 'Todas pelo calendário', scope: 'rede' });
+    assert.equal(centralGlobal.status, 200);
+    assert.ok((await require('../src/services/holidays.service').list({ storeId: 'holiday_new' })).some(row => row.id === centralGlobal.data.id));
+    await review(centralGlobal.data.id, 'cancelado');
     if (process.env.GOALS_PLAYWRIGHT_PATH) {
       const closing = await call('holiday_a', '/closings/holiday_a/2026-11-25', 'PUT', { ...payload, vendaTotal: 1000, meiosPagamento: { dinheiro: 1000 } });
       assert.equal(closing.status, 200);

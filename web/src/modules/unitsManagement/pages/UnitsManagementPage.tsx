@@ -3,12 +3,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   Building2,
   Calendar,
-  CheckCircle2,
-  Palmtree
 } from 'lucide-react';
 import { User } from '../../../shared/types';
 import { FinancialDailyClosingQueue } from '../components/FinancialDailyClosingQueue';
-import { FinancialHolidayApprovalPanel } from '../components/FinancialHolidayApprovalPanel';
 import { FinancialCalendarNavigator } from '../components/FinancialCalendarNavigator';
 import {
   INITIAL_DAILY_CLOSINGS
@@ -39,10 +36,6 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
     return null;
   }, []);
 
-  // Sub-abas exclusivas da Conferência Financeira:
-  // 'closings' (Fechamentos Diários) vs 'holidays' (Aprovação de Feriados)
-  const [financialSubTab, setFinancialSubTab] = useState<'closings' | 'holidays'>(() => savedUnitsFilters?.financialSubTab ?? 'closings');
-
   // Navegação de Data e Mês da Conferência
   const [selectedDate, setSelectedDate] = useState<string>(() => savedUnitsFilters?.referenceDate === today ? savedUnitsFilters.selectedDate : today);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => savedUnitsFilters?.viewMode === 'month' ? (savedUnitsFilters.selectedMonth ?? today.slice(0, 7)) : (savedUnitsFilters?.referenceDate === today ? savedUnitsFilters.selectedMonth : today.slice(0, 7)));
@@ -50,11 +43,11 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
 
   useEffect(() => {
     try {
-      const payload = { financialSubTab, selectedDate, selectedMonth, viewMode, referenceDate: today };
+      const payload = { selectedDate, selectedMonth, viewMode, referenceDate: today };
       sessionStorage.setItem('mega12_units_management_filters_v1', JSON.stringify(payload));
       localStorage.setItem('mega12_units_management_filters_v1', JSON.stringify(payload));
     } catch { }
-  }, [financialSubTab, selectedDate, selectedMonth, viewMode]);
+  }, [selectedDate, selectedMonth, viewMode]);
 
   // Estados locais interativos (Mock com atualização otimista)
   const [closings, setClosings] = useState<StoreDailyClosingSummary[]>(INITIAL_DAILY_CLOSINGS);
@@ -97,8 +90,8 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
   }, [closings, viewMode, selectedDate, selectedMonth]);
 
   // Contadores dinâmicos para os badges das abas
-  const pendingClosingsCount = displayedClosings.filter(c => c.status === 'aguardando').length;
-  const pendingHolidaysCount = holidayRequests.filter(r => r.status === 'pendente').length;
+
+
 
   // Handlers para Ações da Conferência (Fechamento)
   const handleApproveClosing = (closingId: string) => {
@@ -117,16 +110,6 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
     return;
   };
 
-  const holidayMutation = async (path: string, body: object) => {
-    await apiFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    showToast?.('Feriado atualizado. Os dias úteis serão recalculados automaticamente.', 'success');
-    try { await reloadHolidays(); } catch { setLoadError('Feriado salvo, mas não foi possível atualizar a lista. Aguarde a atualização.'); }
-  };
-  const handleApproveHoliday = (id: string) => holidayMutation(`/holidays/${encodeURIComponent(id)}/review`, { decision: 'aprovado', note: '' });
-  const handleRejectHoliday = (id: string, motivo: string) => holidayMutation(`/holidays/${encodeURIComponent(id)}/review`, { decision: 'recusado', note: motivo });
-  const handleCancelHoliday = (id: string) => holidayMutation(`/holidays/${encodeURIComponent(id)}/review`, { decision: 'cancelado', note: 'Cancelado pela central' });
-  const handleDeclareGlobalHoliday = (data: string, name: string) => holidayMutation('/holidays/global', { date: data, name });
-
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-14 animate-fade-in">
       {/* 1. CABEÇALHO DO MÓDULO CONFERÊNCIA DE UNIDADES */}
@@ -142,11 +125,11 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
                   Conferência de Unidades
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                  Rede Mega 12 • 20 Filiais
+                  Rede Mega 12
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                Central de Conferência Diária Financeira e Aprovação de Feriados
+                Central de Conferência Diária Financeira
               </p>
             </div>
           </div>
@@ -163,48 +146,13 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
           </div>
         </div>
 
-        {/* 2. ABAS DA CONFERÊNCIA: FECHAMENTOS DIÁRIOS vs APROVAÇÃO DE FERIADOS */}
-        <div className="flex items-center gap-2 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 max-w-fit">
-          <button
-            type="button"
-            onClick={() => setFinancialSubTab('closings')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${financialSubTab === 'closings'
-              ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-md shadow-slate-950/5'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Fila Diária de Fechamentos</span>
-            {pendingClosingsCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-slate-950 animate-pulse">
-                {pendingClosingsCount}
-              </span>
-            )}
-          </button>
 
-          <button
-            type="button"
-            onClick={() => setFinancialSubTab('holidays')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${financialSubTab === 'holidays'
-              ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-md shadow-slate-950/5'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-          >
-            <Palmtree className="w-4 h-4" />
-            <span>Aprovação de Feriados</span>
-            {pendingHolidaysCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                {pendingHolidaysCount}
-              </span>
-            )}
-          </button>
-        </div>
       </div>
 
       {loadError && <p role="alert" className="p-3 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300">{loadError}</p>}
       <button type="button" onClick={() => void Promise.all([reloadClosings(), reloadHolidays()]).then(() => setLoadError('')).catch(() => setLoadError('Não foi possível atualizar os fechamentos ou feriados.'))} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">Atualizar dados</button>
       {/* 3. NAVEGADOR DE CALENDÁRIO COMERCIAL (DIAS E MESES) */}
-      {financialSubTab === 'closings' && (
+      <>
         <FinancialCalendarNavigator
           selectedDate={selectedDate}
           selectedMonth={selectedMonth}
@@ -221,10 +169,10 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
           closings={closings}
           holidayRequests={holidayRequests}
         />
-      )}
+      </>
 
       {/* 4. CONTEÚDO DA ABA ATIVA */}
-      {financialSubTab === 'closings' ? (
+      <>
         <FinancialDailyClosingQueue
           closings={displayedClosings}
           onApprove={handleApproveClosing}
@@ -238,15 +186,7 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
           }}
           onViewMonth={() => setViewMode('month')}
         />
-      ) : (
-        <FinancialHolidayApprovalPanel
-          holidayRequests={holidayRequests}
-          onApproveHoliday={handleApproveHoliday}
-          onCancelHoliday={handleCancelHoliday}
-          onRejectHoliday={handleRejectHoliday}
-          onDeclareGlobalHoliday={handleDeclareGlobalHoliday}
-        />
-      )}
+      </>
     </div>
   );
 };

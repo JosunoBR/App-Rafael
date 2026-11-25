@@ -23,6 +23,7 @@ export const ROUTE_PATHS = {
   UNITS: '/unidades',
   UNITS_CASH: '/unidades/caixa',
   UNITS_BI: '/unidades/bi',
+  UNITS_CALENDAR: '/unidades/calendario',
   UNITS_HISTORY: '/unidades/historico',
   GOALS: '/metas',
   NEAR_EXPIRY: '/validade-proxima',
@@ -52,6 +53,7 @@ export const NAV_TAB_TO_PATH: Record<string, string> = {
   units: ROUTE_PATHS.UNITS,
   units_cash: ROUTE_PATHS.UNITS_CASH,
   units_bi: ROUTE_PATHS.UNITS_BI,
+  units_calendar: ROUTE_PATHS.UNITS_CALENDAR,
   units_history: ROUTE_PATHS.UNITS_HISTORY,
   goals: ROUTE_PATHS.GOALS,
   near_expiry: ROUTE_PATHS.NEAR_EXPIRY

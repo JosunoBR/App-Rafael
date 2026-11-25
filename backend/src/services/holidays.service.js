@@ -90,4 +90,27 @@ async function review(actor, id, decision, note = '') {
     return { id, status: decision };
   });
 }
-module.exports = { list, submit, review, activeClosures };
+async function declare(actor, payload) {
+  if (!payload || !['rede', 'unidades'].includes(payload.scope)) throw fail('Escolha todas as unidades ou unidades específicas.');
+  if (payload.scope === 'rede') {
+    if (payload.storeIds !== undefined && (!Array.isArray(payload.storeIds) || payload.storeIds.length)) throw fail('Não selecione unidades no feriado geral.');
+    return submit(actor, payload, true);
+  }
+  if (!Array.isArray(payload.storeIds) || !payload.storeIds.length || payload.storeIds.length > 500 || payload.storeIds.some(id => typeof id !== 'string' || !id || id.length > 100)) throw fail('Selecione pelo menos uma unidade válida.');
+  const ids = [...new Set(payload.storeIds)];
+  return withTransaction(async () => {
+    // O lote inteiro é validado e gravado na mesma transação.
+    for (const storeId of ids) if (!(await queryOne('SELECT id FROM stores WHERE id=? AND active=1', [storeId]))) throw fail('Uma das unidades selecionadas está inativa ou não existe.');
+    const created = [];
+    for (const storeId of ids) {
+      const result = await submit({ ...actor, storeId }, { date: payload.date, name: payload.name, reason: payload.reason, storeId });
+      await review(actor, result.id, 'aprovado', 'Cadastrado pela central para esta unidade');
+      created.push(result.id);
+    }
+    return { ids: created };
+  });
+}
+async function stores() {
+  return queryAll('SELECT id,name,active FROM stores ORDER BY name');
+}
+module.exports = { list, submit, review, activeClosures, declare, stores };

@@ -20,6 +20,7 @@ export type ActiveNavTab =
   | 'units_cash'
   | 'goals'
   | 'units_bi'
+  | 'units_calendar'
   | 'units_history'
   | 'near_expiry';
 
@@ -116,6 +117,8 @@ export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): 
   if (tab === 'bi_products') {
     return hasPermission(userOrRole, 'nav:bi_products') || hasPermission(userOrRole, 'nav:dashboard');
   }
+
+  if (tab === 'units_calendar') return canAccessTab(userOrRole, 'units');
 
   if (tab === 'units') {
     const isRoot = role === 'root' || 

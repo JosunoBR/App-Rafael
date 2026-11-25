@@ -30,6 +30,7 @@ export const APP_ROUTES: RouteConfig[] = [
   { path: ROUTE_PATHS.UNITS_CASH, name: 'units_cash', title: 'Caixa das Unidades', requiresAuth: true },
   { path: ROUTE_PATHS.GOALS, name: 'goals', title: 'Metas Executivas', requiresAuth: true },
   { path: ROUTE_PATHS.UNITS_BI, name: 'units_bi', title: 'BI das Lojas', requiresAuth: true },
+  { path: ROUTE_PATHS.UNITS_CALENDAR, name: 'units_calendar', title: 'Calendário', requiresAuth: true },
   { path: ROUTE_PATHS.UNITS_HISTORY, name: 'units_history', title: 'Histórico de Vendas', requiresAuth: true },
   { path: ROUTE_PATHS.LOGIN, name: 'login', title: 'Autenticação', requiresAuth: false }
 ];

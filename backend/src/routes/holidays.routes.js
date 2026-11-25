@@ -8,6 +8,8 @@ const action = work => async (req, res) => {
   try { res.setHeader('Cache-Control', 'no-store'); res.json(await work(req)); }
   catch (error) { if (!error.status) console.error('[feriados]', error.message); res.status(error.status || 500).json({ error: error.status ? error.message : 'Não foi possível processar o feriado. Tente novamente.' }); }
 };
+router.get('/stores', requirePermission('nav:units_conference', 'faturamento'), action(() => holidays.stores()));
+router.post('/central', requirePermission('nav:units_conference', 'faturamento'), action(req => holidays.declare(req.user, req.body)));
 router.get('/', (req, res, next) => requirePermission(req.user.role === 'unidade' ? 'nav:store_portal' : 'nav:units_conference', 'faturamento')(req, res, next), action(req => {
   if (req.user.role === 'unidade' && (!req.user.storeId || req.query.storeId && req.query.storeId !== req.user.storeId)) throw Object.assign(new Error('Acesso à unidade negado.'), { status: 403 });
   return holidays.list({ storeId: req.user.role === 'unidade' ? req.user.storeId : req.query.storeId, month: req.query.month });

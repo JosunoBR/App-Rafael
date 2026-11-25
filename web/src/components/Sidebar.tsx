@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isBiActive = activeNav === 'dashboard' || activeNav === 'bi_products';
 
   const [isUnitsMenuOpen, setIsUnitsMenuOpen] = useState<boolean>(false);
-  const isUnitsActive = activeNav === 'units' || activeNav === 'units_cash' || activeNav === 'goals' || activeNav === 'units_bi' || activeNav === 'units_history';
+  const isUnitsActive = activeNav === 'units_calendar' || activeNav === 'units' || activeNav === 'units_cash' || activeNav === 'goals' || activeNav === 'units_bi' || activeNav === 'units_history';
 
   const toggleCollapsed = () => {
     setIsCollapsed(prev => {
@@ -97,6 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canAccessUsers = canAccessTab(currentUser, 'users');
   const canAccessStorePortal = canAccessTab(currentUser, 'store_portal');
   const canAccessUnits = canAccessTab(currentUser, 'units');
+  const canAccessCalendar = canAccessTab(currentUser, 'units_calendar');
   const canAccessUnitsCash = canAccessTab(currentUser, 'units_cash');
   const canAccessUnitsBi = canAccessTab(currentUser, 'units_bi');
   const canAccessUnitsHistory = canAccessTab(currentUser, 'units_history');
@@ -335,6 +336,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => {
                       const availableTabs: ActiveNavTab[] = [];
                       if (canAccessUnits) availableTabs.push('units');
+                      if (canAccessCalendar) availableTabs.push('units_calendar');
                       if (canAccessUnitsCash) availableTabs.push('units_cash');
                       if (canAccessGoals) availableTabs.push('goals');
                       if (canAccessUnitsBi) availableTabs.push('units_bi');
@@ -349,9 +351,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                       }`}
-                    title="Unidades (Conferência, Caixa, Metas, Bi & Histórico)"
+                    title="Unidades (Conferência, Calendário, Caixa, Metas, BI e Histórico)"
                   >
-                    {activeNav === 'units_cash' ? (
+                    {activeNav === 'units_calendar' ? (<CalendarClock className="w-4 h-4" />) : activeNav === 'units_cash' ? (
                       <Banknote className="w-4 h-4" />
                     ) : activeNav === 'goals' ? (
                       <Target className="w-4 h-4" />
@@ -364,7 +366,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
                   </button>
                 ) : (
-                  (canAccessGoals || canAccessUnitsBi || canAccessUnitsHistory || canAccessUnitsCash) ? (
+                  (canAccessCalendar || canAccessGoals || canAccessUnitsBi || canAccessUnitsHistory || canAccessUnitsCash) ? (
                     // Menu com Submenu para Perfis com múltiplos módulos de Unidades (Diretoria, Root e Financeiro)
                     <div className="space-y-1">
                       <button
@@ -409,6 +411,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </button>
                           )}
 
+                          {canAccessCalendar && <button type="button" onClick={() => onSelectNav('units_calendar')} className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${activeNav === 'units_calendar' ? 'bg-emerald-600 text-white shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'}`}><span className="flex items-center gap-2"><CalendarClock className="w-3.5 h-3.5" />Calendário</span>{activeNav === 'units_calendar' && <ChevronRight className="w-3 h-3" />}</button>}
                           {/* 2. Caixa */}
                           {canAccessUnitsCash && (
                             <button

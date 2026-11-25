@@ -176,6 +176,8 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Painel da Loja (Unidade)', group: 'Frente de Loja', icon: Store, color: 'text-teal-500' };
       case 'units':
         return { title: 'Conferência de Unidades', group: 'Unidades', icon: Building2, color: 'text-amber-500' };
+      case 'units_calendar':
+        return { title: 'Calendário', group: 'Unidades', icon: CalendarClock, color: 'text-sky-500' };
       case 'units_cash':
         return { title: 'Caixa das Unidades', group: 'Unidades', icon: Banknote, color: 'text-emerald-500' };
       case 'goals':

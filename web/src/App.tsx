@@ -1,3 +1,4 @@
+import { UnitsCalendarPage } from './modules/unitsManagement/pages/UnitsCalendarPage';
 import React, { useState, useEffect, useMemo, useRef, startTransition } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
@@ -4410,6 +4411,8 @@ export function App() {
               {activeNav === 'units' && canAccessTab(currentUser, 'units') && (
                 <UnitsManagementPage currentUser={currentUser} showToast={showToast} />
               )}
+
+              {activeNav === 'units_calendar' && canAccessTab(currentUser, 'units_calendar') && <UnitsCalendarPage />}
 
               {/* PÁGINA 9.1: CAIXA DAS UNIDADES (Montante Acumulado, Entradas vs Despesas e Gastos Diários) */}
               {activeNav === 'units_cash' && canAccessTab(currentUser, 'units_cash') && (

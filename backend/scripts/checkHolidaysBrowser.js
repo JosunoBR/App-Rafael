@@ -9,6 +9,7 @@ module.exports = async function checkHolidaysBrowser(base, tokens) {
   const users = {
     a: { id: 'holiday_a', role: 'unidade', storeId: 'holiday_a', nome: 'Operador A', token: tokens.a },
     b: { id: 'holiday_b', role: 'unidade', storeId: 'holiday_b', nome: 'Operador B', token: tokens.b },
+    finance: { id: 'memo_finance_ui', role: 'faturamento', nome: 'Financeiro', token: tokens.finance },
     root: { id: 'usr_root', role: 'root', nome: 'Root', token: tokens.root },
   };
   const fixture = `import React from 'react'; import { createRoot } from 'react-dom/client'; import '/src/index.css';
@@ -78,7 +79,7 @@ module.exports = async function checkHolidaysBrowser(base, tokens) {
     await central.getByRole('button', { name: 'Cadastrar ou consultar feriado em 2026-11-27', exact: true }).click();
     await central.getByRole('dialog').getByRole('button', { name: 'Cancelar feriado', exact: true }).click();
     await central.getByRole('dialog').getByText('Rede UI', { exact: true }).waitFor({ state: 'hidden' });
-    await central.getByRole('button', { name: 'Fechar cadastro de feriado', exact: true }).click();
+    await central.getByRole('button', { name: 'Fechar detalhes do dia', exact: true }).click();
     await a.reload(); await expectDays(a, 22); await b.reload(); await expectDays(b, 23);
     // Cadastro parcial pelo calendário: somente Castro, sem afetar Imbaú.
     await central.getByRole('button', { name: 'Cadastrar ou consultar feriado em 2026-11-28', exact: true }).click();
@@ -104,11 +105,63 @@ module.exports = async function checkHolidaysBrowser(base, tokens) {
     await central.unroute(`${base}/holidays`);
     await central.getByRole('button', { name: 'Atualizar calendário', exact: true }).click();
     await central.getByRole('alert').waitFor({ state: 'hidden' });
+
+    // Diretoria: memorando por unidade/data, consulta posterior e proteção de rascunhos.
+    await central.getByLabel('Unidade do calendário').selectOption('holiday_a');
+    await central.getByRole('button', { name: 'Cadastrar ou consultar feriado em 2026-11-03', exact: true }).click();
+    const memo = central.getByLabel('Memorando de avaliação do dia');
+    await central.waitForFunction(() => { const field=document.querySelector('textarea[aria-label="Memorando de avaliação do dia"]'); return field && !field.disabled; });
+    await memo.fill('Avaliação de Castro: atendimento e exposição avaliados neste dia.');
+    await central.getByRole('button', { name: 'Salvar memorando', exact: true }).click();
+    await central.getByText('Memorando salvo para esta unidade e data.', { exact: true }).waitFor();
+    await central.getByRole('button', { name: 'Fechar detalhes do dia', exact: true }).click();
+    assert.ok((await central.locator('[data-date="2026-11-03"]').innerText()).includes('Memorando'));
+    await central.reload();
+    await central.getByLabel('Unidade do calendário').selectOption('holiday_a');
+    await central.getByRole('button', { name: 'Cadastrar ou consultar feriado em 2026-11-03', exact: true }).click();
+    await central.waitForFunction(() => document.querySelector('textarea[aria-label="Memorando de avaliação do dia"]')?.value === 'Avaliação de Castro: atendimento e exposição avaliados neste dia.');
+    await central.getByRole('button', { name: 'Fechar detalhes do dia', exact: true }).click();
+    await central.getByLabel('Unidade do calendário').selectOption('holiday_b');
+    assert.equal((await central.locator('[data-date="2026-11-03"]').innerText()).includes('Memorando'), false);
+    await central.getByRole('button', { name: 'Cadastrar ou consultar feriado em 2026-11-03', exact: true }).click();
+    await central.waitForFunction(() => {const field=document.querySelector('textarea[aria-label="Memorando de avaliação do dia"]');return field && !field.disabled;});
+    assert.equal(await memo.inputValue(),'');
+    await memo.fill('Rascunho exclusivo de Imbaú');
+    await central.getByLabel('Unidade do memorando').selectOption('holiday_a');
+    await central.waitForFunction(() => document.querySelector('textarea[aria-label="Memorando de avaliação do dia"]')?.value.startsWith('Avaliação de Castro:'));
+    await central.getByLabel('Unidade do memorando').selectOption('holiday_b');
+    assert.equal(await memo.inputValue(),'Rascunho exclusivo de Imbaú');
+    await central.getByRole('button', { name: 'Fechar detalhes do dia', exact: true }).click();
+    await central.getByRole('button', { name: 'Cadastrar ou consultar feriado em 2026-11-03', exact: true }).click();
+    assert.equal(await memo.inputValue(),'Rascunho exclusivo de Imbaú');
+    await central.getByRole('button', { name: 'Descartar rascunho e recarregar', exact: true }).click();
+    await central.waitForFunction(() => {const field=document.querySelector('textarea[aria-label="Memorando de avaliação do dia"]');return field && !field.disabled && field.value==='';});
+    await central.getByLabel('Unidade do memorando').selectOption('holiday_a');
+    await central.waitForFunction(() => {const field=document.querySelector('textarea[aria-label="Memorando de avaliação do dia"]');return field && !field.disabled && field.value.startsWith('Avaliação de Castro:');});
+    const changed = await fetch(`${base}/calendar-memos/holiday_a/2026-11-03`, {method:'PUT',headers:{Authorization:`Bearer ${tokens.root}`,'Content-Type':'application/json'},body:JSON.stringify({content:'Avaliação atualizada por outra pessoa',version:1})});
+    assert.equal(changed.status,200);
+    await memo.fill('Minha avaliação ainda não salva');
+    await central.getByRole('button', { name: 'Salvar memorando', exact: true }).click();
+    await central.getByRole('alert').filter({hasText:'alterado por outra pessoa'}).waitFor();
+    assert.equal(await memo.inputValue(),'Minha avaliação ainda não salva');
+    await central.getByRole('button', { name: 'Descartar rascunho e recarregar', exact: true }).click();
+    await central.waitForFunction(() => document.querySelector('textarea[aria-label="Memorando de avaliação do dia"]')?.value === 'Avaliação atualizada por outra pessoa');
+    await central.getByRole('button', { name: 'Fechar detalhes do dia', exact: true }).click();
+    const finance = await newPage(); await finance.clock.install({time:new Date('2026-11-25T15:00:00Z')});
+    await open(finance,'calendar','finance');
+    await finance.getByRole('button', { name: 'Cadastrar ou consultar feriado em 2026-11-03', exact: true }).click();
+    assert.equal(await finance.getByRole('tab', { name:'Memorando',exact:true }).count(),0,'Financeiro não pode visualizar avaliações exclusivas da diretoria.');
+    await a.reload(); await expectDays(a,21); await b.reload(); await expectDays(b,23);
+    await central.getByLabel('Unidade do calendário').selectOption('all');
     const artifacts = path.resolve(__dirname, '../../.artifacts/holidays'); fs.mkdirSync(artifacts, { recursive: true });
     await a.screenshot({ path: path.join(artifacts, 'unit-approved-holiday.png'), fullPage: true });
     assert.equal(await central.getByRole('alert').count(), 0, 'A conferência deve carregar fechamentos e feriados sem erro.');
     await central.evaluate(() => document.documentElement.classList.add('dark'));
     await central.screenshot({ path: path.join(artifacts, 'central-calendar-dark.png'), fullPage: true });
+    await central.getByRole('button', { name: 'Cadastrar ou consultar feriado em 2026-11-03', exact: true }).click();
+    await central.getByLabel('Memorando de avaliação do dia').waitFor();
+    await central.screenshot({path:path.join(artifacts,'calendar-memo-dark.png'),fullPage:true});
+    await central.getByRole('button', { name: 'Fechar detalhes do dia', exact: true }).click();
     await central.setViewportSize({ width: 390, height: 844 });
     assert.equal(await central.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await central.screenshot({ path: path.join(artifacts, 'central-calendar-mobile.png'), fullPage: true });

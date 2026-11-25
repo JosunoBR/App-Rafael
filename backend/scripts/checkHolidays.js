@@ -18,6 +18,7 @@ async function main() {
   }
   await repository.importWorkbook(require('../src/data/goalsWorkbookSeed.json'), 'usr_root');
   const app = express(); app.use(require('cors')()); app.use(express.json());
+  app.use('/calendar-memos', require('../src/routes/calendarMemos.routes'));
   app.use('/holidays', require('../src/routes/holidays.routes'));
   app.use('/store-closings', require('../src/routes/storeClosings.routes'));
   app.use('/closings', require('../src/routes/storeClosings.routes'));
@@ -90,6 +91,8 @@ async function main() {
       assert.equal(closing.status, 200);
       assert.equal((await call('usr_root', `/closings/${closing.data.id}/review`, 'POST', { decision: 'aprovado', note: '' })).status, 200);
       const tokens = Object.fromEntries([['a','holiday_a'],['b','holiday_b'],['root','usr_root']].map(([key,id]) => [key,jwt.sign({ id },config.JWT_SECRET,{ expiresIn: '10m' })]));
+      await db.execute('INSERT INTO users(id,nome,email,senha,role,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?)', ['memo_finance_ui','Financeiro','memo-finance-ui@example.test','unused-test-password','faturamento',new Date().toISOString(),new Date().toISOString()]);
+      tokens.finance = jwt.sign({id:'memo_finance_ui'},config.JWT_SECRET,{expiresIn:'10m'});
       await require('./checkHolidaysBrowser')(`http://127.0.0.1:${server.address().port}`, tokens);
     }
     console.log('Feriados: escopos rede/unidade, unidades futuras, permissões, validações, concorrência, aprovação/recusa/reabertura/cancelamento, conflitos com caixa, integração com histórico e auditoria verificados em banco temporário.');

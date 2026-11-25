@@ -76,6 +76,19 @@ async function getDatabase() {
       active INTEGER NOT NULL DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS store_daily_memos (
+      id TEXT PRIMARY KEY,
+      storeId TEXT NOT NULL REFERENCES stores(id) ON DELETE RESTRICT,
+      memoDate TEXT NOT NULL,
+      content TEXT NOT NULL CHECK(length(content) <= 10000),
+      version INTEGER NOT NULL CHECK(version > 0),
+      authorId TEXT NOT NULL,
+      authorName TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      UNIQUE(storeId,memoDate,version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_store_daily_memos_date ON store_daily_memos(memoDate,storeId);
+
     CREATE TABLE IF NOT EXISTS store_holidays (
       id TEXT PRIMARY KEY,
       storeId TEXT REFERENCES stores(id) ON DELETE RESTRICT,

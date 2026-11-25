@@ -4412,7 +4412,7 @@ export function App() {
                 <UnitsManagementPage currentUser={currentUser} showToast={showToast} />
               )}
 
-              {activeNav === 'units_calendar' && canAccessTab(currentUser, 'units_calendar') && <UnitsCalendarPage />}
+              {activeNav === 'units_calendar' && canAccessTab(currentUser, 'units_calendar') && <UnitsCalendarPage currentUser={currentUser} />}
 
               {/* PÁGINA 9.1: CAIXA DAS UNIDADES (Montante Acumulado, Entradas vs Despesas e Gastos Diários) */}
               {activeNav === 'units_cash' && canAccessTab(currentUser, 'units_cash') && (

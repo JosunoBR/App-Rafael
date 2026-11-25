@@ -1,5 +1,7 @@
+import { CalendarMemoPanel, type MemoDrafts } from '../components/CalendarMemoPanel';
+import type { User } from '../../../shared/types';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, FileText, X } from 'lucide-react';
 import { apiFetch, ApiError } from '../../../utils/api';
 import { businessDate } from '../../../shared/businessDate';
 import { nationalHolidays } from '../../../shared/nationalHolidays';
@@ -13,7 +15,14 @@ const buttonClass = 'rounded-lg px-3 py-2 text-xs font-bold cursor-pointer disab
 const networkColor = 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20';
 const localColor = 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/20';
 
-export function UnitsCalendarPage() {
+type MemoSummary = { storeId: string; storeName: string; date: string; version: number; authorName: string; updatedAt: string };
+export function UnitsCalendarPage({ currentUser }: { currentUser?: User } = {}) {
+  const canManageMemos = ['root','diretoria'].includes(currentUser?.role ?? '') || currentUser?.id === 'usr_root';
+  const [mode, setMode] = useState<'holiday' | 'memo'>('holiday');
+  const [memoSummaries, setMemoSummaries] = useState<MemoSummary[]>([]);
+  const [memoLoadError, setMemoLoadError] = useState('');
+  const [memoDrafts, setMemoDrafts] = useState<MemoDrafts>({});
+  const [memoBusy, setMemoBusy] = useState(false);
   const today = businessDate();
   const [period, setPeriod] = useState(today.slice(0,7));
   const [storeId, setStoreId] = useState('all');
@@ -30,6 +39,28 @@ export function UnitsCalendarPage() {
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [reasons, setReasons] = useState<Record<string,string>>({});
   const [year, month] = period.split('-').map(Number);
+  const reloadMemos = useCallback(async () => {
+    if (!canManageMemos) return;
+    const response = await apiFetch(`/calendar-memos?month=${period}`);
+    setMemoSummaries(await response.json()); setMemoLoadError('');
+  }, [canManageMemos, period]);
+  useEffect(() => {
+    setMemoSummaries([]); setMemoLoadError('');
+    if (!canManageMemos) return;
+    let active = true;
+    const refresh = () => { if (active) void reloadMemos().catch(() => { if (active) setMemoLoadError('Não foi possível atualizar os memorandos do calendário. Tente novamente.'); }); };
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [reloadMemos, canManageMemos]);
+  useEffect(() => { setMemoDrafts({}); setMode('holiday'); }, [currentUser?.id]);
+  useEffect(() => {
+    if (!Object.keys(memoDrafts).length) return;
+    const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', protect);
+    return () => window.removeEventListener('beforeunload', protect);
+  }, [memoDrafts]);
   const reload = useCallback(async () => {
     const [events, units] = await Promise.allSettled([
       apiFetch('/holidays').then(response => response.json()),
@@ -54,10 +85,10 @@ export function UnitsCalendarPage() {
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [reload]);
   useEffect(() => {
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !mutationLock.current) setSelectedDate(null); };
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !mutationLock.current && !memoBusy) setSelectedDate(null); };
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
-  }, []);
+  }, [memoBusy]);
   const mutate = async (path: string, body: object) => {
     if (mutationLock.current) return false;
     mutationLock.current = true; setBusy(true); setError('');
@@ -76,6 +107,7 @@ export function UnitsCalendarPage() {
   const years = [...new Set([year, ...Array.from({ length: 11 }, (_, index) => Number(today.slice(0,4)) - 5 + index), ...holidays.map(item => Number(item.data.slice(0,4)))])].sort((a,b) => a-b);
   const openDate = (date: string) => {
     setSelectedDate(date); setName(''); setError('');
+    setMode(canManageMemos && (storeId !== 'all' || !!loadError || memoSummaries.some(item => item.date === date)) ? 'memo' : 'holiday');
     setScope(storeId === 'all' ? 'rede' : 'unidades');
     setSelectedStores(storeId === 'all' || !stores.find(store => store.id === storeId)?.active ? [] : [storeId]);
   };
@@ -100,8 +132,15 @@ export function UnitsCalendarPage() {
         <button type="button" disabled={busy} className={`${buttonClass} bg-slate-100 dark:bg-slate-800`} aria-label="Atualizar calendário" onClick={() => void reload().catch(failure => setLoadError(failure.message))}><RefreshCw size={16} /></button>
       </div>
     </header>
+    {canManageMemos && memoLoadError && <p role="alert" className="p-3 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300">{memoLoadError}</p>}
     {loadError && <p role="alert" className="p-3 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300">{loadError}</p>}
     {!selectedDate && error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
+    {!!pending.length && <section className={`${panel} p-4 space-y-3`} aria-label="Solicitações de feriados"><h2 className="font-bold">Solicitações pendentes ({pending.length})</h2>{pending.map(item => <div key={item.id} className="flex flex-wrap gap-3 items-center border-t border-slate-200 dark:border-slate-800 pt-3 text-xs">
+      <div className="flex-1 min-w-52"><strong>{item.holidayName}</strong><p>{item.data.split('-').reverse().join('/')} · {item.lojaNome} · {item.action === 'reabrir' ? 'Reabertura' : 'Sem expediente'}</p>{item.motivoLoja && <p>{item.motivoLoja}</p>}</div>
+      <input aria-label={`Motivo da recusa ${item.id}`} value={reasons[item.id] || ''} maxLength={300} placeholder="Motivo para recusar" className={inputClass} onChange={event => setReasons(previous => ({ ...previous, [item.id]: event.target.value }))} />
+      <button type="button" disabled={busy || !reasons[item.id]?.trim()} className={`${buttonClass} text-rose-600 border border-rose-500/30`} onClick={() => void review(item.id, 'recusado')}>Recusar</button>
+      <button type="button" disabled={busy} className={`${buttonClass} bg-emerald-600 text-white`} onClick={() => void review(item.id, 'aprovado')}>{item.action === 'reabrir' ? 'Aprovar reabertura' : 'Aprovar feriado'}</button>
+    </div>)}</section>}
     <section className={`${panel} overflow-hidden`} aria-label="Calendário de feriados">
       <div className="p-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2"><button type="button" aria-label="Mês anterior" className={buttonClass} onClick={() => shiftMonth(-1)}><ChevronLeft size={18} /></button>
@@ -126,12 +165,14 @@ export function UnitsCalendarPage() {
             else grouped.set(key, { id: item.id, name: item.holidayName, network: item.scope === 'rede', units: [item.lojaNome] });
           });
           const nationalName = national[date.slice(5)];
+          const dayMemos = canManageMemos ? memoSummaries.filter(item => item.date === date && (storeId === 'all' || item.storeId === storeId)) : [];
           const dayPending = pending.filter(item => item.data === date).length;
-          return <button key={date} type="button" data-date={date} aria-label={`Cadastrar ou consultar feriado em ${date}`} onClick={() => openDate(date)} disabled={!!loadError} className={`min-h-32 p-2 flex flex-col items-stretch justify-start text-left border-t border-r border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-500 ${date === today ? 'ring-1 ring-inset ring-emerald-500' : ''}`}>
+          return <button key={date} type="button" data-date={date} aria-label={`Cadastrar ou consultar feriado em ${date}`} onClick={() => openDate(date)} disabled={!!loadError && !canManageMemos} className={`min-h-32 p-2 flex flex-col items-stretch justify-start text-left border-t border-r border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-500 ${date === today ? 'ring-1 ring-inset ring-emerald-500' : ''}`}>
             <span className={`block text-xs mb-2 font-bold ${index % 7 === 0 ? 'text-slate-400' : ''}`}>{day}</span>
             <span className="block space-y-1">
               {nationalName && <span className={`block rounded-md border p-1 text-[10px] ${networkColor}`}>{nationalName}<span className="block opacity-70">Nacional · todas as lojas</span></span>}
               {[...grouped.values()].map(item => <span key={item.id} title={item.network ? 'Toda a rede' : item.units.join(', ')} className={`block rounded-md border p-1 text-[10px] ${item.network ? networkColor : localColor}`}>{item.name}<span className="block opacity-70">{item.network ? 'Toda a rede' : item.units.length <= 2 ? item.units.join(', ') : `${item.units.length} unidades`}</span></span>)}
+              {dayMemos.length > 0 && <span className="flex items-center gap-1 rounded-md bg-violet-500/10 text-violet-700 dark:text-violet-300 p-1 text-[10px]"><FileText size={11} />{dayMemos.length === 1 ? `Memorando · ${dayMemos[0].storeName}` : `${dayMemos.length} memorandos`}</span>}
               {dayPending > 0 && <span className="block text-[10px] text-slate-500">{dayPending} solicitação(ões) pendente(s)</span>}
             </span>
           </button>;
@@ -139,15 +180,11 @@ export function UnitsCalendarPage() {
       </div></div>}
       <p className="p-3 text-xs text-slate-500 dark:text-slate-400">Clique em uma data para cadastrar ou consultar. Domingos, feriados nacionais e fechamentos aprovados não contam como dias úteis. Datas sobrepostas são descontadas uma única vez.</p>
     </section>
-    {!!pending.length && <section className={`${panel} p-4 space-y-3`} aria-label="Solicitações de feriados"><h2 className="font-bold">Solicitações pendentes ({pending.length})</h2>{pending.map(item => <div key={item.id} className="flex flex-wrap gap-3 items-center border-t border-slate-200 dark:border-slate-800 pt-3 text-xs">
-      <div className="flex-1 min-w-52"><strong>{item.holidayName}</strong><p>{item.data.split('-').reverse().join('/')} · {item.lojaNome} · {item.action === 'reabrir' ? 'Reabertura' : 'Sem expediente'}</p>{item.motivoLoja && <p>{item.motivoLoja}</p>}</div>
-      <input aria-label={`Motivo da recusa ${item.id}`} value={reasons[item.id] || ''} maxLength={300} placeholder="Motivo para recusar" className={inputClass} onChange={event => setReasons(previous => ({ ...previous, [item.id]: event.target.value }))} />
-      <button type="button" disabled={busy || !reasons[item.id]?.trim()} className={`${buttonClass} text-rose-600 border border-rose-500/30`} onClick={() => void review(item.id, 'recusado')}>Recusar</button>
-      <button type="button" disabled={busy} className={`${buttonClass} bg-emerald-600 text-white`} onClick={() => void review(item.id, 'aprovado')}>{item.action === 'reabrir' ? 'Aprovar reabertura' : 'Aprovar feriado'}</button>
-    </div>)}</section>}
-    {selectedDate && <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4" onClick={() => { if (!busy) setSelectedDate(null); }}>
+    {selectedDate && <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4" onClick={() => { if (!busy && !memoBusy) setSelectedDate(null); }}>
       <div role="dialog" aria-modal="true" aria-labelledby="holiday-dialog-title" className={`${panel} p-5 w-full max-w-xl max-h-[90vh] overflow-y-auto space-y-4 shadow-xl`} onClick={event => event.stopPropagation()}>
-        <div className="flex justify-between items-center"><h2 id="holiday-dialog-title" className="font-bold text-lg">Feriados · {selectedDate.split('-').reverse().join('/')}</h2><button aria-label="Fechar cadastro de feriado" type="button" disabled={busy} className={buttonClass} onClick={() => setSelectedDate(null)}><X size={18} /></button></div>
+        <div className="flex justify-between items-center"><h2 id="holiday-dialog-title" className="font-bold text-lg">{mode === 'memo' ? 'Memorando' : 'Feriados'} · {selectedDate.split('-').reverse().join('/')}</h2><button aria-label="Fechar detalhes do dia" type="button" disabled={busy || memoBusy} className={buttonClass} onClick={() => setSelectedDate(null)}><X size={18} /></button></div>
+        {canManageMemos && <div role="tablist" aria-label="Informações do dia" className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-3"><button role="tab" type="button" disabled={memoBusy} aria-selected={mode === 'holiday'} className={`${buttonClass} ${mode === 'holiday' ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300' : 'text-slate-500'}`} onClick={() => setMode('holiday')}>Feriados</button><button role="tab" type="button" disabled={busy} aria-selected={mode === 'memo'} className={`${buttonClass} ${mode === 'memo' ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300' : 'text-slate-500'}`} onClick={() => setMode('memo')}>Memorando</button></div>}
+        {canManageMemos && mode === 'memo' ? <CalendarMemoPanel date={selectedDate} initialStoreId={storeId === 'all' && memoSummaries.filter(item => item.date === selectedDate).length === 1 ? memoSummaries.find(item => item.date === selectedDate)!.storeId : storeId} stores={stores} drafts={memoDrafts} setDrafts={setMemoDrafts} onSaved={reloadMemos} onSavingChange={setMemoBusy} /> : <>
         {national[selectedDate.slice(5)] && <p className={`p-3 rounded-xl border text-xs ${networkColor}`}>{national[selectedDate.slice(5)]} · feriado nacional automático para todas as lojas.</p>}
         {selectedEvents.map(item => <div key={item.id} className={`p-3 rounded-xl border text-xs flex justify-between items-center gap-3 ${item.scope === 'rede' ? networkColor : localColor}`}><div><strong>{item.holidayName}</strong><p>{item.scope === 'rede' ? 'Toda a rede, incluindo novas unidades' : item.lojaNome}</p></div><button type="button" disabled={busy} className={`${buttonClass} text-rose-600`} onClick={() => void review(item.id, 'cancelado')}>Cancelar feriado</button></div>)}
         {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
@@ -161,6 +198,7 @@ export function UnitsCalendarPage() {
           <p className="text-xs text-slate-500">O cadastro da central já é aprovado e desconta os dias úteis das unidades abrangidas. Selecionar todas as lojas inclui automaticamente as novas unidades da rede.</p>
           <div className="flex justify-end gap-2"><button type="button" disabled={busy} className={`${buttonClass} bg-slate-100 dark:bg-slate-800`} onClick={() => setSelectedDate(null)}>Voltar</button><button disabled={busy || !!loadError || !name.trim() || scope === 'unidades' && !selectedStores.length} className={`${buttonClass} bg-emerald-600 text-white`} type="submit">{busy ? 'Salvando...' : 'Salvar feriado'}</button></div>
         </form>
+        </>}
       </div>
     </div>}
   </div>;

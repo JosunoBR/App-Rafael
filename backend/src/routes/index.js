@@ -42,6 +42,7 @@ router.use('/payment-conditions', paymentConditionRoutes);
 router.use('/financial', financialRoutes);
 router.use('/goals', require('./goals.routes'));
 router.use('/holidays', require('./holidays.routes'));
+router.use('/calendar-memos', require('./calendarMemos.routes'));
 router.use('/store-closings', require('./storeClosings.routes'));
 router.use('/units-bi', require('./unitsBi.routes'));
 router.use('/audit', auditRoutes);

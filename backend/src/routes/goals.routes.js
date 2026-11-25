@@ -14,6 +14,7 @@ const action = work => async (req, res) => {
   }
 };
 const historyAccess = (req, res, next) => {
+  if (req.user?.role === 'unidade') return res.status(403).json({ error: 'Histórico geral indisponível para o perfil Unidade.' });
   if (req.user?.permissions?.['nav:goals'] === true || req.user?.permissions?.['nav:units_history'] === true) return next();
   return requireRole('diretoria')(req, res, next);
 };
@@ -27,7 +28,7 @@ router.get('/history/source-sheet', historyAccess, action(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json(await repository.getSourceSheet(req.query.name));
 }));
-router.get('/plans', requirePermission('nav:goals', 'unidade'), action(async (req, res) => {
+router.get('/plans', (req,res,next) => requirePermission(req.user.role === 'unidade' ? 'units:view_goals' : 'nav:goals')(req,res,next), action(async (req, res) => {
   const year = Number(req.query.year), month = Number(req.query.month);
   service.validatePeriod(year, month);
   res.setHeader('Cache-Control', 'no-store');

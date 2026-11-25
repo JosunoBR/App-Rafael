@@ -1,3 +1,4 @@
+import { hasPermission } from '../../../shared/permissions';
 import React, { useState, useMemo, useEffect } from 'react';
 import { apiFetch } from '../../../utils/api';
 import type { User } from '../../../shared/types';
@@ -24,12 +25,14 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [goalAmount, setGoalAmount] = useState(0);
   const storeId = currentUser.storeId;
+  const canViewGoals = hasPermission(currentUser, 'units:view_goals');
+  const canSubmit = hasPermission(currentUser, 'units:submit');
   useEffect(() => {
     if (!storeId) return;
     let active = true;
     Promise.all([
       apiFetch(`/store-closings?storeId=${encodeURIComponent(storeId)}&month=${selectedMonth}`).then(res => res.json()),
-      apiFetch(`/goals/plans?year=${selectedMonth.slice(0,4)}&month=${Number(selectedMonth.slice(5))}`).then(res => res.json())
+      canViewGoals ? apiFetch(`/goals/plans?year=${selectedMonth.slice(0,4)}&month=${Number(selectedMonth.slice(5))}`).then(res => res.json()) : Promise.resolve([])
     ]).then(([rows, plans]) => {
       if (!active) return;
       setGoalAmount(plans.find((plan: { storeId: string }) => plan.storeId === storeId)?.amount ?? 0);
@@ -45,7 +48,7 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
       }])));
     }).catch(() => { if (active) showToast?.('Não foi possível carregar os dados da unidade.', 'error'); });
     return () => { active = false; };
-  }, [storeId, selectedMonth]);
+  }, [storeId, selectedMonth, canViewGoals]);
 
   // Data de hoje
   const today = new Date();
@@ -109,6 +112,7 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
 
   // Salvar / atualizar fechamento do dia
   const handleSaveClosing = async (newClosing: DailyCashClosing): Promise<boolean> => {
+    if (!canSubmit) { showToast?.('Seu login não tem permissão para enviar fechamentos.', 'error'); return false; }
     if (!storeId) { showToast?.('Vincule este usuário a uma unidade antes de lançar o caixa.', 'error'); return false; }
     try {
     await apiFetch(`/store-closings/${encodeURIComponent(storeId)}/${newClosing.data}`, {
@@ -145,7 +149,7 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
       />
 
       {/* 1. CABEÇALHO OFICIAL: IDENTIDADE SPLIT 2 + BARRA HERO FLUIDA + CHIPS ORGÂNICOS */}
-      <StoreGoalsHeader
+      {canViewGoals && <StoreGoalsHeader
         goalData={goalData}
         closings={closings}
         onSelectDay={(d) => setActiveModalDate(d)}
@@ -153,7 +157,7 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
         onPrevMonth={handlePrevMonth}
         onNextMonth={handleNextMonth}
         onTriggerConfetti={() => setShowConfetti(true)}
-      />
+      />}
 
       {/* 2. CALENDÁRIO INTERATIVO MENSAL DOS DIAS (TRILHA GAMIFICADA SPLIT 2) */}
       <StoreMonthlyCalendar

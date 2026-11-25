@@ -9,6 +9,10 @@ export interface PermissionDefinition {
 }
 
 export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
+  { codigo: 'nav:store_portal', categoria: 'Operação da Unidade', nome: 'Acessar o painel da unidade', obs: 'Consultar os fechamentos da própria unidade.', roleDefaults: { unidade: true } },
+  { codigo: 'units:submit', categoria: 'Operação da Unidade', nome: 'Lançar e corrigir o fechamento diário', obs: 'Enviar vendas, pagamentos e despesas; corrigir pendentes ou devolvidos. Aprovados não podem ser alterados.', roleDefaults: { unidade: true } },
+  { codigo: 'units:view_goals', categoria: 'Operação da Unidade', nome: 'Consultar metas e acompanhamento', obs: 'Visualizar meta, supermeta e faturamento aprovado da própria unidade.', roleDefaults: { unidade: true } },
+  { codigo: 'nav:near_expiry', categoria: 'Operação da Unidade', nome: 'Acessar validade próxima', obs: 'Acessar o controle de validades da unidade; esta função ainda usa armazenamento local.', roleDefaults: { unidade: true } },
   // 1. COTAÇÃO & COMPRAS
   {
     codigo: 'nav:orders',

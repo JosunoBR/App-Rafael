@@ -38,12 +38,12 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
 
   // Mapa local de exceções do usuário ({ [codigo]: true | false })
   const [overrides, setOverrides] = useState<Record<string, boolean>>(() => {
-    return { ...(user.permissions || {}) };
+    return Object.fromEntries(Object.entries(user.permissions || {}).filter(([code]) => user.role !== 'unidade' || ['nav:store_portal','units:submit','units:view_goals','nav:near_expiry'].includes(code)));
   });
 
   if (!isOpen) return null;
 
-  const categories = [
+  const categories = user.role === 'unidade' ? [{ id: 'all', label: 'Operação da Unidade' }] : [
     { id: 'all', label: 'Todas as Áreas' },
     { id: '1. Cotação & Compras', label: 'Compras & Cotação' },
     { id: '2. Esteira, CD & Separação', label: 'Esteira, CD & Doca' },
@@ -52,6 +52,7 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
   ];
 
   const filteredPermissions = PERMISSIONS_CATALOG.filter(perm => {
+    if ((user.role === 'unidade') !== (perm.categoria === 'Operação da Unidade')) return false;
     const matchCategory = selectedCategory === 'all' || perm.categoria === selectedCategory;
     const term = searchTerm.toLowerCase();
     const matchSearch = 

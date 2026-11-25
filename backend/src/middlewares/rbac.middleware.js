@@ -11,6 +11,7 @@ function requireRole(...allowedRoles) {
     }
 
     const userRole = req.user.role;
+    if (userRole === 'unidade') return allowedRoles.includes('unidade') ? next() : res.status(403).json({ error: 'Operação indisponível para o perfil Unidade.' });
 
     // Diretoria e Administrador Raiz (Root) possuem acesso irrestrito a todas as operações
     const isRoot = req.user.id === 'usr_root' || req.user.email?.toLowerCase() === 'root' || req.user.nome?.toLowerCase() === 'root';
@@ -42,6 +43,10 @@ function requirePermission(permissionCode, ...allowedRoles) {
     }
 
     const userRole = req.user.role;
+    if (userRole === 'unidade') {
+      const codes = ['nav:store_portal','units:submit','units:view_goals','nav:near_expiry'];
+      return codes.includes(permissionCode) && req.user.permissions?.[permissionCode] !== false ? next() : res.status(403).json({ error: 'Acesso bloqueado para o perfil Unidade.' });
+    }
     const isRoot = req.user.id === 'usr_root' || req.user.email?.toLowerCase() === 'root' || req.user.nome?.toLowerCase() === 'root';
     if (userRole === 'diretoria' || userRole === 'root' || isRoot) {
       return next();

@@ -19,7 +19,7 @@ const validDate = date => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test
 const isDirector = user => ['root', 'diretoria'].includes(user.role) || user.id === 'usr_root';
 const allowedStore = (req, storeId) => isDirector(req.user) || (req.user.role === 'unidade' && req.user.storeId === storeId);
 
-router.get('/', requirePermission('nav:units_conference', 'unidade', 'faturamento'), action(async req => {
+router.get('/', (req,res,next) => requirePermission(req.user.role === 'unidade' ? 'nav:store_portal' : 'nav:units_conference', 'faturamento')(req,res,next), action(async req => {
   const { month, storeId } = req.query;
   if (month && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw fail('Mês inválido.');
   if (storeId && (typeof storeId !== 'string' || storeId.length > 100)) throw fail('Unidade inválida.');

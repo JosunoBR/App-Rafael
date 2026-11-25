@@ -59,6 +59,7 @@ export function hasPermission(userOrRole: UserLike, code: string): boolean {
   }
 
   // 1. Root e Diretoria possuem acesso irrestrito
+  if (role === 'unidade') return ['nav:store_portal','units:submit','units:view_goals','nav:near_expiry'].includes(code) && permissions?.[code] !== false;
   if (isRoot || role === 'diretoria') {
     return true;
   }
@@ -89,7 +90,7 @@ export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): 
 
   // Se o usuário possui o perfil 'unidade', possui acesso ao portal da loja e ao controle de validades
   if (role === 'unidade') {
-    return tab === 'store_portal' || tab === 'near_expiry';
+    return tab === 'store_portal' ? hasPermission(userOrRole, 'nav:store_portal') : tab === 'near_expiry' && hasPermission(userOrRole, 'nav:near_expiry');
   }
 
   // Validade Próxima: exclusivo para o terminal das Unidades (Lojas)

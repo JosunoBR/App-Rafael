@@ -11,6 +11,15 @@ async function validateStoreBinding(role, storeId, userId = null) {
   return storeId;
 }
 
+function unitPermissions(role, permissions = {}) {
+  if (role !== 'unidade') return permissions;
+  const allowed = ['nav:store_portal','units:submit','units:view_goals','nav:near_expiry'];
+  if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions) || Object.entries(permissions).some(([key,value]) => !allowed.includes(key) || typeof value !== 'boolean')) {
+    const error = new Error('O perfil Unidade aceita apenas permissões da operação da própria loja.'); error.statusCode = 400; throw error;
+  }
+  return permissions;
+}
+
 class UserService {
   async availableStores(excludeUserId = null) {
     return queryAll(`SELECT s.id,s.name,s.active FROM stores s WHERE s.active=1 AND NOT EXISTS (
@@ -64,7 +73,7 @@ class UserService {
       cargo: userData.cargo?.trim() || '',
       telefone: userData.telefone?.trim() || '',
       ativo: userData.ativo !== undefined ? userData.ativo : 1,
-      permissions: userData.permissions || {},
+      permissions: unitPermissions(userData.role, userData.permissions || {}),
       createdAt: now,
       updatedAt: now
     };
@@ -92,6 +101,7 @@ class UserService {
     }
 
     const dataToUpdate = { ...updateData };
+    dataToUpdate.permissions = unitPermissions(updateData.role ?? existing.role, updateData.permissions ?? (updateData.role === 'unidade' && existing.role !== 'unidade' ? {} : existing.permissions));
     const effectiveActive = updateData.ativo ?? existing.ativo;
     if (effectiveActive !== false && effectiveActive !== 0 && (updateData.role === 'unidade' || (existing.role === 'unidade' && updateData.role === undefined))) {
       dataToUpdate.storeId = await validateStoreBinding('unidade', updateData.storeId ?? existing.storeId, id);
@@ -135,7 +145,7 @@ class UserService {
       throw err;
     }
 
-    const updated = await userRepository.update(id, { permissions });
+    const updated = await userRepository.update(id, { permissions: unitPermissions(existing.role, permissions) });
     const { senha: _, ...safeUser } = updated;
     return safeUser;
   }

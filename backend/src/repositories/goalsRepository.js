@@ -1,5 +1,6 @@
 const { randomUUID } = require('node:crypto');
 const { queryAll, queryOne, execute, withTransaction } = require('../config/database');
+const importMetadata = require('../data/goalsImportMetadata.json');
 const normalize = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toUpperCase();
 const SOURCE_ALIASES = {
   'IRATI TRAJANO': ['TRAJANO'], TEIXEIRA: ['TEIXEIRA SOARES'], 'CASTRO CENTRO': ['CASTRO'],
@@ -143,7 +144,21 @@ async function findWorkbook() {
     const costs = centers.map(center => ({ name: center.name, sourceRow: center.sourceRow, reportedTotal: center.reportedTotal,
       items: items.filter(item => item.costName === center.name).map(item => ({ name: item.itemName, value: item.amount })) }));
     const sourceSheetNames = (await queryAll('SELECT sheetName FROM goal_source_sheets WHERE importId = ? ORDER BY sheetName', params)).map(row => row.sheetName);
-    return { filename: imported.filename, sha256: imported.id, importedAt: imported.importedAt, years: [...years].sort((a,b) => a-b), months, profitSheets, costs, registeredStores,
+    // The annual sheet has no year on its goal column. Its 2026 attribution was
+    // confirmed by the owner and applies only to this exact imported file.
+    const goalYear = importMetadata[imported.id]?.goalYear;
+    const goalsByPeriod = new Map();
+    for (const goal of await queryAll('SELECT storeId,year,month,amountCents FROM store_goals ORDER BY year,month,storeId')) {
+      goalsByPeriod.set(`${goal.storeId}:${goal.year}:${goal.month}`, { storeId: goal.storeId, year: goal.year, month: goal.month, amount: goal.amountCents === null ? null : goal.amountCents / 100 });
+    }
+    // Historical comparisons use column 10 of the imported sheet for its confirmed year.
+    if (Number.isInteger(goalYear)) for (const baseline of baselines) {
+      const storeId = linkMap.get(baseline.sourceKey)?.storeId;
+      if (!storeId || baseline.spreadsheetGoal === null) continue;
+      goalsByPeriod.set(`${storeId}:${goalYear}:${baseline.month}`, { storeId, year: goalYear, month: baseline.month, amount: baseline.spreadsheetGoal });
+    }
+    const goalHistory = [...goalsByPeriod.values()];
+    return { filename: imported.filename, sha256: imported.id, importedAt: imported.importedAt, years: [...years].sort((a,b) => a-b), months, profitSheets, costs, registeredStores, goalHistory,
       calendarClosures: await queryAll("SELECT id,storeId,holidayDate AS date,name FROM store_holidays WHERE status='aprovado' AND action='fechar' ORDER BY holidayDate"),
       sourceSheetNames, storeLinks: links.map(link => ({ sourceKey: link.sourceKey, sourceName: link.sourceName, storeId: link.storeId })) };
   });

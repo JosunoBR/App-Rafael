@@ -1,12 +1,14 @@
+import { ResizableTable } from '../../../shared/components/ResizableTable';
+import { businessDate } from '../../../shared/businessDate';
+import { HistoryEvolutionValue } from '../components/HistoryEvolutionValue';
 import { useTableSort } from '../../../shared/useTableSort';
 import { SortHeader } from '../../../shared/components/SortHeader';
 import React, { useMemo, useState } from 'react';
 import { FileSpreadsheet, Search, RefreshCw } from 'lucide-react';
 import type { User } from '../../../shared/types';
 import { useStoreHistory } from '../../goalsExecutive/utils/useStoreHistory';
-import { buildGoalRows, operatingProfitForYear, roundMoney, valueForYear, workingDays } from '../../goalsExecutive/utils/goalsCalculations';
+import { annualEvolution, buildGoalRows, operatingProfitForYear, roundMoney, valueForYear, workingDays } from '../../goalsExecutive/utils/goalsCalculations';
 import { money } from '../../goalsExecutive/utils/goalsFormat';
-import { HistorySourceSheet } from '../components/HistorySourceSheet';
 const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const panel = 'rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0B132B]';
 const select = 'rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm';
@@ -17,7 +19,6 @@ export const StoresHistoryPage: React.FC<StoresHistoryPageProps> = ({ currentUse
   const [month, setMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
   const [search, setSearch] = useState('');
   const [metric, setMetric] = useState<'sales' | 'profit' | 'salesDaily' | 'profitDaily'>('sales');
-  const [showOriginal, setShowOriginal] = useState(false);
   const rows = useMemo(() => workbook ? (month === 'all' ? MONTHS.map((_, index) => String(index + 1).padStart(2, '0')) : [month]).flatMap(key => buildGoalRows(workbook, key, Math.max(...workbook.years) + 1).map(row => ({ ...row, month: key }))) : [], [workbook, month]);
   const displayRows = useMemo(() => {
     const grouped = new Map<string, { row: typeof rows[number]; periods: typeof rows }>();
@@ -39,8 +40,15 @@ export const StoresHistoryPage: React.FC<StoresHistoryPageProps> = ({ currentUse
     const total = valid.reduce((sum, item) => sum + (item.value ?? 0), 0);
     return { value: !valid.length || isDaily && !days ? null : roundMoney(isDaily ? total / days : total), days };
   };
-  const sorting = useTableSort(filtered, ({ row, periods }, key) => {
+  const evolutionYear = Number(businessDate().slice(0, 4));
+  const metricLabel = `${isSales ? 'faturamento' : 'lucro'}${isDaily ? ' médio diário' : ''}`;
+  const evolutionRows = filtered.map(entry => ({ ...entry, evolution: annualEvolution((workbook?.years ?? []).map(year => {
+    const value = periodSummary(entry.periods, year).value;
+    return { year, value: isSales && value !== null && value <= 0 ? null : value };
+  }), evolutionYear) }));
+  const sorting = useTableSort(evolutionRows, ({ row, periods, evolution }, key) => {
     if (key === 'name') return row.name;
+    if (key === 'evolution') return evolution.averagePercent;
     return periodSummary(periods, Number(key)).value;
   });
   return <div className="max-w-[1800px] mx-auto p-4 sm:p-6 space-y-5 text-slate-900 dark:text-slate-100">
@@ -56,16 +64,15 @@ export const StoresHistoryPage: React.FC<StoresHistoryPageProps> = ({ currentUse
         {search && <button onClick={() => setSearch('')} className="text-xs font-bold px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800">Limpar busca</button>}
       </div>
       {month === 'all' && <p className="text-xs text-slate-500 dark:text-slate-400">Total anual por unidade: soma dos meses com dados disponíveis em cada ano. Na média diária, o total é dividido pelos dias úteis desses meses. Anos incompletos representam apenas os meses informados.</p>}
-      <div className={`${panel} overflow-x-auto`}><table className="w-full text-xs"><caption className="sr-only">{isSales ? 'Faturamento' : 'Lucro líquido'}{isDaily ? ' médio diário' : ''} por unidade, {month === 'all' ? 'total anual dos meses disponíveis' : MONTHS[Number(month) - 1]}, comparado entre os anos</caption><thead className="bg-slate-50 dark:bg-slate-900 uppercase text-slate-500 dark:text-slate-400"><tr><SortHeader sort={sorting} column="name" className="p-4 text-left">Unidade</SortHeader>{workbook.years.map(year => <SortHeader sort={sorting} column={String(year)} key={year} className="p-4 text-right">{year}</SortHeader>)}</tr></thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{sorting.rows.map(({ row, periods }) => <tr key={`${row.id}-${row.month}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40"><th scope="row" className="p-4 text-left whitespace-nowrap">{row.name}{!row.active && <span className="block text-[10px] font-normal text-slate-500">Inativa</span>}</th>{workbook.years.map(year => {
+      <div className={`${panel} overflow-x-auto`}><ResizableTable resizeId="modules/unitsManagement/pages/StoresHistoryPage:1" className="w-full text-xs"><caption className="sr-only">{isSales ? 'Faturamento' : 'Lucro líquido'}{isDaily ? ' médio diário' : ''} por unidade, {month === 'all' ? 'total anual dos meses disponíveis' : MONTHS[Number(month) - 1]}, comparado entre os anos</caption><thead className="bg-slate-50 dark:bg-slate-900 uppercase text-slate-500 dark:text-slate-400"><tr><SortHeader sort={sorting} column="name" className="p-4 text-left">Unidade</SortHeader>{workbook.years.map(year => <SortHeader sort={sorting} column={String(year)} key={year} className="p-4 text-right">{year}</SortHeader>)}<SortHeader sort={sorting} column="evolution" className="p-4 text-right whitespace-nowrap">Média de evolução do {metricLabel}<span className="block text-[10px] normal-case font-normal">{evolutionYear - 3}–{evolutionYear - 1}</span></SortHeader></tr></thead>
+        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{sorting.rows.map(({ row, periods, evolution }) => <tr key={`${row.id}-${row.month}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40"><th scope="row" className="p-4 text-left whitespace-nowrap">{row.name}{!row.active && <span className="block text-[10px] font-normal text-slate-500">Inativa</span>}</th>{workbook.years.map(year => {
           const { value, days } = periodSummary(periods, year);
           const withoutRevenue = month !== 'all' && metric === 'profit' && value === null && valueForYear(row.profit?.profits ?? [], year) !== null;
           return <td key={year} className="p-4 text-right whitespace-nowrap tabular-nums" title={withoutRevenue ? 'Sem faturamento neste período. O custo calculado automaticamente pela planilha não é considerado prejuízo nem entra na evolução do lucro.' : `${days} dias úteis nos períodos com dados, descontando domingos, feriados nacionais e fechamentos aprovados.`}>{money(value)}</td>;
-        })}</tr>)}
-          {!filtered.length && <tr><td colSpan={workbook.years.length + 1} className="p-8 text-center">Nenhuma loja encontrada.</td></tr>}
-        </tbody></table></div>
-      <p className="text-xs text-slate-500 dark:text-slate-400">“—” indica informação ausente. Meses sem faturamento ou com faturamento zero não geram lucro ou prejuízo no comparativo e ficam fora da evolução usada nas metas. Prejuízos de meses com faturamento são mantidos. Os valores originais da planilha permanecem disponíveis para conferência abaixo.</p>
-      <details className={`${panel} p-4`} onToggle={event => setShowOriginal(event.currentTarget.open)}><summary className="cursor-pointer text-sm font-bold">Todos os registros originais da planilha · vendas, lucros, custos e metas</summary><div className="mt-4">{showOriginal && <HistorySourceSheet names={workbook.sourceSheetNames ?? []} />}</div></details>
+        })}<td className="p-4 text-right whitespace-nowrap tabular-nums"><HistoryEvolutionValue evolution={evolution} metricLabel={metricLabel} /></td></tr>)}
+          {!filtered.length && <tr><td colSpan={workbook.years.length + 2} className="p-8 text-center">Nenhuma loja encontrada.</td></tr>}
+        </tbody></ResizableTable></div>
+      <p className="text-xs text-slate-500 dark:text-slate-400">“—” indica informação ausente. Meses sem faturamento ou com faturamento zero não geram lucro ou prejuízo no comparativo e ficam fora da média de evolução. Prejuízos de meses com faturamento são mantidos.</p>
     </>}
   </div>;
 };

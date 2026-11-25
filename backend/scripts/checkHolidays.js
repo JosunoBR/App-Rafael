@@ -21,6 +21,7 @@ async function main() {
   app.use('/holidays', require('../src/routes/holidays.routes'));
   app.use('/store-closings', require('../src/routes/storeClosings.routes'));
   app.use('/closings', require('../src/routes/storeClosings.routes'));
+  app.use('/config', require('../src/routes/config.routes'));
   app.use('/goals', require('../src/routes/goals.routes'));
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));

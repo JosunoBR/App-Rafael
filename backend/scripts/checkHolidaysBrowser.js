@@ -83,7 +83,7 @@ module.exports = async function checkHolidaysBrowser(base, tokens) {
     // Cadastro parcial pelo calendário: somente Castro, sem afetar Imbaú.
     await central.getByRole('button', { name: 'Cadastrar ou consultar feriado em 2026-11-28', exact: true }).click();
     await central.getByLabel('Nome do feriado', { exact: true }).fill('Selecionadas UI');
-    await central.getByRole('radio', { name: 'Uma ou algumas unidades', exact: true }).check();
+    await central.getByRole('radio', { name: 'Selecione a unidade', exact: true }).check();
     await central.getByRole('checkbox', { name: 'Castro', exact: true }).check();
     await central.getByRole('button', { name: 'Salvar feriado', exact: true }).click();
     await central.getByRole('dialog').waitFor({ state: 'hidden' });
@@ -93,6 +93,17 @@ module.exports = async function checkHolidaysBrowser(base, tokens) {
     await central.getByLabel('Unidade do calendário').selectOption('holiday_a');
     assert.ok((await central.locator('[data-date="2026-11-28"]').innerText()).includes('Selecionadas UI'));
     await central.getByLabel('Unidade do calendário').selectOption('all');
+    const unitOptions = central.getByLabel('Unidade do calendário').locator('option');
+    assert.equal(await unitOptions.count(), 4, 'Todas as lojas e as três unidades cadastradas devem aparecer.');
+    await require('../src/config/database').execute('INSERT INTO stores(id,name,shortName,cluster,defaultWeight,active) VALUES(?,?,?,?,?,1)', ['calendar_dynamic','Unidade adicionada agora','Nova','A',1]);
+    await central.route(`${base}/holidays`, route => route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Erro HTTP 404' }) }));
+    await central.getByRole('button', { name: 'Atualizar calendário', exact: true }).click();
+    await central.getByRole('alert').filter({ hasText: 'Reinicie o backend' }).waitFor();
+    assert.equal(await unitOptions.count(), 5, 'Uma falha nos feriados não pode impedir a atualização das unidades.');
+    assert.ok((await unitOptions.allTextContents()).includes('Unidade adicionada agora'));
+    await central.unroute(`${base}/holidays`);
+    await central.getByRole('button', { name: 'Atualizar calendário', exact: true }).click();
+    await central.getByRole('alert').waitFor({ state: 'hidden' });
     const artifacts = path.resolve(__dirname, '../../.artifacts/holidays'); fs.mkdirSync(artifacts, { recursive: true });
     await a.screenshot({ path: path.join(artifacts, 'unit-approved-holiday.png'), fullPage: true });
     assert.equal(await central.getByRole('alert').count(), 0, 'A conferência deve carregar fechamentos e feriados sem erro.');

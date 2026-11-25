@@ -17,13 +17,15 @@ const server = await createServer({ root: webDir, server: { middlewareMode: true
 try {
   const calculations = await server.ssrLoadModule('/src/modules/goalsExecutive/utils/goalsCalculations.ts');
   const generated = prepared;
-  const { superGoal, salesEvolution, suggestGoal, workingDays, nationalHolidays, profitEvolution, operatingProfitForYear, buildGoalRows } = calculations;
+  const { valueForYear, superGoal, salesEvolution, suggestGoal, workingDays, nationalHolidays, profitEvolution, operatingProfitForYear, buildGoalRows } = calculations;
   assert.deepEqual(JSON.parse(JSON.stringify(generated)), parsed, 'Dados gerados devem corresponder ao arquivo atual; execute a importação novamente se a planilha mudou.');
   assert.equal(Object.keys(parsed.months).length, 12);
   assert.equal(Object.values(parsed.months).reduce((sum, month) => sum + month.stores.length, 0), 235);
   for (const month of Object.values(parsed.months)) {
     assert.equal(new Set(month.stores.map(store => store.id)).size, month.stores.length);
     for (const store of month.stores) {
+      const goalCell = workbook ? workbook.Sheets['VENDAS ANUAL'][XLSX.utils.encode_cell({ r: store.sourceRow - 1, c: 9 })]?.v : sourceSheets['VENDAS ANUAL'][store.sourceRow - 1][9];
+      assert.equal(store.spreadsheetGoal, typeof goalCell === 'number' ? goalCell : null, `Meta da coluna 10: ${store.name}, linha ${store.sourceRow}`);
       for (const { year, value } of store.sales) {
         const column = parsed.years.indexOf(year) + 2;
         const original = workbook ? workbook.Sheets['VENDAS ANUAL'][XLSX.utils.encode_cell({ r: store.sourceRow - 1, c: column })]?.v : sourceSheets['VENDAS ANUAL'][store.sourceRow - 1][column];
@@ -97,6 +99,16 @@ try {
   assert.equal(revenueEvolution.comparisons, 2);
   assert.ok(Math.abs(revenueEvolution.averagePercent - (((194418 - 79396.65) / 79396.65 * 100 + (195544 - 194418) / 194418 * 100) / 2)) < 0.000001);
   assert.notEqual(revenueEvolution.averagePercent, profitEvolution(parsed.profitSheets['CASTRO CENTRO']['12'], 2026).averagePercent);
+  const goalsWorkbook = { ...parsed, goalHistory: [
+    { storeId: 'irati_centro', year: 2025, month: 12, amount: 140000 },
+    { storeId: 'irati_centro', year: 2024, month: 12, amount: 0 },
+    { storeId: 'irati_centro', year: 2025, month: 11, amount: 999 },
+    { storeId: 'castro_centro', year: 2025, month: 12, amount: 888 },
+  ] };
+  const periodGoals = buildGoalRows(goalsWorkbook, '12', 2026).find(row => row.id === 'irati_centro').goals;
+  assert.equal(valueForYear(periodGoals, 2025), 140000, 'A meta deve pertencer à mesma unidade, mês e ano.');
+  assert.equal(valueForYear(periodGoals, 2024), 0, 'Meta zero deve ser preservada.');
+  assert.equal(valueForYear(periodGoals, 2023), null, 'Não usar a sugestão nem repetir a meta de outro ano.');
   const { getStoreDayStatus, calculateMonthWorkingDays } = await server.ssrLoadModule('/src/modules/storePortal/utils/storeCalendarUtils.ts');
   assert.equal(getStoreDayStatus('2026-12-25').isWorkingDay, false);
   assert.equal(getStoreDayStatus('2026-12-27').isWorkingDay, false);

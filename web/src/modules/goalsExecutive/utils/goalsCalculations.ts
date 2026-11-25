@@ -38,7 +38,7 @@ export function salesEvolution(sales: AnnualValue[], targetYear: number) {
   return annualEvolution(sales.map(item => ({ ...item, value: item.value !== null && item.value > 0 ? item.value : null })), targetYear);
 }
 
-function annualEvolution(values: AnnualValue[], targetYear: number) {
+export function annualEvolution(values: AnnualValue[], targetYear: number) {
   const history = values.filter(item => item.year >= targetYear - 3 && item.year < targetYear);
   const differences: number[] = [];
   const percentages: number[] = [];
@@ -77,6 +77,7 @@ export function buildGoalRows(workbook: GoalsWorkbook, month: string, targetYear
     const profit = identity.profitSheet ? workbook.profitSheets[identity.profitSheet]?.[month] : undefined;
     return {
       ...identity, source, sales, previousSales, suggestion,
+      goals: (workbook.goalHistory ?? []).filter(goal => goal.storeId === identity.id && goal.month === Number(month)).map(goal => ({ year: goal.year, value: goal.amount })),
       currentSales: valueForYear(sales, targetYear),
       workingDays: currentDays.count, previousWorkingDays: previousDays.count,
       dailySuggestion: suggestion === null || currentDays.count === 0 ? null : roundMoney(suggestion / currentDays.count),

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react';
-import { apiFetch } from '../../../utils/api';
+import { apiFetch, ApiError } from '../../../utils/api';
 import { businessDate } from '../../../shared/businessDate';
 import { nationalHolidays } from '../../../shared/nationalHolidays';
 import type { StoreHolidayRequest } from '../types/unitsManagement.types';
@@ -31,9 +31,19 @@ export function UnitsCalendarPage() {
   const [reasons, setReasons] = useState<Record<string,string>>({});
   const [year, month] = period.split('-').map(Number);
   const reload = useCallback(async () => {
-    const [eventsResponse, storesResponse] = await Promise.all([apiFetch('/holidays'), apiFetch('/holidays/stores')]);
-    const [events, units] = await Promise.all([eventsResponse.json(), storesResponse.json()]);
-    setHolidays(events); setStores(units); setLoadError(''); setLoading(false);
+    const [events, units] = await Promise.allSettled([
+      apiFetch('/holidays').then(response => response.json()),
+      apiFetch('/config/stores').then(response => response.json()),
+    ]);
+    const errors: string[] = [];
+    if (units.status === 'fulfilled') setStores(units.value);
+    else errors.push('Não foi possível atualizar a lista de lojas cadastradas.');
+    if (events.status === 'fulfilled') setHolidays(events.value);
+    else errors.push(events.reason instanceof ApiError && events.reason.status === 404
+      ? 'A consulta de feriados ainda não está disponível no servidor. Reinicie o backend para carregar a versão atualizada.'
+      : 'Não foi possível atualizar os feriados do calendário.');
+    setLoadError(errors.join(' ')); setLoading(false);
+    if (errors.length) throw new Error(errors.join(' '));
   }, []);
   useEffect(() => {
     let active = true;
@@ -145,7 +155,7 @@ export function UnitsCalendarPage() {
           <label className="block text-xs font-bold">Nome do feriado<input aria-label="Nome do feriado" autoFocus required maxLength={300} value={name} onChange={event => setName(event.target.value)} className={`${inputClass} block w-full mt-1`} /></label>
           <fieldset className="space-y-2 text-sm"><legend className="text-xs font-bold mb-2">Aplicar para</legend>
             <label className="flex items-center gap-2"><input type="radio" name="holiday-scope" value="rede" checked={scope === 'rede'} onChange={() => setScope('rede')} />Todas as lojas</label>
-            <label className="flex items-center gap-2"><input type="radio" name="holiday-scope" value="unidades" checked={scope === 'unidades'} onChange={() => setScope('unidades')} />Uma ou algumas unidades</label>
+            <label className="flex items-center gap-2"><input type="radio" name="holiday-scope" value="unidades" checked={scope === 'unidades'} onChange={() => setScope('unidades')} />Selecione a unidade</label>
           </fieldset>
           {scope === 'unidades' && <fieldset className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2"><legend className="text-xs font-bold px-1">Unidades ({selectedStores.length} selecionada(s))</legend>{stores.filter(store => store.active).map(store => <label key={store.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedStores.includes(store.id)} onChange={event => setSelectedStores(previous => event.target.checked ? [...previous,store.id] : previous.filter(id => id !== store.id))} />{store.name}</label>)}</fieldset>}
           <p className="text-xs text-slate-500">O cadastro da central já é aprovado e desconta os dias úteis das unidades abrangidas. Selecionar todas as lojas inclui automaticamente as novas unidades da rede.</p>

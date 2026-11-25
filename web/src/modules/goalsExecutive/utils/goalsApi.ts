@@ -5,10 +5,6 @@ export async function fetchGoalsWorkbook(): Promise<GoalsWorkbook> {
   const response = await apiFetch('/goals/history');
   return response.json();
 }
-export async function fetchHistorySourceSheet(name: string): Promise<(string | number | null)[][]> {
-  const response = await apiFetch(`/goals/history/source-sheet?name=${encodeURIComponent(name)}`);
-  return response.json();
-}
 export async function fetchGoalPlans(year: number, month: number): Promise<SavedGoal[]> {
   const response = await apiFetch(`/goals/plans?year=${year}&month=${month}`);
   return response.json();

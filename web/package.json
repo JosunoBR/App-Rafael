@@ -13,7 +13,8 @@
     "test:units-bi": "node scripts/test-units-bi.mjs",
     "import:goals": "node ../scripts/generateGoalsData.js",
     "preview": "vite preview",
-    "test:holidays": "node scripts/test-holidays.mjs"
+    "test:holidays": "node scripts/test-holidays.mjs",
+    "test:table-widths": "node scripts/test-table-widths.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

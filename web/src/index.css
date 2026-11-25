@@ -115,3 +115,40 @@ input[type="number"] {
   animation: pulse-gold 2s ease-in-out infinite;
 }
 
+
+/* Column resizing is shared by the system's data tables. */
+.table-column-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  z-index: 60;
+}
+.table-column-resizer::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 20%;
+  bottom: 20%;
+  width: 2px;
+  border-radius: 2px;
+  background: #94a3b8;
+  opacity: .25;
+}
+.table-column-resizer:hover::after,
+.table-column-resizer:focus-visible::after,
+.table-column-resizer.is-resizing::after { background: #10b981; opacity: 1; }
+.table-column-resizer:focus-visible { outline: 2px solid #10b981; outline-offset: -2px; }
+.resizable-table[data-column-widths] > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.resizable-table[data-column-widths] > :is(thead, tbody, tfoot) > tr > :is(th, td) :is(input, select) { max-width: 100%; }
+@media print { .table-column-resizer { display: none !important; } }

@@ -18,6 +18,7 @@ async function authMiddleware(req, res, next) {
     if (decoded && decoded.id) {
       try {
         const dbUser = await userRepository.findById(decoded.id);
+        if (!dbUser) return res.status(401).json({ error: 'Usuário não encontrado. Faça login novamente.' });
         if (dbUser) {
           if (dbUser.ativo === 0) {
             return res.status(401).json({ 
@@ -27,13 +28,16 @@ async function authMiddleware(req, res, next) {
           // Garante permissões, cargo e dados sempre atualizados em tempo real direto do banco
           decoded.permissions = dbUser.permissions || {};
           decoded.role = dbUser.role || decoded.role;
+          decoded.storeId = dbUser.storeId || null;
           decoded.nome = dbUser.nome || decoded.nome;
           decoded.email = dbUser.email || decoded.email;
         }
       } catch (dbErr) {
         console.warn('[authMiddleware] Falha ao consultar usuário no banco:', dbErr.message);
+        return res.status(503).json({ error: 'Não foi possível validar sua sessão. Tente novamente.' });
       }
     }
+    if (!decoded?.id) return res.status(401).json({ error: 'Sessão inválida. Faça login novamente.' });
     req.user = decoded;
     return next();
   } catch (err) {

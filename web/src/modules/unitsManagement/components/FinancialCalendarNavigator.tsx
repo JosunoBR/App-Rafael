@@ -1,3 +1,4 @@
+import { businessDate } from '../../../shared/businessDate';
 import React, { useState, useMemo } from 'react';
 import {
   Calendar as CalendarIcon,
@@ -42,8 +43,7 @@ export const FinancialCalendarNavigator: React.FC<FinancialCalendarNavigatorProp
   const year = parseInt(yearStr, 10);
   const month = parseInt(monthStr, 10) - 1; // 0-indexed
 
-  // Data de referência do sistema: 23/11/2026
-  const TODAY_STR = '2026-11-23';
+  const TODAY_STR = businessDate();
 
   // Nomes dos meses em português
   const MONTH_NAMES = [
@@ -73,9 +73,9 @@ export const FinancialCalendarNavigator: React.FC<FinancialCalendarNavigatorProp
     } catch {
       return {
         dayOfWeek: 'Dia',
-        dayNumber: 23,
-        monthName: 'Novembro',
-        year: 2026,
+        dayNumber: Number(TODAY_STR.slice(8)),
+        monthName: MONTH_NAMES[Number(TODAY_STR.slice(5, 7)) - 1],
+        year: Number(TODAY_STR.slice(0, 4)),
         fullText: selectedDate
       };
     }
@@ -114,7 +114,7 @@ export const FinancialCalendarNavigator: React.FC<FinancialCalendarNavigatorProp
 
   const handleGoToday = () => {
     onSelectDate(TODAY_STR);
-    onSelectMonth('2026-11');
+    onSelectMonth(TODAY_STR.slice(0, 7));
     onChangeViewMode('day');
   };
 
@@ -247,7 +247,7 @@ export const FinancialCalendarNavigator: React.FC<FinancialCalendarNavigatorProp
               type="button"
               onClick={handleGoToday}
               className="px-3 py-2 rounded-2xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-              title="Voltar para a data de hoje (23/11/2026)"
+              title="Voltar para a data de hoje"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               <span>Hoje</span>

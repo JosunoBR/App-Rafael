@@ -1,3 +1,4 @@
+import { nationalHolidays } from '../../../shared/nationalHolidays';
 /**
  * UTILITÁRIO DE CALENDÁRIO COMERCIAL DA LOJA (MEGA 12)
  * Regra do App:
@@ -39,7 +40,7 @@ export interface StoreDayStatus {
   isHolidayMarked: boolean; // Loja marcou "Sem Expediente" (dia fechado)
   markedHolidayInfo?: MarkedHoliday;
   holidayName?: string;
-  isWorkingDay: boolean; // Segunda a Sábado e NÃO (domingo ou feriado marcado como fechado)
+  isWorkingDay: boolean; // Segunda a sábado, exceto feriados nacionais e fechamentos marcados
 }
 
 /**
@@ -57,15 +58,17 @@ export function getStoreDayStatus(
   const isSunday = date.getDay() === 0;
 
   const mmdd = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  const candidateHolidayName = customHolidays[dateStr] || customHolidays[mmdd] || markedHolidays[dateStr]?.holidayName;
+  const nationalHolidayName = nationalHolidays(year)[mmdd];
+  const candidateHolidayName = nationalHolidayName || customHolidays[dateStr] || customHolidays[mmdd] || markedHolidays[dateStr]?.holidayName;
   const isHolidayCandidate = Boolean(candidateHolidayName);
 
   const markedHolidayInfo = markedHolidays[dateStr];
   const isHolidayMarked = Boolean(markedHolidayInfo);
   const holidayName = markedHolidayInfo?.holidayName || candidateHolidayName;
 
-  // Um dia só deixa de ser dia útil se for Domingo ou se for Feriado Marcado como Sem Expediente
-  const isWorkingDay = !isSunday && !isHolidayMarked;
+  // Domingos, feriados nacionais e fechamentos adicionais marcados não são dias úteis
+  const isNationalHoliday = Boolean(nationalHolidayName);
+  const isWorkingDay = !isSunday && !isNationalHoliday && !isHolidayMarked;
 
   return {
     isSunday,
@@ -90,7 +93,7 @@ export interface MonthWorkingDaysCalculation {
 
 /**
  * Calcula os dias úteis operacionais do mês e os dias úteis restantes
- * - Exclui rigorosamente domingos e feriados marcados como "Sem Expediente"
+ * - Exclui domingos, feriados nacionais e feriados marcados como "Sem Expediente"
  * - No mês corrente: conta de hoje (inclusive) até o fim do mês
  * - Em mês futuro: conta todos os dias úteis do mês
  * - Em mês passado: zero dias restantes

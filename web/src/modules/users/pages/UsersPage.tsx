@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchUsersFromDb, saveUserToDb, deleteUserFromDb, saveUserPermissionsInDb } from '../../../utils/api';
+import { fetchUsersFromDb, saveUserToDb, deleteUserFromDb, saveUserPermissionsInDb, apiFetch } from '../../../utils/api';
 import {
   Users as UsersIcon, 
   UserPlus, 
@@ -28,6 +28,10 @@ interface UsersPageProps {
 
 export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
   const [users, setUsers] = useState<User[]>([]);
+  const [stores, setStores] = useState<{ id: string; name: string; active: boolean }[]>([]);
+  const [storesLoading, setStoresLoading] = useState(false);
+  const [storesError, setStoresError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [isEditing, setIsEditing] = useState(false);
@@ -69,7 +73,27 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
 
   useEffect(() => {
     loadUsers();
+
   }, []);
+
+  useEffect(() => {
+    if (!isEditing || editingUser.role !== 'unidade' || !editingUser.ativo) return;
+    let active = true;
+    setStoresLoading(true);
+    setStoresError('');
+    const refresh = () => apiFetch(`/users/available-stores${editingUser.id ? `?excludeUserId=${encodeURIComponent(editingUser.id)}` : ''}`)
+      .then(response => response.json()).then(data => {
+        if (!active) return;
+        setStores(data);
+        setStoresLoading(false);
+        setStoresError('');
+        setEditingUser(previous => previous.storeId && !data.some((store: { id: string }) => store.id === previous.storeId) ? { ...previous, storeId: '' } : previous);
+      }).catch(() => { if (active) { setStores([]); setStoresLoading(false); setStoresError('Não foi possível carregar as unidades disponíveis. Reabra o cadastro para tentar novamente.'); } });
+    void refresh();
+    window.addEventListener('focus', refresh);
+    const timer = window.setInterval(refresh, 15000);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [isEditing, editingUser.role, editingUser.id, editingUser.ativo]);
 
   const filteredUsers = users.filter(u => {
     if (isRootUser(u)) return false;
@@ -106,19 +130,22 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
+    if (editingUser.role === 'unidade' && !!editingUser.ativo && (storesLoading || storesError || !editingUser.storeId)) { showToast('Selecione uma unidade disponível antes de salvar.', 'error'); return; }
     if (!editingUser.nome || !editingUser.email) {
       alert('Nome e E-mail são obrigatórios.');
       return;
     }
 
     try {
+      setSaving(true);
       await saveUserToDb(editingUser);
       await loadUsers();
       setIsEditing(false);
       showToast('Usuário salvo com sucesso!', 'success');
     } catch (err: any) {
       alert(err.message);
-    }
+    } finally { setSaving(false); }
   };
 
   const handleSavePermissions = async (userId: string, permissions: Record<string, boolean>) => {
@@ -440,7 +467,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Perfil de Acesso (Cargo) *</label>
                   <select
                     value={editingUser.role || 'deposito'}
-                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as UserRole })}
+                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as UserRole, storeId: undefined })}
                     className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                   >
                     <option value="diretoria">👑 Diretoria (Executivo)</option>
@@ -452,6 +479,19 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                   </select>
                 </div>
 
+                {editingUser.role === 'unidade' && !!editingUser.ativo && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Unidade vinculada *</label>
+                    <select required aria-label="Unidade vinculada" disabled={storesLoading || saving || !!storesError} value={editingUser.storeId || ''}
+                      onChange={event => setEditingUser({ ...editingUser, storeId: event.target.value })}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                      <option value="">{storesLoading ? 'Carregando unidades...' : stores.length ? 'Selecione a unidade' : 'Nenhuma unidade disponível'}</option>
+                      {stores.map(store => <option key={store.id} value={store.id}>{store.name}</option>)}
+                    </select>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Apenas unidades ativas sem outro login são listadas. Cada unidade possui um único login ativo. Desativar ou excluir o login libera a unidade.</p>
+                    {storesError && <p role="alert" className="text-xs text-red-500">{storesError}</p>}
+                  </div>
+                )}
                 {/* Cargo */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Cargo / Função</label>
@@ -507,7 +547,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser }) => {
                     Cancelar
                   </button>
                   <button
-                    type="submit"
+                    type="submit" disabled={saving || (editingUser.role === 'unidade' && !!editingUser.ativo && (storesLoading || !!storesError || !editingUser.storeId))}
                     className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-900/20 transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5" />

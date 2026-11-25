@@ -1,4 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { apiFetch } from '../../../utils/api';
+import type { User } from '../../../shared/types';
 import { StoreGoalsHeader } from '../components/StoreGoalsHeader';
 import { StoreMonthlyCalendar } from '../components/StoreMonthlyCalendar';
 import { StoreCashRegisterModal } from '../components/StoreCashRegisterModal';
@@ -9,15 +11,41 @@ import { DailyCashClosing, StoreGoalData, MarkedHoliday } from '../types/storePo
 import { calculateMonthWorkingDays } from '../utils/storeCalendarUtils';
 
 interface StorePortalPageProps {
+  currentUser: User;
+  unitName?: string;
   showToast?: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
-export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast }) => {
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-11');
+export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, currentUser, unitName }) => {
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toLocaleDateString('en-CA').slice(0, 7));
   const [closings, setClosings] = useState<Record<string, DailyCashClosing>>(INITIAL_CASH_CLOSINGS);
   const [markedHolidays, setMarkedHolidays] = useState<Record<string, MarkedHoliday>>(INITIAL_MARKED_HOLIDAYS);
   const [activeModalDate, setActiveModalDate] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
+  const [goalAmount, setGoalAmount] = useState(0);
+  const storeId = currentUser.storeId;
+  useEffect(() => {
+    if (!storeId) return;
+    let active = true;
+    Promise.all([
+      apiFetch(`/store-closings?storeId=${encodeURIComponent(storeId)}&month=${selectedMonth}`).then(res => res.json()),
+      apiFetch(`/goals/plans?year=${selectedMonth.slice(0,4)}&month=${Number(selectedMonth.slice(5))}`).then(res => res.json())
+    ]).then(([rows, plans]) => {
+      if (!active) return;
+      setGoalAmount(plans.find((plan: { storeId: string }) => plan.storeId === storeId)?.amount ?? 0);
+      setClosings(Object.fromEntries(rows.map((row: any) => [row.closingDate, {
+        data: row.closingDate, status: row.status === 'aguardando' ? 'em_conferencia' : row.status,
+        vendaTotal: row.salesCents / 100, quantidadeVendas: row.salesCount,
+        dinheiro: row.cashCents / 100, pixKais: row.pixKaisCents / 100,
+        pixStone: row.pixStoneCents / 100, pixCnpj: row.pixCnpjCents / 100,
+        cartaoDebito: row.debitCents / 100, cartaoCredito: row.creditCents / 100,
+        despesas: row.expenses.map((expense: any) => ({ id: expense.id, descricao: expense.description, valor: expense.amountCents / 100 })),
+        memorando: row.memo, responsavelFechamento: row.submittedByName || '',
+        motivoDevolucao: row.reviewNote, dataHoraEnvio: row.createdAt
+      }])));
+    }).catch(() => { if (active) showToast?.('Não foi possível carregar os dados da unidade.', 'error'); });
+    return () => { active = false; };
+  }, [storeId, selectedMonth]);
 
   // Data de hoje
   const today = new Date();
@@ -32,50 +60,36 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast }) =
   // Recálculo dinâmico da meta e acumulado com base nos lançamentos do mês
   // Regra do App: Desconsidera domingos e feriados marcados como "Sem Expediente" do divisor de metas
   const goalData: StoreGoalData = useMemo(() => {
-    // Filtra os fechamentos deste mês
-    const monthClosings = Object.values(closings).filter(c => c.data.startsWith(selectedMonth));
+    // Apenas fechamentos aprovados compõem o faturamento e o atingimento da meta.
+    const monthClosings = Object.values(closings).filter(c => c.data.startsWith(selectedMonth) && c.status === 'aprovado');
     const acumulado = monthClosings.reduce((acc, curr) => acc + (Number(curr.vendaTotal) || 0), 0);
 
     const { totalWorkingDays, remainingWorkingDays } = calculateMonthWorkingDays(selectedMonth, todayStr, markedHolidays);
 
-    const superMeta = INITIAL_STORE_GOAL_DATA.superMeta;
+    const superMeta = goalAmount * 1.1;
     const falta = Math.max(0, superMeta - acumulado);
     const diasUteisRestantes = remainingWorkingDays > 0 ? remainingWorkingDays : 1;
     const mediaDiaria = falta > 0 ? falta / diasUteisRestantes : 0;
 
     return {
       ...INITIAL_STORE_GOAL_DATA,
+      lojaId: storeId || '',
+      lojaNome: unitName || (storeId ? 'Carregando unidade...' : 'Unidade não vinculada'),
+      metaNormal: goalAmount,
+      superMeta,
       mesAno: selectedMonth,
       acumuladoVendido: acumulado,
       diasUteisRestantes: remainingWorkingDays,
       diasOperacionaisMes: totalWorkingDays,
       mediaDiariaNecessaria: mediaDiaria
     };
-  }, [closings, selectedMonth, todayStr, markedHolidays]);
+  }, [closings, selectedMonth, todayStr, markedHolidays, goalAmount, storeId, unitName]);
 
   // Alternar marcação de feriado sem expediente
   const handleToggleHoliday = (dateStr: string, holidayName: string, isClosing: boolean) => {
-    setMarkedHolidays(prev => {
-      const next = { ...prev };
-      if (isClosing) {
-        next[dateStr] = {
-          date: dateStr,
-          holidayName: holidayName || 'Feriado',
-          markedBy: 'Amanda (Itapevi)',
-          markedAt: new Date().toLocaleDateString('pt-BR'),
-          status: 'declarado'
-        };
-        if (showToast) {
-          showToast(`Dia ${dateStr.split('-')[2]}/${dateStr.split('-')[1]} marcado como feriado (${holidayName}). Descontado da meta comercial!`, 'info');
-        }
-      } else {
-        delete next[dateStr];
-        if (showToast) {
-          showToast(`Dia ${dateStr.split('-')[2]}/${dateStr.split('-')[1]} reaberto para vendas! Adicionado aos dias úteis.`, 'info');
-        }
-      }
-      return next;
-    });
+    void dateStr; void holidayName; void isClosing;
+    showToast?.('O registro de feriados ainda não está disponível.', 'info');
+    return;
   };
 
   // Navegação de mês
@@ -94,36 +108,28 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast }) =
   };
 
   // Salvar / atualizar fechamento do dia
-  const handleSaveClosing = (newClosing: DailyCashClosing) => {
-    // Se o caixa foi regularizado/reenviado, limpa o snooze do alerta
+  const handleSaveClosing = async (newClosing: DailyCashClosing): Promise<boolean> => {
+    if (!storeId) { showToast?.('Vincule este usuário a uma unidade antes de lançar o caixa.', 'error'); return false; }
     try {
-      localStorage.removeItem(`mega12_snooze_alert_${newClosing.data}`);
-    } catch {
-      // fallback
-    }
-
-    setClosings(prev => {
-      const updated = {
-        ...prev,
-        [newClosing.data]: newClosing
-      };
-
-      // Dispara confetes se o novo acumulado bater a meta
-      const monthClosings = Object.values(updated).filter(c => c.data.startsWith(selectedMonth));
-      const novoAcumulado = monthClosings.reduce((acc, curr) => acc + (Number(curr.vendaTotal) || 0), 0);
-      if (novoAcumulado >= INITIAL_STORE_GOAL_DATA.metaNormal) {
-        setShowConfetti(true);
-      }
-
-      return updated;
+    await apiFetch(`/store-closings/${encodeURIComponent(storeId)}/${newClosing.data}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responsavelFechamento: newClosing.responsavelFechamento, vendaTotal: newClosing.vendaTotal, quantidadeVendas: newClosing.quantidadeVendas,
+        meiosPagamento: { dinheiro: newClosing.dinheiro, pixKais: newClosing.pixKais,
+          pixStone: newClosing.pixStone, pixCnpj: newClosing.pixCnpj,
+          cartaoDebito: newClosing.cartaoDebito, cartaoCredito: newClosing.cartaoCredito },
+        despesas: newClosing.despesas, memorando: newClosing.memorando })
     });
-
-    if (showToast) {
-      showToast(`Fechamento do dia ${newClosing.data.split('-')[2]}/${newClosing.data.split('-')[1]} enviado com sucesso para a Bruna (Financeiro)!`, 'success');
+    setClosings(prev => ({ ...prev, [newClosing.data]: newClosing }));
+    showToast?.('Fechamento enviado para conferência financeira.', 'success');
+    return true;
+    } catch {
+      showToast?.('Não foi possível salvar o fechamento. Confira os campos e tente novamente.', 'error');
+      return false;
     }
   };
 
   return (
+    !storeId ? <div role="alert" className="p-6 rounded-xl bg-amber-50 text-amber-900">Este usuário ainda não está vinculado a uma unidade cadastrada.</div> :
     <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-fade-in relative">
       {/* 0. NOTIFICAÇÃO FLUTUANTE (BOX POR CIMA) DE CAIXA DEVOLVIDO */}
       <StoreNotificationBox 

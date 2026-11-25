@@ -9,6 +9,9 @@
     "lint": "oxlint",
     "test:order-import": "node scripts/test-order-import.mjs",
     "test:dates": "node scripts/test-dates-and-installments.mjs",
+    "test:goals": "node scripts/test-goals.mjs",
+    "test:units-bi": "node scripts/test-units-bi.mjs",
+    "import:goals": "node ../scripts/generateGoalsData.js",
     "preview": "vite preview"
   },
   "dependencies": {

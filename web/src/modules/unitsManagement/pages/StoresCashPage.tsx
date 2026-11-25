@@ -1,3 +1,5 @@
+import { useTableSort } from '../../../shared/useTableSort';
+import { SortHeader } from '../../../shared/components/SortHeader';
 import React, { useState } from 'react';
 import {
   Banknote,
@@ -7,7 +9,6 @@ import {
   Building2,
   TrendingDown,
   TrendingUp,
-  AlertTriangle,
   FileText,
   DollarSign,
   Download,
@@ -21,6 +22,7 @@ import { StoreCashBalance } from '../types/unitsCash.types';
 import { INITIAL_STORES_CASH_BALANCES } from '../mock/unitsCashMockData';
 import { StoreDailyExpensesModal } from '../components/StoreDailyExpensesModal';
 import { formatCurrency } from '../../../utils/masks';
+import { apiFetch } from '../../../utils/api';
 
 interface StoresCashPageProps {
   currentUser?: User;
@@ -33,11 +35,18 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
 }) => {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     try {
-      return sessionStorage.getItem('mega12_stores_cash_month') || '2026-11';
+      return sessionStorage.getItem('mega12_stores_cash_month') || new Date().toLocaleDateString('en-CA').slice(0, 7);
     } catch {
-      return '2026-11';
+      return new Date().toLocaleDateString('en-CA').slice(0, 7);
     }
   });
+  const [registryRevision, setRegistryRevision] = useState(0);
+  React.useEffect(() => {
+    const update = () => setRegistryRevision(value => value + 1);
+    const timer = window.setInterval(update, 15000);
+    window.addEventListener('focus', update);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', update); };
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [inspectingStore, setInspectingStore] = useState<StoreCashBalance | null>(null);
 
@@ -69,7 +78,34 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
    *  - Total de sangrias informadas e conferidas
    *  = Montante Acumulado Atual em Caixa (Espécie)
    */
-  const [storesCash] = useState<StoreCashBalance[]>(INITIAL_STORES_CASH_BALANCES);
+  const [storesCash, setStoresCash] = useState<StoreCashBalance[]>(INITIAL_STORES_CASH_BALANCES);
+  React.useEffect(() => {
+    let active = true;
+    Promise.all([
+      apiFetch('/config/stores').then(response => response.json()),
+      apiFetch(`/store-closings?month=${selectedMonth}`).then(response => response.json())
+    ]).then(([stores, closings]) => {
+      if (!active) return;
+      setStoresCash(stores.map((store: any) => {
+        const approved = closings.filter((row: any) => row.storeId === store.id && row.status === 'aprovado');
+        const movements = approved.map((row: any) => {
+          const expenses = row.expenses.map((expense: any) => ({ id: expense.id, descricao: expense.description,
+            valor: expense.amountCents / 100, categoria: 'outros' as const }));
+          const totalDespesas = expenses.reduce((sum: number, expense: { valor: number }) => sum + expense.valor, 0);
+          return { data: row.closingDate, dataFormatada: row.closingDate.split('-').reverse().join('/'),
+            diaSemana: '', entradaDinheiro: row.cashCents / 100, despesas: expenses, totalDespesas,
+            saldoLiquidoDia: row.cashCents / 100 - totalDespesas, responsavel: row.submittedByName || '', memorando: row.memo };
+        });
+        const totalEntradasDinheiro = movements.reduce((sum: number, item: { entradaDinheiro: number }) => sum + item.entradaDinheiro, 0);
+        const totalDespesas = movements.reduce((sum: number, item: { totalDespesas: number }) => sum + item.totalDespesas, 0);
+        return { lojaId: store.id, lojaCodigo: store.shortName || '', lojaNome: store.name,
+          cidade: '', responsavel: '', fundoDeCaixa: 0, totalEntradasDinheiro, totalDespesas,
+          totalSangrias: 0, saldoAtualEmCaixa: totalEntradasDinheiro - totalDespesas,
+          ultimaAtualizacao: approved[0]?.updatedAt || '', movimentacoes: movements };
+      }));
+    }).catch(() => { if (active) showToast?.('Não foi possível carregar o caixa das unidades.', 'error'); });
+    return () => { active = false; };
+  }, [selectedMonth, registryRevision]);
 
   // Filtro de Busca
   const filteredStores = storesCash.filter(store => {
@@ -78,10 +114,11 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
     return (
       store.lojaNome.toLowerCase().includes(q) ||
       store.lojaCodigo.includes(q) ||
-      store.cidade.toLowerCase().includes(q) ||
-      store.responsavel.toLowerCase().includes(q)
+      store.cidade.toLowerCase().includes(q)
     );
   });
+
+  const sorting = useTableSort(filteredStores, (store, key) => ({ lojaNome: store.lojaNome, fundoDeCaixa: store.fundoDeCaixa, totalEntradasDinheiro: store.totalEntradasDinheiro, totalDespesas: store.totalDespesas, totalSangrias: store.totalSangrias, saldoAtualEmCaixa: store.saldoAtualEmCaixa } as Record<string, string | number>)[key]);
 
   // Totais Consolidados da Rede
   const totalFundoRede = storesCash.reduce((acc, s) => acc + s.fundoDeCaixa, 0);
@@ -89,8 +126,6 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
   const totalDespesasRede = storesCash.reduce((acc, s) => acc + s.totalDespesas, 0);
   const totalSangriasRede = storesCash.reduce((acc, s) => acc + s.totalSangrias, 0);
   const totalMontanteEmCaixaRede = storesCash.reduce((acc, s) => acc + s.saldoAtualEmCaixa, 0);
-
-  const lojasComAlertaSangria = storesCash.filter(s => s.alertaSangria).length;
 
   const handleExportReport = () => {
     if (showToast) {
@@ -141,7 +176,7 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
               <div className="flex items-center gap-2 px-2">
                 <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  {selectedMonth === '2026-11' ? 'Novembro / 2026' : selectedMonth === '2026-12' ? 'Dezembro / 2026' : selectedMonth}
+                  {selectedMonth.split('-').reverse().join('/')}
                 </span>
               </div>
 
@@ -173,15 +208,10 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
               Lista Dinâmica Integrada ao Cadastro
             </span>
             <span>•</span>
-            <span>Atualização instantânea a cada fechamento diário enviado pelas unidades</span>
+            <span>Valores de fechamentos aprovados; fundo de troco e sangrias ainda não estão cadastrados. O saldo físico depende desses valores.</span>
           </div>
 
-          {lojasComAlertaSangria > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-xs font-bold">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span>{lojasComAlertaSangria} lojas com saldo &gt; R$ 3.000 (sugestão de sangria/depósito)</span>
-            </div>
-          )}
+
         </div>
       </div>
 
@@ -189,17 +219,17 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         
         {/* Card 1: Montante Acumulado Total em Caixa */}
-        <div className="p-5 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-600/20 col-span-1 sm:col-span-2 lg:col-span-1">
+        <div className="p-5 rounded-3xl bg-white dark:bg-[#0B132B] border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-100">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Montante em Caixa (Rede)
             </span>
-            <Banknote className="w-5 h-5 text-white/90" />
+            <Banknote className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className="text-2xl lg:text-3xl font-black tracking-tight font-mono">
+          <div className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white font-mono">
             {formatCurrency(totalMontanteEmCaixaRede)}
           </div>
-          <p className="text-[11px] text-emerald-100 font-medium mt-1">
+          <p className="text-[11px] text-slate-400 mt-1">
             Dinheiro físico disponível nas 20 lojas
           </p>
         </div>
@@ -295,21 +325,17 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
           <table className="w-full text-left text-xs border-collapse min-w-[1000px]">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
-                <th className="py-3.5 px-4">Unidade / Loja</th>
-                <th className="py-3.5 px-3">Responsável</th>
-                <th className="py-3.5 px-3 text-right">Troco Fixo</th>
-                <th className="py-3.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">Entradas (+)</th>
-                <th className="py-3.5 px-3 text-right font-bold text-rose-500">Despesas (-)</th>
-                <th className="py-3.5 px-3 text-right font-bold text-amber-500">Sangrias (-)</th>
-                <th className="py-3.5 px-4 text-right font-black text-emerald-700 dark:text-emerald-400 text-xs">Montante Acumulado (=)</th>
-                <th className="py-3.5 px-3 text-center">Status / Aporte</th>
+                <SortHeader sort={sorting} column="lojaNome" className="py-3.5 px-4">Unidade / Loja</SortHeader>
+                <SortHeader sort={sorting} column="fundoDeCaixa" className="py-3.5 px-3 text-right">Troco Fixo</SortHeader>
+                <SortHeader sort={sorting} column="totalEntradasDinheiro" className="py-3.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">Entradas (+)</SortHeader>
+                <SortHeader sort={sorting} column="totalDespesas" className="py-3.5 px-3 text-right font-bold text-rose-500">Despesas (-)</SortHeader>
+                <SortHeader sort={sorting} column="totalSangrias" className="py-3.5 px-3 text-right font-bold text-amber-500">Sangrias (-)</SortHeader>
+                <SortHeader sort={sorting} column="saldoAtualEmCaixa" className="py-3.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">Montante Acumulado (=)</SortHeader>
                 <th className="py-3.5 px-4 text-center">Detalhamento</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-              {filteredStores.map(store => {
-                const isHighBalance = store.alertaSangria;
-
+              {sorting.rows.map(store => {
                 return (
                   <tr
                     key={store.lojaId}
@@ -317,24 +343,16 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
                   >
                     {/* Unidade */}
                     <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-xs font-black shrink-0">
-                          {store.lojaCodigo}
-                        </span>
+                      <div>
                         <div>
                           <div className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
                             {store.lojaNome}
                           </div>
-                          <div className="text-[10px] text-slate-400 font-normal">
+                          {store.cidade && <div className="text-[10px] text-slate-400 font-normal">
                             {store.cidade}
-                          </div>
+                          </div>}
                         </div>
                       </div>
-                    </td>
-
-                    {/* Responsável */}
-                    <td className="py-3.5 px-3 text-xs text-slate-600 dark:text-slate-300">
-                      {store.responsavel}
                     </td>
 
                     {/* Troco Fixo */}
@@ -358,26 +376,8 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
                     </td>
 
                     {/* Montante Acumulado em Caixa */}
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="inline-block px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800">
-                        <span className="text-sm sm:text-base font-black text-emerald-700 dark:text-emerald-300 font-mono">
-                          {formatCurrency(store.saldoAtualEmCaixa)}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Status / Alerta de Sangria */}
-                    <td className="py-3.5 px-3 text-center">
-                      {isHighBalance ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse" title="Saldo alto em loja. Sugere-se realizar sangria e depósito.">
-                          <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                          <span>Fazer Sangria</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                          Regular
-                        </span>
-                      )}
+                    <td className="py-3.5 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(store.saldoAtualEmCaixa)}
                     </td>
 
                     {/* Ações: Ver Gastos por Dia */}
@@ -400,7 +400,7 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
             {/* Linha de Totais da Rede no Rodapé */}
             <tfoot>
               <tr className="bg-slate-100/90 dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-800 font-black text-xs text-slate-900 dark:text-white">
-                <td colSpan={2} className="py-4 px-4 uppercase tracking-wider">
+                <td className="py-4 px-4 uppercase tracking-wider">
                   Total Consolidado da Rede ({filteredStores.length} Lojas)
                 </td>
                 <td className="py-4 px-3 text-right font-mono text-slate-600 dark:text-slate-400">
@@ -415,10 +415,10 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
                 <td className="py-4 px-3 text-right font-mono text-amber-600 dark:text-amber-400">
                   - {formatCurrency(totalSangriasRede)}
                 </td>
-                <td className="py-4 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400 text-sm">
+                <td className="py-4 px-3 text-right font-mono text-emerald-600 dark:text-emerald-400">
                   {formatCurrency(totalMontanteEmCaixaRede)}
                 </td>
-                <td colSpan={2} className="py-4 px-4 text-right text-slate-400 text-[11px] font-normal">
+                <td className="py-4 px-4 text-right text-slate-400 text-[11px] font-normal">
                   Soma de numerário físico apurado
                 </td>
               </tr>

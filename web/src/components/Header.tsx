@@ -42,6 +42,7 @@ interface HeaderProps {
   activeNav: ActiveNavTab;
   order: PurchaseOrder;
   currentUser: User;
+  unitName?: string;
   hasActiveDraft: boolean;
   isSavedOrder: boolean;
   savedOrders?: PurchaseOrder[];
@@ -62,6 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeNav,
   order,
   currentUser,
+  unitName,
   hasActiveDraft,
   isSavedOrder,
   savedOrders = [],
@@ -203,6 +205,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div>
+            {currentUser.role !== 'unidade' && (
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 dark:text-slate-500 leading-none mb-1">
               <img src={LOGO_MEGA12_BASE64} alt="Mega 12" className="w-3.5 h-3.5 object-contain rounded-full inline-block" />
               <span>Rede Mega 12</span>
@@ -214,10 +217,11 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </div>
+            )}
 
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-tight whitespace-nowrap">
-                {activeNav === 'orders' ? 'Pedido' : navMeta.title}
+              <h1 className={currentUser.role === 'unidade' ? 'text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 tracking-tight leading-tight break-words' : 'text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-tight whitespace-nowrap'}>
+                {currentUser.role === 'unidade' ? (unitName || (currentUser.storeId ? 'Carregando unidade...' : 'Unidade não vinculada')) : activeNav === 'orders' ? 'Pedido' : navMeta.title}
               </h1>
               {activeNav === 'orders' && canAccessOrders && order?.header?.numeroPedido && (
                 <div className="relative" ref={ordersDropdownRef}>

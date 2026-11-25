@@ -214,7 +214,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
 
   const handleOpenReturnModal = (c: StoreDailyClosingSummary) => {
     setReturnModalData({
-      lojaId: c.lojaId,
+      lojaId: c.id || c.lojaId,
       lojaNome: c.lojaNome,
       motivo: ''
     });
@@ -443,15 +443,12 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
               <div>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-xs font-black shrink-0">
-                      {c.lojaCodigo}
-                    </span>
                     <div className="min-w-0 flex-1">
                       <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate" title={c.lojaNome}>
                         {cleanStoreName(c.lojaNome)}
                       </h4>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                        {c.responsavelFechamento ? `${c.responsavelFechamento}` : 'Sem envio'}
+                        {c.responsavelFechamento || ''}
                       </p>
                     </div>
                   </div>
@@ -553,7 +550,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                       </button>
                       <button
                         type="button"
-                        onClick={() => onApprove(c.lojaId)}
+                        onClick={() => onApprove(c.id || c.lojaId)}
                         className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black transition cursor-pointer shadow-xs active:scale-95"
                       >
                         Aprovar
@@ -590,7 +587,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                 onClick={onGoToday}
                 className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 transition cursor-pointer shadow-xs"
               >
-                Ir para Hoje (23/11/2026)
+                Ir para hoje
               </button>
             )}
             {onViewMonth && viewMode === 'day' && (
@@ -1072,7 +1069,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                     <button
                       type="button"
                       onClick={() => {
-                        onApprove(inspectingClosing.lojaId);
+                        onApprove(inspectingClosing.id || inspectingClosing.lojaId);
                         setInspectingClosing(null);
                       }}
                       className="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-600/30"

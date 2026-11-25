@@ -136,7 +136,7 @@ function getMutationKey(signature: string): string {
   return key;
 }
 
-async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   const headers = getAuthHeaders(options.headers as Record<string, string> || {});
   const method = String(options.method || 'GET').toUpperCase();

@@ -3824,6 +3824,7 @@ export function App() {
           activeNav={activeNav}
           order={order}
           currentUser={currentUser}
+          unitName={currentUser.role === 'unidade' ? storeConfigs.find(store => store.id === currentUser.storeId)?.name : undefined}
           hasActiveDraft={hasActiveDraft}
           isSavedOrder={isCurrentOrderSaved}
           savedOrders={savedOrders}
@@ -4397,7 +4398,7 @@ export function App() {
 
               {/* PÁGINA 8: PAINEL DA LOJA / UNIDADE (Módulo Sistema 2.0) */}
               {activeNav === 'store_portal' && canAccessTab(currentUser, 'store_portal') && (
-                <StorePortalPage showToast={showToast} />
+                <StorePortalPage currentUser={currentUser} unitName={storeConfigs.find(store => store.id === currentUser.storeId)?.name} showToast={showToast} />
               )}
 
               {/* PÁGINA 8.1: VALIDADE PRÓXIMA DAS UNIDADES (Controle de Validades & Lotes 2.0) */}

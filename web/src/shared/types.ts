@@ -432,6 +432,7 @@ export interface User {
   nome: string;
   email: string;
   role: UserRole;
+    storeId?: string | null;
   cargo?: string;
   telefone?: string;
   ativo: number | boolean;

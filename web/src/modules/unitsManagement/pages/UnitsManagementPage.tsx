@@ -1,3 +1,4 @@
+import { businessDate } from '../../../shared/businessDate';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Building2,
@@ -16,9 +17,8 @@ import {
 import {
   StoreDailyClosingSummary,
   StoreHolidayRequest,
-  StorePaymentMethods
 } from '../types/unitsManagement.types';
-import { ExpenseItem } from '../../storePortal/types/storePortal.types';
+import { apiFetch } from '../../../utils/api';
 
 interface UnitsManagementPageProps {
   currentUser?: User;
@@ -29,6 +29,8 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
   currentUser,
   showToast
 }) => {
+  const today = businessDate();
+  const [loadError, setLoadError] = useState('');
   // Carregamento resiliente dos filtros da conferência na sessão
   const savedUnitsFilters = useMemo(() => {
     try {
@@ -43,13 +45,13 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
   const [financialSubTab, setFinancialSubTab] = useState<'closings' | 'holidays'>(() => savedUnitsFilters?.financialSubTab ?? 'closings');
 
   // Navegação de Data e Mês da Conferência
-  const [selectedDate, setSelectedDate] = useState<string>(() => savedUnitsFilters?.selectedDate ?? '2026-11-23');
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => savedUnitsFilters?.selectedMonth ?? '2026-11');
+  const [selectedDate, setSelectedDate] = useState<string>(() => savedUnitsFilters?.referenceDate === today ? savedUnitsFilters.selectedDate : today);
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => savedUnitsFilters?.viewMode === 'month' ? (savedUnitsFilters.selectedMonth ?? today.slice(0, 7)) : (savedUnitsFilters?.referenceDate === today ? savedUnitsFilters.selectedMonth : today.slice(0, 7)));
   const [viewMode, setViewMode] = useState<'day' | 'month'>(() => savedUnitsFilters?.viewMode ?? 'day');
 
   useEffect(() => {
     try {
-      const payload = { financialSubTab, selectedDate, selectedMonth, viewMode };
+      const payload = { financialSubTab, selectedDate, selectedMonth, viewMode, referenceDate: today };
       sessionStorage.setItem('mega12_units_management_filters_v1', JSON.stringify(payload));
       localStorage.setItem('mega12_units_management_filters_v1', JSON.stringify(payload));
     } catch { }
@@ -57,7 +59,32 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
 
   // Estados locais interativos (Mock com atualização otimista)
   const [closings, setClosings] = useState<StoreDailyClosingSummary[]>(INITIAL_DAILY_CLOSINGS);
-  const [holidayRequests, setHolidayRequests] = useState<StoreHolidayRequest[]>(INITIAL_HOLIDAY_REQUESTS);
+  const [holidayRequests] = useState<StoreHolidayRequest[]>(INITIAL_HOLIDAY_REQUESTS);
+
+  const reloadClosings = async () => {
+    const response = await apiFetch('/store-closings');
+    const rows = await response.json();
+    setLoadError('');
+    setClosings(rows.map((row: any) => ({
+      id: row.id, lojaId: row.storeId, lojaNome: row.storeName, lojaCodigo: row.shortName || '',
+      data: row.closingDate, status: row.status, vendaTotal: row.salesCents / 100,
+      quantidadeVendas: row.salesCount, memorando: row.memo, responsavelFechamento: row.submittedByName || '',
+      dataHoraEnvio: row.createdAt, motivoDevolucao: row.reviewNote, conferidoPor: row.reviewedBy,
+      conferidoEm: row.reviewedAt,
+      meiosPagamento: { dinheiro: row.cashCents / 100, pixKais: row.pixKaisCents / 100,
+        pixStone: row.pixStoneCents / 100, pixCnpj: row.pixCnpjCents / 100,
+        cartaoDebito: row.debitCents / 100, cartaoCredito: row.creditCents / 100 },
+      despesas: row.expenses.map((expense: any) => ({ id: expense.id, descricao: expense.description, valor: expense.amountCents / 100 }))
+    })));
+  };
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { if (active) void reloadClosings().catch(() => { if (active) setLoadError('Não foi possível atualizar os fechamentos. Tente novamente.'); }); };
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, []);
 
   // Fechamentos filtrados por data ou mês consolidado
   const displayedClosings = useMemo(() => {
@@ -72,137 +99,26 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
   const pendingHolidaysCount = holidayRequests.filter(r => r.status === 'pendente').length;
 
   // Handlers para Ações da Conferência (Fechamento)
-  const handleApproveClosing = (lojaId: string) => {
-    setClosings(prev => prev.map(c => {
-      const matchDate = viewMode === 'day' ? c.data === selectedDate : true;
-      if (c.lojaId === lojaId && matchDate) {
-        return {
-          ...c,
-          status: 'aprovado',
-          conferidoPor: currentUser?.nome ? `${currentUser.nome} (Financeiro)` : 'Bruna (Financeiro)',
-          conferidoEm: new Date().toLocaleString('pt-BR')
-        };
-      }
-      return c;
-    }));
-
-    if (showToast) {
-      showToast(`Fechamento da loja aprovado e travado com sucesso!`, 'success');
-    }
+  const handleApproveClosing = (closingId: string) => {
+    const closing = displayedClosings.find(c => c.id === closingId);
+    if (!closing?.id) return;
+    void apiFetch(`/store-closings/${encodeURIComponent(closing.id)}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision: 'aprovado', note: '' }) })
+      .then(reloadClosings).catch(() => showToast?.('Não foi possível aprovar o fechamento.', 'error'));
+    return;
   };
 
-  const handleReturnClosing = (lojaId: string, motivo: string) => {
-    setClosings(prev => prev.map(c => {
-      const matchDate = viewMode === 'day' ? c.data === selectedDate : true;
-      if (c.lojaId === lojaId && matchDate) {
-        return {
-          ...c,
-          status: 'devolvido',
-          motivoDevolucao: motivo,
-          conferidoPor: currentUser?.nome ? `${currentUser.nome} (Financeiro)` : 'Bruna (Financeiro)',
-          conferidoEm: new Date().toLocaleString('pt-BR')
-        };
-      }
-      return c;
-    }));
-
-    if (showToast) {
-      showToast(`Fechamento devolvido para a loja com o apontamento registrado!`, 'info');
-    }
+  const handleReturnClosing = (closingId: string, motivo: string) => {
+    const closing = displayedClosings.find(c => c.id === closingId);
+    if (!closing?.id) return;
+    void apiFetch(`/store-closings/${encodeURIComponent(closing.id)}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision: 'devolvido', note: motivo }) })
+      .then(reloadClosings).catch(() => showToast?.('Não foi possível devolver o fechamento.', 'error'));
+    return;
   };
 
-  const handleAdjustClosing = (
-    lojaId: string,
-    dataStr: string,
-    updatedClosing: {
-      vendaTotal: number;
-      meiosPagamento: StorePaymentMethods;
-      despesas: ExpenseItem[];
-      motivoAjuste: string;
-    }
-  ) => {
-    setClosings(prev => prev.map(c => {
-      if (c.lojaId === lojaId && c.data === dataStr) {
-        return {
-          ...c,
-          vendaTotal: updatedClosing.vendaTotal,
-          meiosPagamento: updatedClosing.meiosPagamento,
-          despesas: updatedClosing.despesas,
-          status: 'aprovado',
-          ajustadoPorFinanceiro: true,
-          motivoAjusteFinanceiro: updatedClosing.motivoAjuste,
-          conferidoPor: currentUser?.nome ? `${currentUser.nome} (Ajustado pelo Financeiro)` : 'Bruna (Ajustado pelo Financeiro)',
-          conferidoEm: new Date().toLocaleString('pt-BR')
-        };
-      }
-      return c;
-    }));
-
-    if (showToast) {
-      showToast(`Fechamento da unidade retificado e homologado pelo Financeiro com sucesso!`, 'success');
-    }
-  };
-
-  // Handlers para Ações de Feriados
-  const handleApproveHoliday = (requestId: string) => {
-    setHolidayRequests(prev => prev.map(r => {
-      if (r.id === requestId) {
-        return {
-          ...r,
-          status: 'aprovado',
-          respondidoPor: currentUser?.nome ? `${currentUser.nome} (Financeiro)` : 'Bruna (Financeiro)',
-          respondidoEm: new Date().toLocaleString('pt-BR'),
-          respostaFinanceiro: 'Fechamento aprovado pela Matriz. Dia descontado da meta comercial.'
-        };
-      }
-      return r;
-    }));
-
-    if (showToast) {
-      showToast(`Feriado aprovado! O dia foi configurado como Sem Expediente (-1d útil na meta).`, 'success');
-    }
-  };
-
-  const handleRejectHoliday = (requestId: string, motivo: string) => {
-    setHolidayRequests(prev => prev.map(r => {
-      if (r.id === requestId) {
-        return {
-          ...r,
-          status: 'recusado',
-          respondidoPor: currentUser?.nome ? `${currentUser.nome} (Financeiro)` : 'Bruna (Financeiro)',
-          respondidoEm: new Date().toLocaleString('pt-BR'),
-          respostaFinanceiro: motivo
-        };
-      }
-      return r;
-    }));
-
-    if (showToast) {
-      showToast(`Solicitação de feriado recusada. Expediente normal mantido.`, 'info');
-    }
-  };
-
-  const handleDeclareGlobalHoliday = (data: string, holidayName: string) => {
-    const newGlobalReq: StoreHolidayRequest = {
-      id: `req_global_${Date.now()}`,
-      lojaId: 'all_stores',
-      lojaNome: 'Rede Mega 12 (Todas as 20 Lojas)',
-      data,
-      holidayName,
-      solicitadoPor: currentUser?.nome || 'Diretoria / Matriz',
-      solicitadoEm: new Date().toLocaleString('pt-BR'),
-      status: 'aprovado',
-      respostaFinanceiro: 'Feriado Geral da Rede cadastrado para todas as filiais físicas.',
-      respondidoPor: currentUser?.nome || 'Diretoria',
-      respondidoEm: new Date().toLocaleString('pt-BR')
-    };
-
-    setHolidayRequests(prev => [newGlobalReq, ...prev]);
-
-    if (showToast) {
-      showToast(`Feriado geral "${holidayName}" aplicado com sucesso para as 20 lojas da rede!`, 'success');
-    }
-  };
+  // Feriados exigem persistência própria antes de serem liberados para operação.
+  const handleApproveHoliday = (_requestId: string) => showToast?.('O cadastro de feriados ainda não está disponível.', 'info');
+  const handleRejectHoliday = (_requestId: string, _motivo: string) => showToast?.('O cadastro de feriados ainda não está disponível.', 'info');
+  const handleDeclareGlobalHoliday = (_data: string, _name: string) => showToast?.('O cadastro de feriados ainda não está disponível.', 'info');
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-14 animate-fade-in">
@@ -278,6 +194,8 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
         </div>
       </div>
 
+      {loadError && <p role="alert" className="p-3 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300">{loadError}</p>}
+      <button type="button" onClick={() => void reloadClosings().catch(() => setLoadError('Não foi possível atualizar os fechamentos.'))} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">Atualizar fechamentos</button>
       {/* 3. NAVEGADOR DE CALENDÁRIO COMERCIAL (DIAS E MESES) */}
       {financialSubTab === 'closings' && (
         <FinancialCalendarNavigator
@@ -304,12 +222,11 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
           closings={displayedClosings}
           onApprove={handleApproveClosing}
           onReturn={handleReturnClosing}
-          onAdjust={handleAdjustClosing}
           selectedDate={selectedDate}
           viewMode={viewMode}
           onGoToday={() => {
-            setSelectedDate('2026-11-23');
-            setSelectedMonth('2026-11');
+            setSelectedDate(businessDate());
+            setSelectedMonth(businessDate().slice(0, 7));
             setViewMode('day');
           }}
           onViewMonth={() => setViewMode('month')}

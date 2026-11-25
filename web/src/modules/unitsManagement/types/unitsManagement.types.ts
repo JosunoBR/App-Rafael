@@ -12,6 +12,7 @@ export interface StorePaymentMethods {
 }
 
 export interface StoreDailyClosingSummary {
+  id?: string;
   lojaId: string;
   lojaNome: string;
   lojaCodigo: string;

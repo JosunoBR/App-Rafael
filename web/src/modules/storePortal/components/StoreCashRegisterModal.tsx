@@ -100,7 +100,7 @@ interface StoreCashRegisterModalProps {
   onClose: () => void;
   dateStr: string;
   initialData?: DailyCashClosing;
-  onSave: (closing: DailyCashClosing) => void;
+    onSave: (closing: DailyCashClosing) => Promise<boolean>;
 }
 
 export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
@@ -121,6 +121,7 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
   const [cartaoCredito, setCartaoCredito] = useState<number>(0);
   const [despesas, setDespesas] = useState<ExpenseItem[]>([]);
   const [memorando, setMemorando] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   // Carrega os dados existentes ou limpa para novo lançamento
   useEffect(() => {
@@ -208,8 +209,9 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
     cartaoDebito +
     cartaoCredito;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
 
     const closingData: DailyCashClosing = {
       data: dateStr,
@@ -224,13 +226,14 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
       cartaoCredito: cartaoCredito || 0,
       despesas: despesas.filter(d => d.descricao.trim() !== '' || d.valor > 0),
       memorando: memorando.trim(),
-      responsavelFechamento: responsavel.trim() || 'Colaboradora da Unidade',
+      responsavelFechamento: responsavel.trim(),
       motivoDevolucao: undefined, // Limpa o motivo de devolução ao reenviar
       dataHoraEnvio: new Date().toLocaleString('pt-BR')
     };
 
-    onSave(closingData);
-    onClose();
+    setSubmitting(true);
+    try { if (await onSave(closingData)) onClose(); }
+    finally { setSubmitting(false); }
   };
 
   const dateStatus = getStoreDayStatus(dateStr);
@@ -346,11 +349,9 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-slate-400" />
                 <span>Responsável pelo Fechamento</span>
-                <span className="text-rose-500">*</span>
-              </label>
+                </label>
               <input
                 type="text"
-                required
                 value={responsavel}
                 onChange={(e) => setResponsavel(e.target.value)}
                 className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-emerald-500"
@@ -613,6 +614,7 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
             ) : (
               <button
                 type="submit"
+                disabled={submitting}
                 className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-md shadow-emerald-500/20 transition cursor-pointer flex items-center gap-2"
               >
                 {initialData?.status === 'devolvido' ? (

@@ -40,6 +40,9 @@ router.use('/separation-presets', separationPresetRoutes);
 router.use('/fiscal-presets', fiscalPresetRoutes);
 router.use('/payment-conditions', paymentConditionRoutes);
 router.use('/financial', financialRoutes);
+router.use('/goals', require('./goals.routes'));
+router.use('/store-closings', require('./storeClosings.routes'));
+router.use('/units-bi', require('./unitsBi.routes'));
 router.use('/audit', auditRoutes);
 router.use('/export', exportRoutes);
 

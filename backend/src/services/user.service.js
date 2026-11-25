@@ -1,7 +1,23 @@
 const userRepository = require('../repositories/userRepository');
 const authService = require('./auth.service');
+const { queryOne, queryAll, withTransaction } = require('../config/database');
+async function validateStoreBinding(role, storeId, userId = null) {
+  if (role !== 'unidade') return null;
+  if (typeof storeId !== 'string' || !storeId || !await queryOne('SELECT id FROM stores WHERE id=? AND active=1', [storeId])) {
+    const error = new Error('Selecione uma unidade ativa para este usuário.'); error.statusCode = 400; throw error;
+  }
+  const occupied = await queryOne("SELECT id FROM users WHERE role='unidade' AND ativo=1 AND storeId=? AND (? IS NULL OR id<>?)", [storeId, userId, userId]);
+  if (occupied) { const error = new Error('Esta unidade já possui um login vinculado. Escolha outra unidade.'); error.statusCode = 409; throw error; }
+  return storeId;
+}
 
 class UserService {
+  async availableStores(excludeUserId = null) {
+    return queryAll(`SELECT s.id,s.name,s.active FROM stores s WHERE s.active=1 AND NOT EXISTS (
+      SELECT 1 FROM users u WHERE u.role='unidade' AND u.ativo=1 AND u.storeId=s.id AND (? IS NULL OR u.id<>?)
+    ) ORDER BY s.name`, [excludeUserId, excludeUserId]);
+  }
+
   async listUsers() {
     return await userRepository.findAll();
   }
@@ -18,6 +34,9 @@ class UserService {
   }
 
   async createUser(userData) {
+    if (!userData.nome || !userData.email || !userData.senha || !userData.role) { const error = new Error('Nome, e-mail, senha e perfil são obrigatórios.'); error.statusCode = 400; throw error; }
+    const hashedPassword = await authService.hashPassword(userData.senha);
+    return withTransaction(async () => {
     if (!userData.nome || !userData.email || !userData.senha || !userData.role) {
       const err = new Error('Nome, e-mail, senha e perfil (role) são obrigatórios.');
       err.statusCode = 400;
@@ -32,7 +51,7 @@ class UserService {
       throw err;
     }
 
-    const hashedPassword = await authService.hashPassword(userData.senha);
+    const storeId = userData.ativo === false || userData.ativo === 0 ? null : await validateStoreBinding(userData.role, userData.storeId);
     const now = new Date().toISOString();
 
     const newUser = {
@@ -41,6 +60,7 @@ class UserService {
       email: cleanEmail,
       senha: hashedPassword,
       role: userData.role,
+      storeId,
       cargo: userData.cargo?.trim() || '',
       telefone: userData.telefone?.trim() || '',
       ativo: userData.ativo !== undefined ? userData.ativo : 1,
@@ -52,9 +72,12 @@ class UserService {
     const saved = await userRepository.create(newUser);
     const { senha: _, ...safeUser } = saved;
     return safeUser;
+    });
   }
 
   async updateUser(id, updateData) {
+    const hashedUpdatePassword = updateData.senha && updateData.senha.trim() !== '' ? await authService.hashPassword(updateData.senha) : null;
+    return withTransaction(async () => {
     if (id === 'usr_root') {
       const err = new Error('O usuário raiz (root) do sistema é reservado e protegido.');
       err.statusCode = 403;
@@ -69,13 +92,19 @@ class UserService {
     }
 
     const dataToUpdate = { ...updateData };
+    const effectiveActive = updateData.ativo ?? existing.ativo;
+    if (effectiveActive !== false && effectiveActive !== 0 && (updateData.role === 'unidade' || (existing.role === 'unidade' && updateData.role === undefined))) {
+      dataToUpdate.storeId = await validateStoreBinding('unidade', updateData.storeId ?? existing.storeId, id);
+    } else {
+      dataToUpdate.storeId = null;
+    }
 
     if (updateData.email) {
       dataToUpdate.email = updateData.email.trim().toLowerCase();
     }
 
     if (updateData.senha && updateData.senha.trim() !== '') {
-      dataToUpdate.senha = await authService.hashPassword(updateData.senha);
+      dataToUpdate.senha = hashedUpdatePassword;
     } else {
       delete dataToUpdate.senha;
     }
@@ -83,6 +112,7 @@ class UserService {
     const updated = await userRepository.update(id, dataToUpdate);
     const { senha: _, ...safeUser } = updated;
     return safeUser;
+    });
   }
 
   async updatePermissions(id, permissions) {

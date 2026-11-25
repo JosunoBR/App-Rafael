@@ -29,24 +29,7 @@ export const StoreNearExpiryPage: React.FC<StoreNearExpiryPageProps> = ({
   showToast
 }) => {
   // Identificação da unidade logada (isolar os dados estritamente para esta filial)
-  const currentStore = useMemo(() => {
-    const nome = currentUser?.nome || '';
-    const lower = nome.toLowerCase().trim();
-    if (
-      lower.includes('nova') || 
-      lower.includes('rússia') || 
-      lower.includes('russia') ||
-      lower === 'pg' ||
-      lower.includes('ponta grossa')
-    ) {
-      return { id: 'store_09_nova_russia', name: 'Nova Rússia (PG)', cidade: 'Ponta Grossa - PR' };
-    }
-    if (currentUser?.role === 'unidade' && nome) {
-      return { id: `store_${lower.replace(/\s+/g, '_')}`, name: nome, cidade: 'Filial Física' };
-    }
-    // Padrão do terminal da loja
-    return { id: 'store_09_nova_russia', name: 'Nova Rússia (PG)', cidade: 'Ponta Grossa - PR' };
-  }, [currentUser]);
+  const currentStore = useMemo(() => ({ id: currentUser?.storeId || '', name: currentUser?.nome || 'Unidade não vinculada', cidade: '' }), [currentUser?.storeId, currentUser?.nome]);
 
   const [validities, setValidities] = useState<StoreProductValidity[]>(() => {
     try {
@@ -73,7 +56,7 @@ export const StoreNearExpiryPage: React.FC<StoreNearExpiryPageProps> = ({
   const [checkingItem, setCheckingItem] = useState<StoreProductValidity | null>(null);
 
   // Data de referência do sistema (23/11/2026) em horário local para precisão de dias
-  const today = new Date('2026-11-23T00:00:00');
+  const today = new Date();
 
   // Cálculo de dias restantes para o vencimento
   const calculateDaysLeft = (expDateStr: string): number => {

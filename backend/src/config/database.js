@@ -76,6 +76,37 @@ async function getDatabase() {
       active INTEGER NOT NULL DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS store_daily_closings (
+      id TEXT PRIMARY KEY,
+      storeId TEXT NOT NULL REFERENCES stores(id),
+      closingDate TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'aguardando' CHECK(status IN ('aguardando','aprovado','devolvido')),
+      salesCents INTEGER NOT NULL CHECK(salesCents >= 0),
+      salesCount INTEGER CHECK(salesCount >= 0),
+      cashCents INTEGER NOT NULL DEFAULT 0,
+      pixKaisCents INTEGER NOT NULL DEFAULT 0,
+      pixStoneCents INTEGER NOT NULL DEFAULT 0,
+      pixCnpjCents INTEGER NOT NULL DEFAULT 0,
+      debitCents INTEGER NOT NULL DEFAULT 0,
+      creditCents INTEGER NOT NULL DEFAULT 0,
+      memo TEXT NOT NULL DEFAULT '',
+      submittedBy TEXT,
+      reviewedBy TEXT,
+      reviewNote TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      reviewedAt TEXT,
+      UNIQUE(storeId, closingDate)
+    );
+    CREATE INDEX IF NOT EXISTS idx_store_closings_month ON store_daily_closings(storeId, closingDate, status);
+    CREATE TABLE IF NOT EXISTS store_daily_expenses (
+      id TEXT PRIMARY KEY,
+      closingId TEXT NOT NULL REFERENCES store_daily_closings(id),
+      description TEXT NOT NULL,
+      amountCents INTEGER NOT NULL CHECK(amountCents > 0),
+      financialEntryId TEXT UNIQUE
+    );
+
     CREATE TABLE IF NOT EXISTS suppliers (
       id TEXT PRIMARY KEY,
       razaoSocial TEXT NOT NULL,
@@ -324,6 +355,7 @@ async function getDatabase() {
       cargo TEXT,
       telefone TEXT,
       ativo INTEGER NOT NULL DEFAULT 1,
+      storeId TEXT REFERENCES stores(id),
       permissions TEXT DEFAULT '{}',
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
@@ -742,6 +774,7 @@ async function getDatabase() {
       const usersTableInfo = dbInstance.exec("PRAGMA table_info(users)");
       if (usersTableInfo[0]) {
         const userCols = usersTableInfo[0].values.map(v => v[1]);
+        if (!userCols.includes('storeId')) dbInstance.run('ALTER TABLE users ADD COLUMN storeId TEXT REFERENCES stores(id)');
         if (!userCols.includes('permissions')) {
           try { dbInstance.run("ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT '{}'"); } catch (e) {}
         }
@@ -895,6 +928,11 @@ async function getDatabase() {
     console.warn('Aviso ao executar limpeza de idempotência:', cleanErr.message);
   }
 
+  if (!dbInstance.exec('PRAGMA table_info(store_daily_closings)')[0].values.some(column => column[1] === 'submittedByName')) {
+    dbInstance.run('ALTER TABLE store_daily_closings ADD COLUMN submittedByName TEXT');
+  }
+  require('../migrations/unitLoginSchema').ensureUnitLoginSchema(dbInstance);
+  require('../migrations/goalsSchema').ensureGoalsSchema(dbInstance);
   saveDatabaseToDisk();
 
   return dbInstance;

@@ -78,7 +78,16 @@ class FiscalRepository {
       const allCurrent = await queryAll("SELECT id FROM stores");
       for (const cur of allCurrent) {
         if (!incomingIds.includes(cur.id)) {
-          await execute("DELETE FROM stores WHERE id = ?", [cur.id]);
+          const hasGoalsHistory = await queryOne(`
+            SELECT 1 AS found FROM goal_store_links WHERE storeId = ?
+            UNION ALL SELECT 1 FROM store_goals WHERE storeId = ?
+            UNION ALL SELECT 1 FROM store_goal_audit WHERE storeId = ? LIMIT 1
+          `, [cur.id, cur.id, cur.id]);
+          if (hasGoalsHistory) {
+            await execute("UPDATE stores SET active = 0 WHERE id = ?", [cur.id]);
+          } else {
+            await execute("DELETE FROM stores WHERE id = ?", [cur.id]);
+          }
         }
       }
     }

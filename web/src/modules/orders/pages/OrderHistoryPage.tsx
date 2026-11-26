@@ -25,6 +25,7 @@ import {
   Layers
 } from 'lucide-react';
 import { PurchaseOrder, Supplier } from '../../../shared/types';
+import { useColumnOrder } from '../../../shared/useColumnOrder';
 import { calculateOrderTotals } from '../../../shared/orderCalculationEngine';
 import { exportOrderToExcel } from '../../../utils/excelExporter';
 import { toBrDate } from '../../../utils/masks';
@@ -51,7 +52,10 @@ interface OrderHistoryPageProps {
   onRescheduleOrder?: (order: PurchaseOrder) => void;
 }
 
-type SortField = 'numero' | 'fornecedor' | 'data' | 'itens' | 'pecas' | 'valor' | 'frete' | 'status';
+type SortField = 'numero' | 'fornecedor' | 'nf' | 'data' | 'itens' | 'pecas' | 'valor' | 'frete' | 'status';
+type ColumnKey = SortField | 'esteira' | 'acoes';
+const DEFAULT_COLUMNS: ColumnKey[] = ['numero', 'fornecedor', 'nf', 'data', 'itens', 'pecas', 'valor', 'frete', 'status', 'esteira', 'acoes'];
+const COLUMN_ORDER_KEY = 'mega12_order_history_column_order_v1';
 type SortDirection = 'asc' | 'desc' | null;
 
 interface ColumnFilters {
@@ -115,6 +119,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   }, []);
 
   const [searchTerm, setSearchTerm] = useState<string>(() => savedFilters?.searchTerm ?? '');
+  const { order: columnOrder, headerProps } = useColumnOrder(DEFAULT_COLUMNS, COLUMN_ORDER_KEY);
   
   // Status da esteira oficial suportados para o perfil atual
   const ALL_PIPELINE_STATUSES = useMemo(() => {
@@ -328,6 +333,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
         const matchesSearch = 
           o.header.numeroPedido.toLowerCase().includes(q) ||
           o.header.fornecedor.toLowerCase().includes(q) ||
+          (o.header.numeroNotaFiscal || '').toLowerCase().includes(q) ||
           getSupplierFantasyName(o).toLowerCase().includes(q) ||
           (o.header.vendedor && o.header.vendedor.toLowerCase().includes(q));
         if (!matchesSearch) return false;
@@ -394,6 +400,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
             break;
           case 'fornecedor':
             cmp = (a.header.fornecedor || '').localeCompare(b.header.fornecedor || '');
+            break;
+          case 'nf':
+            cmp = (a.header.numeroNotaFiscal || '').localeCompare(b.header.numeroNotaFiscal || '', undefined, { numeric: true });
             break;
           case 'data': {
             const dateA = new Date(a.header.dataPedido || a.header.createdAt || 0).getTime();
@@ -904,7 +913,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
               <tr className="bg-slate-50 dark:bg-slate-800 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
                 
                 {/* 1. PEDIDO / NÚMERO */}
-                <th className="py-3 px-4 whitespace-nowrap min-w-[130px] relative">
+                {(() => {
+                    const cells: Record<ColumnKey, React.ReactNode> = {
+                        numero: (<th className="py-3 px-4 whitespace-nowrap min-w-[130px] relative">
                   <div className="flex items-center justify-between gap-1.5">
                     <button
                       onClick={() => handleSortToggle('numero')}
@@ -968,10 +979,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       </div>
                     </div>
                   )}
-                </th>
-
-                {/* 2. FORNECEDOR */}
-                <th className="py-3 px-3 min-w-[210px] relative">
+                </th> ),
+                        fornecedor: (<th className="py-3 px-3 min-w-[210px] relative">
                   <div className="flex items-center justify-between gap-1.5">
                     <button
                       onClick={() => handleSortToggle('fornecedor')}
@@ -1054,10 +1063,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       </div>
                     </div>
                   )}
-                </th>
-
-                {/* 3. DATA */}
-                <th className="py-3 px-3 whitespace-nowrap min-w-[115px] relative">
+                </th> ),
+                        nf: (<th className="py-3 px-3 whitespace-nowrap min-w-[120px]"><button type="button" onClick={() => handleSortToggle('nf')} className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white" title="Ordenar pelo número da NF">Número da NF {sortField === 'nf' ? (sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3 h-3" />}</button></th> ),
+                        data: (<th className="py-3 px-3 whitespace-nowrap min-w-[115px] relative">
                   <div className="flex items-center justify-between gap-1.5">
                     <button
                       onClick={() => handleSortToggle('data')}
@@ -1121,10 +1129,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       </div>
                     </div>
                   )}
-                </th>
-
-                {/* 4. ITENS */}
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[75px]">
+                </th> ),
+                        itens: (<th className="py-3 px-3 text-center whitespace-nowrap min-w-[75px]">
                   <button
                     onClick={() => handleSortToggle('itens')}
                     className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition mx-auto"
@@ -1137,10 +1143,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
                     )}
                   </button>
-                </th>
-
-                {/* 5. VOLUME PEÇAS */}
-                <th className="py-3 px-3 text-right whitespace-nowrap min-w-[115px]">
+                </th> ),
+                        pecas: (<th className="py-3 px-3 text-right whitespace-nowrap min-w-[115px]">
                   <button
                     onClick={() => handleSortToggle('pecas')}
                     className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition ml-auto"
@@ -1153,10 +1157,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
                     )}
                   </button>
-                </th>
-
-                {/* 6. VALOR TOTAL (R$) */}
-                <th className="py-3 px-3 text-right whitespace-nowrap min-w-[135px]">
+                </th> ),
+                        valor: (<th className="py-3 px-3 text-right whitespace-nowrap min-w-[135px]">
                   <button
                     onClick={() => handleSortToggle('valor')}
                     className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer transition ml-auto"
@@ -1169,10 +1171,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       <ArrowUpDown className="w-3 h-3 text-slate-300 dark:text-slate-600" />
                     )}
                   </button>
-                </th>
-
-                {/* 7. FRETE (NOVA COLUNA SOLICITADA) */}
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[115px] relative">
+                </th> ),
+                        frete: (<th className="py-3 px-3 text-center whitespace-nowrap min-w-[115px] relative">
                   <div className="flex items-center justify-center gap-1.5">
                     <button
                       onClick={() => handleSortToggle('frete')}
@@ -1245,10 +1245,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       </div>
                     </div>
                   )}
-                </th>
-
-                {/* 8. STATUS */}
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[135px] relative">
+                </th> ),
+                        status: (<th className="py-3 px-3 text-center whitespace-nowrap min-w-[135px] relative">
                   <div className="flex items-center justify-center gap-1.5">
                     <button
                       onClick={() => handleSortToggle('status')}
@@ -1309,20 +1307,22 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                       </div>
                     </div>
                   )}
-                </th>
-
-                {/* 9. AVANÇAR ESTEIRA */}
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[280px]">Avançar Esteira</th>
-
-                {/* 10. AÇÕES */}
-                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[190px]">Ações</th>
+                </th> ),
+                        esteira: (<th className="py-3 px-3 text-center whitespace-nowrap min-w-[280px]">Avançar Esteira</th> ),
+                        acoes: (<th className="py-3 px-3 text-center whitespace-nowrap min-w-[190px]">Ações</th> )
+                    };
+                    return (columnOrder as ColumnKey[]).map(key => <React.Fragment key={key}>{React.cloneElement(
+                      cells[key] as React.ReactElement<React.ThHTMLAttributes<HTMLTableCellElement>>,
+                      { ...headerProps(key), tabIndex: 0, title: 'Arraste para reorganizar a coluna. Alt + setas para mover pelo teclado.', className: `${(cells[key] as React.ReactElement<React.ThHTMLAttributes<HTMLTableCellElement>>).props.className || ''} ${headerProps(key).className}` }
+                    )}</React.Fragment>);
+                  })()}
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {processedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-12 text-slate-400">
+                  <td colSpan={columnOrder.length} className="text-center py-12 text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Search className="w-8 h-8 text-slate-300 dark:text-slate-600 stroke-1" />
                       <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">Nenhum pedido encontrado</p>
@@ -1385,7 +1385,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                     >
                       
                       {/* Pedido / Número */}
-                      <td 
+                      {(() => {
+                    const cells: Record<ColumnKey, React.ReactNode> = {
+                        numero: (<td
                         className="py-3.5 px-4 font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 transition"
                         onClick={() => handleOpenOrder(ord)}
                         title={canEditSpecificOrder(currentUser, ord.header.status, ord.header.boletosLiberados) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
@@ -1409,10 +1411,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             </span>
                           </div>
                         )}
-                      </td>
-
-                      {/* Fornecedor */}
-                      <td 
+                      </td> ),
+                        fornecedor: (<td
                         className="py-3.5 px-3 cursor-pointer hover:text-emerald-600 transition"
                         onClick={() => handleOpenOrder(ord)}
                         title={canEditSpecificOrder(currentUser, ord.header.status, ord.header.boletosLiberados) ? "Clique para editar este pedido" : "Clique para visualizar este pedido"}
@@ -1425,10 +1425,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             Fantasia: {getSupplierFantasyName(ord)}
                           </div>
                         )}
-                      </td>
-
-                      {/* Data / Previsão de Entrega */}
-                      <td className="py-3.5 px-3 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
+                      </td> ),
+                        nf: (<td className="py-3.5 px-3 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">{ord.header.numeroNotaFiscal?.trim() || "—"}</td> ),
+                        data: (<td className="py-3.5 px-3 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
                         <div>{toBrDate(ord.header.dataPedido || ord.header.createdAt)}</div>
                         {deliveryAlert ? (
                           <div className="mt-1 flex items-center gap-1">
@@ -1473,25 +1472,17 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             )}
                           </div>
                         ) : null}
-                      </td>
-
-                      {/* Itens */}
-                      <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      </td> ),
+                        itens: (<td className="py-3.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {totals.validItemsCount}
-                      </td>
-
-                      {/* Volume Peças */}
-                      <td className="py-3.5 px-3 text-right font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
+                      </td> ),
+                        pecas: (<td className="py-3.5 px-3 text-right font-mono font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
                         {totalPecas.toLocaleString('pt-BR')} un
-                      </td>
-
-                      {/* Valor Total */}
-                      <td className="py-3.5 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                      </td> ),
+                        valor: (<td className="py-3.5 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                         R$ {totalPedido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-
-                      {/* Modalidade Frete (NOVA COLUNA) */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                      </td> ),
+                        frete: (<td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <span className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-extrabold border uppercase tracking-wider ${getFreteBadgeClass(modalidadeFrete)}`}>
                           <Truck className="w-3 h-3" />
                           <span>{modalidadeFrete}</span>
@@ -1501,10 +1492,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             R$ {rawFreteVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </div>
                         )}
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                      </td> ),
+                        status: (<td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold border whitespace-nowrap ${getStatusBadgeClass(statusAtual)}`}>
                           {statusAtual}
                         </span>
@@ -1520,10 +1509,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             </span>
                           ) : null}
                         </div>
-                      </td>
-
-                      {/* Botão de Avanço Rápido de Status da Esteira */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                      </td> ),
+                        esteira: (<td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <div className="inline-grid grid-cols-[100px_160px] gap-2 items-center justify-center text-center">
                           {/* Coluna 1: Ação da Esteira (Largura fixa e alinhada com cores suaves) */}
                           <div className="w-[100px] flex items-center justify-center">
@@ -1600,10 +1587,8 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                             ) : null}
                           </div>
                         </div>
-                      </td>
-
-                      {/* Ações */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                      </td> ),
+                        acoes: (<td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           
                           <button
@@ -1665,7 +1650,10 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                           )}
 
                         </div>
-                      </td>
+                      </td> )
+                    };
+                    return (columnOrder as ColumnKey[]).map(key => <React.Fragment key={key}>{cells[key]}</React.Fragment>);
+                  })()}
 
                     </tr>
                   );

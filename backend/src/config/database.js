@@ -88,6 +88,19 @@ async function getDatabase() {
       UNIQUE(storeId,memoDate,version)
     );
     CREATE INDEX IF NOT EXISTS idx_store_daily_memos_date ON store_daily_memos(memoDate,storeId);
+    CREATE TABLE IF NOT EXISTS store_memo_attachments (
+      id TEXT PRIMARY KEY,
+      storeId TEXT NOT NULL REFERENCES stores(id) ON DELETE RESTRICT,
+      memoDate TEXT NOT NULL,
+      memoVersion INTEGER NOT NULL,
+      originalName TEXT NOT NULL,
+      storageName TEXT NOT NULL UNIQUE,
+      sizeBytes INTEGER NOT NULL CHECK(sizeBytes > 0),
+      uploadedBy TEXT NOT NULL,
+      uploadedAt TEXT NOT NULL,
+      FOREIGN KEY (storeId,memoDate,memoVersion) REFERENCES store_daily_memos(storeId,memoDate,version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_store_memo_attachments_date ON store_memo_attachments(storeId,memoDate);
 
     CREATE TABLE IF NOT EXISTS store_holidays (
       id TEXT PRIMARY KEY,

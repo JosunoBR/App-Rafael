@@ -76,5 +76,7 @@ backend/data/produtos/*
 !backend/data/produtos/.gitkeep
 produtos/
 backend/data/backups/*
+backend/data/calendar-memos/*
+!backend/data/calendar-memos/.gitkeep
 !backend/data/backups/.gitkeep
 

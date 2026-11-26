@@ -231,6 +231,7 @@ export const HomePage: React.FC<HomePageProps> = ({
       const q = searchTerm.toLowerCase();
       list = list.filter(o =>
         o.header.numeroPedido.toLowerCase().includes(q) ||
+        (o.header.numeroNotaFiscal || '').toLowerCase().includes(q) ||
         (o.header.fornecedor && o.header.fornecedor.toLowerCase().includes(q))
       );
     }
@@ -578,7 +579,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Filtrar por nº ou fornecedor..."
+                placeholder="Filtrar por pedido, NF ou fornecedor..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-8.5 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
@@ -689,10 +690,11 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[620px]">
+            <table className="w-full text-left border-collapse min-w-[740px]">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
                   <th className="py-3 px-4">Nº Pedido</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Nº NF</th>
                   <th className="py-3 px-4">Fornecedor</th>
                   <th className="py-3 px-4">Data</th>
                   <th className="py-3 px-4 text-center">Peças</th>
@@ -718,6 +720,9 @@ export const HomePage: React.FC<HomePageProps> = ({
                     >
                       <td className="py-3.5 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">
                         {ord.header.numeroPedido}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                        {ord.header.numeroNotaFiscal?.trim() || '—'}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-100 max-w-[180px] truncate">
                         {ord.header.fornecedor || 'Fornecedor não informado'}

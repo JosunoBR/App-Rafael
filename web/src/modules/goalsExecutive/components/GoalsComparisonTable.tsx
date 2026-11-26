@@ -66,7 +66,7 @@ export function GoalsComparisonTable({ rows, previousRows, previousPeriod, targe
           };
           const dragProps = columns.headerProps(column);
           const color = column === 'suggestion' ? 'text-emerald-700 dark:text-emerald-400' : column === 'superGoal' ? 'text-amber-700 dark:text-amber-400' : '';
-          return <SortHeader key={column} data-column={column} {...dragProps} sort={sorting} column={column} className={`${column === 'name' ? 'px-4 py-4 text-left min-w-48' : cell} ${color} ${dragProps.className}`}>{labels[column]}</SortHeader>;
+          return <SortHeader key={column} data-column={column} {...dragProps} sort={sorting} column={column} className={`${column === 'name' ? 'px-4 py-4 text-left min-w-48' : 'px-4 py-3 text-right tabular-nums'} whitespace-normal break-words [&_button]:whitespace-normal [&_button_span]:min-w-0 [&_button_span]:whitespace-normal [&_button_span]:break-words ${color} ${dragProps.className}`}>{labels[column]}</SortHeader>;
         })}</tr>
       </thead>
       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">

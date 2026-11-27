@@ -2,7 +2,7 @@ import { businessDate } from '../../../shared/businessDate';
 import type { StoreHolidayRequest } from '../../unitsManagement/types/unitsManagement.types';
 import { hasPermission } from '../../../shared/permissions';
 import React, { useState, useMemo, useEffect } from 'react';
-import { apiFetch } from '../../../utils/api';
+import { apiFetch, ApiError } from '../../../utils/api';
 import type { User } from '../../../shared/types';
 import { StoreGoalsHeader } from '../components/StoreGoalsHeader';
 import { StoreMonthlyCalendar } from '../components/StoreMonthlyCalendar';
@@ -147,8 +147,13 @@ export const StorePortalPage: React.FC<StorePortalPageProps> = ({ showToast, cur
     setClosings(prev => ({ ...prev, [newClosing.data]: newClosing }));
     showToast?.('Fechamento enviado para conferência financeira.', 'success');
     return true;
-    } catch {
-      showToast?.('Não foi possível salvar o fechamento. Confira os campos e tente novamente.', 'error');
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message === 'Tipo de saída inválido. Selecione Despesa ou Depósito.' && newClosing.despesas.some(item => item.tipo === 'vale_funcionario')
+          ? 'O servidor ainda não aceita Vale funcionário. Reinicie o backend para carregar a atualização e envie o fechamento novamente.'
+          : error.message
+        : 'Não foi possível salvar o fechamento. Tente novamente; os valores preenchidos foram mantidos.';
+      showToast?.(message, 'error');
       return false;
     }
   };

@@ -19,6 +19,7 @@ export interface StoreDailyClosingSummary {
   data: string; // YYYY-MM-DD
   status: ClosingStatus;
   vendaTotal: number;
+  saldoAnteriorEmCaixa?: number;
   quantidadeVendas?: number | null;
   ticketMedio?: number;
   meiosPagamento: StorePaymentMethods;

@@ -1,4 +1,6 @@
 import { UnitsCalendarPage } from './modules/unitsManagement/pages/UnitsCalendarPage';
+import { FranchiseModulePage } from './components/FranchiseModulePage';
+import { isFranchiseNavTab } from './shared/franchiseModules';
 import React, { useState, useEffect, useMemo, useRef, startTransition } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
@@ -188,6 +190,7 @@ import {
   verifyServerSession,
   isJwtExpired,
   confirmReceiptInDb,
+  correctReceiptInvoiceInDb,
   authorizeFinancialInDb,
   sendOrderToDistributionApi,
   releaseOrderToSeparationApi,
@@ -219,6 +222,7 @@ import { useOrderWatcher } from './hooks/useOrderWatcher';
 import { threeWayMergeOrder, OrderMergeResult } from './utils/orderMerge';
 import { OrderConflictResolutionModal } from './components/OrderConflictResolutionModal';
 import { OrderRollbackModal } from './components/OrderRollbackModal';
+import { CorrectReceiptInvoiceModal } from './modules/orders/components/CorrectReceiptInvoiceModal';
 
 export function App() {
   const location = useLocation();
@@ -417,6 +421,7 @@ export function App() {
   const [supplierModalEditTarget, setSupplierModalEditTarget] = useState<Supplier | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [receiptModalOrder, setReceiptModalOrder] = useState<PurchaseOrder | null>(null);
+  const [correctReceiptInvoiceOrder, setCorrectReceiptInvoiceOrder] = useState<PurchaseOrder | null>(null);
   const [rescheduleModalOrder, setRescheduleModalOrder] = useState<PurchaseOrder | null>(null);
   const [pipelineAuditOrder, setPipelineAuditOrder] = useState<PurchaseOrder | null>(null);
   const [isTrashModalOpen, setIsTrashModalOpen] = useState<boolean>(false);
@@ -3009,6 +3014,29 @@ export function App() {
     }
   };
 
+  const handleCorrectReceiptInvoice = async (payload: {
+    numeroNotaFiscal: string;
+    motivo: string;
+    password: string;
+    expectedVersion?: number;
+  }) => {
+    if (!correctReceiptInvoiceOrder) return;
+    const targetOrder = correctReceiptInvoiceOrder;
+
+    try {
+      const res = await correctReceiptInvoiceInDb(targetOrder.header.id, payload);
+      const updatedOrder = res.order as PurchaseOrder;
+      saveOrderToHistory(updatedOrder);
+      setSavedOrders(prev => prev.map(item => item.header.id === updatedOrder.header.id ? updatedOrder : item));
+      setOrder(previous => previous.header.id === updatedOrder.header.id ? updatedOrder : previous);
+      setCorrectReceiptInvoiceOrder(null);
+      showToast(res.message || `NF do pedido ${targetOrder.header.numeroPedido} corrigida com sucesso.`, 'success');
+    } catch (err: any) {
+      showPersistenceError(err, `Não foi possível corrigir a NF do pedido ${targetOrder.header.numeroPedido}`);
+      throw err;
+    }
+  };
+
   // Handler para liberação de boletos pelo Faturamento / Diretoria
   const handleAuthorizeFinancial = async (targetOrder: PurchaseOrder) => {
     if (!canAuthorizeFinancialRelease(currentUser, targetOrder.header.status)) {
@@ -4367,6 +4395,7 @@ export function App() {
                   onUpdateOrderStatus={handleUpdateOrderStatus}
                   onNavigateToSeparation={(selected) => handleOpenSelectedOrder(selected, 'separation')}
                   onConfirmReceipt={(selected) => setReceiptModalOrder(selected)}
+                  onCorrectReceiptInvoice={(selected) => setCorrectReceiptInvoiceOrder(selected)}
                   onAuthorizeFinancial={handleAuthorizeFinancial}
                   onRescheduleOrder={(selected) => setRescheduleModalOrder(selected)}
                   onRollbackSuccess={(updated) => {
@@ -4430,6 +4459,8 @@ export function App() {
               )}
 
               {/* PÁGINA 12: HISTÓRICO DE VENDAS (Matriz Multianual 2021-2026 Planilha ALS) */}
+              {isFranchiseNavTab(activeNav) && canAccessTab(currentUser, activeNav) && <FranchiseModulePage tab={activeNav} onSelectNav={handleSelectNav} />}
+
               {activeNav === 'units_history' && canAccessTab(currentUser, 'units_history') && (
                 <StoresHistoryPage currentUser={currentUser} showToast={showToast} />
               )}
@@ -4536,6 +4567,15 @@ export function App() {
           currentUser={currentUser}
           onConfirm={handleConfirmReceipt}
           onClose={() => setReceiptModalOrder(null)}
+        />
+      )}
+
+      {correctReceiptInvoiceOrder && (
+        <CorrectReceiptInvoiceModal
+          order={correctReceiptInvoiceOrder}
+          currentUser={currentUser}
+          onConfirm={handleCorrectReceiptInvoice}
+          onClose={() => setCorrectReceiptInvoiceOrder(null)}
         />
       )}
 

@@ -63,6 +63,7 @@ export const UnitsManagementPage: React.FC<UnitsManagementPageProps> = ({
     setClosings(rows.map((row: any) => ({
       id: row.id, lojaId: row.storeId, lojaNome: row.storeName, lojaCodigo: row.shortName || '',
       data: row.closingDate, status: row.status, vendaTotal: row.salesCents / 100,
+      saldoAnteriorEmCaixa: typeof row.cashBalanceBeforeDateCents === 'number' ? row.cashBalanceBeforeDateCents / 100 : undefined,
       quantidadeVendas: row.salesCount, memorando: row.memo, responsavelFechamento: row.submittedByName || '',
       dataHoraEnvio: row.createdAt, motivoDevolucao: row.reviewNote, conferidoPor: row.reviewedBy,
       conferidoEm: row.reviewedAt,

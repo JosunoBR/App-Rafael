@@ -4,7 +4,7 @@
 > **Data:** 19/11/2026  
 > **Fontes Examinadas:**  
 > 1. Vídeo de demonstração operacional: `WhatsApp Video 2026-11-19 at 14.20.53.mp4` (75,7 s — análise frame a frame e transcrição integral do áudio de Bryan).  
-> 2. Modelagem técnica de referência: Pasta `ERP Joia 2` (`ANTIGRAVITY_SULTS_SPEC.md`, `PLANO_IMPLEMENTACAO.md`, schema Prisma relacional).  
+> 2. Modelagem técnica de referência: Pasta `Sults` (`ANTIGRAVITY_SULTS_SPEC.md`, `PLANO_IMPLEMENTACAO.md`, schema Prisma relacional).
 > 3. Sistema atual em produção: `App Rafael` (backend Express + SQLite `mega12.db` e frontend React Router modularizado).  
 > **Decisão Estratégica:** Os módulos **NÃO** serão construídos como um sistema isolado. Serão integrados diretamente no sistema operacional atual (`App Rafael`), constituindo a **FASE FINAL DA TRANSIÇÃO 2.0**.
 
@@ -67,10 +67,10 @@ Com base na fala explícita do Bryan, os módulos dividem-se em três grupos cla
 
 ## 3. Arquitetura de Integração: Não Criar Sistema Isolado
 
-A pasta `ERP Joia 2` foi estruturada em NestJS + PostgreSQL + Next.js 15. No entanto, por decisão estratégica:
+A pasta `Sults` foi estruturada em NestJS + PostgreSQL + Next.js 15. No entanto, por decisão estratégica:
 1. **Zero Duplicação de Infraestrutura:** Não será inicializado um segundo servidor ou banco paralelo no VPS Hostinger.
 2. **Single Sign-On (Login Único):** O colaborador, gerente de loja e supervisor acessarão todas as funcionalidades com a mesma conta no `App Rafael`.
-3. **Reaproveitamento dos Schemas:** Os modelos de dados já definidos em `ERP Joia 2/apps/api/prisma/schema.prisma` (`units`, `announcements`, `checklists`, `action_plans`, `b2b_orders`, `disk_folders`, `lms_courses`) servem de referência direta para criação das migrações SQL no banco SQLite (`mega12.db`).
+3. **Reaproveitamento dos Schemas:** Os modelos de dados já definidos em `Sults/apps/api/prisma/schema.prisma` (`units`, `announcements`, `checklists`, `action_plans`, `b2b_orders`, `disk_folders`, `lms_courses`) servem de referência direta para criação das migrações SQL no banco SQLite (`mega12.db`).
 4. **Navegação Web Multi-Páginas:** Com o roteamento via `react-router-dom` recém-implantado no frontend web, as novas telas entram como módulos em `web/src/modules/` (`modules/announcements`, `modules/checklists`, `modules/supplies`, `modules/units`).
 
 ---

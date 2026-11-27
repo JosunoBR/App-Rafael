@@ -145,6 +145,20 @@ class OrderController {
     }
   }
 
+  async correctReceiptInvoice(req, res, next) {
+    try {
+      const { numeroNotaFiscal, motivo, password, expectedVersion } = req.body;
+      const result = await orderService.correctReceiptInvoice(
+        req.params.id,
+        { numeroNotaFiscal, motivo, password, expectedVersion },
+        req.user
+      );
+      return res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async sendToDistribution(req, res, next) {
     try {
       const result = await orderService.sendToDistribution(req.params.id, req.user);

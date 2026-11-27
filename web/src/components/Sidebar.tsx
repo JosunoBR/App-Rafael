@@ -26,6 +26,7 @@ import {
   Banknote,
   CalendarClock
 } from 'lucide-react';
+import { FRANCHISE_MODULES, isFranchiseNavTab } from '../shared/franchiseModules';
 import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { canAccessTab, ActiveNavTab } from '../shared/permissions';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
@@ -65,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isBiActive = activeNav === 'dashboard' || activeNav === 'bi_products';
 
   const [isUnitsMenuOpen, setIsUnitsMenuOpen] = useState<boolean>(false);
+  const [isFranchiseMenuOpen, setIsFranchiseMenuOpen] = useState<boolean>(false);
   const isUnitsActive = activeNav === 'units_calendar' || activeNav === 'units' || activeNav === 'units_cash' || activeNav === 'goals' || activeNav === 'units_bi' || activeNav === 'units_history';
 
   const toggleCollapsed = () => {
@@ -103,6 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canAccessUnitsHistory = canAccessTab(currentUser, 'units_history');
   const canAccessGoals = canAccessTab(currentUser, 'goals');
   const canAccessNearExpiry = canAccessTab(currentUser, 'near_expiry');
+  const canAccessFranchises = canAccessTab(currentUser, FRANCHISE_MODULES[0].id);
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
@@ -302,7 +305,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* GRUPO 2: GESTÃO & INTELIGÊNCIA */}
-          {(canAccessFinancial || canAccessDashboard || canAccessBiProducts || canAccessHistory || canAccessSeparationHistory) && (
+          {(canAccessFinancial || canAccessDashboard || canAccessBiProducts || canAccessHistory || canAccessSeparationHistory || canAccessFranchises) && (
             <div className="space-y-1">
               {!isCollapsed ? (
                 <div className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -496,6 +499,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )
                   )
                 )
+              )}
+
+              {canAccessFranchises && (
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    aria-expanded={isFranchiseMenuOpen && !isCollapsed}
+                    aria-controls="franchise-submenu"
+                    onClick={() => {
+                      if (isCollapsed) toggleCollapsed();
+                      setIsFranchiseMenuOpen(open => !open);
+                    }}
+                    title={isCollapsed ? 'Mega 12 · Franquias' : undefined}
+                    className={`flex items-center px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${isCollapsed ? 'w-11 h-11 mx-auto justify-center' : 'w-full justify-between'} ${isFranchiseNavTab(activeNav) ? 'bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-white border border-slate-200/80 dark:border-slate-700/60' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'}`}
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <img src={LOGO_MEGA12_BASE64} alt="" className="h-5 w-5 shrink-0 rounded object-contain" />
+                      {!isCollapsed && <span className="truncate">Mega 12 · Franquias</span>}
+                    </span>
+                    {!isCollapsed && (isFranchiseMenuOpen ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />)}
+                  </button>
+                  {isFranchiseMenuOpen && !isCollapsed && (
+                    <div id="franchise-submenu" className="ml-4 space-y-1 border-l-2 border-emerald-500/30 py-1 pl-3 pr-1 dark:border-emerald-500/20">
+                      {FRANCHISE_MODULES.map(module => (
+                        <button
+                          key={module.id}
+                          type="button"
+                          onClick={() => onSelectNav(module.id)}
+                          aria-current={activeNav === module.id ? 'page' : undefined}
+                          title={module.label}
+                          className={`w-full rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold transition-colors ${activeNav === module.id ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-white'}`}
+                        >
+                          {module.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Dashboard & BI com Submenu ou Item Direto */}

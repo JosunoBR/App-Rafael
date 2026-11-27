@@ -131,9 +131,20 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
   const [activeFilter, setActiveFilter] = useState<'all' | ClosingStatus>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [inspectingClosing, setInspectingClosing] = useState<StoreDailyClosingSummary | null>(null);
+  const [isAdjusting, setIsAdjusting] = useState(false);
+
+  const declaredBalance = inspectingClosing && typeof inspectingClosing.saldoAnteriorEmCaixa === 'number'
+    ? (Math.round(inspectingClosing.saldoAnteriorEmCaixa * 100)
+      + Math.round(inspectingClosing.meiosPagamento.dinheiro * 100)
+      - inspectingClosing.despesas.reduce((total, expense) => total + Math.round(expense.valor * 100), 0)) / 100
+    : null;
+  useEffect(() => {
+    if (!inspectingClosing || isAdjusting) return;
+    const latest = closings.find(closing => closing.id === inspectingClosing.id && closing.lojaId === inspectingClosing.lojaId && closing.data === inspectingClosing.data);
+    if (latest && latest !== inspectingClosing) setInspectingClosing(latest);
+  }, [closings, inspectingClosing, isAdjusting]);
 
   // Estados do Modo de Ajuste pelo Financeiro
-  const [isAdjusting, setIsAdjusting] = useState(false);
   const [editMeios, setEditMeios] = useState<StorePaymentMethods>({
     dinheiro: 0,
     pixKais: 0,
@@ -469,7 +480,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                 {/* Valor Total do Dia */}
                 <div className="mt-3 p-3 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
                   <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                    Venda Declarada:
+                    Total de vendas:
                   </span>
                   <span className="text-base font-black text-slate-900 dark:text-white">
                     {c.status !== 'pendente' ? formatCurrency(c.vendaTotal, true) : '---'}
@@ -871,17 +882,18 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
               ) : (
                 /* === MODO DE VISUALIZAÇÃO / CONFRONTO NORMAL === */
                 <>
-                  {/* Total Geral Declarado */}
-                  <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+                  {/* Totais declarados */}
+                  {[0, 1].map(copy => (
+                  <div key={copy} data-summary={copy === 0 ? 'cash-balance' : 'sales-total'} title={copy === 0 ? 'Saldo aprovado até o dia anterior, mais o dinheiro deste fechamento, menos suas despesas, depósitos e vales. Cada lançamento é considerado apenas uma vez.' : undefined} className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
                     <div>
                       <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">
-                        Faturamento Total Declarado
+                        {copy === 0 ? 'Saldo declarado' : 'Venda do dia'}
                       </span>
                       <span className="text-xl sm:text-2xl font-black text-emerald-950 dark:text-emerald-100">
-                        {formatCurrency(inspectingClosing.vendaTotal, true)}
+                        {copy === 0 ? declaredBalance !== null ? formatCurrency(declaredBalance, true) : 'Saldo indisponível' : formatCurrency(inspectingClosing.vendaTotal, true)}
                       </span>
                     </div>
-                    {inspectingClosing.quantidadeVendas && (
+                    {copy === 1 && inspectingClosing.quantidadeVendas && (
                       <div className="text-right">
                         <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
                           {inspectingClosing.quantidadeVendas} Vendas
@@ -892,6 +904,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                       </div>
                     )}
                   </div>
+                  ))}
 
                   {/* Informação de Ajuste se já tiver sido retificado */}
                   {inspectingClosing.ajustadoPorFinanceiro && (
@@ -967,7 +980,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                   <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-800">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                        Despesas e Depósitos do Caixa
+                        Saídas do Caixa
                       </h4>
                       <span className="text-xs font-bold text-slate-500">
                         {inspectingClosing.despesas.length} itens
@@ -979,7 +992,7 @@ export const FinancialDailyClosingQueue: React.FC<FinancialDailyClosingQueueProp
                       <div className="space-y-1">
                         {inspectingClosing.despesas.map((d, i) => (
                           <div key={d.id} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
-                            <span>{i + 1}. {d.tipo === 'deposito' ? 'Depósito' : 'Despesa'}: {d.descricao}</span>
+                            <span>{i + 1}. {d.tipo === 'vale_funcionario' ? 'Vale funcionário' : d.tipo === 'deposito' ? 'Depósito' : 'Despesa'}: {d.descricao}</span>
                             <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(d.valor, true)}</span>
                           </div>
                         ))}

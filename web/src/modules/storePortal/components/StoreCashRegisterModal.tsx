@@ -199,8 +199,10 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
     setDespesas(prev => prev.filter(item => item.id !== id));
   };
 
-  const totalDespesas = despesas.filter(item => item.tipo !== 'deposito').reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+  const totalDespesas = despesas.filter(item => (item.tipo ?? 'despesa') === 'despesa').reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
   const totalDepositos = despesas.filter(item => item.tipo === 'deposito').reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
+
+  const totalVales = despesas.filter(item => item.tipo === 'vale_funcionario').reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
 
   // Soma dos meios de pagamento
   const totalMeios =
@@ -517,7 +519,7 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Despesas / Depósitos do Dia
+                  Despesas / Depósitos / Vales do Dia
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   Gastos e saídas pagas diretamente pelo caixa da loja
@@ -535,7 +537,7 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
 
             {despesas.length === 0 ? (
               <div className="p-3 text-center text-xs text-slate-400 italic rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                Nenhuma despesa ou depósito lançado neste dia.
+                Nenhuma saída lançada neste dia.
               </div>
             ) : (
               <div className="space-y-2">
@@ -544,10 +546,10 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
                     <span className="text-[11px] font-bold text-slate-400 w-4">
                       {idx + 1}.
                     </span>
-                    <select aria-label={`Tipo da saída ${idx + 1}`} value={item.tipo ?? 'despesa'} onChange={event => handleUpdateExpense(item.id, 'tipo', event.target.value)} className="w-28 px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"><option value="despesa">Despesa</option><option value="deposito">Depósito</option></select>
+                    <select aria-label={`Tipo da saída ${idx + 1}`} value={item.tipo ?? 'despesa'} onChange={event => handleUpdateExpense(item.id, 'tipo', event.target.value)} className="w-32 sm:w-36 px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"><option value="despesa">Despesa</option><option value="deposito">Depósito</option><option value="vale_funcionario">Vale funcionário</option></select>
                     <input
                       type="text"
-                      placeholder={item.tipo === 'deposito' ? 'Descrição do depósito' : 'Descrição da despesa'}
+                      placeholder={item.tipo === 'vale_funcionario' ? 'Descrição do vale funcionário' : item.tipo === 'deposito' ? 'Descrição do depósito' : 'Descrição da despesa'}
                       value={item.descricao}
                       onChange={(e) => handleUpdateExpense(item.id, 'descricao', e.target.value)}
                       className="flex-1 min-w-0 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-1 focus:ring-emerald-500"
@@ -572,8 +574,8 @@ export const StoreCashRegisterModal: React.FC<StoreCashRegisterModalProps> = ({
                   </div>
                 ))}
 
-                <div className="flex justify-end pt-1 text-xs font-extrabold text-slate-700 dark:text-slate-300">
-                  Total de Despesas: <span className="text-rose-600 dark:text-rose-400 ml-1.5">{formatCurrency(totalDespesas, true)}</span><span className="ml-3">Depósitos: {formatCurrency(totalDepositos, true)}</span>
+                <div className="flex flex-wrap justify-end gap-y-1 pt-1 text-xs font-extrabold text-slate-700 dark:text-slate-300">
+                  Total de Despesas: <span className="text-rose-600 dark:text-rose-400 ml-1.5">{formatCurrency(totalDespesas, true)}</span><span className="ml-3">Depósitos: {formatCurrency(totalDepositos, true)}</span><span className="ml-3">Vales: {formatCurrency(totalVales, true)}</span>
                 </div>
               </div>
             )}

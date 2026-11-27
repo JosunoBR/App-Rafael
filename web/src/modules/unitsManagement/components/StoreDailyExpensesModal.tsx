@@ -171,7 +171,7 @@ export const StoreDailyExpensesModal: React.FC<StoreDailyExpensesModalProps> = (
                     {dia.sangriaDia && dia.sangriaDia > 0 ? (
                       <>
                         <span className="text-slate-300 dark:text-slate-700">|</span>
-                        <span className="text-amber-500 font-bold" title="Sangria para depósito">
+                        <span className="text-amber-500 font-bold" title="Depósitos e vales para funcionários">
                           Sangria: - {formatCurrency(dia.sangriaDia)}
                         </span>
                       </>
@@ -198,7 +198,7 @@ export const StoreDailyExpensesModal: React.FC<StoreDailyExpensesModalProps> = (
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap mb-1">
-                                {despesa.tipo === 'deposito' ? <span className="text-amber-600 dark:text-amber-400 text-[10px] font-bold">Depósito</span> : getCategoryBadge(despesa.categoria)}
+                                {despesa.tipo === 'deposito' || despesa.tipo === 'vale_funcionario' ? <span className="text-amber-600 dark:text-amber-400 text-[10px] font-bold">{despesa.tipo === 'vale_funcionario' ? 'Vale funcionário' : 'Depósito'}</span> : getCategoryBadge(despesa.categoria)}
                                 {despesa.hora && (
                                   <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
                                     <Clock className="w-3 h-3" />

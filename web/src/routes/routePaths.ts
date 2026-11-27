@@ -1,3 +1,5 @@
+import { FRANCHISE_MODULES } from '../shared/franchiseModules';
+
 /**
  * TABELA OFICIAL DE ROTAS WEB DO SISTEMA
  * Centraliza os caminhos das URLs para evitar strings mágicas espalhadas.
@@ -56,7 +58,8 @@ export const NAV_TAB_TO_PATH: Record<string, string> = {
   units_calendar: ROUTE_PATHS.UNITS_CALENDAR,
   units_history: ROUTE_PATHS.UNITS_HISTORY,
   goals: ROUTE_PATHS.GOALS,
-  near_expiry: ROUTE_PATHS.NEAR_EXPIRY
+  near_expiry: ROUTE_PATHS.NEAR_EXPIRY,
+  ...Object.fromEntries(FRANCHISE_MODULES.map(module => [module.id, `/franquias/${module.id.slice('franchise_'.length).replaceAll('_', '-')}`]))
 };
 
 export const PATH_TO_NAV_TAB: Record<string, string> = Object.entries(NAV_TAB_TO_PATH).reduce(

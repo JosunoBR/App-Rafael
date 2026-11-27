@@ -13,15 +13,19 @@ module.exports = async function checkHolidaysBrowser(base, tokens) {
     root: { id: 'usr_root', role: 'root', nome: 'Root', token: tokens.root },
   };
   const fixture = `import React from 'react'; import { createRoot } from 'react-dom/client'; import '/src/index.css';
+    import { StoresCashPage } from '/src/modules/unitsManagement/pages/StoresCashPage.tsx';
     import { StorePortalPage } from '/src/modules/storePortal/pages/StorePortalPage.tsx';
+    import { StoreCashRegisterModal } from '/src/modules/storePortal/components/StoreCashRegisterModal.tsx';
     import { UnitsCalendarPage } from '/src/modules/unitsManagement/pages/UnitsCalendarPage.tsx';
     import { UnitsManagementPage } from '/src/modules/unitsManagement/pages/UnitsManagementPage.tsx';
     import { GoalsExecutivePage } from '/src/modules/goalsExecutive/pages/GoalsExecutivePage.tsx';
     import { StoresHistoryPage } from '/src/modules/unitsManagement/pages/StoresHistoryPage.tsx';
     const query = new URLSearchParams(location.search), user = ${JSON.stringify(users)}[query.get('user') || 'root'];
     localStorage.setItem('mega12_user', JSON.stringify(user));
-    const component = { portal: StorePortalPage, conference: UnitsManagementPage, calendar: UnitsCalendarPage, goals: GoalsExecutivePage, history: StoresHistoryPage }[query.get('view')];
-    createRoot(document.getElementById('root')).render(React.createElement(component, { currentUser: user, unitName: user.id === 'holiday_a' ? 'Castro' : 'Imbaú' }));`;
+    const component = { portal: StorePortalPage, cash: StoresCashPage, conference: UnitsManagementPage, calendar: UnitsCalendarPage, goals: GoalsExecutivePage, history: StoresHistoryPage }[query.get('view')];
+    createRoot(document.getElementById('root')).render(query.get('view') === 'cash-form'
+      ? React.createElement(StoreCashRegisterModal, { isOpen: true, dateStr: '2026-11-25', onClose: () => {}, onSave: async () => true })
+      : React.createElement(component, { currentUser: user, unitName: user.id === 'holiday_a' ? 'Castro' : 'Imbaú', showToast: message => { document.body.dataset.toast = message; } }));`;
   const vite = await createServer({ root: path.resolve(__dirname, '../../web'), server: { host: '127.0.0.1', port: 0 }, plugins: [{
     name: 'holiday-local-browser-test',
     transform(code, id) { if (id.replaceAll('\\','/').endsWith('/src/utils/config.ts')) return { code: `export const API_BASE_URL=${JSON.stringify(base)}; export const API_HOST=${JSON.stringify(base)};`, map: null }; },
@@ -47,6 +51,34 @@ module.exports = async function checkHolidaysBrowser(base, tokens) {
     const a = await newPage();
     await a.clock.install({ time: new Date('2026-11-25T15:00:00Z') });
     const open = (page, view, user = 'root') => page.goto(`${origin}?view=${view}&user=${user}`);
+    const cashForm = await newPage();
+    await open(cashForm, 'cash-form', 'a');
+    await cashForm.getByRole('button', { name: 'Adicionar saída', exact: true }).click();
+    await cashForm.getByLabel('Tipo da saída 1', {exact:true}).selectOption({label:'Vale funcionário'});
+    await cashForm.getByPlaceholder('Descrição do vale funcionário').fill('Vale de teste');
+    assert.equal(await cashForm.getByLabel('Tipo da saída 1', {exact:true}).inputValue(),'vale_funcionario');
+    await cashForm.close();
+    const rejectedClosing = await newPage();
+    await rejectedClosing.clock.install({time:new Date('2026-11-25T15:00:00Z')});
+    let rejectionMessage = 'Tipo de saída inválido. Selecione Despesa ou Depósito.';
+    await rejectedClosing.route('**/store-closings/holiday_b/2026-11-24', async route => {
+      assert.equal(route.request().method(),'PUT');
+      assert.equal(route.request().postDataJSON().memorando,'','Memorando vazio deve ser enviado sem exigir preenchimento.');
+      await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:rejectionMessage})});
+    });
+    await open(rejectedClosing,'portal','b');
+    await rejectedClosing.locator('[data-date="2026-11-24"]').click();
+    await rejectedClosing.locator('input[required]').fill('100,00');
+    await rejectedClosing.getByRole('button',{name:'Adicionar saída',exact:true}).click();
+    await rejectedClosing.getByLabel('Tipo da saída 1',{exact:true}).selectOption('vale_funcionario');
+    await rejectedClosing.getByPlaceholder('Descrição do vale funcionário').fill('Vale preservado');
+    await rejectedClosing.getByRole('button',{name:'Enviar Fechamento',exact:true}).click();
+    await rejectedClosing.waitForFunction(()=>document.body.dataset.toast?.includes('Reinicie o backend'));
+    assert.equal(await rejectedClosing.getByPlaceholder('Descrição do vale funcionário').inputValue(),'Vale preservado');
+    rejectionMessage = 'O valor da saída deve ser maior que zero.';
+    await rejectedClosing.getByRole('button',{name:'Enviar Fechamento',exact:true}).click();
+    await rejectedClosing.waitForFunction(()=>document.body.dataset.toast==='O valor da saída deve ser maior que zero.');
+    await rejectedClosing.close();
     const expectDays = (page, count) => page.getByText(`Jornada de Metas do Mês • ${count} dias úteis`, { exact: true }).waitFor();
     await open(a, 'portal', 'a'); await expectDays(a, 23);
     await a.getByRole('button', { name: 'Solicitar feriado em 2026-11-26', exact: true }).click();
@@ -165,6 +197,30 @@ module.exports = async function checkHolidaysBrowser(base, tokens) {
     await central.setViewportSize({ width: 390, height: 844 });
     assert.equal(await central.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await central.screenshot({ path: path.join(artifacts, 'central-calendar-mobile.png'), fullPage: true });
+
+    const cashClosingResponse = await fetch(`${base}/store-closings/holiday_a/2026-11-24`, {method:'PUT',headers:{Authorization:`Bearer ${tokens.root}`,'Content-Type':'application/json'},body:JSON.stringify({vendaTotal:1000,meiosPagamento:{dinheiro:500,pixKais:500},despesas:[{descricao:'Limpeza teste',valor:50,tipo:'despesa'},{descricao:'Depósito teste',valor:100,tipo:'deposito'}],memorando:''})});
+    assert.equal(cashClosingResponse.status,200); const cashClosing=await cashClosingResponse.json();
+    assert.equal((await fetch(`${base}/store-closings/${cashClosing.id}/review`,{method:'POST',headers:{Authorization:`Bearer ${tokens.root}`,'Content-Type':'application/json'},body:JSON.stringify({decision:'aprovado',note:''})})).status,200);
+    const laterClosingResponse=await fetch(`${base}/store-closings/holiday_a/2026-11-30`,{method:'PUT',headers:{Authorization:`Bearer ${tokens.root}`,'Content-Type':'application/json'},body:JSON.stringify({vendaTotal:700,meiosPagamento:{dinheiro:700},despesas:[],memorando:''})});assert.equal(laterClosingResponse.status,200);const laterClosing=await laterClosingResponse.json();
+    assert.equal((await fetch(`${base}/store-closings/${laterClosing.id}/review`,{method:'POST',headers:{Authorization:`Bearer ${tokens.root}`,'Content-Type':'application/json'},body:JSON.stringify({decision:'aprovado',note:''})})).status,200);
+    const cashPage = await newPage();await cashPage.clock.install({time:new Date('2026-11-25T15:00:00Z')});
+    await open(cashPage,'cash');
+    const cashRow=cashPage.locator('tbody tr').filter({has:cashPage.getByText('Castro',{exact:true})});
+    await cashRow.waitFor();
+    const cashValue=await cashRow.locator('td').nth(4).innerText();assert.ok(cashValue.includes('1.875,00'));
+    const conference=await newPage();await conference.clock.install({time:new Date('2026-11-25T15:00:00Z')});
+    await open(conference,'conference');
+    await conference.getByText('Castro',{exact:true}).click();
+    const balanceSummary=conference.locator('[data-summary="cash-balance"]');
+    await conference.waitForFunction(()=>document.querySelector('[data-summary="cash-balance"]')?.textContent.includes('1.175,00'));
+    assert.ok((await balanceSummary.textContent()).includes('Saldo declarado'));
+    await conference.getByText('3. Vale funcionário: Vale funcionário do dia', {exact:true}).waitFor();
+    assert.ok((await conference.locator('[data-summary="sales-total"]').innerText()).includes('1.000,00'),'O saldo acumulado deve ser diferente do faturamento do fechamento.');
+    assert.equal((await balanceSummary.innerText()).includes('Ticket Médio'),false,'Ticket e quantidade de vendas pertencem somente ao faturamento.');
+    assert.ok((await balanceSummary.innerText()).includes('1.175,00'),'Saldo anterior (350) mais dinheiro do dia (1.000), menos despesa (50), depósito (100) e vale funcionário (25), excluindo o dia posterior aprovado.');
+    assert.ok(cashValue.includes('1.875,00'),'O saldo mensal do Caixa inclui o dia posterior, enquanto a conferência respeita a data do fechamento.');
+    for(let refresh=0;refresh<2;refresh++){await conference.reload();await conference.getByText('Castro',{exact:true}).click();await conference.waitForFunction(()=>document.querySelector('[data-summary="cash-balance"]')?.textContent.includes('1.175,00'));}
+    assert.ok((await balanceSummary.innerText()).includes('1.175,00'),'Reabrir e atualizar não podem acumular o valor novamente.');
     assert.deepEqual(errors, []);
     console.log('Navegador local: solicitação, aprovação, isolamento de unidades, feriado geral, metas, histórico diário e cancelamento com recálculo verificados.');
   } finally { if (browser) await browser.close(); await vite.close(); }

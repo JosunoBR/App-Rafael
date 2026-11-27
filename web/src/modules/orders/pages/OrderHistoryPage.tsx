@@ -17,6 +17,7 @@ import {
   X,
   RotateCcw,
   CreditCard,
+  FileText,
   Scale,
   AlertTriangle,
   Clock,
@@ -35,7 +36,7 @@ import { OrderRollbackModal } from '../components/OrderRollbackModal';
 import { DeliveryAlertBanner } from '../components/DeliveryAlertBanner';
 import { getOrderDeliveryAlert } from '../../../utils/deliveryAlerts';
 import { User } from '../../../shared/types';
-import { canConfirmReceipt, canAuthorizeFinancialRelease, canEditSpecificOrder, canRollbackOrderStatus } from '../../../shared/permissions';
+import { canConfirmReceipt, canAuthorizeFinancialRelease, canEditSpecificOrder, canRollbackOrderStatus, canCorrectReceiptInvoice } from '../../../shared/permissions';
 
 interface OrderHistoryPageProps {
   orders: PurchaseOrder[];
@@ -47,6 +48,7 @@ interface OrderHistoryPageProps {
   onUpdateOrderStatus?: (order: PurchaseOrder, newStatus: string) => void;
   onNavigateToSeparation?: (order: PurchaseOrder) => void;
   onConfirmReceipt?: (order: PurchaseOrder) => void;
+  onCorrectReceiptInvoice?: (order: PurchaseOrder) => void;
   onAuthorizeFinancial?: (order: PurchaseOrder) => void;
   onRollbackSuccess?: (updatedOrder: PurchaseOrder) => void;
   onRescheduleOrder?: (order: PurchaseOrder) => void;
@@ -101,6 +103,7 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
   onUpdateOrderStatus,
   onNavigateToSeparation,
   onConfirmReceipt,
+  onCorrectReceiptInvoice,
   onAuthorizeFinancial,
   onRollbackSuccess,
   onRescheduleOrder
@@ -1646,6 +1649,17 @@ export const OrderHistoryPage: React.FC<OrderHistoryPageProps> = ({
                               title="Excluir este pedido"
                             >
                               <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {ord.header.recebidoMatriz && onCorrectReceiptInvoice && canCorrectReceiptInvoice(currentUser, statusAtual) && (
+                            <button
+                              type="button"
+                              onClick={() => onCorrectReceiptInvoice(ord)}
+                              className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/60 transition cursor-pointer"
+                              title="Corrigir número da NF recebida (exige justificativa e senha)"
+                            >
+                              <FileText className="w-4 h-4" />
                             </button>
                           )}
 

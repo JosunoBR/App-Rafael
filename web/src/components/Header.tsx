@@ -37,6 +37,7 @@ import { PurchaseOrder, User, UserRole } from '../shared/types';
 import { ActiveNavTab, canAccessTab, canCreateOrEditOrders, canEditSpecificOrder, canEditClosedOrders } from '../shared/permissions';
 import { calculateOrderNetTotal } from '../utils/installments';
 import { LOGO_MEGA12_BASE64 } from '../assets/logoBase64';
+import { FRANCHISE_MODULES, isFranchiseNavTab } from '../shared/franchiseModules';
 
 interface HeaderProps {
   activeNav: ActiveNavTab;
@@ -147,6 +148,10 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Configurações de Título e Ícone da Página Ativa
   const getNavMeta = (tab: ActiveNavTab) => {
+    if (isFranchiseNavTab(tab)) {
+      const module = FRANCHISE_MODULES.find(item => item.id === tab);
+      return { title: module?.label || 'Franquias', group: 'Franquias', icon: Store, color: 'text-emerald-500' };
+    }
     switch (tab) {
       case 'home':
         return { title: 'Início', group: 'Operação', icon: Home, color: 'text-emerald-500' };

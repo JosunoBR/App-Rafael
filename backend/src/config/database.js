@@ -76,6 +76,47 @@ async function getDatabase() {
       active INTEGER NOT NULL DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS franchise_announcements (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 160),
+      body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 10000),
+      audience TEXT NOT NULL CHECK(audience IN ('all','selected')),
+      status TEXT NOT NULL DEFAULT 'published' CHECK(status IN ('published','archived')),
+      authorId TEXT NOT NULL,
+      authorName TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      archivedAt TEXT,
+      archivedBy TEXT
+    );
+    CREATE TABLE IF NOT EXISTS franchise_announcement_targets (
+      announcementId TEXT NOT NULL REFERENCES franchise_announcements(id) ON DELETE CASCADE,
+      storeId TEXT NOT NULL REFERENCES stores(id) ON DELETE RESTRICT,
+      PRIMARY KEY (announcementId, storeId)
+    );
+    CREATE INDEX IF NOT EXISTS idx_franchise_announcements_created ON franchise_announcements(createdAt DESC);
+    CREATE INDEX IF NOT EXISTS idx_franchise_announcements_status ON franchise_announcements(status,createdAt DESC);
+    CREATE INDEX IF NOT EXISTS idx_franchise_announcement_targets_store ON franchise_announcement_targets(storeId,announcementId);
+    CREATE TABLE IF NOT EXISTS franchise_announcement_audit (
+      id TEXT PRIMARY KEY,
+      announcementId TEXT NOT NULL REFERENCES franchise_announcements(id),
+      action TEXT NOT NULL CHECK(action IN ('published','archived')),
+      actorId TEXT NOT NULL,
+      occurredAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS franchise_audit_log (
+      id TEXT PRIMARY KEY,
+      module TEXT NOT NULL,
+      action TEXT NOT NULL,
+      resourceId TEXT,
+      resourceType TEXT,
+      actorId TEXT NOT NULL,
+      actorRole TEXT NOT NULL,
+      occurredAt TEXT NOT NULL,
+      detailsJson TEXT DEFAULT '{}',
+      ipAddress TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS store_daily_memos (
       id TEXT PRIMARY KEY,
       storeId TEXT NOT NULL REFERENCES stores(id) ON DELETE RESTRICT,
@@ -101,6 +142,21 @@ async function getDatabase() {
       FOREIGN KEY (storeId,memoDate,memoVersion) REFERENCES store_daily_memos(storeId,memoDate,version)
     );
     CREATE INDEX IF NOT EXISTS idx_store_memo_attachments_date ON store_memo_attachments(storeId,memoDate);
+
+    CREATE TABLE IF NOT EXISTS files (
+      id TEXT PRIMARY KEY,
+      storageName TEXT NOT NULL UNIQUE,
+      originalName TEXT NOT NULL,
+      mimeType TEXT NOT NULL,
+      sizeBytes INTEGER NOT NULL CHECK(sizeBytes > 0),
+      module TEXT NOT NULL,
+      resourceId TEXT NOT NULL,
+      uploadedBy TEXT NOT NULL,
+      uploadedAt TEXT NOT NULL,
+      downloadCount INTEGER NOT NULL DEFAULT 0,
+      lastDownloadedAt TEXT,
+      checksum TEXT NOT NULL
+    );
 
     CREATE TABLE IF NOT EXISTS store_holidays (
       id TEXT PRIMARY KEY,
@@ -980,9 +1036,7 @@ async function getDatabase() {
     console.warn('Aviso ao executar limpeza de idempotência:', cleanErr.message);
   }
 
-  if (!dbInstance.exec('PRAGMA table_info(store_daily_expenses)')[0].values.some(column => column[1] === 'movementType')) {
-    dbInstance.run("ALTER TABLE store_daily_expenses ADD COLUMN movementType TEXT NOT NULL DEFAULT 'despesa' CHECK(movementType IN ('despesa','deposito'))");
-  }
+  require('../migrations/storeExpenseTypes').ensureStoreExpenseTypes(dbInstance);
   if (!dbInstance.exec('PRAGMA table_info(store_daily_closings)')[0].values.some(column => column[1] === 'submittedByName')) {
     dbInstance.run('ALTER TABLE store_daily_closings ADD COLUMN submittedByName TEXT');
   }

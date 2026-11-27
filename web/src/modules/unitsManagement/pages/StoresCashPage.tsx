@@ -1,3 +1,4 @@
+import { useStoreCashBalances } from '../utils/useStoreCashBalances';
 import { useTableSort } from '../../../shared/useTableSort';
 import { SortHeader } from '../../../shared/components/SortHeader';
 import React, { useState } from 'react';
@@ -19,10 +20,8 @@ import {
 } from 'lucide-react';
 import { User } from '../../../shared/types';
 import { StoreCashBalance } from '../types/unitsCash.types';
-import { INITIAL_STORES_CASH_BALANCES } from '../mock/unitsCashMockData';
 import { StoreDailyExpensesModal } from '../components/StoreDailyExpensesModal';
 import { formatCurrency } from '../../../utils/masks';
-import { apiFetch } from '../../../utils/api';
 
 interface StoresCashPageProps {
   currentUser?: User;
@@ -30,7 +29,7 @@ interface StoresCashPageProps {
 }
 
 export const StoresCashPage: React.FC<StoresCashPageProps> = ({
-  currentUser: _currentUser,
+  currentUser,
   showToast
 }) => {
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -40,13 +39,6 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
       return new Date().toLocaleDateString('en-CA').slice(0, 7);
     }
   });
-  const [registryRevision, setRegistryRevision] = useState(0);
-  React.useEffect(() => {
-    const update = () => setRegistryRevision(value => value + 1);
-    const timer = window.setInterval(update, 15000);
-    window.addEventListener('focus', update);
-    return () => { window.clearInterval(timer); window.removeEventListener('focus', update); };
-  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [inspectingStore, setInspectingStore] = useState<StoreCashBalance | null>(null);
 
@@ -68,46 +60,11 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
     setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   };
 
-  /**
-   * NOTA DE ARQUITETURA PARA O BACKEND:
-   * A lista abaixo é dinâmica e deve ser carregada via endpoint (ex: `GET /api/units/cash-balances?month=2026-11`).
-   * No backend, cada registro deve ser gerado a partir do somatório de:
-   *  + Fundo fixo de troco cadastrado para a filial
-   *  + Vendas em dinheiro (meiosPagamento.dinheiro) dos fechamentos diários aprovados
-   *  - Total de despesas pagas em dinheiro registradas pelo caixa da loja
-   *  - Total de sangrias informadas e conferidas
-   *  = Montante Acumulado Atual em Caixa (Espécie)
-   */
-  const [storesCash, setStoresCash] = useState<StoreCashBalance[]>(INITIAL_STORES_CASH_BALANCES);
-  React.useEffect(() => {
-    let active = true;
-    Promise.all([
-      apiFetch('/config/stores').then(response => response.json()),
-      apiFetch(`/store-closings?month=${selectedMonth}`).then(response => response.json())
-    ]).then(([stores, closings]) => {
-      if (!active) return;
-      setStoresCash(stores.map((store: any) => {
-        const approved = closings.filter((row: any) => row.storeId === store.id && row.status === 'aprovado');
-        const movements = approved.map((row: any) => {
-          const expenses = row.expenses.map((expense: any) => ({ id: expense.id, descricao: expense.description,
-            valor: expense.amountCents / 100, tipo: (expense.movementType ?? 'despesa') as 'despesa' | 'deposito', categoria: 'outros' as const }));
-          const totalDespesas = expenses.filter((expense: { tipo: string }) => expense.tipo !== 'deposito').reduce((sum: number, expense: { valor: number }) => sum + expense.valor, 0);
-          const sangriaDia = expenses.filter((expense: { tipo: string }) => expense.tipo === 'deposito').reduce((sum: number, expense: { valor: number }) => sum + expense.valor, 0);
-          return { data: row.closingDate, dataFormatada: row.closingDate.split('-').reverse().join('/'),
-            diaSemana: '', entradaDinheiro: row.cashCents / 100, despesas: expenses, totalDespesas, sangriaDia,
-            saldoLiquidoDia: row.cashCents / 100 - totalDespesas - sangriaDia, responsavel: row.submittedByName || '', memorando: row.memo };
-        });
-        const totalEntradasDinheiro = movements.reduce((sum: number, item: { entradaDinheiro: number }) => sum + item.entradaDinheiro, 0);
-        const totalDespesas = movements.reduce((sum: number, item: { totalDespesas: number }) => sum + item.totalDespesas, 0);
-        const totalSangrias = movements.reduce((sum: number, item: { sangriaDia: number }) => sum + item.sangriaDia, 0);
-        return { lojaId: store.id, lojaCodigo: store.shortName || '', lojaNome: store.name,
-          cidade: '', responsavel: '', fundoDeCaixa: 0, totalEntradasDinheiro, totalDespesas,
-          totalSangrias, saldoAtualEmCaixa: totalEntradasDinheiro - totalDespesas - totalSangrias,
-          ultimaAtualizacao: approved[0]?.updatedAt || '', movimentacoes: movements };
-      }));
-    }).catch(() => { if (active) showToast?.('Não foi possível carregar o caixa das unidades.', 'error'); });
-    return () => { active = false; };
-  }, [selectedMonth, registryRevision]);
+  const cash = useStoreCashBalances(selectedMonth, currentUser?.id);
+  const storesCash = cash.rows;
+  const notify = React.useRef(showToast);
+  React.useEffect(() => { notify.current = showToast; }, [showToast]);
+  React.useEffect(() => { if (cash.error) notify.current?.(cash.error, 'error'); }, [cash.error]);
 
   // Filtro de Busca
   const filteredStores = storesCash.filter(store => {
@@ -210,7 +167,7 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
               Lista Dinâmica Integrada ao Cadastro
             </span>
             <span>•</span>
-            <span>Valores dos fechamentos aprovados: entradas em dinheiro menos despesas e depósitos. O fundo fixo de troco ainda não está cadastrado.</span>
+            <span>Valores dos fechamentos aprovados: entradas em dinheiro menos despesas, depósitos e vales. O fundo fixo de troco ainda não está cadastrado.</span>
           </div>
 
 
@@ -272,7 +229,7 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
         <div className="p-5 rounded-3xl bg-white dark:bg-[#0B132B] border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Sangrias / Depósitos
+              Depósitos / Vales
             </span>
             <ShieldAlert className="w-4 h-4 text-amber-500" />
           </div>
@@ -280,7 +237,7 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
             - {formatCurrency(totalSangriasRede)}
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
-            Retiradas depositadas em banco
+            Depósitos e vales para funcionários
           </p>
         </div>
 
@@ -328,7 +285,6 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
                 <SortHeader sort={sorting} column="lojaNome" className="py-3.5 px-4">Unidade / Loja</SortHeader>
-                <SortHeader sort={sorting} column="fundoDeCaixa" className="py-3.5 px-3 text-right">Troco Fixo</SortHeader>
                 <SortHeader sort={sorting} column="totalEntradasDinheiro" className="py-3.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">Entradas (+)</SortHeader>
                 <SortHeader sort={sorting} column="totalDespesas" className="py-3.5 px-3 text-right font-bold text-rose-500">Despesas (-)</SortHeader>
                 <SortHeader sort={sorting} column="totalSangrias" className="py-3.5 px-3 text-right font-bold text-amber-500">Sangrias (-)</SortHeader>
@@ -355,11 +311,6 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
                           </div>}
                         </div>
                       </div>
-                    </td>
-
-                    {/* Troco Fixo */}
-                    <td className="py-3.5 px-3 text-right font-mono text-slate-500">
-                      {formatCurrency(store.fundoDeCaixa)}
                     </td>
 
                     {/* Entradas em Dinheiro */}

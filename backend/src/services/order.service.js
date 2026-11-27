@@ -1247,6 +1247,107 @@ class OrderService {
   }
 
   /**
+   * Corrige somente o número da NF já registrada no recebimento.
+   * Não altera valores, parcelas, estoque ou a etapa da esteira.
+   */
+  async correctReceiptInvoice(orderId, { numeroNotaFiscal, motivo, password, expectedVersion }, currentUser) {
+    if (!currentUser) {
+      const err = new Error('Acesso não autorizado. Identificação de usuário necessária.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const nextInvoice = String(numeroNotaFiscal || '').trim();
+    const reason = String(motivo || '').trim();
+    if (!nextInvoice || nextInvoice.length > 50) {
+      const err = new Error('Informe um número de NF válido, com no máximo 50 caracteres.');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!reason || reason.length > 500) {
+      const err = new Error('A justificativa é obrigatória e deve ter no máximo 500 caracteres.');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!password || typeof password !== 'string' || !password.trim()) {
+      const err = new Error('A confirmação da sua senha de acesso é obrigatória.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const userRepository = require('../repositories/userRepository');
+    const bcrypt = require('bcryptjs');
+    const dbUser = (currentUser.id ? await userRepository.findById(currentUser.id) : null) ||
+      (currentUser.email ? await userRepository.findByEmailOrAlias(currentUser.email) : null);
+    if (!dbUser) {
+      const err = new Error('Usuário autenticado não encontrado no sistema.');
+      err.statusCode = 401;
+      throw err;
+    }
+    const isPasswordValid = dbUser.senha && dbUser.senha.startsWith('$2')
+      ? await bcrypt.compare(password.trim(), dbUser.senha)
+      : dbUser.senha === password.trim();
+    if (!isPasswordValid) {
+      const err = new Error('Senha de confirmação incorreta. A NF não foi alterada.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const order = await orderRepository.findById(orderId);
+    if (!order) {
+      const err = new Error('Pedido não encontrado.');
+      err.statusCode = 404;
+      throw err;
+    }
+    checkPipelineVersion(order, expectedVersion);
+
+    const status = order.header?.status || 'Em Cotação';
+    if (!['Faturamento', 'Finalizado'].includes(status)) {
+      const err = new Error('A correção da NF está disponível somente no Faturamento ou após a finalização.');
+      err.statusCode = 409;
+      throw err;
+    }
+    if (!order.header?.recebidoMatriz) {
+      const err = new Error('O pedido ainda não possui recebimento físico confirmado na Matriz.');
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const previousInvoice = String(order.header.numeroNotaFiscal || '').trim();
+    if (previousInvoice === nextInvoice) {
+      const err = new Error('A nova NF é igual à NF já registrada.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    order.header.numeroNotaFiscal = nextInvoice;
+    order.header.updatedAt = new Date().toISOString();
+    const saved = await orderRepository.save(order);
+
+    await distributionAuditRepo.create({
+      orderId: saved.header.id,
+      numeroPedido: saved.header.numeroPedido,
+      fornecedor: saved.header.fornecedor,
+      usuarioId: currentUser.id || null,
+      usuarioNome: currentUser.nome || currentUser.email || 'Usuário',
+      usuarioRole: currentUser.role,
+      acao: 'CORRECAO_NF_RECEBIDA',
+      detalhesJson: {
+        numeroNotaFiscalAnterior: previousInvoice || null,
+        numeroNotaFiscalNovo: nextInvoice,
+        statusPedido: status
+      },
+      observacoes: reason
+    }).catch((auditErr) => console.error('Erro ao registrar auditoria da correção de NF:', auditErr));
+
+    return {
+      success: true,
+      message: `NF do pedido ${saved.header.numeroPedido} corrigida com sucesso.`,
+      order: saved
+    };
+  }
+
+  /**
    * Envia o pedido aprovado para a Distribuição entre as lojas.
    * Permitido: diretoria, comprador, deposito
    */

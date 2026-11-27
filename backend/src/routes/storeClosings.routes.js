@@ -29,7 +29,15 @@ router.get('/', (req,res,next) => requirePermission(req.user.role === 'unidade' 
   if (month) { where += ' AND c.closingDate LIKE ?'; params.push(`${month}-%`); }
   if (storeId) { where += ' AND c.storeId = ?'; params.push(storeId); }
   if (req.user.role === 'unidade') { where += ' AND c.storeId = ?'; params.push(req.user.storeId); }
-  const rows = await queryAll(`SELECT c.*,s.name AS storeName,s.shortName,c.submittedByName AS responsibleName FROM store_daily_closings c JOIN stores s ON s.id=c.storeId ${where} ORDER BY c.closingDate DESC,s.name`, params);
+  const rows = await queryAll(`WITH expense_totals AS (
+      SELECT closingId,SUM(amountCents) AS amountCents FROM store_daily_expenses GROUP BY closingId
+    ), closing_balances AS (
+      SELECT c.*,COALESCE(SUM(CASE WHEN c.status='aprovado' THEN c.cashCents-COALESCE(e.amountCents,0) ELSE 0 END)
+        OVER(PARTITION BY c.storeId ORDER BY c.closingDate ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),0) AS cashBalanceBeforeDateCents
+      FROM store_daily_closings c LEFT JOIN expense_totals e ON e.closingId=c.id
+    )
+    SELECT c.*,s.name AS storeName,s.shortName,c.submittedByName AS responsibleName
+    FROM closing_balances c JOIN stores s ON s.id=c.storeId ${where} ORDER BY c.closingDate DESC,s.name`, params);
   return Promise.all(rows.map(async row => ({ ...row, expenses: await queryAll('SELECT id,description,amountCents,financialEntryId,movementType FROM store_daily_expenses WHERE closingId = ?', [row.id]) })));
 }));
 
@@ -55,7 +63,7 @@ router.put('/:storeId/:date', requirePermission('units:submit', 'unidade'), acti
   const expenses = data.despesas.map(item => {
     if (!item || typeof item.descricao !== 'string' || !item.descricao.trim() || item.descricao.length > 500) throw fail('Descrição do gasto inválida.');
     const movementType = item.tipo ?? 'despesa';
-    if (!['despesa','deposito'].includes(movementType)) throw fail('Tipo de saída inválido. Selecione Despesa ou Depósito.');
+    if (!['despesa','deposito','vale_funcionario'].includes(movementType)) throw fail('Tipo de saída inválido. Selecione Despesa, Depósito ou Vale funcionário.');
     const amount = cents(item.valor);
     if (!amount) throw fail('O valor da saída deve ser maior que zero.');
     return { id: randomUUID(), description: item.descricao.trim(), amount, movementType };
@@ -86,7 +94,7 @@ router.post('/:id/review', requirePermission('nav:units_conference', 'faturament
   if (decision === 'aprovado') {
     const expenses = await queryAll('SELECT * FROM store_daily_expenses WHERE closingId=?', [closing.id]);
     for (const expense of expenses) {
-      if (expense.movementType === 'deposito') continue;
+      if (expense.movementType !== 'despesa') continue;
       const entryId = `store-expense:${expense.id}`;
       await execute(`INSERT INTO financial_entries(id,tipo,descricao,categoria,storeId,lojaNome,formaPagamento,documentoRef,dataVencimento,valor,status,dataPagamento,valorPago,observacao,createdAt,updatedAt)
         VALUES(?,'despesa',?,'OPERACIONAL',?,?,'DINHEIRO',?,?,?,'Pago',?,?,?, ?,?)`,

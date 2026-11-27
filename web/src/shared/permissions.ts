@@ -1,5 +1,6 @@
 import { User, UserRole } from './types';
 import { PERMISSIONS_MAP } from './permissionsCatalog';
+import { isFranchiseNavTab, type FranchiseNavTab } from './franchiseModules';
 
 export type ActiveNavTab = 
   | 'home' 
@@ -22,7 +23,8 @@ export type ActiveNavTab =
   | 'units_bi'
   | 'units_calendar'
   | 'units_history'
-  | 'near_expiry';
+  | 'near_expiry'
+  | FranchiseNavTab;
 
 export type UserLike = 
   | User 
@@ -88,6 +90,13 @@ export function canAccessTab(userOrRole?: UserLike, tab?: ActiveNavTab | null): 
   if (!userOrRole || !tab) return false;
 
   const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+  const isRoot = role === 'root' || (typeof userOrRole === 'object' && userOrRole !== null && userOrRole.id === 'usr_root');
+
+  // Telas de franquias: acesso via catálogo de permissões (root continua tendo acesso irrestrito).
+  if (isFranchiseNavTab(tab)) {
+    if (isRoot) return true;
+    return hasPermission(userOrRole, `nav:${tab}`);
+  }
 
   // Se o usuário possui o perfil 'unidade', possui acesso ao portal da loja e ao controle de validades
   if (role === 'unidade') {
@@ -326,6 +335,11 @@ export function canConfirmReceipt(userOrRole?: UserLike, orderStatus?: string | 
   if (!hasPermission(userOrRole, 'pipeline:confirm_receipt')) return false;
   if (!orderStatus) return true;
   return orderStatus !== 'Finalizado';
+}
+
+export function canCorrectReceiptInvoice(userOrRole?: UserLike, orderStatus?: string | null): boolean {
+  if (!hasPermission(userOrRole, 'pipeline:correct_receipt_invoice')) return false;
+  return Boolean(orderStatus && ['Faturamento', 'Finalizado'].includes(orderStatus));
 }
 
 /**

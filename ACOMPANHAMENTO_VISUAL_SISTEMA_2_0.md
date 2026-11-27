@@ -36,3 +36,23 @@
 2. Definir prioridades e disponibilidade no **web versus Android**; separar módulos que exigem fotos, leitura/aceite ou uso offline.
 3. Registrar decisão por módulo nesta tabela: `planejado → prévia visual → regras validadas → backend/API → web integrado → Android integrado → testado/homologado`.
 4. Manter separados o orçamento fechado de caixa/metas/conferência e a ampliação para módulos SULTS/Android até acordo comercial explícito.
+
+## Atualização em 26/11/2026: páginas de Franquias no Mega 12
+
+- O protótipo na pasta `Sults` tem apenas um painel de cartões e um menu demonstrativo; não há páginas de módulos nem API operacional a incorporar.
+- Criadas 13 rotas próprias em `/franquias/`, acessadas pelo submenu **Mega 12 · Franquias**. Cada tela tem descrição, fluxo, campos previstos e listagem adequada ao módulo. Os módulos não confirmados por Bryan estão sinalizados.
+- As novas páginas usam a logo Mega 12, o estilo visual do sistema e acesso temporário restrito ao root no frontend. A tela de unidades consulta o cadastro atual via `/config/stores`; Comunicados grava no SQLite; as outras telas são prévias editáveis sem persistência ou registros simulados.
+- Próxima etapa: validar as regras e os campos por módulo, criar migrações SQLite, endpoints e autorização no servidor, depois conectar as telas e o aplicativo Android aos dados reais.
+
+### Avanço do módulo Comunicados
+
+- Tela própria para publicar avisos para toda a rede ou unidades selecionadas, consultar o histórico e arquivar.
+- Dados gravados nas tabelas SQLite de comunicados, destinatários e auditoria; endpoints protegidos para root.
+- Teste isolado em banco temporário cobre acesso, validação de unidades, publicação, histórico e arquivamento.
+- Confirmação de leitura e exibição na loja dependem da próxima etapa.
+
+### Formulários das demais páginas
+
+- Páginas restantes receberam formulários próprios de prévia, campos específicos e, para compras, checklists e implantação, linhas de itens editáveis apenas em memória. O preenchimento não grava no SQLite.
+- Agenda oferece acesso ao calendário existente, que já grava memorandos diários; compromisso, participantes e pauta continuam em preparação.
+- Próximos módulos exigem regras aprovadas, modelo de dados específico, permissões no backend e migrações SQLite antes de habilitar gravação.

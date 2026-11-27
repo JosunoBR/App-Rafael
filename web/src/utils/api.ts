@@ -496,6 +496,23 @@ export async function confirmReceiptInDb(
   return res.json();
 }
 
+export async function correctReceiptInvoiceInDb(
+  orderId: string,
+  payload: {
+    numeroNotaFiscal: string;
+    motivo: string;
+    password: string;
+    expectedVersion?: number;
+  }
+): Promise<any> {
+  const res = await apiFetch(`/orders/${orderId}/receipt-invoice`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
 export async function authorizeFinancialInDb(orderId: string): Promise<any> {
   const res = await apiFetch(`/orders/${orderId}/authorize-financial`, {
     method: 'POST'

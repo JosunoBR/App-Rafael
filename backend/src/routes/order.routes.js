@@ -19,6 +19,7 @@ router.post('/:id/duplicate', authMiddleware, (req, res, next) => orderControlle
 router.put('/:id/installment', authMiddleware, (req, res, next) => orderController.updateInstallment(req, res, next));
 router.post('/:id/reschedule-delivery', authMiddleware, (req, res, next) => orderController.rescheduleDelivery(req, res, next));
 router.post('/:id/confirm-receipt', authMiddleware, requirePermission('pipeline:confirm_receipt', 'comprador', 'deposito'), (req, res, next) => orderController.confirmReceipt(req, res, next));
+router.patch('/:id/receipt-invoice', authMiddleware, requirePermission('pipeline:correct_receipt_invoice', 'faturamento'), (req, res, next) => orderController.correctReceiptInvoice(req, res, next));
 router.post('/:id/send-to-distribution', authMiddleware, requirePermission('pipeline:send_distribution', 'comprador', 'deposito'), (req, res, next) => orderController.sendToDistribution(req, res, next));
 router.post('/:id/release-to-separation', authMiddleware, requirePermission('pipeline:release_separation', 'comprador', 'deposito'), (req, res, next) => orderController.releaseToSeparation(req, res, next));
 router.get('/:id/separation', authMiddleware, (req, res, next) => orderController.getSeparation(req, res, next));

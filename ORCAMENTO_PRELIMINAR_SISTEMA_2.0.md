@@ -4,13 +4,13 @@
 
 **Data:** 12/11/2026  
 **Estado:** estimativa de trabalho para preparação de proposta; **não é preço fechado nem documento para aceite**.  
-**Base analisada:** `PLANEJAMENTO_IMPLANTACAO_SISTEMA_2.0.md`, `Portal ERP Jóia/` (React/Express, SQLite por empresa, app Android Compose), `App Erica/` (vendas e metas), `ERP Joia 2/ANTIGRAVITY_SULTS_SPEC.md` e `ERP Joia 2/PLANO_IMPLEMENTACAO.md`. Necessidades da conversa com Rafael e adições de Josué.
+**Base analisada:** `PLANEJAMENTO_IMPLANTACAO_SISTEMA_2.0.md`, `Portal ERP Jóia/` (React/Express, SQLite por empresa, app Android Compose), `App Erica/` (vendas e metas), `Sults/ANTIGRAVITY_SULTS_SPEC.md` e `Sults/PLANO_IMPLEMENTACAO.md`. Necessidades da conversa com Rafael e adições de Josué.
 
 ## 1. Decisão de trabalho
 
 **Nenhuma implementação da V2 está autorizada neste momento.** O desenvolvimento começa somente após levantamento, delimitação de entregas e aprovação comercial. O aplicativo Android atual de compras/doca também é parte substancial do trabalho: os módulos de operação, supervisão, evidências e comunicação exigem novas telas, navegação por perfil, APIs, tratamento de rede e nova distribuição/teste do APK.
 
-O escopo inclui a evolução da base web **e** do Android existente; `ERP Joia 2` é especificação de referência, não software pronto para incorporar. O banco operacional previsto é SQLite por empresa, sujeito à avaliação de concorrência, durabilidade, backup e hospedagem antes da implantação em todas as lojas.
+O escopo inclui a evolução da base web **e** do Android existente; `Sults` é especificação de referência, não software pronto para incorporar. O banco operacional previsto é SQLite por empresa, sujeito à avaliação de concorrência, durabilidade, backup e hospedagem antes da implantação em todas as lojas.
 
 ## 2. Entregas conhecidas para compor o orçamento-base
 

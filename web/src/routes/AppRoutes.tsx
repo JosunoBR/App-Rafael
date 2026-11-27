@@ -1,4 +1,5 @@
 import { ROUTE_PATHS, NAV_TAB_TO_PATH, PATH_TO_NAV_TAB, AppRouteKey } from './routePaths';
+import { FRANCHISE_MODULES } from '../shared/franchiseModules';
 
 export { ROUTE_PATHS, NAV_TAB_TO_PATH, PATH_TO_NAV_TAB };
 export type { AppRouteKey };
@@ -11,6 +12,7 @@ export interface RouteConfig {
 }
 
 export const APP_ROUTES: RouteConfig[] = [
+  ...FRANCHISE_MODULES.map(module => ({ path: NAV_TAB_TO_PATH[module.id], name: module.id, title: module.label, requiresAuth: true })),
   { path: ROUTE_PATHS.HOME, name: 'home', title: 'Hub Principal', requiresAuth: true },
   { path: ROUTE_PATHS.ORDERS, name: 'orders', title: 'Compras & Pedidos', requiresAuth: true },
   { path: ROUTE_PATHS.ORDER_HISTORY, name: 'history', title: 'Histórico de Compras', requiresAuth: true },

@@ -87,7 +87,7 @@ async function main() {
     assert.ok((await require('../src/services/holidays.service').list({ storeId: 'holiday_new' })).some(row => row.id === centralGlobal.data.id));
     await review(centralGlobal.data.id, 'cancelado');
     if (process.env.GOALS_PLAYWRIGHT_PATH) {
-      const closing = await call('holiday_a', '/closings/holiday_a/2026-11-25', 'PUT', { ...payload, vendaTotal: 1000, meiosPagamento: { dinheiro: 1000 } });
+      const closing = await call('holiday_a', '/closings/holiday_a/2026-11-25', 'PUT', { ...payload, vendaTotal: 1000, meiosPagamento: { dinheiro: 1000 }, despesas: [{ descricao: 'Limpeza do dia', valor: 50, tipo: 'despesa' }, { descricao: 'Depósito do dia', valor: 100, tipo: 'deposito' }, { descricao: 'Vale funcionário do dia', valor: 25, tipo: 'vale_funcionario' }] });
       assert.equal(closing.status, 200);
       assert.equal((await call('usr_root', `/closings/${closing.data.id}/review`, 'POST', { decision: 'aprovado', note: '' })).status, 200);
       const tokens = Object.fromEntries([['a','holiday_a'],['b','holiday_b'],['root','usr_root']].map(([key,id]) => [key,jwt.sign({ id },config.JWT_SECRET,{ expiresIn: '10m' })]));

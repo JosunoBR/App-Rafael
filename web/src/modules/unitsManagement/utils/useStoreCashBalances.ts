@@ -18,9 +18,10 @@ async function refresh(entry: Entry, selectedMonth: string) {
   if (entry.request) return entry.request;
   entry.request = (async () => {
     try {
-      const [stores, closings] = await Promise.all([
+      const [stores, closings, balances] = await Promise.all([
         apiFetch('/config/stores').then(response => response.json()),
         apiFetch(`/store-closings?month=${selectedMonth}`).then(response => response.json()),
+        apiFetch(`/store-closings/cash-balances?month=${selectedMonth}`).then(response => response.json()),
       ]);
       const rows: StoreCashBalance[] = stores.map((store: any) => {
         const approved = closings.filter((row: any) => row.storeId === store.id && row.status === 'aprovado');
@@ -38,7 +39,7 @@ async function refresh(entry: Entry, selectedMonth: string) {
         const totalSangrias = movements.reduce((sum: number, item: { sangriaDia: number }) => sum + item.sangriaDia, 0);
         return { lojaId: store.id, lojaCodigo: store.shortName || '', lojaNome: store.name,
           cidade: '', responsavel: '', fundoDeCaixa: 0, totalEntradasDinheiro, totalDespesas,
-          totalSangrias, saldoAtualEmCaixa: totalEntradasDinheiro - totalDespesas - totalSangrias,
+          totalSangrias, saldoAtualEmCaixa: balances.find((balance: {storeId: string}) => balance.storeId === store.id).balanceCents / 100,
           ultimaAtualizacao: approved[0]?.updatedAt || '', movimentacoes: movements };
       });
       publish(entry, { rows, loading: false, error: '' });

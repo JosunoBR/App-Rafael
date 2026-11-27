@@ -15,6 +15,7 @@ dist-ssr/
 *.sqlite
 mega12.db
 backend/data/*.db
+backend/data/cash-balance-import.json
 backup_*.json
 /orders_dump.json
 

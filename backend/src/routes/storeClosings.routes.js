@@ -3,6 +3,7 @@ const { randomUUID } = require('node:crypto');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 const { requirePermission } = require('../middlewares/rbac.middleware');
 const { queryAll, queryOne, execute, withTransaction } = require('../config/database');
+const { balanceAtDateSql } = require('../services/storeCashBalance.service');
 
 const router = Router();
 router.use(authMiddleware);
@@ -29,16 +30,19 @@ router.get('/', (req,res,next) => requirePermission(req.user.role === 'unidade' 
   if (month) { where += ' AND c.closingDate LIKE ?'; params.push(`${month}-%`); }
   if (storeId) { where += ' AND c.storeId = ?'; params.push(storeId); }
   if (req.user.role === 'unidade') { where += ' AND c.storeId = ?'; params.push(req.user.storeId); }
-  const rows = await queryAll(`WITH expense_totals AS (
-      SELECT closingId,SUM(amountCents) AS amountCents FROM store_daily_expenses GROUP BY closingId
-    ), closing_balances AS (
-      SELECT c.*,COALESCE(SUM(CASE WHEN c.status='aprovado' THEN c.cashCents-COALESCE(e.amountCents,0) ELSE 0 END)
-        OVER(PARTITION BY c.storeId ORDER BY c.closingDate ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),0) AS cashBalanceBeforeDateCents
-      FROM store_daily_closings c LEFT JOIN expense_totals e ON e.closingId=c.id
-    )
-    SELECT c.*,s.name AS storeName,s.shortName,c.submittedByName AS responsibleName
-    FROM closing_balances c JOIN stores s ON s.id=c.storeId ${where} ORDER BY c.closingDate DESC,s.name`, params);
+  const rows = await queryAll(`SELECT c.*,s.name AS storeName,s.shortName,c.submittedByName AS responsibleName,
+    ${balanceAtDateSql('c.storeId','c.closingDate',false)} AS cashBalanceBeforeDateCents
+    FROM store_daily_closings c JOIN stores s ON s.id=c.storeId ${where} ORDER BY c.closingDate DESC,s.name`, params);
   return Promise.all(rows.map(async row => ({ ...row, expenses: await queryAll('SELECT id,description,amountCents,financialEntryId,movementType FROM store_daily_expenses WHERE closingId = ?', [row.id]) })));
+}));
+
+router.get('/cash-balances', requirePermission('nav:units_cash', 'faturamento'), action(async req => {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.month || '')) throw fail('Mês inválido.');
+  const [year,month] = req.query.month.split('-').map(Number);
+  const endDate = `${req.query.month}-${new Date(Date.UTC(year,month,0)).getUTCDate()}`;
+  return queryAll(`WITH period AS (SELECT ? AS endDate) SELECT s.id AS storeId,
+    ${balanceAtDateSql('s.id','period.endDate')} AS balanceCents
+    FROM stores s CROSS JOIN period`, [endDate]);
 }));
 
 router.get('/monthly-sales', requirePermission('nav:units_history', 'financeiro'), action(async () => {

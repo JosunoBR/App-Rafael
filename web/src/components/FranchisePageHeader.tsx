@@ -29,7 +29,7 @@ export interface FranchisePageHeaderProps {
 }
 
 /** Classe CSS padrão do cabeçalho */
-const DEFAULT_CLASS_NAME = 'rounded-2xl border border-emerald-200 bg-white p-5 sm:p-7';
+const DEFAULT_CLASS_NAME = 'rounded-2xl border border-emerald-200 bg-white dark:bg-slate-900 p-5 sm:p-7';
 
 export function FranchisePageHeader({
   title,

@@ -167,7 +167,7 @@ export const StoresCashPage: React.FC<StoresCashPageProps> = ({
               Lista Dinâmica Integrada ao Cadastro
             </span>
             <span>•</span>
-            <span>Valores dos fechamentos aprovados: entradas em dinheiro menos despesas, depósitos e vales. O fundo fixo de troco ainda não está cadastrado.</span>
+            <span>Saldo de referência mais os movimentos aprovados posteriores: entradas em dinheiro menos despesas, depósitos e vales.</span>
           </div>
 
 

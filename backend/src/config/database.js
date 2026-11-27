@@ -1037,6 +1037,7 @@ async function getDatabase() {
   }
 
   require('../migrations/storeExpenseTypes').ensureStoreExpenseTypes(dbInstance);
+  require('../migrations/storeCashReferences').ensureStoreCashReferences(dbInstance, path.join(dbDir, 'cash-balance-import.json'));
   if (!dbInstance.exec('PRAGMA table_info(store_daily_closings)')[0].values.some(column => column[1] === 'submittedByName')) {
     dbInstance.run('ALTER TABLE store_daily_closings ADD COLUMN submittedByName TEXT');
   }
